@@ -4,8 +4,11 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
+from app.models.asset import Asset
+from app.models.corporate_event import CorporateEvent
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_event_ledger_preflight import (
+    read_corporate_event_ledger_preflight,
     read_ledger_transaction_preflight,
 )
 
@@ -104,3 +107,66 @@ async def test_ledger_preflight_requires_ticker(db, portfolio) -> None:
             ticker=" ",
             as_of=date(2025, 1, 1),
         )
+
+
+@pytest.mark.asyncio
+async def test_corporate_event_preflight_projects_quantity_without_writing(
+    db, portfolio
+) -> None:
+    asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="AMOB3",
+            asset_type="ACAO",
+            operation=OperationType.buy,
+            quantity=Decimal("300"),
+            price=Decimal("0.30"),
+            date=date(2024, 1, 1),
+            currency="BRL",
+        )
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 1, 1),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 1, 1),
+        quantity_factor=Decimal("0.02"),
+        portfolio_id=portfolio.id,
+        source_provider="test",
+    )
+    db.add(event)
+    await db.flush()
+    before = await db.scalar(select(func.count()).select_from(Transaction))
+
+    preflight = await read_corporate_event_ledger_preflight(db, event)
+
+    after = await db.scalar(select(func.count()).select_from(Transaction))
+    assert preflight.quantity_factor == Decimal("0.02")
+    assert preflight.ledger.net_quantity == Decimal("300")
+    assert preflight.projected_net_quantity == Decimal("6")
+    assert before == after == 1
+
+
+@pytest.mark.asyncio
+async def test_corporate_event_preflight_requires_explicit_portfolio(db, portfolio) -> None:
+    asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 1, 1),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 1, 1),
+        quantity_factor=Decimal("0.02"),
+        source_provider="test",
+    )
+
+    with pytest.raises(ValueError, match="portfolio_id explicito"):
+        await read_corporate_event_ledger_preflight(db, event)

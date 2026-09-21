@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import OperationType, Transaction
+from app.models.corporate_event import CorporateEvent
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,18 @@ class LedgerTransactionPreflight:
     @property
     def transaction_count(self) -> int:
         return len(self.transaction_ids)
+
+
+@dataclass(frozen=True)
+class CorporateEventLedgerPreflight:
+    event_id: int
+    event_type: str
+    quantity_factor: Decimal
+    ledger: LedgerTransactionPreflight
+
+    @property
+    def projected_net_quantity(self) -> Decimal:
+        return self.ledger.net_quantity * self.quantity_factor
 
 
 async def read_ledger_transaction_preflight(
@@ -81,4 +94,36 @@ async def read_ledger_transaction_preflight(
         last_transaction_date=(transactions[-1].date if transactions else None),
         buy_quantity=buy_quantity,
         sell_quantity=sell_quantity,
+    )
+
+
+async def read_corporate_event_ledger_preflight(
+    db: AsyncSession,
+    event: CorporateEvent,
+) -> CorporateEventLedgerPreflight:
+    """Lê a base do evento e calcula a quantidade projetada sem persistir."""
+
+    if event.portfolio_id is None:
+        raise ValueError(
+            "preflight do evento exige portfolio_id explicito"
+        )
+
+    try:
+        quantity_factor = Decimal(str(event.quantity_factor))
+    except (InvalidOperation, ValueError):
+        raise ValueError("quantity_factor do evento deve ser decimal") from None
+    if not quantity_factor.is_finite() or quantity_factor <= 0:
+        raise ValueError("quantity_factor do evento deve ser positivo")
+
+    ledger = await read_ledger_transaction_preflight(
+        db,
+        portfolio_id=int(event.portfolio_id),
+        ticker=str(event.ticker),
+        as_of=event.effective_date,
+    )
+    return CorporateEventLedgerPreflight(
+        event_id=int(event.id),
+        event_type=str(event.event_type),
+        quantity_factor=quantity_factor,
+        ledger=ledger,
     )
