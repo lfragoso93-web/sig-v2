@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
 
@@ -53,6 +54,8 @@ class CorporateEventMatchResolutionEvidence:
     fractional_settlement_price: str | None = None
     cash_treatment: str | None = None
     ledger_basis: CorporateEventLedgerBasis | None = None
+    ledger_transformation_reference: str | None = None
+    ledger_quantity_factor: str | None = None
 
     def to_dict(self) -> dict[str, str | None]:
         return {
@@ -65,6 +68,8 @@ class CorporateEventMatchResolutionEvidence:
             "ledger_basis": (
                 self.ledger_basis.value if self.ledger_basis is not None else None
             ),
+            "ledger_transformation_reference": self.ledger_transformation_reference,
+            "ledger_quantity_factor": self.ledger_quantity_factor,
         }
 
 
@@ -129,6 +134,35 @@ def validate_match_resolution_evidence(
         raise ValueError(
             f"base do ledger desconhecida: {evidence.ledger_basis}"
         )
+
+    has_transformation_reference = bool(
+        str(evidence.ledger_transformation_reference or "").strip()
+    )
+    has_quantity_factor = bool(str(evidence.ledger_quantity_factor or "").strip())
+    if evidence.ledger_basis == CorporateEventLedgerBasis.RAW_HISTORICAL:
+        if not has_transformation_reference:
+            raise ValueError(
+                "RAW_HISTORICAL exige referencia da transformacao do ledger"
+            )
+        if not has_quantity_factor:
+            raise ValueError(
+                "RAW_HISTORICAL exige fator quantitativo da transformacao"
+            )
+        try:
+            quantity_factor = Decimal(str(evidence.ledger_quantity_factor))
+        except (InvalidOperation, ValueError):
+            raise ValueError(
+                "fator quantitativo da transformacao deve ser decimal"
+            ) from None
+        if not quantity_factor.is_finite() or quantity_factor <= 0:
+            raise ValueError(
+                "fator quantitativo da transformacao deve ser positivo"
+            )
+    elif evidence.ledger_basis == CorporateEventLedgerBasis.ADJUSTED_POST_EVENT:
+        if has_transformation_reference or has_quantity_factor:
+            raise ValueError(
+                "ledger ajustado nao aceita contrato de transformacao pendente"
+            )
 
     has_fraction = bool(str(evidence.fractional_quantity or "").strip())
     if evidence.fractional_policy == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:

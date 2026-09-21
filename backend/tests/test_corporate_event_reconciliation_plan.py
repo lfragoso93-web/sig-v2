@@ -156,6 +156,42 @@ def test_match_resolution_serializes_explicit_ledger_basis() -> None:
     assert evidence.to_dict()["ledger_basis"] == "ADJUSTED_POST_EVENT"
 
 
+def test_raw_historical_requires_auditable_transformation_contract() -> None:
+    with pytest.raises(ValueError, match="referencia da transformacao"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+                ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+            )
+        )
+
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+        evidence_reference="broker-note:AMOB3:2025-05",
+        fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+        ledger_transformation_reference="broker-note:AMOB3:2025-05:ratio",
+        ledger_quantity_factor="0.02",
+    )
+    validate_match_resolution_evidence(evidence)
+
+
+def test_adjusted_ledger_rejects_pending_transformation_contract() -> None:
+    with pytest.raises(ValueError, match="contrato de transformacao pendente"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+                ledger_basis=CorporateEventLedgerBasis.ADJUSTED_POST_EVENT,
+                ledger_transformation_reference="broker-note:AMOB3:2025-05:ratio",
+                ledger_quantity_factor="0.02",
+            )
+        )
+
+
 def test_match_resolution_requires_cash_settlement_details_for_fraction() -> None:
     with pytest.raises(ValueError, match="preco de liquidacao"):
         validate_match_resolution_evidence(
@@ -240,7 +276,7 @@ def test_matched_grouping_rejects_amob3_adjusted_ledger_reapplication() -> None:
 
 
 def test_matched_grouping_keeps_amob3_raw_ledger_fail_closed() -> None:
-    with pytest.raises(ValueError, match="ledger historico bruto"):
+    with pytest.raises(ValueError, match="referencia da transformacao"):
         build_reconciliation_dry_run_report(
             (
                 CorporateEventEvidence(
@@ -363,5 +399,7 @@ def test_matched_dry_run_serializes_official_evidence_as_v2() -> None:
         "fractional_settlement_price": None,
         "cash_treatment": None,
         "ledger_basis": None,
+        "ledger_transformation_reference": None,
+        "ledger_quantity_factor": None,
     }
     assert payload["database_writes_executed"] == 0
