@@ -24,6 +24,7 @@ def _arguments(
     verify_manifest_file=None,
     event_ids=None,
     reason="reconciliacao de certificacao",
+    source_sha=None,
 ) -> Namespace:
     return Namespace(
         event_id=[12, 13] if event_ids is None else event_ids,
@@ -41,6 +42,7 @@ def _arguments(
         manifest_file=manifest_file,
         verify_report_file=verify_report_file,
         verify_manifest_file=verify_manifest_file,
+        source_sha=source_sha,
         execute=execute,
     )
 
@@ -239,6 +241,14 @@ async def test_cli_manifest_requires_report_file(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_cli_source_sha_requires_full_hex_commit() -> None:
+    with pytest.raises(ValueError, match="40 caracteres"):
+        await cli._main(
+            _arguments(decision="CONFLICT", source_sha="abc123")
+        )
+
+
+@pytest.mark.asyncio
 async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_path) -> None:
     class FakeReport:
         def to_dict(self):
@@ -271,6 +281,7 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
             decision="CONFLICT",
             report_file=report_file,
             manifest_file=manifest_file,
+            source_sha="a" * 40,
         )
     )
 
@@ -279,6 +290,7 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
     assert manifest["schema_version"] == "corporate-event-reconciliation-manifest.v1"
     assert manifest["report_sha256"] == hashlib.sha256(report_bytes).hexdigest()
     assert manifest["report_schema_version"] == "test.v1"
+    assert manifest["source_commit_sha"] == "a" * 40
 
 
 @pytest.mark.asyncio

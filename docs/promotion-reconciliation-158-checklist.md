@@ -373,6 +373,7 @@ python -m app.cli.corporate_event_reconciliation_dry_run \
   --decision CONFLICT \
   --event-id 12 --event-id 13 \
   --ledger-preflight-event-id 12 \
+  --source-sha 0000000000000000000000000000000000000000 \
   --reason "preflight read-only do ledger"
 ```
 

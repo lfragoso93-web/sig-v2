@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--event-id", type=int, action="append")
     parser.add_argument("--verify-report-file", type=Path)
     parser.add_argument("--verify-manifest-file", type=Path)
+    parser.add_argument("--source-sha")
     parser.add_argument(
         "--ledger-preflight-event-id",
         type=int,
@@ -108,6 +110,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                 "execute",
                 "report_file",
                 "manifest_file",
+                "source_sha",
             )
         ):
             raise ValueError(
@@ -138,8 +141,14 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise ValueError("report-file exige dry-run e nao aceita --execute")
     if arguments.execute and arguments.manifest_file is not None:
         raise ValueError("manifest-file exige dry-run e nao aceita --execute")
+    if arguments.execute and arguments.source_sha is not None:
+        raise ValueError("source-sha exige dry-run e nao aceita --execute")
     if arguments.manifest_file is not None and arguments.report_file is None:
         raise ValueError("manifest-file exige --report-file")
+    if arguments.source_sha is not None and not re.fullmatch(
+        r"[0-9a-fA-F]{40}", arguments.source_sha
+    ):
+        raise ValueError("source-sha deve ser SHA hexadecimal completo de 40 caracteres")
     if (
         arguments.ledger_preflight_event_id is not None
         and arguments.ledger_preflight_event_id not in event_ids
@@ -233,6 +242,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                 "database_writes_executed": payload.get(
                     "database_writes_executed"
                 ),
+                "source_commit_sha": arguments.source_sha,
             }
             manifest_bytes = (
                 json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
