@@ -3,6 +3,7 @@ from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
     CorporateEventMatchEvidenceType,
     CorporateEventMatchResolutionEvidence,
+    CorporateEventLedgerBasis,
     CorporateEventReconciliationDecision,
     FractionalResolutionPolicy,
     build_reconciliation_dry_run_report,
@@ -140,6 +141,19 @@ def test_match_resolution_allows_no_fractional_residue() -> None:
             fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
         )
     )
+
+
+def test_match_resolution_serializes_explicit_ledger_basis() -> None:
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+        evidence_reference="broker-note:AMOB3:2025-05",
+        fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ledger_basis=CorporateEventLedgerBasis.ADJUSTED_POST_EVENT,
+    )
+
+    validate_match_resolution_evidence(evidence)
+
+    assert evidence.to_dict()["ledger_basis"] == "ADJUSTED_POST_EVENT"
 
 
 def test_match_resolution_requires_cash_settlement_details_for_fraction() -> None:
@@ -300,5 +314,6 @@ def test_matched_dry_run_serializes_official_evidence_as_v2() -> None:
         "fractional_quantity": None,
         "fractional_settlement_price": None,
         "cash_treatment": None,
+        "ledger_basis": None,
     }
     assert payload["database_writes_executed"] == 0

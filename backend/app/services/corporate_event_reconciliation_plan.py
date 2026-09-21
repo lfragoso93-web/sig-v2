@@ -20,6 +20,11 @@ class CorporateEventMatchEvidenceType(StrEnum):
     OFFICIAL_EXCHANGE_DOCUMENT = "OFFICIAL_EXCHANGE_DOCUMENT"
 
 
+class CorporateEventLedgerBasis(StrEnum):
+    RAW_HISTORICAL = "RAW_HISTORICAL"
+    ADJUSTED_POST_EVENT = "ADJUSTED_POST_EVENT"
+
+
 @dataclass(frozen=True)
 class CorporateEventEvidence:
     event_id: int
@@ -47,6 +52,7 @@ class CorporateEventMatchResolutionEvidence:
     fractional_quantity: str | None = None
     fractional_settlement_price: str | None = None
     cash_treatment: str | None = None
+    ledger_basis: CorporateEventLedgerBasis | None = None
 
     def to_dict(self) -> dict[str, str | None]:
         return {
@@ -56,6 +62,9 @@ class CorporateEventMatchResolutionEvidence:
             "fractional_quantity": self.fractional_quantity,
             "fractional_settlement_price": self.fractional_settlement_price,
             "cash_treatment": self.cash_treatment,
+            "ledger_basis": (
+                self.ledger_basis.value if self.ledger_basis is not None else None
+            ),
         }
 
 
@@ -113,6 +122,13 @@ def validate_match_resolution_evidence(
 ) -> None:
     if not evidence.evidence_reference.strip():
         raise ValueError("referencia documental da evidencia e obrigatoria")
+
+    if evidence.ledger_basis is not None and not isinstance(
+        evidence.ledger_basis, CorporateEventLedgerBasis
+    ):
+        raise ValueError(
+            f"base do ledger desconhecida: {evidence.ledger_basis}"
+        )
 
     has_fraction = bool(str(evidence.fractional_quantity or "").strip())
     if evidence.fractional_policy == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:
