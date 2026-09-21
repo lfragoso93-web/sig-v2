@@ -4,6 +4,9 @@ import json
 
 import pytest
 from app.cli import corporate_event_reconciliation_dry_run as cli
+from app.services.corporate_event_report_manifest import (
+    verify_corporate_event_report_manifest,
+)
 
 
 def _arguments(
@@ -348,6 +351,9 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
         "window_end": None,
         "source_commit_sha": "a" * 40,
     }
+    assert verify_corporate_event_report_manifest(
+        report_file, manifest_file
+    )["valid"] is True
 
 
 @pytest.mark.asyncio
