@@ -32,6 +32,10 @@ def _write_artifacts(tmp_path, *, report_payload=None):
                 "database_writes_executed": report_payload[
                     "database_writes_executed"
                 ],
+                "dataset_id": "fixture-amob3-2025",
+                "window_start": None,
+                "window_end": None,
+                "source_commit_sha": None,
             },
             indent=2,
             sort_keys=True,
@@ -73,4 +77,25 @@ def test_manifest_verification_rejects_non_read_only_report(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="escritas no banco"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
+def test_manifest_verification_rejects_inverted_window(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["window_start"] = "2025-02-01"
+    manifest["window_end"] = "2025-01-01"
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="janela do manifesto esta invertida"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
+def test_manifest_verification_rejects_invalid_source_sha(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["source_commit_sha"] = "short"
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_commit_sha invalido"):
         verify_corporate_event_report_manifest(report_file, manifest_file)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,23 @@ def verify_corporate_event_report_manifest(
         raise ValueError("artefato nao esta marcado como dry-run")
     if report.get("database_writes_executed") != 0:
         raise ValueError("artefato registra escritas no banco")
+    if not str(manifest.get("dataset_id") or "").strip():
+        raise ValueError("manifesto exige dataset_id")
+    window_start = manifest.get("window_start")
+    window_end = manifest.get("window_end")
+    if (window_start is None) != (window_end is None):
+        raise ValueError("manifesto possui janela incompleta")
+    if window_start is not None:
+        try:
+            parsed_start = date.fromisoformat(window_start)
+            parsed_end = date.fromisoformat(window_end)
+        except (TypeError, ValueError):
+            raise ValueError("janela do manifesto deve usar datas ISO") from None
+        if parsed_start > parsed_end:
+            raise ValueError("janela do manifesto esta invertida")
+    source_sha = manifest.get("source_commit_sha")
+    if source_sha is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", source_sha):
+        raise ValueError("source_commit_sha invalido no manifesto")
 
     return {
         "valid": True,
@@ -36,4 +55,8 @@ def verify_corporate_event_report_manifest(
         "report_schema_version": report.get("schema_version"),
         "dry_run": True,
         "database_writes_executed": 0,
+        "dataset_id": manifest["dataset_id"],
+        "window_start": window_start,
+        "window_end": window_end,
+        "source_commit_sha": source_sha,
     }
