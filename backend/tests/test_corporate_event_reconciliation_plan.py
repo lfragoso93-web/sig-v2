@@ -23,6 +23,20 @@ def _evidence(event_id: int, source: str = "brapi") -> CorporateEventEvidence:
     )
 
 
+def _ticker_evidence(
+    event_id: int,
+    ticker: str,
+    source: str = "brapi",
+) -> CorporateEventEvidence:
+    return CorporateEventEvidence(
+        event_id=event_id,
+        ticker=ticker,
+        event_type="BONIFICACAO",
+        source_provider=source,
+        source_event_id=f"{source}:{event_id}",
+    )
+
+
 def test_conflict_plan_keeps_all_evidences_out_of_projection() -> None:
     updates = plan_conflict_reconciliation(
         (_evidence(13, "yahoo"), _evidence(12, "brapi")),
@@ -136,6 +150,24 @@ def test_match_resolution_requires_cash_settlement_details_for_fraction() -> Non
                 fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
                 fractional_quantity="0.10",
             )
+        )
+
+
+def test_matched_cash_settlement_keeps_klbn11_fail_closed_until_unit_contract() -> None:
+    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
+        build_reconciliation_dry_run_report(
+            (_ticker_evidence(12, "KLBN11"), _ticker_evidence(13, "KLBN11", "yahoo")),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="unit composta exige decomposicao por especies",
+            canonical_event_id=12,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:KLBN11:2025-12",
+                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+                fractional_quantity="0.10",
+                fractional_settlement_price="4.00",
+                cash_treatment="AUCTION_SETTLEMENT",
+            ),
         )
 
 

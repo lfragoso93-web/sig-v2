@@ -13,6 +13,7 @@ from app.models.corporate_event import CorporateEvent, CorporateEventStatus
 from app.models.corporate_event_reconciliation_evidence import (
     CorporateEventReconciliationEvidence,
 )
+from app.models.transaction import OperationType, Transaction
 from app.services.corporate_event_fractional_resolution import (
     FractionalResolutionPolicy,
 )
@@ -24,6 +25,7 @@ from app.services.corporate_action_position_reader import (
     _source_identity,
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_position_state_service import build_positions_at
 
 
 @pytest.mark.asyncio
@@ -176,6 +178,78 @@ async def test_reader_transports_cash_settlement_evidence(
     assert resolution.fractional_quantity == Decimal("0.10")
     assert resolution.settlement_price == Decimal("3.94")
     assert resolution.cash_treatment == "AUCTION_SETTLEMENT"
+
+
+@pytest.mark.asyncio
+async def test_cash_settlement_reaches_position_state_without_ledger_mutation(
+    db: AsyncSession,
+    portfolio,
+) -> None:
+    asset = Asset(
+        ticker="FRAC3",
+        name="Ativo fracionario",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="FRAC3",
+            asset_type=AssetType.ACAO.value,
+            operation=OperationType.buy,
+            quantity=Decimal("10"),
+            price=Decimal("18.53"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 1),
+            currency="BRL",
+        )
+    )
+
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="FRAC3",
+        event_type="BONIFICACAO",
+        status=CorporateEventStatus.PENDENTE.value,
+        effective_date=date(2026, 1, 2),
+        ratio=Decimal("1.01"),
+        quantity_factor=Decimal("1.01"),
+        source_provider="brapi",
+        source_event_id="brapi:fraction-e2e",
+        event_date=date(2026, 1, 2),
+        is_canonical=True,
+        reconciliation_status="MATCHED",
+        requires_review=False,
+        portfolio_id=None,
+    )
+    db.add(event)
+    await db.flush()
+
+    db.add(
+        CorporateEventReconciliationEvidence(
+            corporate_event_id=event.id,
+            decision="MATCHED",
+            evidence_type="BROKER_STATEMENT",
+            evidence_reference="broker-note:FRAC3:2026-01",
+            fractional_policy="CASH_SETTLEMENT",
+            fractional_quantity=Decimal("0.10"),
+            fractional_settlement_price=Decimal("4.00"),
+            cash_treatment="AUCTION_SETTLEMENT",
+        )
+    )
+    await db.flush()
+
+    states = await build_positions_at(db, portfolio.id, date(2026, 1, 3))
+
+    state = states["FRAC3"]
+    assert state.qty == Decimal("10")
+    assert state.cost.quantize(Decimal("0.01")) == Decimal("185.30")
+    assert state.realized_pnl == Decimal("0")
+    assert len(state.corporate_action_cash_flows) == 1
+    cash_flow = state.corporate_action_cash_flows[0]
+    assert cash_flow.source_event_id == "brapi:fraction-e2e"
+    assert cash_flow.gross_amount_brl == Decimal("0.4000")
 
 
 @pytest.mark.asyncio
