@@ -111,6 +111,68 @@ async def test_cli_ledger_preflight_event_must_be_in_event_ids() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cli_dry_run_forwards_ledger_preflight_and_rolls_back(monkeypatch) -> None:
+    calls = []
+    session = None
+
+    class FakeReport:
+        def to_dict(self):
+            return {
+                "schema_version": "corporate-event-reconciliation-dry-run.v2",
+                "database_writes_executed": 0,
+            }
+
+    class FakeSession:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            self.rollbacks += 1
+
+    class FakeSessionFactory:
+        def __call__(self):
+            nonlocal session
+            session = FakeSession()
+            return session
+
+    async def fake_dry_run(db, **kwargs):
+        calls.append({"db": db, **kwargs})
+        return FakeReport()
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
+    monkeypatch.setattr(
+        cli,
+        "build_corporate_event_reconciliation_dry_run",
+        fake_dry_run,
+    )
+
+    result = await cli._main(
+        _arguments(
+            decision="CONFLICT",
+            ledger_preflight_event_id=12,
+        )
+    )
+
+    assert result == 0
+    assert session is not None
+    assert session.commits == 0
+    assert session.rollbacks == 1
+    assert len(calls) == 1
+    assert calls[0]["ledger_preflight_event_id"] == 12
+    assert calls[0]["event_ids"] == (12, 13)
+
+
+@pytest.mark.asyncio
 async def test_cli_matched_execute_dispatches_writer_and_commits(
     monkeypatch,
 ) -> None:

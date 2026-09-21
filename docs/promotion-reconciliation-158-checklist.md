@@ -359,6 +359,27 @@ Decisao: a persistencia do conflito formaliza o bloqueio, mas nao resolve #370
 para GO. Os eventos seguem fora da projecao financeira ate reconciliacao contra
 extrato ou politica canonica de fracao/residuo.
 
+### Preflight read-only do ledger no dry-run
+
+A CLI aceita `--ledger-preflight-event-id` somente sem `--execute`. O ID deve
+estar entre os eventos informados e o resultado inclui o relatorio
+`corporate-event-ledger-preflight.v1`, com `database_writes_executed=0` e
+`ready_for_execution=false`.
+
+Exemplo controlado:
+
+```bash
+python -m app.cli.corporate_event_reconciliation_dry_run \
+  --decision CONFLICT \
+  --event-id 12 --event-id 13 \
+  --ledger-preflight-event-id 12 \
+  --reason "preflight read-only do ledger"
+```
+
+Esse comando apenas le as transacoes da carteira ate `effective_date`, calcula
+a quantidade liquida projetada pelo `quantity_factor` e faz rollback da sessao.
+Ele nao cria transacao, nao altera evento e nao autoriza `MATCHED`.
+
 ### Pre-requisitos para saida de `CONFLICT` em 15/09/2026
 
 Foi adicionado um contrato puro de evidencia para qualquer transicao futura para
