@@ -358,6 +358,18 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
     assert verify_corporate_event_report_manifest(
         report_file, manifest_file
     )["valid"] is True
+    assert (
+        await cli._main(
+            _arguments(
+                decision=None,
+                event_ids=[],
+                reason=None,
+                verify_report_file=report_file,
+                verify_manifest_file=manifest_file,
+            )
+        )
+        == 0
+    )
 
 
 @pytest.mark.asyncio
