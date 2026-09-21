@@ -226,6 +226,62 @@ async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_matched_writer_keeps_klbn11_cash_settlement_fail_closed(db) -> None:
+    asset = Asset(
+        ticker="KLBN11",
+        name="Klabin Unit",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    brapi = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:klbn11",
+    )
+    yahoo = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:klbn11",
+    )
+
+    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
+        await execute_corporate_event_matched_reconciliation(
+            db,
+            event_ids=(brapi.id, yahoo.id),
+            canonical_event_id=brapi.id,
+            reason="unit composta exige contrato proprio",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:KLBN11:2025-12",
+                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+                fractional_quantity="0.10",
+                fractional_settlement_price="4.00",
+                cash_treatment="AUCTION_SETTLEMENT",
+            ),
+        )
+
+    assert brapi.reconciliation_status == "UNRECONCILED"
+    assert brapi.requires_review is True
+    assert brapi.is_canonical is True
+    assert brapi.matched_event_id is None
+
+    assert yahoo.reconciliation_status == "UNRECONCILED"
+    assert yahoo.requires_review is True
+    assert yahoo.is_canonical is True
+    assert yahoo.matched_event_id is None
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
 async def test_matched_writer_validates_complete_event_set_before_mutation(
     db,
 ) -> None:

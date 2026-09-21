@@ -17,8 +17,6 @@ from app.services.corporate_event_reconciliation_plan import (
     CorporateEventReconciliationUpdate,
     build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
-    plan_matched_reconciliation,
-    validate_match_resolution_evidence,
 )
 
 
@@ -118,8 +116,6 @@ async def execute_corporate_event_matched_reconciliation(
     if len(set(event_ids)) != len(event_ids):
         raise ValueError("event_ids contem duplicidade")
 
-    validate_match_resolution_evidence(match_resolution_evidence)
-
     result = await db.execute(
         select(CorporateEvent)
         .where(CorporateEvent.id.in_(event_ids))
@@ -140,11 +136,14 @@ async def execute_corporate_event_matched_reconciliation(
             f"eventos nao encontrados durante execucao: {missing}"
         )
 
-    updates = plan_matched_reconciliation(
+    contract_report = build_reconciliation_dry_run_report(
         tuple(evidence_from_event(event) for event in events),
+        decision=CorporateEventReconciliationDecision.MATCHED,
         canonical_event_id=canonical_event_id,
         reason=reason,
+        match_resolution_evidence=match_resolution_evidence,
     )
+    updates = contract_report.updates
 
     existing_result = await db.execute(
         select(CorporateEventReconciliationEvidence)
