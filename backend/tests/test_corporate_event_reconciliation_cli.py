@@ -1,4 +1,5 @@
 from argparse import Namespace
+import hashlib
 import json
 
 import pytest
@@ -18,6 +19,7 @@ def _arguments(
     cash_treatment: str | None = None,
     ledger_preflight_event_id: int | None = None,
     report_file=None,
+    manifest_file=None,
 ) -> Namespace:
     return Namespace(
         event_id=[12, 13],
@@ -32,6 +34,7 @@ def _arguments(
         cash_treatment=cash_treatment,
         ledger_preflight_event_id=ledger_preflight_event_id,
         report_file=report_file,
+        manifest_file=manifest_file,
         execute=execute,
     )
 
@@ -126,6 +129,60 @@ def test_cli_report_file_is_exclusive_and_writes_json(tmp_path) -> None:
     assert json.loads(report_file.read_text(encoding="utf-8")) == payload
     with pytest.raises(FileExistsError):
         report_file.open("x", encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_cli_manifest_requires_report_file(tmp_path) -> None:
+    with pytest.raises(ValueError, match="manifest-file exige --report-file"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                manifest_file=tmp_path / "manifest.json",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_path) -> None:
+    class FakeReport:
+        def to_dict(self):
+            return {
+                "schema_version": "test.v1",
+                "dry_run": True,
+                "database_writes_executed": 0,
+            }
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def rollback(self):
+            return None
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: FakeSession())
+    async def fake_dry_run(*args, **kwargs):
+        return FakeReport()
+
+    monkeypatch.setattr(cli, "build_corporate_event_reconciliation_dry_run", fake_dry_run)
+    report_file = tmp_path / "report.json"
+    manifest_file = tmp_path / "manifest.json"
+
+    await cli._main(
+        _arguments(
+            decision="CONFLICT",
+            report_file=report_file,
+            manifest_file=manifest_file,
+        )
+    )
+
+    report_bytes = report_file.read_bytes()
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == "corporate-event-reconciliation-manifest.v1"
+    assert manifest["report_sha256"] == hashlib.sha256(report_bytes).hexdigest()
+    assert manifest["report_schema_version"] == "test.v1"
 
 
 @pytest.mark.asyncio

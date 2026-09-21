@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -54,6 +55,11 @@ def _arguments() -> argparse.Namespace:
         help="Salva o JSON do dry-run em um arquivo novo, sem sobrescrever.",
     )
     parser.add_argument(
+        "--manifest-file",
+        type=Path,
+        help="Salva manifesto SHA-256 do report-file, sem sobrescrever.",
+    )
+    parser.add_argument(
         "--decision",
         choices=[item.value for item in CorporateEventReconciliationDecision],
         required=True,
@@ -90,6 +96,10 @@ async def _main(arguments: argparse.Namespace) -> int:
         )
     if arguments.execute and arguments.report_file is not None:
         raise ValueError("report-file exige dry-run e nao aceita --execute")
+    if arguments.execute and arguments.manifest_file is not None:
+        raise ValueError("manifest-file exige dry-run e nao aceita --execute")
+    if arguments.manifest_file is not None and arguments.report_file is None:
+        raise ValueError("manifest-file exige --report-file")
     if (
         arguments.ledger_preflight_event_id is not None
         and arguments.ledger_preflight_event_id not in event_ids
@@ -164,15 +174,37 @@ async def _main(arguments: argparse.Namespace) -> int:
 
     payload: dict[str, Any] = report.to_dict()
     serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    report_bytes = f"{serialized}\n".encode("utf-8")
     if arguments.report_file is not None:
         try:
-            with arguments.report_file.open("x", encoding="utf-8", newline="\n") as handle:
-                handle.write(serialized)
-                handle.write("\n")
+            with arguments.report_file.open("xb") as handle:
+                handle.write(report_bytes)
         except FileExistsError:
             raise ValueError(
                 f"report-file ja existe e nao sera sobrescrito: {arguments.report_file}"
             ) from None
+        if arguments.manifest_file is not None:
+            manifest = {
+                "schema_version": "corporate-event-reconciliation-manifest.v1",
+                "report_file": str(arguments.report_file),
+                "report_sha256": hashlib.sha256(report_bytes).hexdigest(),
+                "report_schema_version": payload.get("schema_version"),
+                "dry_run": payload.get("dry_run"),
+                "database_writes_executed": payload.get(
+                    "database_writes_executed"
+                ),
+            }
+            manifest_bytes = (
+                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n"
+            ).encode("utf-8")
+            try:
+                with arguments.manifest_file.open("xb") as handle:
+                    handle.write(manifest_bytes)
+            except FileExistsError:
+                raise ValueError(
+                    f"manifest-file ja existe e nao sera sobrescrito: {arguments.manifest_file}"
+                ) from None
     print(serialized)
     return 0
 
