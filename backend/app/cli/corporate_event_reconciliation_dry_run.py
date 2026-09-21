@@ -42,6 +42,11 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--event-id", type=int, action="append", required=True)
     parser.add_argument(
+        "--ledger-preflight-event-id",
+        type=int,
+        help="Inclui o preflight read-only do evento no relatorio dry-run.",
+    )
+    parser.add_argument(
         "--decision",
         choices=[item.value for item in CorporateEventReconciliationDecision],
         required=True,
@@ -71,6 +76,18 @@ def _arguments() -> argparse.Namespace:
 async def _main(arguments: argparse.Namespace) -> int:
     event_ids = tuple(arguments.event_id)
     decision = CorporateEventReconciliationDecision(arguments.decision)
+
+    if arguments.execute and arguments.ledger_preflight_event_id is not None:
+        raise ValueError(
+            "ledger-preflight-event-id exige dry-run e nao aceita --execute"
+        )
+    if (
+        arguments.ledger_preflight_event_id is not None
+        and arguments.ledger_preflight_event_id not in event_ids
+    ):
+        raise ValueError(
+            "ledger-preflight-event-id deve pertencer aos event-id informados"
+        )
 
     match_argument_values = (
         arguments.evidence_type,
@@ -132,6 +149,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                 reason=arguments.reason,
                 canonical_event_id=arguments.canonical_event_id,
                 match_resolution_evidence=match_resolution_evidence,
+                ledger_preflight_event_id=arguments.ledger_preflight_event_id,
             )
             await db.rollback()
 

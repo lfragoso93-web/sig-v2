@@ -15,6 +15,7 @@ def _arguments(
     fractional_quantity: str | None = None,
     fractional_settlement_price: str | None = None,
     cash_treatment: str | None = None,
+    ledger_preflight_event_id: int | None = None,
 ) -> Namespace:
     return Namespace(
         event_id=[12, 13],
@@ -27,6 +28,7 @@ def _arguments(
         fractional_quantity=fractional_quantity,
         fractional_settlement_price=fractional_settlement_price,
         cash_treatment=cash_treatment,
+        ledger_preflight_event_id=ledger_preflight_event_id,
         execute=execute,
     )
 
@@ -81,6 +83,29 @@ async def test_cli_conflict_rejects_matched_evidence_arguments() -> None:
                 decision="CONFLICT",
                 evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
                 evidence_reference="b3:official-document:AMOB3:2025-05",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_ledger_preflight_requires_dry_run() -> None:
+    with pytest.raises(ValueError, match="exige dry-run"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                execute=True,
+                ledger_preflight_event_id=12,
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_ledger_preflight_event_must_be_in_event_ids() -> None:
+    with pytest.raises(ValueError, match="deve pertencer"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                ledger_preflight_event_id=99,
             )
         )
 
