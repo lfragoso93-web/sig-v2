@@ -395,8 +395,10 @@ python -m app.cli.corporate_event_reconciliation_dry_run \
 ```
 
 O modo `verify` recalcula o SHA-256, confere o schema e exige
-`dry_run=true` e `database_writes_executed=0`. Ele nao aceita argumentos de
-reconciliacao, `--execute` ou escrita de novos artefatos.
+`dry_run=true` e `database_writes_executed=0`. Ele tambem confere se o
+`artifact_context` do relatorio coincide exatamente com `dataset_id`, janela e
+`source_commit_sha` do manifesto. Ele nao aceita argumentos de reconciliacao,
+`--execute` ou escrita de novos artefatos.
 
 ### Pre-requisitos para saida de `CONFLICT` em 15/09/2026
 

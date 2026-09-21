@@ -335,12 +335,19 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
     )
 
     report_bytes = report_file.read_bytes()
+    report = json.loads(report_bytes)
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "corporate-event-reconciliation-manifest.v1"
     assert manifest["report_sha256"] == hashlib.sha256(report_bytes).hexdigest()
     assert manifest["report_schema_version"] == "test.v1"
     assert manifest["source_commit_sha"] == "a" * 40
     assert manifest["dataset_id"] == "fixture-amob3-2025"
+    assert report["artifact_context"] == {
+        "dataset_id": "fixture-amob3-2025",
+        "window_start": None,
+        "window_end": None,
+        "source_commit_sha": "a" * 40,
+    }
 
 
 @pytest.mark.asyncio
