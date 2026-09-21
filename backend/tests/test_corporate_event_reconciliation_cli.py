@@ -334,6 +334,8 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
             manifest_file=manifest_file,
             source_sha="a" * 40,
             dataset_id="fixture-amob3-2025",
+            window_start="2025-01-01",
+            window_end="2025-12-31",
         )
     )
 
@@ -345,10 +347,12 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
     assert manifest["report_schema_version"] == "test.v1"
     assert manifest["source_commit_sha"] == "a" * 40
     assert manifest["dataset_id"] == "fixture-amob3-2025"
+    assert manifest["window_start"] == "2025-01-01"
+    assert manifest["window_end"] == "2025-12-31"
     assert report["artifact_context"] == {
         "dataset_id": "fixture-amob3-2025",
-        "window_start": None,
-        "window_end": None,
+        "window_start": "2025-01-01",
+        "window_end": "2025-12-31",
         "source_commit_sha": "a" * 40,
     }
     assert verify_corporate_event_report_manifest(
