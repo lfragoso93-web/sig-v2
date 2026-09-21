@@ -48,6 +48,12 @@ def verify_corporate_event_report_manifest(
     source_sha = manifest.get("source_commit_sha")
     if source_sha is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", source_sha):
         raise ValueError("source_commit_sha invalido no manifesto")
+    artifact_context = report.get("artifact_context")
+    if not isinstance(artifact_context, dict):
+        raise ValueError("relatorio exige artifact_context")
+    for field in ("dataset_id", "window_start", "window_end", "source_commit_sha"):
+        if artifact_context.get(field) != manifest.get(field):
+            raise ValueError(f"contexto {field} do relatorio diverge do manifesto")
 
     return {
         "valid": True,

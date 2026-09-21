@@ -9,11 +9,18 @@ from app.services.corporate_event_report_manifest import (
 
 
 def _write_artifacts(tmp_path, *, report_payload=None):
+    artifact_context = {
+        "dataset_id": "fixture-amob3-2025",
+        "window_start": None,
+        "window_end": None,
+        "source_commit_sha": None,
+    }
     report_payload = report_payload or {
         "schema_version": "corporate-event-reconciliation-dry-run.v2",
         "dry_run": True,
         "database_writes_executed": 0,
     }
+    report_payload.setdefault("artifact_context", artifact_context)
     report_file = tmp_path / "report.json"
     report_bytes = (
         json.dumps(report_payload, ensure_ascii=False, indent=2, sort_keys=True)
@@ -98,4 +105,28 @@ def test_manifest_verification_rejects_invalid_source_sha(tmp_path) -> None:
     manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(ValueError, match="source_commit_sha invalido"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
+def test_manifest_verification_rejects_context_mismatch(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["dataset_id"] = "other-dataset"
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="contexto dataset_id"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
+def test_manifest_verification_rejects_missing_report_context(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    report.pop("artifact_context")
+    report_bytes = (json.dumps(report, sort_keys=True) + "\n").encode("utf-8")
+    report_file.write_bytes(report_bytes)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["report_sha256"] = hashlib.sha256(report_bytes).hexdigest()
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="artifact_context"):
         verify_corporate_event_report_manifest(report_file, manifest_file)

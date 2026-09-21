@@ -185,6 +185,12 @@ async def test_cli_verify_mode_checks_retained_fixture_without_database(
                 "schema_version": "corporate-event-reconciliation-dry-run.v2",
                 "dry_run": True,
                 "database_writes_executed": 0,
+                "artifact_context": {
+                    "dataset_id": "fixture-amob3-2025",
+                    "window_start": None,
+                    "window_end": None,
+                    "source_commit_sha": None,
+                },
                 "dataset_id": "fixture-amob3-2025",
                 "window_start": None,
                 "window_end": None,

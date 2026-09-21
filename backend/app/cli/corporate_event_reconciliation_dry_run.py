@@ -247,6 +247,12 @@ async def _main(arguments: argparse.Namespace) -> int:
             await db.rollback()
 
     payload: dict[str, Any] = report.to_dict()
+    payload["artifact_context"] = {
+        "dataset_id": arguments.dataset_id,
+        "window_start": window_start.isoformat() if window_start else None,
+        "window_end": window_end.isoformat() if window_end else None,
+        "source_commit_sha": arguments.source_sha,
+    }
     serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
     report_bytes = f"{serialized}\n".encode("utf-8")
     if arguments.report_file is not None:
