@@ -83,6 +83,7 @@ class CorporateEventReconciliationDryRunReport:
     event_ids: tuple[int, ...]
     updates: tuple[CorporateEventReconciliationUpdate, ...]
     match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None
+    ledger_preflight: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = {
@@ -108,6 +109,8 @@ class CorporateEventReconciliationDryRunReport:
             payload["match_resolution_evidence"] = (
                 self.match_resolution_evidence.to_dict()
             )
+        if self.ledger_preflight is not None:
+            payload["ledger_preflight"] = self.ledger_preflight
         return payload
 
 

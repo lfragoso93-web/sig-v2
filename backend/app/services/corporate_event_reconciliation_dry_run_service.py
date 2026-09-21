@@ -18,6 +18,9 @@ from app.services.corporate_event_reconciliation_plan import (
     build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
 )
+from app.services.corporate_event_ledger_preflight import (
+    build_corporate_event_ledger_preflight_report,
+)
 
 
 def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:
@@ -38,6 +41,7 @@ async def build_corporate_event_reconciliation_dry_run(
     reason: str,
     canonical_event_id: int | None = None,
     match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None,
+    ledger_preflight_event_id: int | None = None,
 ) -> CorporateEventReconciliationDryRunReport:
     if not event_ids:
         raise ValueError("event_ids e obrigatorio")
@@ -53,12 +57,34 @@ async def build_corporate_event_reconciliation_dry_run(
     if missing:
         raise ValueError(f"eventos nao encontrados: {missing}")
 
-    return build_reconciliation_dry_run_report(
+    report = build_reconciliation_dry_run_report(
         tuple(evidence_from_event(event) for event in events),
         decision=decision,
         reason=reason,
         canonical_event_id=canonical_event_id,
         match_resolution_evidence=match_resolution_evidence,
+    )
+    if ledger_preflight_event_id is None:
+        return report
+    event_by_id = {int(event.id): event for event in events}
+    ledger_event = event_by_id.get(ledger_preflight_event_id)
+    if ledger_event is None:
+        raise ValueError(
+            "ledger_preflight_event_id deve pertencer aos event_ids"
+        )
+    ledger_report = await build_corporate_event_ledger_preflight_report(
+        db, ledger_event
+    )
+    return CorporateEventReconciliationDryRunReport(
+        schema_version=report.schema_version,
+        ok=report.ok,
+        decision=report.decision,
+        dry_run=report.dry_run,
+        database_writes_executed=report.database_writes_executed,
+        event_ids=report.event_ids,
+        updates=report.updates,
+        match_resolution_evidence=report.match_resolution_evidence,
+        ledger_preflight=ledger_report.to_dict(),
     )
 
 
