@@ -32,7 +32,7 @@ def _asset(asset_type="ACAO"):
 
 
 @pytest.mark.asyncio
-async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
+async def test_sync_persists_only_brapi_events_when_brapi_is_available() -> None:
     async def brapi_fetcher(ticker: str):
         assert ticker == "AERI3"
         return {
@@ -49,8 +49,7 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
         }
 
     async def yahoo_fetcher(symbol: str):
-        assert symbol == "AERI3.SA"
-        return [(date(2024, 5, 14), 0.05)]
+        raise AssertionError("Yahoo nao deve ser consultado quando BRAPI responde")
 
     db = _db()
     created = await sync_corporate_events_for_asset(
@@ -60,18 +59,18 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
         yahoo_fetcher=yahoo_fetcher,
     )
 
-    assert len(created) == 2
-    assert {event.event_type for event in created} == {"BONIFICACAO", "GRUPAMENTO"}
-    assert {event.ratio for event in created} == {Decimal("1.05"), Decimal("0.05")}
+    assert len(created) == 1
+    assert {event.event_type for event in created} == {"BONIFICACAO"}
+    assert {event.ratio for event in created} == {Decimal("1.05")}
     assert all(event.ticker == "AERI3" for event in created)
     assert all(event.portfolio_id is None for event in created)
-    assert all(event.source_provider in {"brapi", "yahoo"} for event in created)
+    assert all(event.source_provider == "brapi" for event in created)
     assert all(event.source_event_id for event in created)
     assert all(event.source_payload_hash for event in created)
     assert all(event.raw_metadata is not None for event in created)
     assert all(event.brapi_event_id is None for event in created)
     assert all(event.raw_data is None for event in created)
-    assert db.add.call_count == 2
+    assert db.add.call_count == 1
     db.flush.assert_awaited_once()
 
 

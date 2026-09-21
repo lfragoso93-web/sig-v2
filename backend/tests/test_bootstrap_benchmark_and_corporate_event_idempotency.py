@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.services import benchmark_rate_service
-from app.services.corporate_action_engine import normalize_yahoo_splits
+from app.services.corporate_action_engine import (
+    normalize_brapi_corporate_actions,
+)
 from app.services.corporate_event_service import sync_corporate_events_for_asset
 
 
@@ -79,10 +81,23 @@ async def test_corporate_event_sync_second_execution_does_not_create_duplicate(m
         brapi_ticker=None,
         asset_type="ACAO",
     )
-    brapi_fetcher = AsyncMock(return_value={"results": [{"symbol": "TEST3", "data": {}}]})
+    brapi_fetcher = AsyncMock(return_value={
+        "results": [{
+            "symbol": "TEST3",
+            "data": {
+                "stockDividends": [{
+                    "factor": 1.05,
+                    "lastDatePrior": "2026-01-15",
+                }],
+                "subscriptions": [],
+            },
+        }],
+    })
     yahoo_rows = [(date(2026, 1, 15), 2.0)]
     yahoo_fetcher = AsyncMock(return_value=yahoo_rows)
-    expected_action = normalize_yahoo_splits("TEST3", yahoo_rows)[0]
+    expected_action = normalize_brapi_corporate_actions(
+        "TEST3", brapi_fetcher.return_value
+    )[0]
 
     db = MagicMock()
     db.add = MagicMock()
@@ -110,10 +125,10 @@ async def test_corporate_event_sync_second_execution_does_not_create_duplicate(m
     )
 
     assert len(first) == 1
-    assert first[0].source_provider == "yahoo"
+    assert first[0].source_provider == "brapi"
     assert first[0].source_event_id == expected_action.source_event_id
     assert second == []
     db.add.assert_called_once()
     db.flush.assert_awaited_once()
     assert brapi_fetcher.await_count == 2
-    assert yahoo_fetcher.await_count == 2
+    assert yahoo_fetcher.await_count == 0

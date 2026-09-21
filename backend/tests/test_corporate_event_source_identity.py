@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.corporate_event import CorporateEvent, CorporateEventStatus
 from app.services.corporate_action_engine import normalize_brapi_corporate_actions
-from app.services.corporate_event_service import sync_corporate_events_for_asset
+from app.services.corporate_event_service import (
+    CorporateActionCollectionError,
+    sync_corporate_events_for_asset,
+)
 
 
 def _brapi_payload() -> dict[str, object]:
@@ -148,3 +151,66 @@ async def test_sync_does_not_use_legacy_brapi_alias_as_canonical_identity(
     assert created[0].source_provider == "brapi"
     assert created[0].source_event_id == action.source_event_id
     assert created[0].brapi_event_id is None
+
+
+@pytest.mark.asyncio
+async def test_sync_uses_yahoo_only_when_brapi_is_unavailable(
+    db: AsyncSession,
+) -> None:
+    asset = Asset(
+        ticker="TEST3",
+        brapi_ticker="TEST3",
+        name="Ativo de teste",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    async def unavailable_brapi(ticker: str) -> dict[str, object]:
+        raise CorporateActionCollectionError(f"{ticker}/brapi: indisponivel")
+
+    async def yahoo_fallback(symbol: str) -> list[tuple[date, float]]:
+        assert symbol == "TEST3.SA"
+        return [(date(2026, 2, 1), 0.5)]
+
+    created = await sync_corporate_events_for_asset(
+        db,
+        asset,
+        brapi_fetcher=unavailable_brapi,
+        yahoo_fetcher=yahoo_fallback,
+    )
+
+    assert len(created) == 1
+    assert created[0].source_provider == "yahoo"
+    assert created[0].effective_date == date(2026, 2, 1)
+    assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
+
+
+@pytest.mark.asyncio
+async def test_sync_does_not_call_yahoo_when_brapi_returns_valid_empty_payload(
+    db: AsyncSession,
+) -> None:
+    asset = Asset(
+        ticker="TEST3",
+        brapi_ticker="TEST3",
+        name="Ativo de teste",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    async def empty_brapi(ticker: str) -> dict[str, object]:
+        assert ticker == "TEST3"
+        return {"results": []}
+
+    async def unexpected_yahoo(symbol: str) -> list[tuple[date, float]]:
+        raise AssertionError("Yahoo nao deve ser consultado apos resposta BRAPI valida")
+
+    created = await sync_corporate_events_for_asset(
+        db,
+        asset,
+        brapi_fetcher=empty_brapi,
+        yahoo_fetcher=unexpected_yahoo,
+    )
+
+    assert created == []

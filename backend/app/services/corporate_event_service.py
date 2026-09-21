@@ -133,12 +133,18 @@ async def sync_corporate_events_for_asset(
 
     brapi_fetcher = brapi_fetcher or fetch_brapi_corporate_actions_payload
     yahoo_fetcher = yahoo_fetcher or fetch_yahoo_splits
-    brapi_payload = await brapi_fetcher(ticker)
-    yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
-    actions = (
-        *normalize_brapi_corporate_actions(ticker, brapi_payload),
-        *normalize_yahoo_splits(ticker, yahoo_rows),
-    )
+    try:
+        brapi_payload = await brapi_fetcher(ticker)
+    except CorporateActionCollectionError as exc:
+        logger.warning(
+            "[corporate_events] BRAPI indisponivel para %s; usando Yahoo como fallback: %s",
+            ticker,
+            exc,
+        )
+        yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
+        actions = normalize_yahoo_splits(ticker, yahoo_rows)
+    else:
+        actions = normalize_brapi_corporate_actions(ticker, brapi_payload)
     if not actions:
         return []
 
