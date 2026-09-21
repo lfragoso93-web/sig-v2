@@ -25,6 +25,9 @@ def _arguments(
     event_ids=None,
     reason="reconciliacao de certificacao",
     source_sha=None,
+    dataset_id=None,
+    window_start=None,
+    window_end=None,
 ) -> Namespace:
     return Namespace(
         event_id=[12, 13] if event_ids is None else event_ids,
@@ -43,6 +46,9 @@ def _arguments(
         verify_report_file=verify_report_file,
         verify_manifest_file=verify_manifest_file,
         source_sha=source_sha,
+        dataset_id=dataset_id,
+        window_start=window_start,
+        window_end=window_end,
         execute=execute,
     )
 
@@ -249,6 +255,34 @@ async def test_cli_source_sha_requires_full_hex_commit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cli_manifest_requires_dataset_id(tmp_path) -> None:
+    with pytest.raises(ValueError, match="manifest-file exige --dataset-id"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                report_file=tmp_path / "report.json",
+                manifest_file=tmp_path / "manifest.json",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_rejects_incomplete_or_reversed_window() -> None:
+    with pytest.raises(ValueError, match="informados juntos"):
+        await cli._main(
+            _arguments(decision="CONFLICT", window_start="2025-01-01")
+        )
+    with pytest.raises(ValueError, match="posterior"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                window_start="2025-02-01",
+                window_end="2025-01-01",
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_path) -> None:
     class FakeReport:
         def to_dict(self):
@@ -282,6 +316,7 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
             report_file=report_file,
             manifest_file=manifest_file,
             source_sha="a" * 40,
+            dataset_id="fixture-amob3-2025",
         )
     )
 
@@ -291,6 +326,7 @@ async def test_cli_dry_run_writes_report_manifest_with_sha256(monkeypatch, tmp_p
     assert manifest["report_sha256"] == hashlib.sha256(report_bytes).hexdigest()
     assert manifest["report_schema_version"] == "test.v1"
     assert manifest["source_commit_sha"] == "a" * 40
+    assert manifest["dataset_id"] == "fixture-amob3-2025"
 
 
 @pytest.mark.asyncio

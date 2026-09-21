@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,9 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--verify-report-file", type=Path)
     parser.add_argument("--verify-manifest-file", type=Path)
     parser.add_argument("--source-sha")
+    parser.add_argument("--dataset-id")
+    parser.add_argument("--window-start")
+    parser.add_argument("--window-end")
     parser.add_argument(
         "--ledger-preflight-event-id",
         type=int,
@@ -111,6 +115,9 @@ async def _main(arguments: argparse.Namespace) -> int:
                 "report_file",
                 "manifest_file",
                 "source_sha",
+                "dataset_id",
+                "window_start",
+                "window_end",
             )
         ):
             raise ValueError(
@@ -143,8 +150,26 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise ValueError("manifest-file exige dry-run e nao aceita --execute")
     if arguments.execute and arguments.source_sha is not None:
         raise ValueError("source-sha exige dry-run e nao aceita --execute")
+    if arguments.execute and any(
+        value is not None
+        for value in (arguments.dataset_id, arguments.window_start, arguments.window_end)
+    ):
+        raise ValueError("dataset/janela exigem dry-run e nao aceitam --execute")
     if arguments.manifest_file is not None and arguments.report_file is None:
         raise ValueError("manifest-file exige --report-file")
+    if arguments.manifest_file is not None and not str(arguments.dataset_id or "").strip():
+        raise ValueError("manifest-file exige --dataset-id")
+    if (arguments.window_start is None) != (arguments.window_end is None):
+        raise ValueError("window-start e window-end devem ser informados juntos")
+    window_start = window_end = None
+    if arguments.window_start is not None:
+        try:
+            window_start = date.fromisoformat(arguments.window_start)
+            window_end = date.fromisoformat(arguments.window_end)
+        except ValueError:
+            raise ValueError("janela deve usar datas ISO YYYY-MM-DD") from None
+        if window_start > window_end:
+            raise ValueError("window-start nao pode ser posterior a window-end")
     if arguments.source_sha is not None and not re.fullmatch(
         r"[0-9a-fA-F]{40}", arguments.source_sha
     ):
@@ -243,6 +268,9 @@ async def _main(arguments: argparse.Namespace) -> int:
                     "database_writes_executed"
                 ),
                 "source_commit_sha": arguments.source_sha,
+                "dataset_id": arguments.dataset_id,
+                "window_start": window_start.isoformat() if window_start else None,
+                "window_end": window_end.isoformat() if window_end else None,
             }
             manifest_bytes = (
                 json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)

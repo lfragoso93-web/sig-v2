@@ -374,6 +374,8 @@ python -m app.cli.corporate_event_reconciliation_dry_run \
   --event-id 12 --event-id 13 \
   --ledger-preflight-event-id 12 \
   --source-sha 0000000000000000000000000000000000000000 \
+  --dataset-id fixture-amob3-2025 \
+  --window-start 2025-01-01 --window-end 2025-12-31 \
   --reason "preflight read-only do ledger"
 ```
 
