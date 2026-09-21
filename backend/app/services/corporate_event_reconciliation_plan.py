@@ -190,8 +190,16 @@ def _reject_unsupported_adjusted_ledger_reapplication(
         for item in evidences
     )
     if has_quantity_changing_event:
+        if evidence.ledger_basis is None:
+            raise ValueError(
+                "MATCHED para AMOB3 exige contrato explicito de base do ledger"
+            )
+        if evidence.ledger_basis == CorporateEventLedgerBasis.ADJUSTED_POST_EVENT:
+            raise ValueError(
+                "MATCHED para AMOB3 rejeita reaplicacao sobre ledger ajustado"
+            )
         raise ValueError(
-            "MATCHED para AMOB3 exige contrato explicito de base do ledger"
+            "MATCHED para AMOB3 em ledger historico bruto exige contrato explicito"
         )
 
 

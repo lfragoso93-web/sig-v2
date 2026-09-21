@@ -215,6 +215,54 @@ def test_matched_grouping_keeps_amob3_fail_closed_until_ledger_basis_contract() 
         )
 
 
+def test_matched_grouping_rejects_amob3_adjusted_ledger_reapplication() -> None:
+    with pytest.raises(ValueError, match="reaplicacao sobre ledger ajustado"):
+        build_reconciliation_dry_run_report(
+            (
+                CorporateEventEvidence(
+                    event_id=12,
+                    ticker="AMOB3",
+                    event_type="GRUPAMENTO",
+                    source_provider="brapi",
+                    source_event_id="brapi:amob3",
+                ),
+            ),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="ledger ja ajustado pelo grupamento",
+            canonical_event_id=12,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+                ledger_basis=CorporateEventLedgerBasis.ADJUSTED_POST_EVENT,
+            ),
+        )
+
+
+def test_matched_grouping_keeps_amob3_raw_ledger_fail_closed() -> None:
+    with pytest.raises(ValueError, match="ledger historico bruto"):
+        build_reconciliation_dry_run_report(
+            (
+                CorporateEventEvidence(
+                    event_id=12,
+                    ticker="AMOB3",
+                    event_type="GRUPAMENTO",
+                    source_provider="brapi",
+                    source_event_id="brapi:amob3",
+                ),
+            ),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="ledger historico ainda nao transformado",
+            canonical_event_id=12,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+                ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+            ),
+        )
+
+
 def test_match_resolution_rejects_manual_review_for_matched() -> None:
     with pytest.raises(ValueError, match="nao autoriza MATCHED"):
         validate_match_resolution_evidence(
