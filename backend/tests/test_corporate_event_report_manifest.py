@@ -118,6 +118,32 @@ def test_manifest_verification_rejects_non_string_source_sha(tmp_path) -> None:
         verify_corporate_event_report_manifest(report_file, manifest_file)
 
 
+def test_manifest_verification_rejects_non_string_dataset_id(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["dataset_id"] = 370
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifesto exige dataset_id"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
+def test_manifest_verification_rejects_incomplete_report_context(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    report["artifact_context"].pop("window_end")
+    report_bytes = (
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    report_file.write_bytes(report_bytes)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["report_sha256"] = hashlib.sha256(report_bytes).hexdigest()
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="artifact_context possui campos divergentes"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
 def test_manifest_verification_rejects_context_mismatch(tmp_path) -> None:
     report_file, manifest_file = _write_artifacts(tmp_path)
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))

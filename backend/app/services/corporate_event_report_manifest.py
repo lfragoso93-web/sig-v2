@@ -31,13 +31,16 @@ def verify_corporate_event_report_manifest(
         raise ValueError("artefato nao esta marcado como dry-run")
     if report.get("database_writes_executed") != 0:
         raise ValueError("artefato registra escritas no banco")
-    if not str(manifest.get("dataset_id") or "").strip():
+    dataset_id = manifest.get("dataset_id")
+    if not isinstance(dataset_id, str) or not dataset_id.strip():
         raise ValueError("manifesto exige dataset_id")
     window_start = manifest.get("window_start")
     window_end = manifest.get("window_end")
     if (window_start is None) != (window_end is None):
         raise ValueError("manifesto possui janela incompleta")
     if window_start is not None:
+        if not isinstance(window_start, str) or not isinstance(window_end, str):
+            raise ValueError("janela do manifesto deve usar datas ISO")
         try:
             parsed_start = date.fromisoformat(window_start)
             parsed_end = date.fromisoformat(window_end)
@@ -54,7 +57,15 @@ def verify_corporate_event_report_manifest(
     artifact_context = report.get("artifact_context")
     if not isinstance(artifact_context, dict):
         raise ValueError("relatorio exige artifact_context")
-    for field in ("dataset_id", "window_start", "window_end", "source_commit_sha"):
+    context_fields = {
+        "dataset_id",
+        "window_start",
+        "window_end",
+        "source_commit_sha",
+    }
+    if set(artifact_context) != context_fields:
+        raise ValueError("artifact_context possui campos divergentes")
+    for field in context_fields:
         if artifact_context.get(field) != manifest.get(field):
             raise ValueError(f"contexto {field} do relatorio diverge do manifesto")
 
@@ -64,7 +75,7 @@ def verify_corporate_event_report_manifest(
         "report_schema_version": report.get("schema_version"),
         "dry_run": True,
         "database_writes_executed": 0,
-        "dataset_id": manifest["dataset_id"],
+        "dataset_id": dataset_id,
         "window_start": window_start,
         "window_end": window_end,
         "source_commit_sha": source_sha,
