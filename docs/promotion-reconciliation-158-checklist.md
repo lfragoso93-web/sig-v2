@@ -380,6 +380,21 @@ Esse comando apenas le as transacoes da carteira ate `effective_date`, calcula
 a quantidade liquida projetada pelo `quantity_factor` e faz rollback da sessao.
 Ele nao cria transacao, nao altera evento e nao autoriza `MATCHED`.
 
+### Verificacao independente do artefato retido
+
+Depois de reter `report.json` e `manifest.json`, a integridade pode ser
+verificada sem abrir sessao de banco:
+
+```bash
+python -m app.cli.corporate_event_reconciliation_dry_run \
+  --verify-report-file report.json \
+  --verify-manifest-file manifest.json
+```
+
+O modo `verify` recalcula o SHA-256, confere o schema e exige
+`dry_run=true` e `database_writes_executed=0`. Ele nao aceita argumentos de
+reconciliacao, `--execute` ou escrita de novos artefatos.
+
 ### Pre-requisitos para saida de `CONFLICT` em 15/09/2026
 
 Foi adicionado um contrato puro de evidencia para qualquer transicao futura para

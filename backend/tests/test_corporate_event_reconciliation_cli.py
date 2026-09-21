@@ -166,6 +166,55 @@ async def test_cli_verify_mode_is_read_only_and_does_not_open_session(
 
 
 @pytest.mark.asyncio
+async def test_cli_verify_mode_checks_retained_fixture_without_database(
+    tmp_path,
+) -> None:
+    report_file = tmp_path / "report.json"
+    manifest_file = tmp_path / "manifest.json"
+    report_bytes = (
+        json.dumps(
+            {
+                "schema_version": "corporate-event-reconciliation-dry-run.v2",
+                "dry_run": True,
+                "database_writes_executed": 0,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+    report_file.write_bytes(report_bytes)
+    manifest_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "corporate-event-reconciliation-manifest.v1",
+                "report_file": str(report_file),
+                "report_sha256": hashlib.sha256(report_bytes).hexdigest(),
+                "report_schema_version": "corporate-event-reconciliation-dry-run.v2",
+                "dry_run": True,
+                "database_writes_executed": 0,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = await cli._main(
+        _arguments(
+            decision=None,
+            event_ids=[],
+            reason=None,
+            verify_report_file=report_file,
+            verify_manifest_file=manifest_file,
+        )
+    )
+
+    assert result == 0
+
+
+@pytest.mark.asyncio
 async def test_cli_verify_mode_requires_both_artifacts(tmp_path) -> None:
     with pytest.raises(ValueError, match="exige --verify-report-file"):
         await cli._main(
