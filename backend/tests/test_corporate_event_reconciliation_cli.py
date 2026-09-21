@@ -20,11 +20,15 @@ def _arguments(
     ledger_preflight_event_id: int | None = None,
     report_file=None,
     manifest_file=None,
+    verify_report_file=None,
+    verify_manifest_file=None,
+    event_ids=None,
+    reason="reconciliacao de certificacao",
 ) -> Namespace:
     return Namespace(
-        event_id=[12, 13],
+        event_id=[12, 13] if event_ids is None else event_ids,
         decision=decision,
-        reason="reconciliacao de certificacao",
+        reason=reason,
         canonical_event_id=canonical_event_id,
         evidence_type=evidence_type,
         evidence_reference=evidence_reference,
@@ -35,6 +39,8 @@ def _arguments(
         ledger_preflight_event_id=ledger_preflight_event_id,
         report_file=report_file,
         manifest_file=manifest_file,
+        verify_report_file=verify_report_file,
+        verify_manifest_file=verify_manifest_file,
         execute=execute,
     )
 
@@ -129,6 +135,47 @@ def test_cli_report_file_is_exclusive_and_writes_json(tmp_path) -> None:
     assert json.loads(report_file.read_text(encoding="utf-8")) == payload
     with pytest.raises(FileExistsError):
         report_file.open("x", encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_cli_verify_mode_is_read_only_and_does_not_open_session(
+    monkeypatch, tmp_path
+) -> None:
+    report_file = tmp_path / "report.json"
+    manifest_file = tmp_path / "manifest.json"
+    monkeypatch.setattr(
+        cli,
+        "verify_corporate_event_report_manifest",
+        lambda report, manifest: {
+            "valid": True,
+            "report_sha256": "abc",
+        },
+    )
+
+    result = await cli._main(
+        _arguments(
+            decision=None,
+            event_ids=[],
+            reason=None,
+            verify_report_file=report_file,
+            verify_manifest_file=manifest_file,
+        )
+    )
+
+    assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_cli_verify_mode_requires_both_artifacts(tmp_path) -> None:
+    with pytest.raises(ValueError, match="exige --verify-report-file"):
+        await cli._main(
+            _arguments(
+                decision=None,
+                event_ids=[],
+                reason=None,
+                verify_report_file=tmp_path / "report.json",
+            )
+        )
 
 
 @pytest.mark.asyncio

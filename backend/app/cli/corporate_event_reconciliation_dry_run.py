@@ -21,6 +21,9 @@ from app.services.corporate_event_reconciliation_dry_run_service import (
     execute_corporate_event_conflict_reconciliation,
     execute_corporate_event_matched_reconciliation,
 )
+from app.services.corporate_event_report_manifest import (
+    verify_corporate_event_report_manifest,
+)
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventMatchEvidenceType,
     CorporateEventMatchResolutionEvidence,
@@ -43,7 +46,9 @@ def _arguments() -> argparse.Namespace:
             "sem executar escrita no banco."
         )
     )
-    parser.add_argument("--event-id", type=int, action="append", required=True)
+    parser.add_argument("--event-id", type=int, action="append")
+    parser.add_argument("--verify-report-file", type=Path)
+    parser.add_argument("--verify-manifest-file", type=Path)
     parser.add_argument(
         "--ledger-preflight-event-id",
         type=int,
@@ -62,9 +67,9 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument(
         "--decision",
         choices=[item.value for item in CorporateEventReconciliationDecision],
-        required=True,
+        required=False,
     )
-    parser.add_argument("--reason", required=True)
+    parser.add_argument("--reason")
     parser.add_argument("--canonical-event-id", type=int)
     parser.add_argument(
         "--evidence-type",
@@ -87,6 +92,41 @@ def _arguments() -> argparse.Namespace:
 
 
 async def _main(arguments: argparse.Namespace) -> int:
+    verify_report_file = getattr(arguments, "verify_report_file", None)
+    verify_manifest_file = getattr(arguments, "verify_manifest_file", None)
+    if verify_report_file is not None or verify_manifest_file is not None:
+        if verify_report_file is None or verify_manifest_file is None:
+            raise ValueError(
+                "verificacao exige --verify-report-file e --verify-manifest-file"
+            )
+        if any(
+            bool(getattr(arguments, name, None))
+            for name in (
+                "event_id",
+                "decision",
+                "reason",
+                "execute",
+                "report_file",
+                "manifest_file",
+            )
+        ):
+            raise ValueError(
+                "verificacao nao aceita argumentos de reconciliacao"
+            )
+        print(
+            json.dumps(
+                verify_corporate_event_report_manifest(
+                    verify_report_file, verify_manifest_file
+                ),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    if not arguments.event_id or not arguments.decision or not arguments.reason:
+        raise ValueError("dry-run exige --event-id, --decision e --reason")
     event_ids = tuple(arguments.event_id)
     decision = CorporateEventReconciliationDecision(arguments.decision)
 
