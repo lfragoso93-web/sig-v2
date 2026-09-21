@@ -55,6 +55,15 @@ def _average_price_from_state(state: object) -> Decimal:
     return cost / qty if qty else _ZERO
 
 
+def _corporate_action_cash_flow_total(positions: dict) -> Decimal:
+    """Soma fluxos economicos derivados sem mistura-los a valor de mercado/PnL."""
+    total = _ZERO
+    for state in positions.values():
+        for cash_flow in getattr(state, "corporate_action_cash_flows", ()) or ():
+            total += Decimal(str(getattr(cash_flow, "gross_amount_brl", 0) or 0))
+    return total.quantize(_MONEY)
+
+
 async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
     result = await db.execute(
         select(Asset.ticker).where(
@@ -135,6 +144,7 @@ async def _base_totals_without_dedicated_lookup(
             "unrealized_pnl": _ZERO,
             "total_pnl": _ZERO,
             "return_pct": _ZERO,
+            "corporate_action_cash_flow_total": _ZERO,
             "pre_listing_assets": 0,
             "real_price_gaps": 0,
             "market_value_by_class": {},
@@ -239,6 +249,9 @@ async def _base_totals_without_dedicated_lookup(
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),
+        "corporate_action_cash_flow_total": _corporate_action_cash_flow_total(
+            positions,
+        ),
         "pre_listing_assets": len(pre_listing),
         "real_price_gaps": len(real_gaps),
         "market_value_by_class": {

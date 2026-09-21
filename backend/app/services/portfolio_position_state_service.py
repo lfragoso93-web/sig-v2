@@ -21,7 +21,15 @@ from app.services.snapshot_position_projection import project_snapshot_positions
 class TickerState:
     """Estado projetado de um ticker em uma data."""
 
-    __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
+    __slots__ = (
+        "ticker",
+        "asset_type",
+        "qty",
+        "cost",
+        "realized_pnl",
+        "corporate_action_cash_flows",
+        "is_usd",
+    )
 
     def __init__(self, ticker: str, asset_type: str, is_usd: bool = False):
         self.ticker = ticker
@@ -29,6 +37,7 @@ class TickerState:
         self.qty = Decimal("0")
         self.cost = Decimal("0")
         self.realized_pnl = Decimal("0")
+        self.corporate_action_cash_flows = ()
         self.is_usd = is_usd
 
 
@@ -65,6 +74,7 @@ async def build_positions_at(
         state.qty = projection.quantity
         state.cost = projection.total_cost
         state.realized_pnl = projection.realized_pnl
+        state.corporate_action_cash_flows = projection.corporate_action_cash_flows
         states[ticker] = state
 
     return states

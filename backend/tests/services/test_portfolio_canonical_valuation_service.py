@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -93,6 +94,49 @@ async def test_canonical_totals_sem_renda_fixa_preserva_base(monkeypatch):
     assert result["total_pnl"] == base["total_pnl"]
     assert result["return_pct"] == base["return_pct"]
     assert result["market_value_by_class"] == base["market_value_by_class"]
+
+
+@pytest.mark.asyncio
+async def test_base_totals_exposes_corporate_action_cash_flow_without_pnl_or_market_mix(
+    monkeypatch,
+):
+    state = SimpleNamespace(
+        asset_type="ACAO",
+        qty=Decimal("10"),
+        cost=Decimal("185.30"),
+        realized_pnl=Decimal("0"),
+        is_usd=False,
+        corporate_action_cash_flows=(
+            SimpleNamespace(gross_amount_brl=Decimal("0.4000")),
+        ),
+    )
+    db = AsyncMock()
+    db.execute.side_effect = [
+        SimpleNamespace(
+            all=lambda: [
+                SimpleNamespace(ticker="ABC", asset_type="ACAO"),
+            ],
+        ),
+        SimpleNamespace(scalar_one=lambda: Decimal("185.30")),
+    ]
+
+    async def fake_prices(*_args, **_kwargs):
+        return {"ABC": Decimal("18.53")}, set(), set()
+
+    monkeypatch.setattr(service, "get_prices_at_date_with_lifecycle", fake_prices)
+
+    result = await service._base_totals_without_dedicated_lookup(
+        db,
+        1,
+        date(2026, 1, 2),
+        positions={"ABC": state},
+    )
+
+    assert result["corporate_action_cash_flow_total"] == Decimal("0.40")
+    assert result["market_value"] == Decimal("185.30")
+    assert result["realized_pnl"] == Decimal("0.00")
+    assert result["unrealized_pnl"] == Decimal("0.00")
+    assert result["total_pnl"] == Decimal("0.00")
 
 
 @pytest.mark.asyncio
