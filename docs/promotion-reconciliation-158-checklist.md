@@ -416,6 +416,25 @@ Esse contrato nao altera banco, nao executa rebuild e nao promove evento
 corporativo. Ele apenas impede reconciliacao fail-open enquanto #370 nao tiver
 evidencia operacional suficiente.
 
+### Matriz de evidencia operacional para AMOB3 e KLBN11
+
+Antes de qualquer decisao `MATCHED`, registrar separadamente por evento e por
+ticker:
+
+| Item | Evidencia minima | Decisao se ausente |
+| --- | --- | --- |
+| Identidade do evento | extrato, aviso da corretora ou documento oficial com ticker, tipo, data e fator | manter `CONFLICT` |
+| Base do ledger | confirmacao se as transacoes sao historicas brutas ou pos-evento ajustadas | nao promover `MATCHED` |
+| Quantidade projetada | saldo antes do evento, fator aplicado e saldo esperado, reconciliados com a carteira | bloquear execucao |
+| Fracao ou residuo | quantidade fracionaria, politica (`NO_FRACTIONAL_RESIDUE`, `CASH_SETTLEMENT` ou revisao manual) e suporte documental | nao promover `MATCHED` |
+| Tratamento de KLBN11 | contrato explicito para a Unit composta e eventual liquidacao em caixa | manter `CONFLICT` |
+| Tratamento de AMOB3 | contrato explicito de base do ledger, sem reaplicacao sobre base ajustada | manter `CONFLICT` |
+
+O pacote deve conter a referencia documental, o `source_commit_sha`, o
+`dataset_id`, a janela analisada e os artefatos `report.json` e `manifest.json`.
+Ausencia, divergencia ou evidencia apenas inferida de provider nao autoriza
+escrita, rebuild, sincronizacao ou promocao.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
