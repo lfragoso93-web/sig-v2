@@ -54,3 +54,6 @@ Thumbs.db
 
 # OCI operational artifacts
 /artifacts/oci-source-package/
+
+# Codex local operational scratch and retained dry-run artifacts
+/.tmp-codex/
