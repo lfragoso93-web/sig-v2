@@ -774,6 +774,88 @@ Decisao: aprovado para readiness assistido no ambiente local, mantendo
 promocao para `main`, rebuild amplo nem `MATCHED` de KLBN11 sem evidencia
 documental do preco/valor da fracao agrupada.
 
+### Provider-boundary dos read paths financeiros em 22/09/2026
+
+Foi executada suite focada para confirmar que leituras financeiras usam dados
+persistidos e nao chamam providers externos nem materializam direitos derivados
+em mutacoes transacionais.
+
+Comando:
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest `
+  tests\test_assets_router_provider_boundary.py `
+  tests\test_assets_router_db_first_price_contract.py `
+  tests\test_price_history_router_db_first.py `
+  tests\test_summary_db_first_fx_boundary.py `
+  tests\test_class_snapshot_fx_db_first_boundary.py `
+  tests\test_portfolio_certification_reconcile_no_provider.py `
+  tests\test_asset_market_pipeline_no_materialization.py `
+  tests\test_transactions_no_dividend_materialization.py `
+  tests\test_legacy_scheduler_no_materialization.py `
+  tests\test_rf_legacy_service_absence.py `
+  tests\test_treasury_catalog_db_first_boundary.py -q
+```
+
+Resultado: 41 testes `passed`.
+
+Cobertura validada:
+
+- endpoints de ativos e cotacoes usam catalogo/precos persistidos;
+- historico de precos e FX no resumo/snapshots sao DB-first;
+- CLI de reconciliacao CERT303 nao importa providers;
+- pipeline de mercado e mutacoes de transacoes nao materializam Proventos por
+  carteira;
+- scheduler legado nao reintroduz materializacao;
+- caminho legado de provider de Renda Fixa permanece ausente;
+- resolucao de Tesouro usa catalogo/aliases persistidos.
+
+Decisao: provider-boundary aprovado para read paths financeiros deste SHA. Isso
+nao autoriza seed/rebuild amplo nem chamada de provider em GET financeiro.
+
+### Dominio financeiro canonico em 22/09/2026
+
+Foi executada suite focada de dominio financeiro para cobrir rentabilidade,
+valuation, snapshots, PnL, IRPF, Tesouro e Renda Fixa sem escrita operacional no
+banco local.
+
+Comando:
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest `
+  tests\test_twr_service.py `
+  tests\test_rentabilidade_reconciliation_service.py `
+  tests\services\test_portfolio_canonical_valuation_service.py `
+  tests\test_portfolio_class_snapshot_service.py `
+  tests\test_realized_pnl_projection_reader.py `
+  tests\test_realized_pnl_summary_scenarios.py `
+  tests\test_irpf_legacy_monthly_schema_policy.py `
+  tests\test_alembic_consumer_consolidation_policy.py `
+  tests\test_treasury_reconciliation_db_first_boundary.py `
+  tests\test_treasury_bootstrap_idempotency.py `
+  tests\services\test_fixed_income_contract_audit_service.py -q
+```
+
+Resultado: 53 testes `passed`.
+
+Cobertura validada:
+
+- TWR diario nao transforma aporte/resgate em rentabilidade;
+- reconciliacao da pagina de Rentabilidade cruza resumo, KPIs e classes;
+- valuation canonico preserva totais, proventos corporativos em caixa,
+  arredondamento por classe e reuso de posicoes;
+- snapshots por classe tratam datas nao uteis, tolerancias monetarias e
+  reconciliacao de campos;
+- PnL realizado e cenarios de venda parcial permanecem coerentes;
+- runtime IRPF nao reintroduz consumidores das tabelas mensais legadas e a
+  decisao de schema continua governada por evidencia;
+- reconciliacao de Tesouro nao cria ativos e segunda execucao permanece
+  convergente;
+- auditoria de contratos de Renda Fixa permanece ativa.
+
+Decisao: dominio financeiro canonico aprovado para este microbloco, com
+`ready_for_real_data=false` preservado.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
