@@ -196,17 +196,19 @@ def validate_match_resolution_evidence(
     )
 
 
-def _reject_unsupported_composite_cash_settlement(
+def _reject_unsupported_klbn11_unit_reconciliation(
     evidences: tuple[CorporateEventEvidence, ...],
-    evidence: CorporateEventMatchResolutionEvidence,
 ) -> None:
-    if evidence.fractional_policy != FractionalResolutionPolicy.CASH_SETTLEMENT:
-        return
-
-    tickers = {item.ticker.strip().upper() for item in evidences}
-    if "KLBN11" in tickers:
+    unit_quantity_changing_types = {"BONIFICACAO", "DESDOBRAMENTO"}
+    has_klbn11_unit_event = any(
+        item.ticker.strip().upper() == "KLBN11"
+        and item.event_type.strip().upper() in unit_quantity_changing_types
+        for item in evidences
+    )
+    if has_klbn11_unit_event:
         raise ValueError(
-            "CASH_SETTLEMENT para KLBN11 exige contrato explicito de Unit composta"
+            "MATCHED para KLBN11 exige contrato explicito de Unit composta, "
+            "fracao/residuo e tratamento de caixa"
         )
 
 
@@ -318,10 +320,7 @@ def build_reconciliation_dry_run_report(
         if match_resolution_evidence is None:
             raise ValueError("MATCHED exige evidencia operacional")
         validate_match_resolution_evidence(match_resolution_evidence)
-        _reject_unsupported_composite_cash_settlement(
-            evidences,
-            match_resolution_evidence,
-        )
+        _reject_unsupported_klbn11_unit_reconciliation(evidences)
         _reject_unsupported_adjusted_ledger_reapplication(
             evidences,
             match_resolution_evidence,

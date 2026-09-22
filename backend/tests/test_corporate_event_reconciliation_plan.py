@@ -221,6 +221,24 @@ def test_matched_cash_settlement_keeps_klbn11_fail_closed_until_unit_contract() 
         )
 
 
+def test_matched_no_fractional_residue_keeps_klbn11_fail_closed() -> None:
+    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
+        build_reconciliation_dry_run_report(
+            (
+                _ticker_evidence(81, "KLBN11"),
+                _ticker_evidence(82, "KLBN11", "yahoo"),
+            ),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="preflight projetou fracao de unit",
+            canonical_event_id=81,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT,
+                evidence_reference="klabin:unit-event:2025-12",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+            ),
+        )
+
+
 def test_matched_grouping_keeps_amob3_fail_closed_until_ledger_basis_contract() -> None:
     with pytest.raises(ValueError, match="AMOB3 exige contrato explicito"):
         build_reconciliation_dry_run_report(

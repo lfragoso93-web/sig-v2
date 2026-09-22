@@ -382,12 +382,15 @@ async def test_matched_writer_keeps_klbn11_cash_settlement_fail_closed(db) -> No
         source_provider="brapi",
         source_event_id="brapi:klbn11",
     )
+    brapi.event_type = "BONIFICACAO"
     yahoo = await _create_event(
         db,
         asset=asset,
         source_provider="yahoo",
         source_event_id="yahoo:klbn11",
     )
+    yahoo.event_type = "DESDOBRAMENTO"
+    await db.flush()
 
     with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
         await execute_corporate_event_matched_reconciliation(
