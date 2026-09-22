@@ -697,6 +697,33 @@ documental do preco/valor de liquidacao da fracao agrupada. Nenhuma escrita no
 banco foi executada neste bloco, nenhum registro em `transactions` foi alterado
 e nenhum novo `asset_dividends` foi criado.
 
+### Varredura de materialidade por posicao em 22/09/2026
+
+Foi executada varredura read-only cruzando `corporate_events` com `transactions`
+por ticker e posicao liquida na data efetiva do evento. A leitura ampla por
+primeira transacao ainda encontrava 11 eventos `UNRECONCILED` em tickers ja
+negociados, incluindo FIQE3, GOAU4, ITSA4, KLBN4, PETZ3 e POMO4. O refinamento
+por posicao liquida mostrou que esses eventos nao tinham quantidade aberta no
+momento do evento.
+
+Eventos corporativos materiais com posicao aberta:
+
+| Ticker | Eventos | Estado |
+| --- | --- | --- |
+| AMOB3 | 12 `GRUPAMENTO` BRAPI e 13 `GRUPAMENTO` Yahoo | 12 `CONFLICT`, 13 `MATCHED` canonico |
+| KLBN11 | 81 `BONIFICACAO` BRAPI e 82 `DESDOBRAMENTO` Yahoo | ambos `CONFLICT`, pendentes de preco/valor documental da fracao |
+
+Contagem por posicao liquida diferente de zero:
+
+- `CONFLICT`, `requires_review=true`, `is_canonical=false`: 3 eventos;
+- `MATCHED`, `requires_review=false`, `is_canonical=true`: 1 evento;
+- `UNRECONCILED`: 0 eventos materiais com posicao aberta.
+
+Decisao: a fila material de eventos corporativos com impacto em posicao aberta
+nao possui `UNRECONCILED` remanescente. O unico bloqueio operacional conhecido
+permanece KLBN11 em `CONFLICT`, dependente de evidencia documental da liquidacao
+da fracao agrupada antes de eventual `MATCHED`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
