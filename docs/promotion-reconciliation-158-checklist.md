@@ -435,6 +435,20 @@ O pacote deve conter a referencia documental, o `source_commit_sha`, o
 Ausencia, divergencia ou evidencia apenas inferida de provider nao autoriza
 escrita, rebuild, sincronizacao ou promocao.
 
+### Politica de providers para eventos corporativos
+
+Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
+BRAPI retorna payload valido, inclusive `results=[]`, o SGI nao consulta nem
+mescla Yahoo. Yahoo pode ser usado somente quando a coleta BRAPI falha por
+indisponibilidade, transporte ou autorizacao; nesse caso, o evento recebe
+`source_provider=yahoo` e `raw_metadata.provider_fallback=brapi_unavailable`.
+
+Payload BRAPI invalido ou incompatibilidade de contrato nao aciona fallback:
+permanece erro fail-closed para evitar que uma fonte secundaria mascare uma
+mudanca de contrato da fonte primaria. Providers nao sao consultados durante
+calculos financeiros; o banco canonico continua sendo a fonte de leitura do
+runtime.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
