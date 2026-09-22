@@ -604,6 +604,42 @@ Pos-validacao read-only confirmou que o banco permaneceu inalterado: eventos 81
 e 82 continuam `UNRECONCILED`, revisaveis e canonicos ate que haja autorizacao
 explicita para `--execute`.
 
+### Execucao controlada de `CONFLICT` KLBN11 em 22/09/2026
+
+Apos autorizacao explicita do operador, foi executada a reconciliacao controlada
+de `CONFLICT` para KLBN11 eventos 81 e 82 no banco local Docker.
+
+Preflight imediato:
+
+- eventos 81 e 82 estavam `UNRECONCILED`, `requires_review=true`,
+  `is_canonical=true`, sem `matched_event_id`;
+- `corporate_event_reconciliation_evidence` tinha 0 linhas para 81/82.
+
+Execucao:
+
+- comando: `corporate_event_reconciliation_dry_run --decision CONFLICT --event-id 81 --event-id 82 --execute`;
+- `schema_version=corporate-event-reconciliation-execution.v1`;
+- `ok=true`;
+- `database_writes_executed=2`;
+- escrita limitada aos dois updates de estado em `corporate_events`.
+
+Pos-validacao:
+
+- evento 81: `CONFLICT`, `requires_review=true`, `is_canonical=false`,
+  `matched_event_id=null`;
+- evento 82: `CONFLICT`, `requires_review=true`, `is_canonical=false`,
+  `matched_event_id=null`;
+- nenhuma evidencia `MATCHED` foi criada para KLBN11;
+- ledger da carteira 15 para `KLBN11` ate 18/12/2025 permaneceu com 1
+  transacao (`1413`), compra de 10 units em 05/11/2025;
+- resumo dos quatro eventos materiais da #370: 3 `CONFLICT` revisaveis e 1
+  `MATCHED` canonico; nenhum dos quatro permanece `UNRECONCILED`.
+
+Essa execucao formaliza o bloqueio de KLBN11 e remove o estado
+`UNRECONCILED` material do dataset local, mas nao resolve a politica de Unit
+composta, nao cria evento financeiro projetavel, nao executa rebuild, nao toca
+`transactions` e nao promove `ready_for_real_data=true`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
