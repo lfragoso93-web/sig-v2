@@ -460,6 +460,46 @@ Para AMOB3, `RAW_HISTORICAL` com referencia documental da transformacao e
 `ADJUSTED_POST_EVENT` continua bloqueado para impedir reaplicacao do grupamento
 sobre ledger ja normalizado.
 
+### Execucao controlada AMOB3 em 22/09/2026
+
+Apos autorizacao explicita do operador, foi executada a reconciliacao controlada
+dos eventos AMOB3 12 e 13 no banco local Docker.
+
+Preflight imediato:
+
+- migration atual: `20260922_corp_ev_ledger_basis`;
+- evento 12: `AMOB3` `GRUPAMENTO`, `CONFLICT`, `requires_review=true`,
+  `is_canonical=false`, `matched_event_id=13`;
+- evento 13: `AMOB3` `GRUPAMENTO`, `MATCHED`, `requires_review=false`,
+  `is_canonical=true`;
+- evidencia canonica existente para evento 13 ja confirmava
+  `OFFICIAL_ISSUER_DOCUMENT`,
+  `AUTOMOB:AVISO-AOS-ACIONISTAS:2025-04-25:GRUPAMENTO-50-1` e
+  `NO_FRACTIONAL_RESIDUE`, mas ainda nao continha os campos de base do ledger.
+
+Execucao:
+
+- comando: `corporate_event_reconciliation_dry_run --decision MATCHED ... --execute`;
+- `schema_version=corporate-event-reconciliation-execution.v1`;
+- `ok=true`;
+- `database_writes_executed=3`;
+- escrita limitada a dois updates de estado dos eventos e complemento da
+  evidencia canonica legada.
+
+Pos-validacao:
+
+- evento 12 permaneceu `CONFLICT`, revisavel e apontando para o evento 13;
+- evento 13 permaneceu `MATCHED`, canonico e sem `matched_event_id`;
+- evidencia do evento 13 passou a registrar `ledger_basis=RAW_HISTORICAL`,
+  `ledger_transformation_reference=AUTOMOB:LEDGER-BASIS:CSV-RAW-300-TO-6` e
+  `ledger_quantity_factor=0.020000000000`;
+- ledger da carteira 15 para `AMOB3` ate 29/05/2025 permaneceu com 2
+  transacoes (`1287`, `1323`), quantidade bruta 300 e nenhuma transformacao em
+  `transactions`.
+
+Essa execucao nao cria transacao, nao executa rebuild, nao sincroniza providers,
+nao resolve KLBN11 e nao promove `ready_for_real_data=true`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a

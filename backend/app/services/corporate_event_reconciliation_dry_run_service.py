@@ -41,6 +41,43 @@ def _normalized_decimal_text(value: object | None) -> str | None:
     return str(Decimal(str(value)).normalize())
 
 
+def _evidence_updates_for_missing_ledger_contract(
+    actual: dict[str, object | None],
+    expected: dict[str, object | None],
+) -> dict[str, object]:
+    immutable_fields = (
+        "decision",
+        "evidence_type",
+        "evidence_reference",
+        "fractional_policy",
+        "fractional_quantity",
+        "fractional_settlement_price",
+        "cash_treatment",
+    )
+    for field in immutable_fields:
+        if actual[field] != expected[field]:
+            raise ValueError(
+                "evento canonico ja possui evidencia de reconciliacao "
+                "divergente"
+            )
+
+    updates: dict[str, object] = {}
+    for field in (
+        "ledger_basis",
+        "ledger_transformation_reference",
+        "ledger_quantity_factor",
+    ):
+        if actual[field] == expected[field]:
+            continue
+        if actual[field] is not None or expected[field] is None:
+            raise ValueError(
+                "evento canonico ja possui evidencia de reconciliacao "
+                "divergente"
+            )
+        updates[field] = expected[field]
+    return updates
+
+
 async def build_corporate_event_reconciliation_dry_run(
     db: AsyncSession,
     *,
@@ -243,13 +280,14 @@ async def execute_corporate_event_matched_reconciliation(
             ),
         }
 
-        if actual != expected:
-            raise ValueError(
-                "evento canonico ja possui evidencia de reconciliacao "
-                "divergente"
-            )
+        missing_ledger_updates = _evidence_updates_for_missing_ledger_contract(
+            actual,
+            expected,
+        )
+        for field, value in missing_ledger_updates.items():
+            setattr(existing, field, value)
 
-        evidence_write_count = 0
+        evidence_write_count = 1 if missing_ledger_updates else 0
 
     for update in updates:
         _apply_update(events_by_id[update.event_id], update)

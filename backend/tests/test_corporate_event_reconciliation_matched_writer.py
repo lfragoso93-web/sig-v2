@@ -236,6 +236,78 @@ async def test_matched_writer_persists_ledger_basis_contract(db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_matched_writer_completes_missing_ledger_contract(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    first = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:amob3-complete-ledger",
+    )
+    canonical = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:amob3-complete-ledger",
+    )
+    db.add(
+        CorporateEventReconciliationEvidence(
+            corporate_event_id=canonical.id,
+            decision="MATCHED",
+            evidence_type="OFFICIAL_ISSUER_DOCUMENT",
+            evidence_reference=(
+                "AUTOMOB:AVISO-AOS-ACIONISTAS:2025-04-25:GRUPAMENTO-50-1"
+            ),
+            fractional_policy="NO_FRACTIONAL_RESIDUE",
+        )
+    )
+    await db.flush()
+
+    report = await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento operacional confirma base do ledger",
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT,
+            evidence_reference=(
+                "AUTOMOB:AVISO-AOS-ACIONISTAS:2025-04-25:GRUPAMENTO-50-1"
+            ),
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+            ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+            ledger_transformation_reference=(
+                "AUTOMOB:LEDGER-BASIS:CSV-RAW-300-TO-6"
+            ),
+            ledger_quantity_factor="0.02",
+        ),
+    )
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence).where(
+            CorporateEventReconciliationEvidence.corporate_event_id
+            == canonical.id
+        )
+    )
+    persisted = result.scalar_one()
+
+    assert report.database_writes_executed == 3
+    assert persisted.ledger_basis == "RAW_HISTORICAL"
+    assert (
+        persisted.ledger_transformation_reference
+        == "AUTOMOB:LEDGER-BASIS:CSV-RAW-300-TO-6"
+    )
+    assert persisted.ledger_quantity_factor == Decimal("0.020000000000")
+
+
+@pytest.mark.asyncio
 async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
     asset = Asset(
         ticker="ABEV3",
