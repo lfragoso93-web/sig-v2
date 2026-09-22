@@ -18,6 +18,11 @@ _SUPPORTED_TYPES = {"ACAO", "BDR", "ETF_NACIONAL"}
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--portfolio-id", type=int, required=True)
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Persiste eventos coletados; sem esta flag o comando faz dry-run.",
+    )
     return parser
 
 
@@ -25,6 +30,8 @@ async def _main() -> None:
     args = _parser().parse_args()
     report = {
         "portfolio_id": args.portfolio_id,
+        "dry_run": not args.execute,
+        "database_writes_executed": 0,
         "assets_processed": 0,
         "events_created": 0,
         "errors": [],
@@ -53,7 +60,11 @@ async def _main() -> None:
         for asset in assets:
             try:
                 created = await sync_corporate_events_for_asset(db, asset)
-                await db.commit()
+                if args.execute:
+                    await db.commit()
+                    report["database_writes_executed"] += len(created)
+                else:
+                    await db.rollback()
                 report["assets_processed"] += 1
                 report["events_created"] += len(created)
                 report["assets"].append(

@@ -449,6 +449,10 @@ mudanca de contrato da fonte primaria. Providers nao sao consultados durante
 calculos financeiros; o banco canonico continua sendo a fonte de leitura do
 runtime.
 
+O CLI legado de seed de eventos tambem segue dry-run por padrao. A persistencia
+exige `--execute` explicito; sem essa flag, cada coleta e descartada por
+rollback e o relatorio registra `database_writes_executed=0`.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
