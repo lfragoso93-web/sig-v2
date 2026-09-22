@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.corporate_event import CorporateEvent, CorporateEventStatus
-from app.services.corporate_action_engine import normalize_brapi_corporate_actions
+from app.services.corporate_action_engine import (
+    CorporateActionNormalizationError,
+    normalize_brapi_corporate_actions,
+)
 from app.services.corporate_event_service import (
     CorporateActionCollectionError,
     sync_corporate_events_for_asset,
@@ -215,3 +218,31 @@ async def test_sync_does_not_call_yahoo_when_brapi_returns_valid_empty_payload(
     )
 
     assert created == []
+
+
+@pytest.mark.asyncio
+async def test_sync_does_not_fallback_on_invalid_brapi_payload(
+    db: AsyncSession,
+) -> None:
+    asset = Asset(
+        ticker="TEST3",
+        brapi_ticker="TEST3",
+        name="Ativo de teste",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    async def invalid_brapi(ticker: str) -> dict[str, object]:
+        return {"results": {"invalid": True}}
+
+    async def unexpected_yahoo(symbol: str) -> list[tuple[date, float]]:
+        raise AssertionError("Yahoo nao deve mascarar payload BRAPI invalido")
+
+    with pytest.raises(CorporateActionNormalizationError, match="results deve ser lista"):
+        await sync_corporate_events_for_asset(
+            db,
+            asset,
+            brapi_fetcher=invalid_brapi,
+            yahoo_fetcher=unexpected_yahoo,
+        )
