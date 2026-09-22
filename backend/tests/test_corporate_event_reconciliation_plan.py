@@ -203,22 +203,29 @@ def test_match_resolution_requires_cash_settlement_details_for_fraction() -> Non
         )
 
 
-def test_matched_cash_settlement_keeps_klbn11_fail_closed_until_unit_contract() -> None:
-    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
-        build_reconciliation_dry_run_report(
-            (_ticker_evidence(12, "KLBN11"), _ticker_evidence(13, "KLBN11", "yahoo")),
-            decision=CorporateEventReconciliationDecision.MATCHED,
-            reason="unit composta exige decomposicao por especies",
-            canonical_event_id=12,
-            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
-                evidence_reference="broker-note:KLBN11:2025-12",
-                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
-                fractional_quantity="0.10",
-                fractional_settlement_price="4.00",
-                cash_treatment="AUCTION_SETTLEMENT",
-            ),
-        )
+def test_matched_cash_settlement_accepts_klbn11_fraction_contract() -> None:
+    report = build_reconciliation_dry_run_report(
+        (_ticker_evidence(12, "KLBN11"), _ticker_evidence(13, "KLBN11", "yahoo")),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="fracao de Unit liquidada em leilao",
+        canonical_event_id=12,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+            evidence_reference="broker-note:KLBN11:2025-12",
+            fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity="0.10",
+            fractional_settlement_price="4.00",
+            cash_treatment="UNIT_FRACTION_AUCTION",
+        ),
+    )
+
+    assert report.ok is True
+    assert report.decision == "MATCHED"
+    assert report.match_resolution_evidence is not None
+    assert (
+        report.match_resolution_evidence.fractional_policy
+        == FractionalResolutionPolicy.CASH_SETTLEMENT
+    )
 
 
 def test_matched_no_fractional_residue_keeps_klbn11_fail_closed() -> None:

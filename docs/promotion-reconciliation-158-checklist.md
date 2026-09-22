@@ -640,6 +640,31 @@ Essa execucao formaliza o bloqueio de KLBN11 e remove o estado
 composta, nao cria evento financeiro projetavel, nao executa rebuild, nao toca
 `transactions` e nao promove `ready_for_real_data=true`.
 
+### Politica operacional KLBN11 fracao de bonificacao em 22/09/2026
+
+Foi adotada a regra operacional para o evento KLBN11 `1,01 para 1`: a bonificacao
+de 1% so gera unit inteira para multiplos de 100 units. A fracao projetada deve
+ser tratada como fracao agrupada, vendida em leilao e distribuida
+proporcionalmente ao investidor em caixa.
+
+Consequencia tecnica:
+
+- `NO_FRACTIONAL_RESIDUE` continua bloqueado para KLBN11 quando houver fracao
+  projetada;
+- `MATCHED` passa a ser permitido somente com `CASH_SETTLEMENT` completo:
+  `fractional_quantity`, `fractional_settlement_price` e `cash_treatment`;
+- o projetor canonico preserva o ledger bruto, arredonda a quantidade projetada
+  para a quantidade inteira e registra o caixa em
+  `corporate_action_cash_flows`, fora de `transactions`;
+- o valor recebido pode ser apresentado no dominio de proventos como caixa de
+  bonificacao/fracao vendida, mas nao deve ser persistido como novo
+  `asset_dividends` sem preco/valor documental de liquidacao.
+
+Para a carteira 15, o preflight projetou 10 units brutas * 1,01 = 10,10 units.
+Assim, uma futura reconciliacao `MATCHED` de KLBN11 deve declarar
+`fractional_quantity=0.10` e o preco/valor documental obtido na venda agrupada
+das fracoes.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a

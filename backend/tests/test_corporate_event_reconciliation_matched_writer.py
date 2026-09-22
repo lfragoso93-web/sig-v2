@@ -366,7 +366,7 @@ async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
 
 
 @pytest.mark.asyncio
-async def test_matched_writer_keeps_klbn11_cash_settlement_fail_closed(db) -> None:
+async def test_matched_writer_accepts_klbn11_cash_settlement_contract(db) -> None:
     asset = Asset(
         ticker="KLBN11",
         name="Klabin Unit",
@@ -392,36 +392,42 @@ async def test_matched_writer_keeps_klbn11_cash_settlement_fail_closed(db) -> No
     yahoo.event_type = "DESDOBRAMENTO"
     await db.flush()
 
-    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
-        await execute_corporate_event_matched_reconciliation(
-            db,
-            event_ids=(brapi.id, yahoo.id),
-            canonical_event_id=brapi.id,
-            reason="unit composta exige contrato proprio",
-            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
-                evidence_reference="broker-note:KLBN11:2025-12",
-                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
-                fractional_quantity="0.10",
-                fractional_settlement_price="4.00",
-                cash_treatment="AUCTION_SETTLEMENT",
-            ),
-        )
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(brapi.id, yahoo.id),
+        canonical_event_id=brapi.id,
+        reason="fracao de Unit liquidada em leilao",
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+            evidence_reference="broker-note:KLBN11:2025-12",
+            fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity="0.10",
+            fractional_settlement_price="4.00",
+            cash_treatment="UNIT_FRACTION_AUCTION",
+        ),
+    )
 
-    assert brapi.reconciliation_status == "UNRECONCILED"
-    assert brapi.requires_review is True
+    assert brapi.reconciliation_status == "MATCHED"
+    assert brapi.requires_review is False
     assert brapi.is_canonical is True
     assert brapi.matched_event_id is None
 
-    assert yahoo.reconciliation_status == "UNRECONCILED"
+    assert yahoo.reconciliation_status == "CONFLICT"
     assert yahoo.requires_review is True
-    assert yahoo.is_canonical is True
-    assert yahoo.matched_event_id is None
+    assert yahoo.is_canonical is False
+    assert yahoo.matched_event_id == brapi.id
 
     result = await db.execute(
         select(CorporateEventReconciliationEvidence)
     )
-    assert result.scalars().all() == []
+    evidence = result.scalar_one()
+
+    assert evidence.corporate_event_id == brapi.id
+    assert evidence.decision == "MATCHED"
+    assert evidence.fractional_policy == "CASH_SETTLEMENT"
+    assert evidence.fractional_quantity == Decimal("0.100000000000")
+    assert evidence.fractional_settlement_price == Decimal("4.00000000")
+    assert evidence.cash_treatment == "UNIT_FRACTION_AUCTION"
 
 
 @pytest.mark.asyncio
