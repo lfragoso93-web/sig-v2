@@ -96,3 +96,24 @@ async def test_seed_cli_execute_commits_and_counts_writes(monkeypatch, capsys) -
     assert '"database_writes_executed": 1' in output
     session.commit.assert_awaited_once()
     session.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_seed_cli_rolls_back_failed_asset_and_reports_error(
+    monkeypatch, capsys
+) -> None:
+    session = _Session()
+    _configure(monkeypatch, session, execute=True)
+    monkeypatch.setattr(
+        cli,
+        "sync_corporate_events_for_asset",
+        AsyncMock(side_effect=RuntimeError("provider indisponivel")),
+    )
+
+    await cli._main()
+
+    payload = capsys.readouterr().out
+    assert '"database_writes_executed": 0' in payload
+    assert "provider indisponivel" in payload
+    session.rollback.assert_awaited_once()
+    session.commit.assert_not_awaited()
