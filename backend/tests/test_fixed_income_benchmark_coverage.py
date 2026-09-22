@@ -230,6 +230,25 @@ def test_application_parser_reads_benchmark_source_without_changing_indexer() ->
     assert app.invested_amount == Decimal("5000.00")
 
 
+def test_application_parser_ignores_noncanonical_benchmark_source() -> None:
+    tx = SimpleNamespace(
+        ticker="LIG LIQUIDEZ",
+        notes=(
+            "Indexador: CDI | "
+            "Benchmark Source: assisted-user-test-certification"
+        ),
+        quantity=Decimal("1"),
+        price=Decimal("121.14"),
+        fees=Decimal("0"),
+        date=date(2026, 4, 14),
+    )
+
+    app = valuation._application_from_buy(tx)
+
+    assert app.key.indexer == "CDI"
+    assert app.key.benchmark_source is None
+
+
 @pytest.mark.asyncio
 async def test_selic_uses_same_conservative_gap_contract(monkeypatch) -> None:
     coverage = AsyncMock(return_value=BenchmarkCoverageStatus.ABSENT)

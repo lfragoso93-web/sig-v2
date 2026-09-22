@@ -49,6 +49,7 @@ _DEFAULT_CDI_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_SELIC_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_IPCA_ANNUAL_PCT = Decimal("4.50")
 _DEFAULT_IGPM_ANNUAL_PCT = Decimal("4.00")
+_SOURCE_QUALIFIED_BENCHMARKS = {"synthetic-certification"}
 
 
 class IncompleteBenchmarkCoverageError(RuntimeError):
@@ -179,7 +180,9 @@ def _parse_notes(
         re.IGNORECASE,
     )
     if m:
-        benchmark_source = m.group(1).strip() or None
+        candidate = m.group(1).strip() or None
+        if candidate in _SOURCE_QUALIFIED_BENCHMARKS:
+            benchmark_source = candidate
 
     return _normalize_indexer(indexer), rate, maturity, benchmark_source
 
