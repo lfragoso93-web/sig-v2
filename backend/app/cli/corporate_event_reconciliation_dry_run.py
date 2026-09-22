@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from app.core.database import AsyncSessionLocal
+from app.models.corporate_event import CorporateEvent
+from app.models.transaction import Transaction
 from app.services.corporate_event_reconciliation_dry_run_service import (
     build_corporate_event_reconciliation_dry_run,
     execute_corporate_event_conflict_reconciliation,
@@ -33,6 +35,12 @@ from app.services.corporate_event_reconciliation_plan import (
     CorporateEventReconciliationDecision,
     FractionalResolutionPolicy,
 )
+from app.services.portfolio_snapshot_canonical_twr_service import (
+    backfill_canonical_snapshots_with_returns,
+)
+from app.services.portfolio_snapshot_service import invalidate_snapshots_from
+from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
+from sqlalchemy import select
 
 
 def _configure_output() -> None:
@@ -107,6 +115,65 @@ def _arguments() -> argparse.Namespace:
         help="Persiste reconciliacao CONFLICT ou MATCHED validada.",
     )
     return parser.parse_args()
+
+
+async def _maintain_snapshots_after_matched_reconciliation(
+    db,
+    event_ids: tuple[int, ...],
+) -> dict[str, Any]:
+    result = await db.execute(
+        select(CorporateEvent).where(CorporateEvent.id.in_(event_ids))
+    )
+    events = list(result.scalars().all())
+    tickers = sorted({str(event.ticker).upper() for event in events if event.ticker})
+    effective_dates = [
+        event.effective_date
+        for event in events
+        if event.effective_date is not None
+    ]
+    if not tickers or not effective_dates:
+        return {
+            "portfolio_ids": [],
+            "from_date": None,
+            "snapshots_deleted": 0,
+            "snapshots_rebuilt": 0,
+            "rentabilidade_cache_invalidated": 0,
+        }
+
+    from_date = min(effective_dates)
+    portfolio_result = await db.execute(
+        select(Transaction.portfolio_id)
+        .where(Transaction.ticker.in_(tickers))
+        .distinct()
+        .order_by(Transaction.portfolio_id.asc())
+    )
+    portfolio_ids = [int(row[0]) for row in portfolio_result.all()]
+
+    snapshots_deleted = 0
+    snapshots_rebuilt = 0
+    cache_invalidated = 0
+    for portfolio_id in portfolio_ids:
+        snapshots_deleted += await invalidate_snapshots_from(
+            db,
+            portfolio_id,
+            from_date,
+            commit=False,
+        )
+        snapshots_rebuilt += await backfill_canonical_snapshots_with_returns(
+            db,
+            portfolio_id,
+            commit=False,
+        )
+        await invalidate_rentabilidade_cache(portfolio_id)
+        cache_invalidated += 1
+
+    return {
+        "portfolio_ids": portfolio_ids,
+        "from_date": from_date.isoformat(),
+        "snapshots_deleted": snapshots_deleted,
+        "snapshots_rebuilt": snapshots_rebuilt,
+        "rentabilidade_cache_invalidated": cache_invalidated,
+    }
 
 
 async def _main(arguments: argparse.Namespace) -> int:
@@ -255,6 +322,7 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise ValueError("CONFLICT nao aceita argumentos de evidencia de MATCHED")
 
     async with AsyncSessionLocal() as db:
+        snapshot_maintenance = None
         if arguments.execute:
             if decision == CorporateEventReconciliationDecision.CONFLICT:
                 if arguments.canonical_event_id is not None:
@@ -276,6 +344,12 @@ async def _main(arguments: argparse.Namespace) -> int:
                     reason=arguments.reason,
                     match_resolution_evidence=match_resolution_evidence,
                 )
+                snapshot_maintenance = (
+                    await _maintain_snapshots_after_matched_reconciliation(
+                        db,
+                        event_ids,
+                    )
+                )
             await db.commit()
         else:
             report = await build_corporate_event_reconciliation_dry_run(
@@ -293,6 +367,8 @@ async def _main(arguments: argparse.Namespace) -> int:
             await db.rollback()
 
     payload: dict[str, Any] = report.to_dict()
+    if snapshot_maintenance is not None:
+        payload["post_reconciliation_snapshot_maintenance"] = snapshot_maintenance
     payload["artifact_context"] = {
         "dataset_id": arguments.dataset_id,
         "window_start": window_start.isoformat() if window_start else None,

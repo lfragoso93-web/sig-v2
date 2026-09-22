@@ -550,11 +550,32 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
         )
         return FakeReport()
 
+    async def fake_snapshot_maintenance(db, event_ids):
+        calls.append(
+            {
+                "db": db,
+                "event_ids": event_ids,
+                "snapshot_maintenance": True,
+            }
+        )
+        return {
+            "portfolio_ids": [15],
+            "from_date": "2025-05-30",
+            "snapshots_deleted": 1,
+            "snapshots_rebuilt": 2,
+            "rentabilidade_cache_invalidated": 1,
+        }
+
     monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
     monkeypatch.setattr(
         cli,
         "execute_corporate_event_matched_reconciliation",
         fake_matched_writer,
+    )
+    monkeypatch.setattr(
+        cli,
+        "_maintain_snapshots_after_matched_reconciliation",
+        fake_snapshot_maintenance,
     )
 
     result = await cli._main(
@@ -576,7 +597,7 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
     assert session.commits == 1
     assert session.rollbacks == 0
 
-    assert len(calls) == 1
+    assert len(calls) == 2
     call = calls[0]
     assert call["db"] is session
     assert call["event_ids"] == (12, 13)
@@ -600,6 +621,11 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
         == "broker-note:AMOB3:2025-05:ratio"
     )
     assert call["evidence"].ledger_quantity_factor == "0.02"
+    assert calls[1] == {
+        "db": session,
+        "event_ids": (12, 13),
+        "snapshot_maintenance": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -765,6 +791,9 @@ async def test_cli_conflict_execute_preserves_existing_dispatch(
         matched_called = True
         raise AssertionError("MATCHED writer nao deveria ser chamado")
 
+    async def forbidden_snapshot_maintenance(*args, **kwargs):
+        raise AssertionError("CONFLICT nao deve reconstruir snapshots")
+
     monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
     monkeypatch.setattr(
         cli,
@@ -775,6 +804,11 @@ async def test_cli_conflict_execute_preserves_existing_dispatch(
         cli,
         "execute_corporate_event_matched_reconciliation",
         forbidden_matched_writer,
+    )
+    monkeypatch.setattr(
+        cli,
+        "_maintain_snapshots_after_matched_reconciliation",
+        forbidden_snapshot_maintenance,
     )
 
     result = await cli._main(
