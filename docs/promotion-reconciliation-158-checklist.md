@@ -665,6 +665,38 @@ Assim, uma futura reconciliacao `MATCHED` de KLBN11 deve declarar
 `fractional_quantity=0.10` e o preco/valor documental obtido na venda agrupada
 das fracoes.
 
+### Checkpoint KLBN11 liquidacao fracionaria pendente em 22/09/2026
+
+Foi executada auditoria read-only apos a formalizacao da politica operacional
+para KLBN11. O banco local Docker confirmou:
+
+- eventos 81 e 82 permanecem `CONFLICT`, `requires_review=true`,
+  `is_canonical=false`, sem `matched_event_id`;
+- nao existe evidencia em `corporate_event_reconciliation_evidence` para os
+  eventos 81 e 82;
+- a carteira 15 possui 10,00000000 units KLBN11 compradas em 05/11/2025 na
+  transacao 1413;
+- nao ha registro em `asset_dividends` para KLBN11 na janela de dezembro/2025 a
+  janeiro/2026 que informe valor por unit, pagamento ou preco de liquidacao da
+  fracao agrupada.
+
+Dry-run negativo de `MATCHED` com `CASH_SETTLEMENT`,
+`fractional_quantity=0.10` e `cash_treatment=UNIT_FRACTION_AUCTION`, mas sem
+`fractional_settlement_price`, retornou:
+
+```json
+{
+  "schema_version": "corporate-event-reconciliation-error.v1",
+  "ok": false,
+  "error": "CASH_SETTLEMENT exige preco de liquidacao"
+}
+```
+
+Decisao: KLBN11 continua bloqueado para `MATCHED` ate haver evidencia
+documental do preco/valor de liquidacao da fracao agrupada. Nenhuma escrita no
+banco foi executada neste bloco, nenhum registro em `transactions` foi alterado
+e nenhum novo `asset_dividends` foi criado.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
