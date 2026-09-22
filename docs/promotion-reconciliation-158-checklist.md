@@ -724,6 +724,56 @@ nao possui `UNRECONCILED` remanescente. O unico bloqueio operacional conhecido
 permanece KLBN11 em `CONFLICT`, dependente de evidencia documental da liquidacao
 da fracao agrupada antes de eventual `MATCHED`.
 
+### Readiness assistido e inventario em 22/09/2026
+
+Foi executado bloco read-only de reconciliacao minima para confirmar o estado
+apos a varredura de eventos corporativos.
+
+`portfolio_certification_reconcile` retornou:
+
+- `CERT303-RECONCILE`: `portfolio_id=13`, data `2026-02-28`, 7 posicoes,
+  `remaining_cost=37629.30`, `market_value=38960.00`,
+  `realized_pnl=450.80`, `open_pnl=1330.70`, `income=20.00`,
+  `total_pnl_with_income=1801.50`, `status=PASS`;
+- `CERT303-CLASS`: classes `ACAO=2160.00`, `BDR=1140.00`,
+  `CRIPTO=21000.00`, `ETF_NACIONAL=560.00`, `FII=2100.00`,
+  `RENDA_FIXA=5050.00`, `TESOURO_DIRETO=6950.00`, `status=PASS`;
+- `CERT303-SNAPSHOT`: `market_value=38960.00`, `cost_basis=37629.30`,
+  `realized_pnl=450.80`, `unrealized_pnl=1330.70`,
+  `total_pnl=1781.50`, `status=PASS`.
+
+O primeiro `user_test_readiness` retornou `NO_GO` por dois blockers:
+`database_inventory` e `goals_runtime_schema`. A causa foi contratual, nao de
+dado financeiro:
+
+- a tabela `corporate_event_reconciliation_evidence`, criada para evidencias de
+  reconciliacao de eventos corporativos, ainda nao estava classificada no
+  inventario pre-prod;
+- `goals_runtime_schema` verificava apenas a revisao literal em
+  `alembic_version`, embora bancos Alembic lineares guardem o head atual
+  (`20260922_corp_ev_ledger_basis`) e nao toda a ancestralidade.
+
+O contrato foi corrigido para:
+
+- classificar `corporate_event_reconciliation_evidence` como `preserved`;
+- aceitar heads Alembic descendentes de `20260910_goals_runtime` no readiness.
+
+Validacoes apos o ajuste:
+
+- `pre_prod_inventory`: `tables=21`, `unclassified_tables=0`,
+  `blocking_findings=0`, `writes_executed=0`;
+- `user_test_readiness`: `status=GO_ASSISTED`,
+  `go_for_assisted_user_tests=true`, `ready_for_real_data=false`,
+  `blockers=[]`, `warnings=[]`, `writes_executed=0`;
+- testes focados:
+  `test_pre_prod_inventory_service.py` e `test_user_test_readiness_service.py`
+  com 17 testes `passed`.
+
+Decisao: aprovado para readiness assistido no ambiente local, mantendo
+`ready_for_real_data=false`. Essa decisao nao autoriza dados reais irrestritos,
+promocao para `main`, rebuild amplo nem `MATCHED` de KLBN11 sem evidencia
+documental do preco/valor da fracao agrupada.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a

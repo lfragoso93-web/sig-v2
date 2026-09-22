@@ -4,7 +4,10 @@ import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.services.user_test_readiness_service import build_user_test_readiness
+from app.services.user_test_readiness_service import (
+    _revision_is_applied,
+    build_user_test_readiness,
+)
 
 
 @pytest.mark.asyncio
@@ -101,3 +104,10 @@ async def test_user_test_readiness_blocks_when_goals_runtime_migration_is_missin
 
     assert report.go_for_assisted_user_tests is False
     assert "goals_runtime_schema" in report.blockers
+
+
+def test_goals_runtime_schema_accepts_descendant_alembic_head() -> None:
+    assert _revision_is_applied(
+        {"20260922_corp_ev_ledger_basis"},
+        "20260910_goals_runtime",
+    )

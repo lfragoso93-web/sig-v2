@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +100,37 @@ async def _alembic_revisions(session: AsyncSession, tables: set[str]) -> set[str
     return {str(row[0]) for row in result}
 
 
+def _revision_is_applied(
+    revisions: set[str],
+    required_revision: str,
+) -> bool:
+    if required_revision in revisions:
+        return True
+    if not revisions:
+        return False
+    try:
+        backend_root = Path(__file__).resolve().parents[2]
+        config = Config(str(backend_root / "alembic.ini"))
+        config.set_main_option("script_location", str(backend_root / "alembic"))
+        script = ScriptDirectory.from_config(config)
+    except Exception:
+        return False
+    for current_revision in revisions:
+        try:
+            ancestry = {
+                item.revision
+                for item in script.walk_revisions(
+                    base=required_revision,
+                    head=current_revision,
+                )
+            }
+        except Exception:
+            continue
+        if required_revision in ancestry:
+            return True
+    return False
+
+
 def _append_check(
     checks: list[UserTestReadinessCheck],
     *,
@@ -148,7 +182,7 @@ async def build_user_test_readiness(
     _append_check(
         checks,
         code="goals_runtime_schema",
-        ok=GOALS_RUNTIME_REVISION in revisions,
+        ok=_revision_is_applied(revisions, GOALS_RUNTIME_REVISION),
         detail=f"required_revision={GOALS_RUNTIME_REVISION} applied={sorted(revisions)}",
     )
     _append_check(
