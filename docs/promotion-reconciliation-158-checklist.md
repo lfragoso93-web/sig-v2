@@ -575,6 +575,35 @@ execucao exige autorizacao explicita porque escreve em `corporate_events`; ela
 nao cria evidencia `MATCHED`, nao toca `transactions`, nao executa rebuild e
 nao promove `ready_for_real_data=true`.
 
+### Preflight final de `CONFLICT` KLBN11 em 22/09/2026
+
+Foi gerado o pacote dry-run imediatamente anterior a uma eventual execucao
+controlada de `CONFLICT` para KLBN11 81/82.
+
+- artefatos locais:
+  `.tmp-codex/corp370-klbn11-conflict-final-20260922/klbn11-conflict-final-report.json`
+  e
+  `.tmp-codex/corp370-klbn11-conflict-final-20260922/klbn11-conflict-final-manifest.json`;
+- `schema_version=corporate-event-reconciliation-dry-run.v1`;
+- `decision=CONFLICT`;
+- `ok=true`;
+- `dry_run=true`;
+- `database_writes_executed=0`;
+- `source_commit_sha=fc6548a04e6cf4d04640e53cae55102f5870e916`;
+- manifest valido, SHA-256
+  `60559a8dc10b46cca49cba74f1b2ab2aa145e0f34c2c68e08c7a7d50f94ccaca`.
+
+Plano proposto pelo dry-run:
+
+- evento 81 -> `CONFLICT`, `requires_review=true`, `is_canonical=false`,
+  `matched_event_id=null`;
+- evento 82 -> `CONFLICT`, `requires_review=true`, `is_canonical=false`,
+  `matched_event_id=null`.
+
+Pos-validacao read-only confirmou que o banco permaneceu inalterado: eventos 81
+e 82 continuam `UNRECONCILED`, revisaveis e canonicos ate que haja autorizacao
+explicita para `--execute`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
