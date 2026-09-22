@@ -500,6 +500,53 @@ Pos-validacao:
 Essa execucao nao cria transacao, nao executa rebuild, nao sincroniza providers,
 nao resolve KLBN11 e nao promove `ready_for_real_data=true`.
 
+### Preflight read-only KLBN11 em 22/09/2026
+
+Foi gerado pacote read-only para KLBN11 sem escrita no banco, cobrindo os
+eventos 81 e 82 e a carteira 15.
+
+Estado observado:
+
+- evento 81: `KLBN11` `BONIFICACAO`, BRAPI, efetivo em 17/12/2025, fator
+  `1.010000000000`, `UNRECONCILED`, `requires_review=true`;
+- evento 82: `KLBN11` `DESDOBRAMENTO`, Yahoo, efetivo em 18/12/2025, fator
+  `1.010000000000`, `UNRECONCILED`, `requires_review=true`;
+- raw BRAPI: `label=BONIFICACAO`, `completeFactor="1,01 para 1"`;
+- raw Yahoo: `eventDate=2025-12-18`, `factor=1.01`;
+- ledger da carteira 15 ate 18/12/2025: uma transacao (`1413`), compra de 10
+  units em 05/11/2025.
+
+Artefatos retidos:
+
+- BRAPI candidate:
+  `.tmp-codex/corp370-klbn11-readonly-20260922/klbn11-conflict-brapi-ledger-preflight-report.json`;
+- Yahoo candidate:
+  `.tmp-codex/corp370-klbn11-readonly-20260922/klbn11-conflict-yahoo-ledger-preflight-report.json`;
+- ambos com `dry_run=true`, `database_writes_executed=0`,
+  `dataset_id=local-sgi-20260922-portfolio15` e
+  `source_commit_sha=cf886126bf47878d3719299228c56c3eef9c1c36`;
+- manifest BRAPI valido, SHA-256
+  `ebf286f47465d59d0453fe5c2b1a153021cab6fcfa06600b5b822252b86cf1d8`;
+- manifest Yahoo valido, SHA-256
+  `823bdaa430673ebd0172cbd7012ce4bf3d8ae2193268676cac56b0d33fb13825`.
+
+Resultado do ledger preflight:
+
+- candidato BRAPI/evento 81: `as_of=2025-12-17`,
+  `projected_net_quantity=10.10000000000000000000`;
+- candidato Yahoo/evento 82: `as_of=2025-12-18`,
+  `projected_net_quantity=10.10000000000000000000`;
+- ambos indicam quantidade fracionaria projetada de 0,10 unit.
+
+Decisao operacional: KLBN11 permanece NO-GO para `MATCHED`. A evidencia atual
+confirma materialidade e fracao projetada, mas nao fornece contrato explicito de
+Unit composta nem suporte documental suficiente para liquidacao fracionaria em
+caixa. A saida segura permanece `CONFLICT`/revisao manual ate existir politica
+canonica para Unit composta, fracao/residuo e tratamento de caixa. Os dry-runs
+nao alteraram `corporate_events`, nao criaram evidencia, nao tocaram
+`transactions`, nao executaram rebuild e nao promoveram
+`ready_for_real_data=true`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
