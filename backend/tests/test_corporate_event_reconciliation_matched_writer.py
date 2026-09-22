@@ -13,6 +13,7 @@ from app.services.corporate_event_reconciliation_dry_run_service import (
     execute_corporate_event_matched_reconciliation,
 )
 from app.services.corporate_event_reconciliation_plan import (
+    CorporateEventLedgerBasis,
     CorporateEventMatchEvidenceType,
     CorporateEventMatchResolutionEvidence,
     FractionalResolutionPolicy,
@@ -111,6 +112,9 @@ async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
     assert evidence.evidence_type == "OFFICIAL_EXCHANGE_DOCUMENT"
     assert evidence.evidence_reference == "b3:test:ABEV3"
     assert evidence.fractional_policy == "NO_FRACTIONAL_RESIDUE"
+    assert evidence.ledger_basis is None
+    assert evidence.ledger_transformation_reference is None
+    assert evidence.ledger_quantity_factor is None
 
 
 @pytest.mark.asyncio
@@ -165,6 +169,70 @@ async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
     rows = result.scalars().all()
 
     assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_persists_ledger_basis_contract(db) -> None:
+    asset = Asset(
+        ticker="ABEV3",
+        name="Ambev",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    first = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:ledger-basis",
+    )
+    canonical = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:ledger-basis",
+    )
+
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+        evidence_reference="broker-note:ABEV3:2025-05",
+        fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+        ledger_transformation_reference="broker-note:ABEV3:2025-05:ratio",
+        ledger_quantity_factor="0.02",
+    )
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento operacional confirma base do ledger",
+        match_resolution_evidence=evidence,
+    )
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento operacional confirma base do ledger",
+        match_resolution_evidence=evidence,
+    )
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    rows = result.scalars().all()
+
+    assert len(rows) == 1
+    persisted = rows[0]
+    assert persisted.ledger_basis == "RAW_HISTORICAL"
+    assert (
+        persisted.ledger_transformation_reference
+        == "broker-note:ABEV3:2025-05:ratio"
+    )
+    assert persisted.ledger_quantity_factor == Decimal("0.020000000000")
 
 
 @pytest.mark.asyncio

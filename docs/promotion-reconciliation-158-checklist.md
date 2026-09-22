@@ -442,6 +442,19 @@ Mesmo que exista evento AMOB3 marcado como `MATCHED`, a projecao permanece
 fail-closed quando a evidencia persistida nao declarar a base do ledger. Esse
 caso nao deve ser tratado como reconciliacao operacional suficiente para #370.
 
+Quando uma futura decisao `MATCHED` exigir contrato de base do ledger, a CLI
+aceita os metadados explicitos:
+
+```bash
+--ledger-basis RAW_HISTORICAL \
+--ledger-transformation-reference <referencia-documental-da-transformacao> \
+--ledger-quantity-factor <fator-decimal>
+```
+
+Esses campos apenas documentam a base/transformacao autorizada pela evidencia;
+eles nao executam transformacao de `transactions` e nao removem os bloqueios
+especificos de AMOB3/KLBN11.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a

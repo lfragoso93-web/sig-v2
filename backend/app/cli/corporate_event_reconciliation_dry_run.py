@@ -28,6 +28,7 @@ from app.services.corporate_event_report_manifest import (
 )
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventMatchEvidenceType,
+    CorporateEventLedgerBasis,
     CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
     FractionalResolutionPolicy,
@@ -95,6 +96,12 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--fractional-settlement-price")
     parser.add_argument("--cash-treatment")
     parser.add_argument(
+        "--ledger-basis",
+        choices=[item.value for item in CorporateEventLedgerBasis],
+    )
+    parser.add_argument("--ledger-transformation-reference")
+    parser.add_argument("--ledger-quantity-factor")
+    parser.add_argument(
         "--execute",
         action="store_true",
         help="Persiste reconciliacao CONFLICT ou MATCHED validada.",
@@ -123,6 +130,9 @@ async def _main(arguments: argparse.Namespace) -> int:
                 "dataset_id",
                 "window_start",
                 "window_end",
+                "ledger_basis",
+                "ledger_transformation_reference",
+                "ledger_quantity_factor",
             )
         ):
             raise ValueError(
@@ -210,6 +220,9 @@ async def _main(arguments: argparse.Namespace) -> int:
         arguments.fractional_quantity,
         arguments.fractional_settlement_price,
         arguments.cash_treatment,
+        arguments.ledger_basis,
+        arguments.ledger_transformation_reference,
+        arguments.ledger_quantity_factor,
     )
     has_match_arguments = any(value is not None for value in match_argument_values)
 
@@ -228,6 +241,15 @@ async def _main(arguments: argparse.Namespace) -> int:
             fractional_quantity=arguments.fractional_quantity,
             fractional_settlement_price=arguments.fractional_settlement_price,
             cash_treatment=arguments.cash_treatment,
+            ledger_basis=(
+                CorporateEventLedgerBasis(arguments.ledger_basis)
+                if arguments.ledger_basis
+                else None
+            ),
+            ledger_transformation_reference=(
+                arguments.ledger_transformation_reference
+            ),
+            ledger_quantity_factor=arguments.ledger_quantity_factor,
         )
     elif has_match_arguments:
         raise ValueError("CONFLICT nao aceita argumentos de evidencia de MATCHED")

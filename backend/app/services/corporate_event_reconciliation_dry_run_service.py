@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +33,12 @@ def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:
         source_provider=str(event.source_provider),
         source_event_id=event.source_event_id,
     )
+
+
+def _normalized_decimal_text(value: object | None) -> str | None:
+    if value is None:
+        return None
+    return str(Decimal(str(value)).normalize())
 
 
 async def build_corporate_event_reconciliation_dry_run(
@@ -194,6 +202,17 @@ async def execute_corporate_event_matched_reconciliation(
             match_resolution_evidence.fractional_settlement_price
         ),
         "cash_treatment": match_resolution_evidence.cash_treatment,
+        "ledger_basis": (
+            match_resolution_evidence.ledger_basis.value
+            if match_resolution_evidence.ledger_basis is not None
+            else None
+        ),
+        "ledger_transformation_reference": (
+            match_resolution_evidence.ledger_transformation_reference
+        ),
+        "ledger_quantity_factor": _normalized_decimal_text(
+            match_resolution_evidence.ledger_quantity_factor
+        ),
     }
 
     if existing is None:
@@ -215,6 +234,13 @@ async def execute_corporate_event_matched_reconciliation(
                 existing.fractional_settlement_price
             ),
             "cash_treatment": existing.cash_treatment,
+            "ledger_basis": existing.ledger_basis,
+            "ledger_transformation_reference": (
+                existing.ledger_transformation_reference
+            ),
+            "ledger_quantity_factor": _normalized_decimal_text(
+                existing.ledger_quantity_factor
+            ),
         }
 
         if actual != expected:

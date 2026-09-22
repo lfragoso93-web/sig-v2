@@ -336,6 +336,57 @@ async def test_reader_fails_closed_for_amob3_matched_without_ledger_basis(
         await load_global_corporate_actions_by_ticker(db, ["AMOB3"])
 
 
+@pytest.mark.asyncio
+async def test_reader_allows_amob3_matched_with_persisted_ledger_basis(
+    db: AsyncSession,
+) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        status=CorporateEventStatus.PENDENTE.value,
+        effective_date=date(2025, 5, 29),
+        ratio=Decimal("0.02"),
+        quantity_factor=Decimal("0.02"),
+        source_provider="yahoo",
+        source_event_id="yahoo:AMOB3:2025-05-29",
+        event_date=date(2025, 5, 29),
+        is_canonical=True,
+        reconciliation_status="MATCHED",
+        requires_review=False,
+        portfolio_id=None,
+    )
+    db.add(event)
+    await db.flush()
+
+    db.add(
+        CorporateEventReconciliationEvidence(
+            corporate_event_id=event.id,
+            decision="MATCHED",
+            evidence_type="OFFICIAL_ISSUER_DOCUMENT",
+            evidence_reference="AUTOMOB:AVISO:2025-04-25",
+            fractional_policy="NO_FRACTIONAL_RESIDUE",
+            ledger_basis="RAW_HISTORICAL",
+            ledger_transformation_reference="AUTOMOB:LEDGER-BASIS",
+            ledger_quantity_factor=Decimal("0.02"),
+        )
+    )
+    await db.flush()
+
+    loaded = await load_global_corporate_actions_by_ticker(db, ["AMOB3"])
+
+    assert len(loaded["AMOB3"]) == 1
+    assert loaded["AMOB3"][0].quantity_factor == Decimal("0.02")
+
+
 def test_fractional_resolution_keeps_legacy_compatibility() -> None:
     event = CorporateEvent(
         id=99,

@@ -20,6 +20,9 @@ def _arguments(
     fractional_quantity: str | None = None,
     fractional_settlement_price: str | None = None,
     cash_treatment: str | None = None,
+    ledger_basis: str | None = None,
+    ledger_transformation_reference: str | None = None,
+    ledger_quantity_factor: str | None = None,
     ledger_preflight_event_id: int | None = None,
     ledger_preflight_portfolio_id: int | None = None,
     report_file=None,
@@ -44,6 +47,9 @@ def _arguments(
         fractional_quantity=fractional_quantity,
         fractional_settlement_price=fractional_settlement_price,
         cash_treatment=cash_treatment,
+        ledger_basis=ledger_basis,
+        ledger_transformation_reference=ledger_transformation_reference,
+        ledger_quantity_factor=ledger_quantity_factor,
         ledger_preflight_event_id=ledger_preflight_event_id,
         ledger_preflight_portfolio_id=ledger_preflight_portfolio_id,
         report_file=report_file,
@@ -274,6 +280,21 @@ async def test_cli_verify_mode_requires_both_artifacts(tmp_path) -> None:
                 event_ids=[],
                 reason=None,
                 verify_report_file=tmp_path / "report.json",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_verify_mode_rejects_ledger_basis_arguments(tmp_path) -> None:
+    with pytest.raises(ValueError, match="nao aceita argumentos"):
+        await cli._main(
+            _arguments(
+                decision=None,
+                event_ids=[],
+                reason=None,
+                verify_report_file=tmp_path / "report.json",
+                verify_manifest_file=tmp_path / "manifest.json",
+                ledger_basis="RAW_HISTORICAL",
             )
         )
 
@@ -544,6 +565,9 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
             evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
             evidence_reference="b3:official-document:AMOB3:2025-05",
             fractional_policy="NO_FRACTIONAL_RESIDUE",
+            ledger_basis="RAW_HISTORICAL",
+            ledger_transformation_reference="broker-note:AMOB3:2025-05:ratio",
+            ledger_quantity_factor="0.02",
         )
     )
 
@@ -570,6 +594,12 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
         call["evidence"].fractional_policy.value
         == "NO_FRACTIONAL_RESIDUE"
     )
+    assert call["evidence"].ledger_basis.value == "RAW_HISTORICAL"
+    assert (
+        call["evidence"].ledger_transformation_reference
+        == "broker-note:AMOB3:2025-05:ratio"
+    )
+    assert call["evidence"].ledger_quantity_factor == "0.02"
 
 
 @pytest.mark.asyncio

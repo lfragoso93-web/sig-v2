@@ -42,6 +42,9 @@ class CorporateEventReconciliationEvidence(Base):
     fractional_quantity = Column(Numeric(24, 12), nullable=True)
     fractional_settlement_price = Column(Numeric(24, 8), nullable=True)
     cash_treatment = Column(String(40), nullable=True)
+    ledger_basis = Column(String(40), nullable=True)
+    ledger_transformation_reference = Column(Text, nullable=True)
+    ledger_quantity_factor = Column(Numeric(24, 12), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
