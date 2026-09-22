@@ -299,6 +299,48 @@ def test_matched_grouping_keeps_amob3_raw_ledger_fail_closed() -> None:
         )
 
 
+def test_matched_grouping_accepts_amob3_raw_ledger_contract() -> None:
+    report = build_reconciliation_dry_run_report(
+        (
+            CorporateEventEvidence(
+                event_id=12,
+                ticker="AMOB3",
+                event_type="GRUPAMENTO",
+                source_provider="brapi",
+                source_event_id="brapi:amob3",
+            ),
+            CorporateEventEvidence(
+                event_id=13,
+                ticker="AMOB3",
+                event_type="GRUPAMENTO",
+                source_provider="yahoo",
+                source_event_id="yahoo:amob3",
+            ),
+        ),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="ledger historico bruto reconciliado contra evidencia operacional",
+        canonical_event_id=13,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+            evidence_reference="broker-note:AMOB3:2025-05",
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+            ledger_basis=CorporateEventLedgerBasis.RAW_HISTORICAL,
+            ledger_transformation_reference="broker-note:AMOB3:2025-05:ratio",
+            ledger_quantity_factor="0.02",
+        ),
+    )
+
+    assert report.ok is True
+    assert report.decision == "MATCHED"
+    assert report.updates[0].reconciliation_status == "CONFLICT"
+    assert report.updates[0].matched_event_id == 13
+    assert report.updates[1].reconciliation_status == "MATCHED"
+    assert report.match_resolution_evidence is not None
+    assert report.match_resolution_evidence.ledger_basis == (
+        CorporateEventLedgerBasis.RAW_HISTORICAL
+    )
+
+
 def test_match_resolution_rejects_manual_review_for_matched() -> None:
     with pytest.raises(ValueError, match="nao autoriza MATCHED"):
         validate_match_resolution_evidence(

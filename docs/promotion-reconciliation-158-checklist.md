@@ -455,6 +455,11 @@ Esses campos apenas documentam a base/transformacao autorizada pela evidencia;
 eles nao executam transformacao de `transactions` e nao removem os bloqueios
 especificos de AMOB3/KLBN11.
 
+Para AMOB3, `RAW_HISTORICAL` com referencia documental da transformacao e
+`ledger_quantity_factor` positivo permite apenas planejar `MATCHED` em dry-run.
+`ADJUSTED_POST_EVENT` continua bloqueado para impedir reaplicacao do grupamento
+sobre ledger ja normalizado.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a

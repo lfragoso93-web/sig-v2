@@ -235,9 +235,6 @@ def _reject_unsupported_adjusted_ledger_reapplication(
             raise ValueError(
                 "MATCHED para AMOB3 rejeita reaplicacao sobre ledger ajustado"
             )
-        raise ValueError(
-            "MATCHED para AMOB3 em ledger historico bruto exige contrato explicito"
-        )
 
 
 def plan_conflict_reconciliation(
