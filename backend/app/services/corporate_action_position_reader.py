@@ -27,6 +27,7 @@ _SUPPORTED_KINDS = {kind.value: kind for kind in CorporateActionKind}
 _MATCHED_RECONCILIATION_STATUS = "MATCHED"
 _IGNORED_EVENT_STATUS = "IGNORADO"
 _LEGACY_SOURCE_PROVIDER = "legacy"
+_AMOB3_LEDGER_BASIS_REQUIRED_TYPES = {"GRUPAMENTO", "DESDOBRAMENTO"}
 
 
 def _normalized_text(value: object) -> str:
@@ -143,6 +144,20 @@ def _fractional_resolution(
     if policy == FractionalResolutionPolicy.MANUAL_REVIEW:
         raise ValueError(
             f"evento corporativo MATCHED {event.id!r} nao aceita MANUAL_REVIEW"
+        )
+
+    ticker = _normalized_text(event.ticker).upper()
+    event_type = _normalized_text(event.event_type).upper()
+    ledger_basis = _normalized_text(
+        getattr(evidence, "ledger_basis", None)
+    ).upper()
+    if (
+        ticker == "AMOB3"
+        and event_type in _AMOB3_LEDGER_BASIS_REQUIRED_TYPES
+        and not ledger_basis
+    ):
+        raise ValueError(
+            f"evento corporativo MATCHED {event.id!r} AMOB3 exige base do ledger"
         )
 
     return FractionalResolution(

@@ -438,6 +438,10 @@ O pacote deve conter a referencia documental, o `source_commit_sha`, o
 Ausencia, divergencia ou evidencia apenas inferida de provider nao autoriza
 escrita, rebuild, sincronizacao ou promocao.
 
+Mesmo que exista evento AMOB3 marcado como `MATCHED`, a projecao permanece
+fail-closed quando a evidencia persistida nao declarar a base do ledger. Esse
+caso nao deve ser tratado como reconciliacao operacional suficiente para #370.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
