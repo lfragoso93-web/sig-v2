@@ -547,6 +547,34 @@ nao alteraram `corporate_events`, nao criaram evidencia, nao tocaram
 `transactions`, nao executaram rebuild e nao promoveram
 `ready_for_real_data=true`.
 
+### Checkpoint #370 apos bloqueio de Unit KLBN11 em 22/09/2026
+
+O contrato de planejamento passou a bloquear qualquer `MATCHED` para eventos
+KLBN11 de `BONIFICACAO`/`DESDOBRAMENTO` enquanto nao existir contrato explicito
+de Unit composta, fracao/residuo e tratamento de caixa. Isso fecha tambem a
+tentativa insegura de usar `NO_FRACTIONAL_RESIDUE` apesar do preflight projetar
+10,10 units a partir de 10 units brutas.
+
+Auditoria read-only do banco local apos AMOB3 e apos o bloqueio de contrato:
+
+- AMOB3 evento 12: `CONFLICT`, `requires_review=true`, nao canonico,
+  `matched_event_id=13`;
+- AMOB3 evento 13: `MATCHED`, canonico, evidencia persistida com
+  `OFFICIAL_ISSUER_DOCUMENT`, `NO_FRACTIONAL_RESIDUE`,
+  `ledger_basis=RAW_HISTORICAL`,
+  `ledger_transformation_reference=AUTOMOB:LEDGER-BASIS:CSV-RAW-300-TO-6` e
+  `ledger_quantity_factor=0.020000000000`;
+- KLBN11 eventos 81 e 82: ainda `UNRECONCILED`, `requires_review=true`,
+  canonicos, sem evidencia persistida.
+
+Conclusao do checkpoint: #370 nao esta pronta para liberar #158 porque ainda
+existe evento corporativo material `UNRECONCILED` no dataset alvo. O proximo
+passo permitido e uma execucao controlada de `CONFLICT` para KLBN11 81/82,
+mantendo ambos fora da projecao financeira e preservando o bloqueio. Essa
+execucao exige autorizacao explicita porque escreve em `corporate_events`; ela
+nao cria evidencia `MATCHED`, nao toca `transactions`, nao executa rebuild e
+nao promove `ready_for_real_data=true`.
+
 ### Politica de providers para eventos corporativos
 
 Para eventos corporativos, a BRAPI e o provider primario de ingestao. Quando a
