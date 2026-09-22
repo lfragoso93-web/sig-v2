@@ -180,6 +180,49 @@ async def test_corporate_event_preflight_requires_explicit_portfolio(db, portfol
 
 
 @pytest.mark.asyncio
+async def test_corporate_event_preflight_accepts_portfolio_for_global_event(
+    db, portfolio
+) -> None:
+    asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="AMOB3",
+            asset_type="ACAO",
+            operation=OperationType.buy,
+            quantity=Decimal("300"),
+            price=Decimal("0.30"),
+            date=date(2024, 1, 1),
+            currency="BRL",
+        )
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 1, 1),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 1, 1),
+        quantity_factor=Decimal("0.02"),
+        source_provider="test",
+    )
+    db.add(event)
+    await db.flush()
+
+    preflight = await read_corporate_event_ledger_preflight(
+        db,
+        event,
+        portfolio_id=portfolio.id,
+    )
+
+    assert preflight.ledger.portfolio_id == portfolio.id
+    assert preflight.ledger.net_quantity == Decimal("300")
+    assert preflight.projected_net_quantity == Decimal("6")
+
+
+@pytest.mark.asyncio
 async def test_corporate_event_preflight_report_is_versioned_and_read_only(
     db, portfolio
 ) -> None:
@@ -280,4 +323,52 @@ async def test_reconciliation_dry_run_can_embed_ledger_preflight(db, portfolio) 
     assert payload["dry_run"] is True
     assert payload["database_writes_executed"] == 0
     assert payload["ledger_preflight"]["ready_for_execution"] is False
+    assert payload["ledger_preflight"]["projected_net_quantity"] == "6.0000000000"
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_dry_run_embeds_global_event_preflight(
+    db, portfolio
+) -> None:
+    asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="AMOB3",
+            asset_type="ACAO",
+            operation=OperationType.buy,
+            quantity=Decimal("300"),
+            price=Decimal("0.30"),
+            date=date(2024, 1, 1),
+            currency="BRL",
+        )
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 1, 1),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 1, 1),
+        quantity_factor=Decimal("0.02"),
+        source_provider="test",
+        source_event_id="test:amob3",
+    )
+    db.add(event)
+    await db.flush()
+
+    report = await build_corporate_event_reconciliation_dry_run(
+        db,
+        event_ids=(event.id,),
+        decision=CorporateEventReconciliationDecision.CONFLICT,
+        reason="preflight read-only",
+        ledger_preflight_event_id=event.id,
+        ledger_preflight_portfolio_id=portfolio.id,
+    )
+
+    payload = report.to_dict()
+    assert payload["database_writes_executed"] == 0
+    assert payload["ledger_preflight"]["portfolio_id"] == portfolio.id
     assert payload["ledger_preflight"]["projected_net_quantity"] == "6.0000000000"

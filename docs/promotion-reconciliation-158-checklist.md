@@ -373,15 +373,18 @@ python -m app.cli.corporate_event_reconciliation_dry_run \
   --decision CONFLICT \
   --event-id 12 --event-id 13 \
   --ledger-preflight-event-id 12 \
+  --ledger-preflight-portfolio-id 15 \
   --source-sha 0000000000000000000000000000000000000000 \
   --dataset-id fixture-amob3-2025 \
   --window-start 2025-01-01 --window-end 2025-12-31 \
   --reason "preflight read-only do ledger"
 ```
 
-Esse comando apenas le as transacoes da carteira ate `effective_date`, calcula
-a quantidade liquida projetada pelo `quantity_factor` e faz rollback da sessao.
-Ele nao cria transacao, nao altera evento e nao autoriza `MATCHED`.
+Para eventos globais (`portfolio_id=null`), `--ledger-preflight-portfolio-id`
+declara explicitamente a carteira auditada. Esse comando apenas le as transacoes
+da carteira ate `effective_date`, calcula a quantidade liquida projetada pelo
+`quantity_factor` e faz rollback da sessao. Ele nao cria transacao, nao altera
+evento e nao autoriza `MATCHED`.
 
 ### Verificacao independente do artefato retido
 

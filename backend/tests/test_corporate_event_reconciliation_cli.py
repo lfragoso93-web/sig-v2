@@ -21,6 +21,7 @@ def _arguments(
     fractional_settlement_price: str | None = None,
     cash_treatment: str | None = None,
     ledger_preflight_event_id: int | None = None,
+    ledger_preflight_portfolio_id: int | None = None,
     report_file=None,
     manifest_file=None,
     verify_report_file=None,
@@ -44,6 +45,7 @@ def _arguments(
         fractional_settlement_price=fractional_settlement_price,
         cash_treatment=cash_treatment,
         ledger_preflight_event_id=ledger_preflight_event_id,
+        ledger_preflight_portfolio_id=ledger_preflight_portfolio_id,
         report_file=report_file,
         manifest_file=manifest_file,
         verify_report_file=verify_report_file,
@@ -118,6 +120,30 @@ async def test_cli_ledger_preflight_requires_dry_run() -> None:
                 decision="CONFLICT",
                 execute=True,
                 ledger_preflight_event_id=12,
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_ledger_preflight_portfolio_requires_event_id() -> None:
+    with pytest.raises(ValueError, match="exige --ledger-preflight-event-id"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                ledger_preflight_portfolio_id=15,
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_ledger_preflight_portfolio_requires_dry_run() -> None:
+    with pytest.raises(ValueError, match="exige dry-run"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                execute=True,
+                ledger_preflight_event_id=12,
+                ledger_preflight_portfolio_id=15,
             )
         )
 
@@ -433,6 +459,7 @@ async def test_cli_dry_run_forwards_ledger_preflight_and_rolls_back(monkeypatch)
         _arguments(
             decision="CONFLICT",
             ledger_preflight_event_id=12,
+            ledger_preflight_portfolio_id=15,
         )
     )
 
@@ -442,6 +469,7 @@ async def test_cli_dry_run_forwards_ledger_preflight_and_rolls_back(monkeypatch)
     assert session.rollbacks == 1
     assert len(calls) == 1
     assert calls[0]["ledger_preflight_event_id"] == 12
+    assert calls[0]["ledger_preflight_portfolio_id"] == 15
     assert calls[0]["event_ids"] == (12, 13)
 
 

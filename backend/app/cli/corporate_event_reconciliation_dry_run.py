@@ -61,6 +61,11 @@ def _arguments() -> argparse.Namespace:
         help="Inclui o preflight read-only do evento no relatorio dry-run.",
     )
     parser.add_argument(
+        "--ledger-preflight-portfolio-id",
+        type=int,
+        help="Carteira usada no preflight read-only de evento global.",
+    )
+    parser.add_argument(
         "--report-file",
         type=Path,
         help="Salva o JSON do dry-run em um arquivo novo, sem sobrescrever.",
@@ -144,6 +149,22 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise ValueError(
             "ledger-preflight-event-id exige dry-run e nao aceita --execute"
         )
+    if arguments.execute and arguments.ledger_preflight_portfolio_id is not None:
+        raise ValueError(
+            "ledger-preflight-portfolio-id exige dry-run e nao aceita --execute"
+        )
+    if (
+        arguments.ledger_preflight_portfolio_id is not None
+        and arguments.ledger_preflight_event_id is None
+    ):
+        raise ValueError(
+            "ledger-preflight-portfolio-id exige --ledger-preflight-event-id"
+        )
+    if (
+        arguments.ledger_preflight_portfolio_id is not None
+        and arguments.ledger_preflight_portfolio_id <= 0
+    ):
+        raise ValueError("ledger-preflight-portfolio-id deve ser positivo")
     if arguments.execute and arguments.report_file is not None:
         raise ValueError("report-file exige dry-run e nao aceita --execute")
     if arguments.execute and arguments.manifest_file is not None:
@@ -243,6 +264,9 @@ async def _main(arguments: argparse.Namespace) -> int:
                 canonical_event_id=arguments.canonical_event_id,
                 match_resolution_evidence=match_resolution_evidence,
                 ledger_preflight_event_id=arguments.ledger_preflight_event_id,
+                ledger_preflight_portfolio_id=(
+                    arguments.ledger_preflight_portfolio_id
+                ),
             )
             await db.rollback()
 

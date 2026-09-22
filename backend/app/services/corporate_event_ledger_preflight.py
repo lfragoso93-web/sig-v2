@@ -143,13 +143,20 @@ async def read_ledger_transaction_preflight(
 async def read_corporate_event_ledger_preflight(
     db: AsyncSession,
     event: CorporateEvent,
+    *,
+    portfolio_id: int | None = None,
 ) -> CorporateEventLedgerPreflight:
     """Lê a base do evento e calcula a quantidade projetada sem persistir."""
 
-    if event.portfolio_id is None:
+    effective_portfolio_id = (
+        portfolio_id if portfolio_id is not None else event.portfolio_id
+    )
+    if effective_portfolio_id is None:
         raise ValueError(
             "preflight do evento exige portfolio_id explicito"
         )
+    if effective_portfolio_id <= 0:
+        raise ValueError("portfolio_id explicito deve ser positivo")
 
     try:
         quantity_factor = Decimal(str(event.quantity_factor))
@@ -160,7 +167,7 @@ async def read_corporate_event_ledger_preflight(
 
     ledger = await read_ledger_transaction_preflight(
         db,
-        portfolio_id=int(event.portfolio_id),
+        portfolio_id=int(effective_portfolio_id),
         ticker=str(event.ticker),
         as_of=event.effective_date,
     )
@@ -175,8 +182,14 @@ async def read_corporate_event_ledger_preflight(
 async def build_corporate_event_ledger_preflight_report(
     db: AsyncSession,
     event: CorporateEvent,
+    *,
+    portfolio_id: int | None = None,
 ) -> CorporateEventLedgerPreflightReport:
-    preflight = await read_corporate_event_ledger_preflight(db, event)
+    preflight = await read_corporate_event_ledger_preflight(
+        db,
+        event,
+        portfolio_id=portfolio_id,
+    )
     return CorporateEventLedgerPreflightReport(
         schema_version="corporate-event-ledger-preflight.v1",
         dry_run=True,

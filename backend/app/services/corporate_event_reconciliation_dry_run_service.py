@@ -42,6 +42,7 @@ async def build_corporate_event_reconciliation_dry_run(
     canonical_event_id: int | None = None,
     match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None,
     ledger_preflight_event_id: int | None = None,
+    ledger_preflight_portfolio_id: int | None = None,
 ) -> CorporateEventReconciliationDryRunReport:
     if not event_ids:
         raise ValueError("event_ids e obrigatorio")
@@ -73,7 +74,9 @@ async def build_corporate_event_reconciliation_dry_run(
             "ledger_preflight_event_id deve pertencer aos event_ids"
         )
     ledger_report = await build_corporate_event_ledger_preflight_report(
-        db, ledger_event
+        db,
+        ledger_event,
+        portfolio_id=ledger_preflight_portfolio_id,
     )
     return CorporateEventReconciliationDryRunReport(
         schema_version=report.schema_version,
