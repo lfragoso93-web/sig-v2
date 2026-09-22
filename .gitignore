@@ -57,3 +57,12 @@ Thumbs.db
 
 # Codex local operational scratch and retained dry-run artifacts
 /.tmp-codex/
+
+# Local test/runtime scratch
+/.pytest-codex-sync-jobs/
+/.tmp-pytest-cli-*/
+/backend/.codex-runtime-temp/
+/backend/.pytest_cache/
+/backend/.test-tmp/
+/backend/pytest-cache-files-*/
+/backend/review-temp/
