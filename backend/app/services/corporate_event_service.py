@@ -6,6 +6,7 @@ import asyncio
 import logging
 import warnings
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
@@ -142,7 +143,16 @@ async def sync_corporate_events_for_asset(
             exc,
         )
         yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
-        actions = normalize_yahoo_splits(ticker, yahoo_rows)
+        actions = tuple(
+            replace(
+                action,
+                raw_payload={
+                    **action.raw_payload,
+                    "provider_fallback": "brapi_unavailable",
+                },
+            )
+            for action in normalize_yahoo_splits(ticker, yahoo_rows)
+        )
     else:
         actions = normalize_brapi_corporate_actions(ticker, brapi_payload)
     if not actions:

@@ -184,6 +184,7 @@ async def test_sync_uses_yahoo_only_when_brapi_is_unavailable(
     assert created[0].source_provider == "yahoo"
     assert created[0].effective_date == date(2026, 2, 1)
     assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
+    assert created[0].raw_metadata["provider_fallback"] == "brapi_unavailable"
 
 
 @pytest.mark.asyncio
