@@ -1,14 +1,19 @@
-import { useEffect, useRef } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import BottomNav from './BottomNav'
 import AddTransactionModal from '@/components/modals/AddTransactionModal'
+import { findAnchorElement, resolveScrollRestoration } from '@/utils/scrollRestoration'
 
 export default function AppLayout() {
   const { sidebarOpen, closeSidebar, transactionModal, closeTransactionModal } = useAppStore()
   const overlayRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const scrollPositions = useRef(new Map<string, number>())
+  const location = useLocation()
+  const navigationType = useNavigationType()
 
   useEffect(() => {
     const el = overlayRef.current
@@ -17,6 +22,32 @@ export default function AppLayout() {
     el.addEventListener('click', handler)
     return () => el.removeEventListener('click', handler)
   }, [closeSidebar])
+
+  useEffect(() => {
+    return () => {
+      const el = mainRef.current
+      if (el) scrollPositions.current.set(location.key, el.scrollTop)
+    }
+  }, [location.key])
+
+  useLayoutEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+
+    const action = resolveScrollRestoration(
+      navigationType,
+      location.hash,
+      scrollPositions.current.get(location.key),
+    )
+
+    if (action.kind === 'anchor') {
+      const anchor = findAnchorElement(action.hash, el)
+      if (anchor) anchor.scrollIntoView({ block: 'start' })
+      return
+    }
+
+    el.scrollTo({ top: action.kind === 'restore' ? action.top : 0, left: 0 })
+  }, [location.hash, location.key, location.pathname, navigationType])
 
   return (
     <div
@@ -48,6 +79,7 @@ export default function AppLayout() {
         <Sidebar />
 
         <main
+          ref={mainRef}
           style={{
             flex:       1,
             minWidth:   0,
