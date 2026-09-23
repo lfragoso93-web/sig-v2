@@ -77,6 +77,24 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - Trivy runtime image passou para backend Debian 13.7 e pacotes Python com 0
   vulnerabilidades HIGH/CRITICAL.
 
+### 23/09/2026 - #269 inventario externo GitHub
+
+- Code Scanning aberto no GitHub: 0 alertas;
+- Secret Scanning aberto no GitHub: 0 alertas, sem impressao de valores de
+  segredo;
+- Dependabot aberto no GitHub: 2 alertas `medium`, ambos em dev dependencies do
+  frontend no default branch: `vitest` e `@vitest/mocker`, advisory
+  `GHSA-82fw-gwwq-j7x9` / `CVE-2026-84373`, corrigido em 4.1.11;
+- o SHA candidato em `stable-15jun` ja usa `vitest` 4.1.11,
+  `@vitest/mocker` 4.1.11 e `@vitest/coverage-v8` 4.1.11 no
+  `frontend/package-lock.json`;
+- `npm audit --omit=dev --audit-level=moderate`: `found 0 vulnerabilities`;
+- `npm audit --audit-level=moderate`: `found 0 vulnerabilities`;
+- conclusao: alertas Dependabot pertencem ao default branch ainda defasado, nao
+  ao SHA candidato de `stable-15jun`; a baixa efetiva deve ocorrer quando o
+  macrobloco certificado for promovido para `main` ou quando `main` receber
+  backport dedicado da atualizacao Vitest.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
