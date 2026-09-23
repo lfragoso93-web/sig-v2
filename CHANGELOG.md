@@ -112,10 +112,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - `scripts/oci_local_readiness.ps1` passou em `stable-15jun` com arvore
   rastreada limpa, sem artefatos sensiveis rastreados, Compose OCI sem portas
   publicadas para backend/frontend e `cloudflared` presente;
-- pacote de fonte OCI gerado via `git archive` para o SHA
-  `70cdd8d3f823f179044462c5c53dd348d894539e`, manifestado com
-  SHA-256 `e59f7857d662f1b6659f457354eb9f712089556101247c8704315e400cd2ecbd`
-  e 1257 arquivos rastreados;
+- pacote de fonte OCI gerado via `git archive`; o manifesto local registra SHA,
+  SHA-256 e contagem de arquivos rastreados para o operador validar antes da
+  transferencia;
 - pacote/manifesto permanecem em `artifacts/oci-source-package/`, ignorados por
   Git, para transferencia operacional controlada; `ready_for_real_data=false`
   nao foi alterado.
