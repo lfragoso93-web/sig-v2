@@ -25,7 +25,7 @@ ready_for_real_data=false
 /ready=503
 ```
 
-### Delta 14/09/2026
+### Delta 23/09/2026
 
 - #363 fechado apos recuperacao dos gates tecnicos locais.
 - #354 permanece fechada.
@@ -34,6 +34,11 @@ ready_for_real_data=false
 - #303 foi consolidada como `PORTFOLIO-TEST-READY`; #226 e #216 foram
   consumidas pela Trilha A; `ready_for_real_data=false` permanece obrigatorio
   ate #158, #269, #284 e #227.
+- #370 avancou a fronteira de eventos corporativos materiais: a varredura de
+  22/09/2026 registrou zero eventos materiais em `UNRECONCILED`; AMOB3 esta
+  formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
+  revisavel ate haver evidencia documental de liquidacao fracionaria para
+  eventual `MATCHED`.
 - Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
   condicionada ao fechamento certificado de #158, #269, #284 e #227 sobre o
   mesmo SHA candidato.
@@ -116,7 +121,7 @@ Princípios obrigatórios:
 | Tesouro | valuation DB-first e snapshots dedicados |
 | Renda Fixa | lifecycle transaction-derived e valuation dedicado |
 | Proventos | `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda; prova portfolio-scoped idempotente |
-| Eventos corporativos | reconciliação material ainda pendente para casos complexos |
+| Eventos corporativos | sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF | funcional para classes suportadas |
 | Metas | superfície básica funcional; desenho definitivo permanece #246 |
 | Detalhe de ativo | parcialmente implementado (#58/#351) |
@@ -127,7 +132,7 @@ Princípios obrigatórios:
 
 - #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
-- eventos corporativos materiais ao dataset de promoção;
+- confirmação final de eventos corporativos materiais no dataset de promoção;
 - fechamento #158 → #269 → #284 → #227.
 
 #149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.

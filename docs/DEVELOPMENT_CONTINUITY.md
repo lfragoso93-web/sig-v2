@@ -1,6 +1,6 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 14/09/2026.
+> Documento obrigatório para retomar desenvolvimento. Atualizado em 23/09/2026.
 
 ## Baseline atual
 
@@ -86,7 +86,10 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 - consumir evidências já certificadas;
 - evitar repetir seeds/rebuilds destrutivos por checklist histórico;
 - executar somente o delta ainda necessário;
-- reconciliar eventos corporativos materiais ao dataset.
+- confirmar o estado de eventos corporativos materiais ao dataset: a varredura
+  de 22/09/2026 registrou zero eventos materiais em `UNRECONCILED`, com AMOB3
+  formalizada como `MATCHED`/`CONFLICT` e KLBN11 em `CONFLICT` revisável até
+  haver evidência documental de liquidação fracionária.
 
 ### #284 — OCI
 
@@ -119,7 +122,9 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 - IRPF funcional para classes suportadas;
 - Metas básica operacional após correção runtime-safe;
 - detalhe de ativo parcialmente implementado;
-- eventos corporativos complexos ainda podem exigir reconciliação antes da promoção.
+- eventos corporativos materiais não têm `UNRECONCILED` remanescente no dataset
+  alvo; KLBN11 segue bloqueado para `MATCHED` sem evidência documental da
+  fração.
 
 ## Dívidas não bloqueantes por padrão
 

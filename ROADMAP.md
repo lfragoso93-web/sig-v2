@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 14/09/2026.
+> Última atualização: 23/09/2026.
 
 ## Estado do projeto
 
@@ -101,7 +101,11 @@ Não fabricar retorno. Se TWR não existir, UI deve declarar indisponibilidade. 
 
 ### Eventos corporativos
 
-Eventos portfolio-scoped já podem ser coletados, mas eventos complexos permanecem `UNRECONCILED` até reconciliação canônica. No release, reconciliar os que forem materiais ao dataset de promoção.
+Eventos portfolio-scoped já podem ser coletados. No dataset alvo, a varredura de
+materialidade de 22/09/2026 não deixou evento material em `UNRECONCILED`: AMOB3
+ficou formalizada como 1 `MATCHED` canônico + 1 `CONFLICT` revisável, e KLBN11
+ficou em `CONFLICT` até existir evidência documental de liquidação fracionária
+para eventual `MATCHED`.
 
 ## Backlog funcional classificado
 
@@ -138,7 +142,7 @@ Eventos portfolio-scoped já podem ser coletados, mas eventos complexos permanec
 | RF TWR diário | 🟠 #149 |
 | Proventos `pre-prod-dividends-seed.v2` | 🟢 asset-based; direitos sob demanda; portfolio-scoped comprovado |
 | Proventos gate amplo | 🟢 #226 portfolio-scoped suficiente |
-| Eventos corporativos | 🟠 reconciliação material pendente |
+| Eventos corporativos | 🟠 sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF suportado | 🟢 funcional |
 | Metas operacional | 🟢 básico funcional |
 | Análise/IA | ⚪ planejado |

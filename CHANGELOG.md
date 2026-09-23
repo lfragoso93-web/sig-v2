@@ -4,6 +4,18 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 23/09/2026 - rebaseline documental pós-#370
+
+- README, ROADMAP e DEVELOPMENT_CONTINUITY foram alinhados ao estado mais novo
+  registrado no checklist da #158;
+- a documentação raiz deixa de afirmar que eventos corporativos materiais ainda
+  permanecem `UNRECONCILED`;
+- estado vigente: AMOB3 formalizada como `MATCHED`/`CONFLICT`, KLBN11 em
+  `CONFLICT` revisável, e zero eventos corporativos materiais com posição
+  aberta em `UNRECONCILED`;
+- KLBN11 continua bloqueada para eventual `MATCHED` até haver evidência
+  documental de liquidação fracionária; `ready_for_real_data=false` permanece.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
@@ -247,7 +259,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - rebuild histórico observado com 493 snapshots entre 22/10/2024 e 10/09/2026;
 - Proventos portfolio-scoped idempotentes com 49 ativos elegíveis e 183 eventos na janela validada;
 - Tesouro DB-first, Renda Fixa dedicada e IRPF para classes suportadas exercitados em runtime;
-- eventos corporativos portfolio-scoped disponíveis, com reconciliação material ainda pendente para casos complexos.
+- eventos corporativos portfolio-scoped disponíveis; no dataset alvo, a varredura
+  mais recente registrou zero eventos materiais em `UNRECONCILED`, com KLBN11
+  preservada em `CONFLICT` revisável.
 
 ### Arquitetura preservada
 
