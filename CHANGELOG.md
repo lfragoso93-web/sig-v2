@@ -68,9 +68,14 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   UID 101;
 - smoke HTTP do frontend runtime serviu `/` com sucesso e o container
   temporário foi removido;
-- Trivy filesystem e scans de imagem ainda não foram concluídos: a base Trivy
-  baixou até 100%, mas os processos ficaram sem progresso operacional e foram
-  interrompidos para não deixar sessões penduradas.
+- Trivy filesystem foi concluído em worktree limpo do SHA publicado, sem
+  artefatos locais não rastreados como `.env`, `.agents`, `.tmp` e cache do
+  scanner: 0 vulnerabilidades HIGH/CRITICAL, 0 secrets e 0 misconfigs nos
+  alvos detectados;
+- Trivy runtime image passou para frontend Alpine 3.24.1 com 0
+  vulnerabilidades HIGH/CRITICAL;
+- Trivy runtime image passou para backend Debian 13.7 e pacotes Python com 0
+  vulnerabilidades HIGH/CRITICAL.
 
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
