@@ -16,6 +16,20 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - KLBN11 continua bloqueada para eventual `MATCHED` até haver evidência
   documental de liquidação fracionária; `ready_for_real_data=false` permanece.
 
+### 23/09/2026 - #158 checkpoint operacional de runtime
+
+- checklist da #158 registrou o SHA `b39edd8f86e7f94b95ea5a45585480cca092cdb2`
+  com gates locais sem escrita aprovados: 137 testes focados, `compileall`,
+  `mypy app --check-untyped-defs` e `git diff --check`;
+- congelamento final da #158 segue bloqueado por runtime Docker/Postgres:
+  `localhost:5432` indisponível, Docker/Docker Compose sem resposta dentro do
+  timeout operacional, `com.docker.service` parado e WSL com `E_ACCESSDENIED`;
+- não houve seed, rebuild, migration, `--execute`, escrita em banco, alteração
+  de ledger ou promoção de `ready_for_real_data`;
+- retomada permitida quando o runtime voltar: `docker compose ps`,
+  `user_test_readiness` no backend e validação de reconciliacao runtime,
+  restart, persistência e idempotência no mesmo SHA candidato.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
