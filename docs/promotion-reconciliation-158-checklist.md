@@ -942,6 +942,38 @@ Ao concluir o microbloco operacional, registrar na #158:
 - riscos e pendencias;
 - decisao: aprovado, aprovado com ressalvas ou abortado.
 
+## Checkpoint operacional - 2026-09-23
+
+SHA verificado: `b39edd8f86e7f94b95ea5a45585480cca092cdb2`.
+
+Gates locais executados sem escrita em banco:
+
+- suite focada de read-path financeiro, valuation, reconciliacao, Tesouro,
+  Renda Fixa, eventos corporativos, preflight e writer: 137 testes `passed`;
+- `python -m compileall -q app tests`: `PASS`;
+- `python -m mypy app --check-untyped-defs`: `Success: no issues found in
+  364 source files`;
+- `git diff --check`: `PASS`.
+
+Bloqueio operacional:
+
+- `localhost:5432` indisponivel;
+- comandos Docker/Docker Compose sem resposta dentro do timeout operacional;
+- servico `com.docker.service` observado como `Stopped`;
+- WSL/Docker Desktop intermitente, incluindo retorno `E_ACCESSDENIED`.
+
+Decisao: congelamento final da #158 permanece bloqueado por runtime
+Docker/Postgres indisponivel. Nao houve seed, rebuild, migration, `--execute`,
+alteracao de ledger, escrita em banco ou promocao de `ready_for_real_data`.
+O estado seguro continua `ready_for_real_data=false`.
+
+Quando Docker/Postgres voltar, retomar por comandos nao destrutivos:
+
+- `docker compose ps`;
+- `docker compose exec backend python -m app.cli.user_test_readiness`;
+- validacao de reconciliacao runtime, restart, persistencia e idempotencia no
+  mesmo SHA candidato.
+
 ## Proximo gate
 
 Somente depois da #158 aprovada, executar #269 sobre exatamente o mesmo SHA
