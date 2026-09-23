@@ -13,3 +13,13 @@ regexes = [
   '''crypto_top100_market_cap''',
   '''CRYPTO_TOP100_UNIVERSE_KEY''',
 ]
+
+[[allowlists]]
+description = "Non-secret BRAPI corporate-event label documented in reconciliation changelog"
+regexTarget = "match"
+paths = [
+  '''docs/changelog/2026-09-15-promotion-reconciliation-158-corporate-event-decision\.md''',
+]
+regexes = [
+  '''BRAPI: `label=GRUPAMENTO`''',
+]

@@ -53,6 +53,25 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   sem seed, rebuild, migration, `--execute`, alteração de ledger ou promoção
   de dados reais amplos.
 
+### 23/09/2026 - #269 CERT-01B iniciado
+
+- gate local de segurança iniciado sobre o SHA
+  `e5bc987b92335eb943e5cf1aeda9008ffc051f13`;
+- Gitleaks encontrou um falso positivo documental em
+  `docs/changelog/2026-09-15-promotion-reconciliation-158-corporate-event-decision.md`,
+  causado por texto técnico `BRAPI: label=GRUPAMENTO`;
+- `.gitleaks.toml` recebeu allowlist cirúrgica para esse trecho específico e a
+  reexecução do Gitleaks varreu 4036 commits com `no leaks found`;
+- Hadolint passou para `backend/Dockerfile` e `frontend/Dockerfile`;
+- imagens runtime backend/frontend foram buildadas no SHA candidato;
+- identidades runtime confirmadas como não-root: backend UID 1000 e frontend
+  UID 101;
+- smoke HTTP do frontend runtime serviu `/` com sucesso e o container
+  temporário foi removido;
+- Trivy filesystem e scans de imagem ainda não foram concluídos: a base Trivy
+  baixou até 100%, mas os processos ficaram sem progresso operacional e foram
+  interrompidos para não deixar sessões penduradas.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
