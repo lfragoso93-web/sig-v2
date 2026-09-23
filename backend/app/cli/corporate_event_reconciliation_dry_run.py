@@ -40,7 +40,7 @@ from app.services.portfolio_snapshot_canonical_twr_service import (
 )
 from app.services.portfolio_snapshot_service import invalidate_snapshots_from
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 def _configure_output() -> None:
@@ -143,7 +143,7 @@ async def _maintain_snapshots_after_matched_reconciliation(
     from_date = min(effective_dates)
     portfolio_result = await db.execute(
         select(Transaction.portfolio_id)
-        .where(Transaction.ticker.in_(tickers))
+        .where(func.upper(Transaction.ticker).in_(tickers))
         .distinct()
         .order_by(Transaction.portfolio_id.asc())
     )

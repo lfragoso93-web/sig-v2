@@ -1,6 +1,8 @@
 from argparse import Namespace
+from datetime import date
 import hashlib
 import json
+from types import SimpleNamespace
 
 import pytest
 from app.cli import corporate_event_reconciliation_dry_run as cli
@@ -626,6 +628,116 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
         "event_ids": (12, 13),
         "snapshot_maintenance": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_snapshot_maintenance_is_generic_for_matched_events(
+    monkeypatch,
+) -> None:
+    class EventResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [
+                SimpleNamespace(ticker="amob3", effective_date=date(2025, 5, 30)),
+                SimpleNamespace(ticker="XYZ3", effective_date=date(2025, 6, 10)),
+            ]
+
+    class PortfolioResult:
+        def all(self):
+            return [(15,), (19,)]
+
+    class FakeSession:
+        def __init__(self):
+            self.executions = []
+
+        async def execute(self, statement):
+            self.executions.append(str(statement))
+            if len(self.executions) == 1:
+                return EventResult()
+            return PortfolioResult()
+
+    snapshot_calls = []
+    cache_calls = []
+
+    async def fake_invalidate_snapshots(db, portfolio_id, from_date, *, commit):
+        snapshot_calls.append(
+            {
+                "stage": "invalidate",
+                "db": db,
+                "portfolio_id": portfolio_id,
+                "from_date": from_date,
+                "commit": commit,
+            }
+        )
+        return portfolio_id - 14
+
+    async def fake_backfill_snapshots(db, portfolio_id, *, commit):
+        snapshot_calls.append(
+            {
+                "stage": "backfill",
+                "db": db,
+                "portfolio_id": portfolio_id,
+                "commit": commit,
+            }
+        )
+        return portfolio_id - 13
+
+    async def fake_invalidate_cache(portfolio_id):
+        cache_calls.append(portfolio_id)
+
+    monkeypatch.setattr(cli, "invalidate_snapshots_from", fake_invalidate_snapshots)
+    monkeypatch.setattr(
+        cli,
+        "backfill_canonical_snapshots_with_returns",
+        fake_backfill_snapshots,
+    )
+    monkeypatch.setattr(cli, "invalidate_rentabilidade_cache", fake_invalidate_cache)
+
+    session = FakeSession()
+    result = await cli._maintain_snapshots_after_matched_reconciliation(
+        session,
+        (12, 13),
+    )
+
+    assert result == {
+        "portfolio_ids": [15, 19],
+        "from_date": "2025-05-30",
+        "snapshots_deleted": 6,
+        "snapshots_rebuilt": 8,
+        "rentabilidade_cache_invalidated": 2,
+    }
+    assert "upper" in session.executions[1].lower()
+    assert snapshot_calls == [
+        {
+            "stage": "invalidate",
+            "db": session,
+            "portfolio_id": 15,
+            "from_date": date(2025, 5, 30),
+            "commit": False,
+        },
+        {
+            "stage": "backfill",
+            "db": session,
+            "portfolio_id": 15,
+            "commit": False,
+        },
+        {
+            "stage": "invalidate",
+            "db": session,
+            "portfolio_id": 19,
+            "from_date": date(2025, 5, 30),
+            "commit": False,
+        },
+        {
+            "stage": "backfill",
+            "db": session,
+            "portfolio_id": 19,
+            "commit": False,
+        },
+    ]
+    assert cache_calls == [15, 19]
 
 
 @pytest.mark.asyncio
