@@ -30,6 +30,29 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   `user_test_readiness` no backend e validação de reconciliacao runtime,
   restart, persistência e idempotência no mesmo SHA candidato.
 
+### 23/09/2026 - #158 runtime Docker/Postgres validado
+
+- no SHA `7b5b5838dcab3d50145152fc72955e697b9d2f94`, Docker/Postgres estavam
+  ativos; o bloqueio era permissão do usuário corrente no pipe
+  `dockerDesktopLinuxEngine`, contornado por execução elevada sem remover
+  volumes, containers ou dados;
+- `docker compose ps` mostrou `backend`, `db`, `redis`, `frontend` e
+  `cloudflared` ativos, com `backend`, `db` e `redis` saudáveis;
+- `user_test_readiness` retornou `GO_ASSISTED`, `blockers=[]`, `warnings=[]`,
+  `writes_executed=0`, `ready_for_real_data=false`, com 8 usuários,
+  7 carteiras, 423 transações, 3677 ativos, 4409462 preços, 978 snapshots,
+  431 Proventos, 123 eventos corporativos e 2 metas;
+- inventário `pre-prod-inventory.v2` retornou 21 tabelas, 4437703 linhas,
+  0 tabelas não classificadas e 0 findings bloqueantes;
+- `/health=200` com Postgres/Redis `ok`; `/ready=503` permanece esperado;
+- AMOB3 está formalizada como `CONFLICT`/`MATCHED`, KLBN11 2025 como
+  `CONFLICT`, e a consulta de eventos `UNRECONCILED` com posição positiva na
+  data do evento retornou 0 linhas;
+- restart controlado de `backend` e, depois, de `db` + `backend` preservou
+  health, readiness e contagens, validando persistência/idempotência runtime
+  sem seed, rebuild, migration, `--execute`, alteração de ledger ou promoção
+  de dados reais amplos.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a

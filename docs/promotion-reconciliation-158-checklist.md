@@ -974,6 +974,57 @@ Quando Docker/Postgres voltar, retomar por comandos nao destrutivos:
 - validacao de reconciliacao runtime, restart, persistencia e idempotencia no
   mesmo SHA candidato.
 
+## Checkpoint runtime Docker/Postgres - 2026-09-23
+
+SHA verificado: `7b5b5838dcab3d50145152fc72955e697b9d2f94`.
+
+Diagnostico: os containers estavam ativos e saudaveis, mas o usuario corrente
+nao tinha permissao para abrir o pipe `dockerDesktopLinuxEngine`. Os comandos de
+runtime foram executados com permissao elevada, sem remover containers, volumes
+ou dados.
+
+Evidencias de runtime:
+
+- `docker compose ps`: `backend`, `db`, `redis`, `frontend` e `cloudflared`
+  ativos; `backend`, `db` e `redis` saudaveis;
+- `python -m app.cli.user_test_readiness`: `GO_ASSISTED`,
+  `go_for_assisted_user_tests=true`, `ready_for_real_data=false`,
+  `blockers=[]`, `warnings=[]`, `writes_executed=0`;
+- contagens do readiness: 8 usuarios, 7 carteiras, 423 transacoes, 3677 ativos,
+  4409462 precos, 978 snapshots, 431 Proventos, 123 eventos corporativos e
+  2 metas;
+- `pre-prod-inventory.v2`: 21 tabelas, 4437703 linhas, 0 tabelas
+  nao classificadas, 0 findings bloqueantes, `writes_executed=0`,
+  `cleanup_executed=false`, `rebuild_executed=false`;
+- `/health`: HTTP 200 com Postgres e Redis `ok`;
+- `/ready`: HTTP 503 esperado enquanto `ready_for_real_data=false`.
+
+Evidencias de eventos corporativos no banco:
+
+- `AMOB3` evento 12: `CONFLICT`, `requires_review=true`, nao canonico;
+- `AMOB3` evento 13: `MATCHED`, `requires_review=false`, canonico;
+- `KLBN11` eventos 81 e 82: `CONFLICT`, `requires_review=true`, nao canonicos;
+- eventos `UNRECONCILED` restantes por estado global: 119, todos
+  `requires_review=true`;
+- eventos `UNRECONCILED` com posicao positiva na data do evento: 0.
+
+Evidencias de idempotencia e persistencia:
+
+- `user_test_readiness` repetido antes do restart manteve as mesmas contagens,
+  sem blockers, sem warnings e `writes_executed=0`;
+- restart controlado de `backend` preservou `/health=200`, `/ready=503` e as
+  mesmas contagens do readiness;
+- restart controlado de `db` + `backend` preservou health dos containers e as
+  contagens: 431 `asset_dividends`, 4409462 `asset_prices`, 3677 `assets`,
+  123 `corporate_events`, 2 `goals`, 978 `portfolio_snapshots`,
+  7 `portfolios`, 423 `transactions` e 8 `users`.
+
+Decisao: o bloqueio operacional Docker/Postgres foi removido para este SHA.
+O runtime local esta validado para #158 com `ready_for_real_data=false`
+preservado e sem escrita operacional neste checkpoint. A aprovacao da #158 ainda
+nao autoriza #269 como concluida, homologacao OCI, PR para `main` nem promocao
+de dados reais amplos.
+
 ## Proximo gate
 
 Somente depois da #158 aprovada, executar #269 sobre exatamente o mesmo SHA
