@@ -47,9 +47,11 @@ ready_for_real_data=false
   ↓
 #216 (concluida)
   ↓
-#158 (agora)
+#158 (certificada localmente)
   ↓
-OCI: homologação do SHA exato
+#269 (certificada localmente)
+  ↓
+#284 OCI: homologação do SHA exato (agora)
   ↓
 #227 GO / NO-GO
 ```
@@ -83,13 +85,22 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 ### #158
 
 - checklist operacional: `docs/promotion-reconciliation-158-checklist.md`;
-- consumir evidências já certificadas;
-- evitar repetir seeds/rebuilds destrutivos por checklist histórico;
-- executar somente o delta ainda necessário;
+- evidencia local publicada no SHA candidato;
+- nao repetir seeds/rebuilds destrutivos por checklist historico;
 - confirmar o estado de eventos corporativos materiais ao dataset: a varredura
   de 22/09/2026 registrou zero eventos materiais em `UNRECONCILED`, com AMOB3
   formalizada como `MATCHED`/`CONFLICT` e KLBN11 em `CONFLICT` revisável até
   haver evidência documental de liquidação fracionária.
+
+### #269
+
+- Gitleaks, Hadolint, builds runtime, identidade nao-root, smoke frontend,
+  Trivy filesystem, Trivy image backend/frontend e inventario externo GitHub
+  validados no SHA candidato;
+- Code Scanning e Secret Scanning abertos: 0;
+- Dependabot aberto no default branch: 2 alertas medios de Vitest ja corrigidos
+  no SHA candidato de `stable-15jun`;
+- nao promove `ready_for_real_data`.
 
 ### #284 — OCI
 

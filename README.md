@@ -32,16 +32,17 @@ ready_for_real_data=false
 - #352 foi validada manualmente e fechada: `Tipo de ativo` virou caixa seletora
   no modal de lancamento, e a transacao foi adicionada com sucesso.
 - #303 foi consolidada como `PORTFOLIO-TEST-READY`; #226 e #216 foram
-  consumidas pela Trilha A; `ready_for_real_data=false` permanece obrigatorio
-  ate #158, #269, #284 e #227.
+  consumidas pela Trilha A; #158 e #269 possuem evidencia local publicada no
+  SHA candidato; `ready_for_real_data=false` permanece obrigatorio ate #284 e
+  #227.
 - #370 avancou a fronteira de eventos corporativos materiais: a varredura de
   22/09/2026 registrou zero eventos materiais em `UNRECONCILED`; AMOB3 esta
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
   revisavel ate haver evidencia documental de liquidacao fracionaria para
   eventual `MATCHED`.
 - Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
-  condicionada ao fechamento certificado de #158, #269, #284 e #227 sobre o
-  mesmo SHA candidato.
+  condicionada a homologacao OCI (#284) e decisao GO/NO-GO (#227) sobre o mesmo
+  SHA candidato.
 
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
@@ -54,9 +55,11 @@ A cadeia obrigatória para promoção é:
         ↓
 #216 gate agregado
         ↓
-#158 promotion reconciliation (proximo bloco)
+#158 promotion reconciliation
         ↓
-OCI homologa o SHA exato
+#269 security gate
+        ↓
+#284 OCI homologa o SHA exato (proximo bloco)
         ↓
 #227 GO / NO-GO
         ↓
@@ -133,7 +136,7 @@ Princípios obrigatórios:
 - #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
 - confirmação final de eventos corporativos materiais no dataset de promoção;
-- fechamento #158 → #269 → #284 → #227.
+- homologacao #284 e decisao #227 sobre o SHA candidato certificado.
 
 #149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
 

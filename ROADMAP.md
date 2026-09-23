@@ -48,7 +48,7 @@ a evidência portfolio-scoped de Proventos é suficiente para a promoção
 controlada, sem seed global mecânico. Global controlado só volta ao escopo se
 #158 encontrar necessidade material nova.
 
-## Fase 4 — promotion reconciliation (#158) — AGORA
+## Fase 4 — promotion reconciliation (#158) — CERTIFICADA LOCALMENTE
 
 Executar apenas o delta necessário sobre SHA/dataset congelados:
 
@@ -61,7 +61,11 @@ Executar apenas o delta necessário sobre SHA/dataset congelados:
 
 Não repetir destruições/rebuilds já certificados sem novo finding.
 
-## Fase 5 — homologação OCI (#284)
+Estado: runtime Docker/Postgres, `user_test_readiness`, restart, persistência,
+idempotência, eventos corporativos materiais e segurança #269 foram validados
+localmente no SHA candidato publicado em `stable-15jun`.
+
+## Fase 5 — homologação OCI (#284) — AGORA
 
 OCI recebe exatamente o SHA certificado localmente.
 

@@ -95,6 +95,15 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   macrobloco certificado for promovido para `main` ou quando `main` receber
   backport dedicado da atualizacao Vitest.
 
+### 23/09/2026 - rebaseline documental para #284
+
+- README, ROADMAP e DEVELOPMENT_CONTINUITY foram alinhados ao estado em que
+  #158 e #269 possuem evidencia local publicada no SHA candidato;
+- o proximo bloco operacional passa a ser homologacao OCI (#284) sobre o mesmo
+  SHA candidato;
+- `ready_for_real_data=false` permanece obrigatorio ate decisao GO/NO-GO da
+  #227.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
