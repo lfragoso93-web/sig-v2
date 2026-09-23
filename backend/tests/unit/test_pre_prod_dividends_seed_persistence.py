@@ -293,7 +293,7 @@ async def test_same_source_same_dates_distinct_values_are_separate_occurrences()
 
 
 @pytest.mark.asyncio
-async def test_same_source_three_unique_occurrences_are_blocked() -> None:
+async def test_same_source_three_unique_occurrences_are_persisted() -> None:
     asset = SimpleNamespace(id=7, ticker="CPFE3", asset_type="ACAO")
     events = [
         ParsedDividendEvent(
@@ -321,12 +321,10 @@ async def test_same_source_three_unique_occurrences_are_blocked() -> None:
     )
     db = _db(assets=[asset])
 
-    with pytest.raises(DividendsSeedPersistenceError) as exc_info:
-        await persist_asset_dividends_strict(db=db, collections=(collection,))
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    message = str(exc_info.value)
-    assert "CPFE3/ACAO/2026-04-30/DIVIDENDO/brapi; eventos=3" in message
-    db.add.assert_not_called()
+    assert result.created == 3
+    assert db.add.call_count == 3
 
 
 @pytest.mark.asyncio
