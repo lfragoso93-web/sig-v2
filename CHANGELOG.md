@@ -104,6 +104,22 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - `ready_for_real_data=false` permanece obrigatorio ate decisao GO/NO-GO da
   #227.
 
+### 23/09/2026 - #284 preflight local e pacote exact-SHA
+
+- `scripts/oci_compose_preflight.ps1` foi alinhado ao contrato real do backend:
+  workers sao controlados por `BACKEND_WORKERS=1` no ambiente e consumidos pelo
+  `entrypoint.sh`;
+- `scripts/oci_local_readiness.ps1` passou em `stable-15jun` com arvore
+  rastreada limpa, sem artefatos sensiveis rastreados, Compose OCI sem portas
+  publicadas para backend/frontend e `cloudflared` presente;
+- pacote de fonte OCI gerado via `git archive` para o SHA
+  `70cdd8d3f823f179044462c5c53dd348d894539e`, manifestado com
+  SHA-256 `e59f7857d662f1b6659f457354eb9f712089556101247c8704315e400cd2ecbd`
+  e 1257 arquivos rastreados;
+- pacote/manifesto permanecem em `artifacts/oci-source-package/`, ignorados por
+  Git, para transferencia operacional controlada; `ready_for_real_data=false`
+  nao foi alterado.
+
 ### 15/09/2026 - #158 eventos corporativos materiais decididos
 
 - os 15 eventos corporativos inicialmente materiais foram cruzados com a
