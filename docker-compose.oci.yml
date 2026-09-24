@@ -19,7 +19,15 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in the VM .env}
+    env_file:
+      - path: .env
+        required: true
+    entrypoint:
+      - /bin/sh
+      - -c
+    command: >-
+      exec cloudflared tunnel --no-autoupdate run
+      --token "$${CLOUDFLARE_TUNNEL_TOKEN}"
     depends_on:
       frontend:
         condition: service_started
