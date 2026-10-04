@@ -51,5 +51,6 @@ def test_live_documents_publish_the_canonical_v2_boundary() -> None:
     assert "`asset_dividends`" in canonical_data
     assert "calculados sob demanda" in readme
     assert "Nenhuma coleta ou leitura materializa direitos" in canonical_data
-    assert "duas execuções reais controladas permanecem pendentes" in normalized_runbook
+    assert "portfolio-scoped/idempotente aceita como suficiente" in normalized_runbook
+    assert "não repetir Proventos global" in normalized_runbook
     assert "20260731_drop_legacy_divs" in rebuild_runbook

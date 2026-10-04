@@ -106,21 +106,20 @@ def test_taee11_like_canonical_aggregate_is_collapsed_to_components() -> None:
     assert collapsed == (aggregate,)
 
 
-def test_three_canonical_events_without_structural_aggregate_remain_blocking() -> None:
+def test_three_canonical_events_without_structural_aggregate_are_retained() -> None:
     events = (
         _event(1.8963242, approved_on=date(2022, 5, 3)),
         _event(2.323063, approved_on=date(2022, 5, 3)),
         _event(0.42673913, approved_on=date(2022, 5, 3)),
     )
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match="evento global conflitante na mesma fonte",
-    ):
-        _collapse_estimated_payment_components(events)
+    retained, collapsed = _collapse_estimated_payment_components(events)
+
+    assert retained == events
+    assert collapsed == ()
 
 
-def test_three_canonical_events_with_wrong_sum_remain_blocking() -> None:
+def test_three_canonical_events_with_wrong_sum_are_distinct_occurrences() -> None:
     common = {
         "payment_date": date(2022, 5, 31),
         "isin_code": "BRTAEECDAM10",
@@ -134,8 +133,7 @@ def test_three_canonical_events_with_wrong_sum_remain_blocking() -> None:
         _event(0.42673913, approved_on=date(2022, 5, 3), **common),
     )
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match="evento global conflitante na mesma fonte",
-    ):
-        _collapse_estimated_payment_components(events)
+    retained, collapsed = _collapse_estimated_payment_components(events)
+
+    assert retained == events
+    assert collapsed == ()
