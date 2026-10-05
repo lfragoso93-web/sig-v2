@@ -10,9 +10,11 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 10/09/2026
+## Status atual — 05/10/2026
 
-O SGI v2 está em **certificação final assistida**, não em construção do núcleo.
+O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
+promovida para `main` pela PR #362; essa promoção não altera automaticamente o
+readiness para dados reais.
 
 Estado operacional registrado:
 
@@ -25,45 +27,39 @@ ready_for_real_data=false
 /ready=503
 ```
 
-### Delta 23/09/2026
+### Rebaseline pós-promoção
 
 - #363 fechado apos recuperacao dos gates tecnicos locais.
 - #354 permanece fechada.
 - #352 foi validada manualmente e fechada: `Tipo de ativo` virou caixa seletora
   no modal de lancamento, e a transacao foi adicionada com sucesso.
-- #303 foi consolidada como `PORTFOLIO-TEST-READY`; #226 e #216 foram
-  consumidas pela Trilha A; #158 e #269 possuem evidencia local publicada no
-  SHA candidato; `ready_for_real_data=false` permanece obrigatorio ate #284 e
-  #227.
+- #158, #269 e #227 estão fechadas; a PR #362 foi mergeada em `main`;
+- OCI/#284 saiu do caminho crítico atual e permanece backlog futuro de
+  infraestrutura/cloud;
+- `ready_for_real_data=false` permanece obrigatório até uma decisão explícita,
+  persistente e auditável tratada pela #384;
 - #370 avancou a fronteira de eventos corporativos materiais: a varredura de
   22/09/2026 registrou zero eventos materiais em `UNRECONCILED`; AMOB3 esta
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
   revisavel ate haver evidencia documental de liquidacao fracionaria para
   eventual `MATCHED`.
-- Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
-  condicionada a homologacao OCI (#284) e decisao GO/NO-GO (#227) sobre o mesmo
-  SHA candidato.
+- a próxima fase arquitetural é a Epic #344, iniciando pela #345 somente após
+  baseline local verde e governança coerente.
 
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
-A cadeia obrigatória para promoção é:
+A cadeia histórica de promoção foi concluída. O mapa vigente é:
 
 ```text
-#303 PORTFOLIO-TEST-READY
-        ↓
-#226 Proventos
-        ↓
-#216 gate agregado
-        ↓
-#158 promotion reconciliation
-        ↓
-#269 security gate
-        ↓
-#284 OCI homologa o SHA exato (proximo bloco)
-        ↓
-#227 GO / NO-GO
-        ↓
-somente após GO: avaliar ready_for_real_data=true
+governança pós-#362
+        -> baseline local do HEAD
+        -> #345 Architecture Doctor
+        -> #346 Agent Skills
+        -> #347 Certification Proof
+        -> #365 antes de qualquer migration ampla de #364
+
+#384 permanece a fronteira separada para eventual ready_for_real_data=true.
+#284 permanece backlog futuro e não bloqueia desenvolvimento local.
 ```
 
 ## Ambiente de desenvolvimento e OCI
@@ -74,9 +70,11 @@ Windows + PowerShell + Docker é o ambiente oficial de desenvolvimento, correç�
 
 ### OCI
 
-OCI é ambiente de homologação do SHA já certificado localmente: deploy exato, migrations aprovadas, smoke, restart, persistência, recursos, rede, Cloudflare Tunnel e checks de segurança/resiliência.
+OCI não faz parte do caminho atual de desenvolvimento, testes ou homologação.
+#284 preserva o trabalho de infraestrutura/cloud como backlog futuro.
 
-Não desenvolver nem manter hotfix permanente na VM. Falha encontrada em OCI volta ao ambiente local, gera novo SHA e nova homologação.
+Quando esse backlog for retomado, não desenvolver nem manter hotfix permanente
+na VM.
 
 ## Arquitetura financeira canônica
 
@@ -135,8 +133,9 @@ Princípios obrigatórios:
 
 - #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
-- confirmação final de eventos corporativos materiais no dataset de promoção;
-- homologacao #284 e decisao #227 sobre o SHA candidato certificado.
+- #370 permanece fail-closed para KLBN11 até evidência documental suficiente;
+- #384 deve manter a liberação para dados reais explícita, persistente e
+  separada da promoção para `main`.
 
 #149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
 
@@ -185,5 +184,5 @@ docker compose run --rm backend python -m app.cli.user_test_readiness
 - `docs/USER_TEST_READINESS_GATE.md`;
 - `docs/USER_VALIDATION_RUNBOOK.md`;
 - `docs/BOOTSTRAP_DATA_FLOW.md`;
-- `docs/deployment/oci-execution-index.md`;
-- Issues #303, #226, #216, #158, #227, #284 e #293.
+- `docs/deployment/oci-execution-index.md` (referência futura OCI);
+- Issues #344, #345, #365, #364, #370, #384 e #284 (backlog futuro).

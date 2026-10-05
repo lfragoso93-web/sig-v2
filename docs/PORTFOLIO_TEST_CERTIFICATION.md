@@ -1,5 +1,10 @@
 # Certificação funcional de carteira — PORTFOLIO-TEST-READY
 
+> Status em 05/10/2026: evidência histórica concluída e consumida pela promoção
+> da PR #362. As sequências abaixo registram o processo usado e não comandam o
+> trabalho atual. OCI/#284 é backlog futuro; `ready_for_real_data` permanece
+> separado sob a #384.
+
 ## Objetivo
 
 Este documento define o gate funcional anterior ao uso de carteiras e dados reais no SGI v2.
@@ -489,12 +494,11 @@ Status em 14/09/2026: aprovado para `PORTFOLIO-TEST-READY` no SHA publicado e
 registrado na Issue #303. A aprovacao e restrita ao gate local/assistido e nao
 autoriza `ready_for_real_data=true`.
 
-## Próxima etapa após aprovação
+## Etapa histórica após aprovação
 
-Após `PORTFOLIO-TEST-READY`:
+O processo abaixo foi concluído por #158, #269, #227 e PR #362:
 
-1. executar somente entao os gates reais #158 -> #269 -> #284 -> #227;
+1. preservar a evidência dos gates executados;
 2. selecionar um SHA exato já certificado localmente;
-3. atualizar OCI para esse SHA;
-4. realizar homologação reduzida e operacional;
-5. qualquer falha de código retorna ao ambiente local.
+3. manter OCI/#284 como backlog futuro, fora do caminho atual;
+4. manter qualquer autorização para dados reais separada sob a #384.
