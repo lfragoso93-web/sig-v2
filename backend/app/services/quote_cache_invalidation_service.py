@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import cache_delete
 from app.models.asset import AssetType
 from app.models.transaction import Transaction
+from app.services.portfolio_service import portfolio_cache_key
 
 
 async def invalidate_quote_consumers(
@@ -21,8 +22,8 @@ async def invalidate_quote_consumers(
         )
     portfolio_ids = [row.portfolio_id for row in (await db.execute(query)).all()]
     for portfolio_id in portfolio_ids:
-        await cache_delete(f"portfolio:{portfolio_id}:summary")
-        await cache_delete(f"portfolio:{portfolio_id}:positions")
+        await cache_delete(portfolio_cache_key(portfolio_id, "summary"))
+        await cache_delete(portfolio_cache_key(portfolio_id, "positions"))
     return len(portfolio_ids)
 
 

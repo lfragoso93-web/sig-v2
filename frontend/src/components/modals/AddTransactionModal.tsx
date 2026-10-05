@@ -36,6 +36,68 @@ const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
 const TODAY       = new Date().toISOString().split('T')[0]
 
+function normalizeTreasurySearch(value: string | null | undefined) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function treasuryIdentity(item: TreasuryItem) {
+  return normalizeTreasurySearch((item as any).slug || item.ticker || item.name)
+}
+
+function matchesTreasuryItem(item: TreasuryItem, value: string) {
+  const normalized = normalizeTreasurySearch(value)
+  if (!normalized) return false
+  return [
+    item.name,
+    item.ticker,
+    item.slug,
+    (item as any).slug || item.ticker,
+  ].some(candidate => normalizeTreasurySearch(candidate) === normalized)
+}
+
+function uniqueTreasuryCatalogMatch(items: TreasuryItem[], value: string) {
+  if (items.length !== 1) return null
+  const normalized = normalizeTreasurySearch(value)
+  if (!normalized) return null
+
+  const item = items[0]
+  const searchable = normalizeTreasurySearch(
+    [item.name, item.ticker, item.slug].filter(Boolean).join(' '),
+  )
+  const terms = normalized.split(/\s+/).filter(Boolean)
+  return terms.every(term => searchable.includes(term)) ? item : null
+}
+
+function inferTreasuryIndexer(value: string | null | undefined) {
+  const normalized = normalizeTreasurySearch(value)
+  if (normalized.includes('selic')) return 'SELIC'
+  if (normalized.includes('ipca') || normalized.includes('renda') || normalized.includes('educa')) return 'IPCA+'
+  if (normalized.includes('igp')) return 'IGP-M'
+  if (normalized.includes('prefixado')) return 'Prefixado'
+  return ''
+}
+
+function inferTreasuryMaturity(value: string | null | undefined) {
+  const raw = String(value ?? '')
+  const compactMatch = raw.match(/(\d{2})(\d{2})(20\d{2})$/)
+  if (compactMatch) {
+    const [, day, month, year] = compactMatch
+    return `${year}-${month}-${day}`
+  }
+
+  const isoMatch = raw.match(/(20\d{2})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${year}-${month}-${day}`
+  }
+
+  return ''
+}
+
 const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.3rem' }
 const labelStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)', fontWeight: 500,
@@ -175,6 +237,13 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isPending  = isCreating || isUpdating
   const isEditMode = !!prefill?.transactionId
   const initialTab = prefill?.tab ?? 'acao'
+  const initialIsTesouro = initialTab === 'tesouro'
+  const initialTreasuryIdentity = initialIsTesouro
+    ? prefill?.treasurySlug || prefill?.ticker || ''
+    : ''
+  const initialTreasuryLabel = initialIsTesouro
+    ? prefill?.assetName || prefill?.ticker || ''
+    : ''
 
   const [activeTab,      setActiveTab]      = useState(initialTab)
   const [operation,      setOperation]      = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
@@ -189,16 +258,17 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [error,          setError]          = useState<string | null>(null)
   const [success,        setSuccess]        = useState(false)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
-  const [indexer,        setIndexer]        = useState('')
+  const [indexer,        setIndexer]        = useState(initialIsTesouro ? inferTreasuryIndexer(initialTreasuryLabel || initialTreasuryIdentity) : '')
   const [rate,           setRate]           = useState('')
-  const [maturity,       setMaturity]       = useState('')
+  const [maturity,       setMaturity]       = useState(initialIsTesouro ? inferTreasuryMaturity(initialTreasuryLabel || initialTreasuryIdentity) : '')
   const [issuer,         setIssuer]         = useState('')
   const [dailyLiquidity, setDailyLiquidity] = useState(false)
-  const [activeSlug,     setActiveSlug]     = useState('')
+  const [activeSlug,     setActiveSlug]     = useState(initialTreasuryIdentity)
   const [priceEdited,    setPriceEdited]    = useState(isEditMode)
   const [showTDSugg,     setShowTDSugg]     = useState(false)
   const [showRVSugg,     setShowRVSugg]     = useState(false)
   const dropdownRef                          = useRef<HTMLDivElement>(null)
+  const autoAppliedTreasuryRef               = useRef('')
 
   const tab            = TABS.find(t => t.key === activeTab)!
   const isRF           = tab.extraFields === 'renda_fixa'
@@ -214,7 +284,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading, error: tdSearchError } = useTesouroSearch(ticker, isTesouro && !isEditMode)
   const { items: rvItems, loading: rvLoading, error: rvSearchError } = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
-  const { price: tdPrice, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
+  const { price: tdPrice, rate: tdRate, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
   const lookupError = quoteError ?? tdSearchError ?? rvSearchError ?? tdPriceError
 
@@ -245,12 +315,35 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [tdPrice, isTesouro, priceEdited])
 
   useEffect(() => {
+    if (tdRate !== null && tdRate !== undefined && isTesouro && !rate) {
+      setRate(String(tdRate))
+    }
+  }, [tdRate, isTesouro, rate])
+
+  useEffect(() => {
     if (isTesouro && activeSlug && !priceEdited) { setPrice(''); setPriceFromBrapi(false) }
   }, [date, isTesouro, activeSlug])
 
   useEffect(() => {
-    if (isTesouro && tdItems.length > 0) setShowTDSugg(true); else setShowTDSugg(false)
-  }, [tdItems, isTesouro])
+    if (!isTesouro || isEditMode || tdItems.length === 0) {
+      setShowTDSugg(false)
+      return
+    }
+
+    const catalogItem = tdItems.find(item => matchesTreasuryItem(item, ticker))
+      ?? uniqueTreasuryCatalogMatch(tdItems, ticker)
+    if (catalogItem) {
+      const key = treasuryIdentity(catalogItem)
+      if (key && autoAppliedTreasuryRef.current !== key) {
+        autoAppliedTreasuryRef.current = key
+        applyTDSuggestion(catalogItem)
+      }
+      setShowTDSugg(false)
+      return
+    }
+
+    setShowTDSugg(true)
+  }, [tdItems, isTesouro, isEditMode, ticker])
 
   useEffect(() => {
     if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true); else setShowRVSugg(false)
@@ -425,7 +518,8 @@ export default function AddTransactionModal({ onClose }: Props) {
         boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        maxHeight: '92dvh',
+        maxHeight: '94dvh',
+        minHeight: 0,
       }}>
 
         {/* Header */}
@@ -488,51 +582,13 @@ export default function AddTransactionModal({ onClose }: Props) {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-
-            {/* Abas */}
-            <div style={{
-              display: 'flex', gap: 4, rowGap: 4,
-              flexWrap: 'wrap',
-              padding: '0.875rem 1.25rem 0',
-              flexShrink: 0,
-            }}>
-              {TABS.map(t => {
-                const isActive = activeTab === t.key
-                return (
-                  <button
-                    key={t.key} type="button"
-                    onClick={() => !isEditMode && handleTabChange(t.key)}
-                    style={{
-                      flexShrink: 0,
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '5px 10px',
-                      borderRadius: 'var(--radius-lg)',
-                      border: isActive
-                        ? '1px solid oklch(from var(--color-primary) l c h / 0.3)'
-                        : '1px solid transparent',
-                      background: isActive
-                        ? 'oklch(from var(--color-primary) l c h / 0.12)'
-                        : 'transparent',
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      fontSize: 'var(--text-xs)', fontWeight: isActive ? 600 : 400,
-                      cursor: isEditMode && !isActive ? 'default' : 'pointer',
-                      opacity: isEditMode && !isActive ? 0.35 : 1,
-                      transition: 'all 150ms ease', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {t.icon}{t.label}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.625rem 1.25rem 0', flexShrink: 0 }} />
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Campos */}
             <div style={{
               flex: 1, overflowY: 'auto', overflowX: 'hidden',
-              padding: '1rem 1.25rem',
+              minHeight: 0,
+              padding: '0.875rem 1.25rem 1rem',
               display: 'flex', flexDirection: 'column', gap: '0.875rem',
             }}>
 
@@ -567,6 +623,19 @@ export default function AddTransactionModal({ onClose }: Props) {
                 })}
               </div>
 
+              <Field label="Tipo de ativo">
+                <Select
+                  value={activeTab}
+                  onChange={e => handleTabChange(e.target.value)}
+                  disabled={isEditMode}
+                  aria-label="Tipo de ativo"
+                >
+                  {TABS.map(t => (
+                    <option key={t.key} value={t.key}>{t.label}</option>
+                  ))}
+                </Select>
+              </Field>
+
               {/* Ticker + Moeda */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <Field label={tab.tickerLabel} style={{ flex: 1 }}>
@@ -579,7 +648,10 @@ export default function AddTransactionModal({ onClose }: Props) {
                         setTicker(v)
                         if (!prefill?.ticker) setAssetName('')
                         setPrice(''); setPriceFromBrapi(false); setPriceEdited(false)
-                        if (isTesouro) setActiveSlug('')
+                        if (isTesouro) {
+                          setActiveSlug('')
+                          autoAppliedTreasuryRef.current = ''
+                        }
                       }}
                       onFocus={() => {
                         if (!isEditMode) {
@@ -663,7 +735,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <Field label="Indexador" required style={{ flex: 1 }}>
-                      <Select value={indexer} onChange={e => setIndexer(e.target.value)}>
+                      <Select value={indexer} onChange={e => setIndexer(e.target.value)} disabled={isTesouro && !!activeSlug}>
                         <option value="">Selecionar…</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
@@ -684,7 +756,13 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     {!dailyLiquidity && (
                       <Field label="Vencimento" style={{ flex: 1 }}>
-                        <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={maturity}
+                          onChange={e => setMaturity(e.target.value)}
+                          readOnly={isTesouro && !!activeSlug}
+                          style={isTesouro && !!activeSlug ? { opacity: 0.75 } : undefined}
+                        />
                       </Field>
                     )}
                     {dailyLiquidity && (

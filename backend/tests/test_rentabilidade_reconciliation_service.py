@@ -37,7 +37,7 @@ async def test_reconciliation_matches_summary_and_class_totals():
             "current_value": 500.0,
             "cost_basis": 400.0,
             "dedicated_history_required": True,
-            "twr_available": False,
+            "twr_available": True,
         },
     ]
 
@@ -55,8 +55,8 @@ async def test_reconciliation_matches_summary_and_class_totals():
 
     assert result["is_reconciled"] is True
     assert result["classes"]["patrimonio"]["difference"] == 0.0
-    assert result["unsupported_class_twr"] == ["RENDA_FIXA"]
-    assert result["twr_comparability_status"] == "partial_by_design"
+    assert result["unsupported_class_twr"] == []
+    assert result["twr_comparability_status"] == "all_classes_supported"
 
 
 @pytest.mark.asyncio

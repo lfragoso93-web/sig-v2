@@ -147,7 +147,12 @@ async def fetch_sgs_series(
     limit_last: Optional[int] = None,
     timeout_seconds: float = 30.0,
 ) -> list[dict]:
-    """Busca uma série SGS e retorna registros normalizados."""
+    """Busca uma série SGS e retorna registros normalizados.
+
+    Ranges janelados são atômicos do ponto de vista de cobertura: se qualquer
+    janela falhar, a chamada falha inteira. Retornar somente as janelas bem
+    sucedidas faria uma série parcial parecer completa para consumidores DB-first.
+    """
     key = indicator.upper()
     if key not in SGS_INDICATORS:
         raise ValueError(f"Indicador SGS não suportado: {indicator}")
@@ -177,14 +182,14 @@ async def fetch_sgs_series(
                     end_date=window_end,
                 )
             except httpx.HTTPStatusError as exc:
-                logger.warning(
-                    "[BCB SGS] falha na janela %s %s-%s: %s",
+                logger.error(
+                    "[BCB SGS] cobertura incompleta para %s; janela %s-%s falhou: %s",
                     meta.indicator,
                     window_start,
                     window_end,
                     exc,
                 )
-                continue
+                raise
             for row in chunk:
                 row_date = row["date"]
                 if row_date not in seen:

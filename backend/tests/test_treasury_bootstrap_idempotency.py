@@ -117,3 +117,22 @@ async def test_treasury_reconciliation_second_execution_has_no_new_mutation(monk
     assert second.created_assets == 0
     assert second.errors == 0
     assert db.commit.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_treasury_resolution_prefers_canonical_symbol_over_legacy_asset():
+    db = MagicMock()
+
+    canonical_result = MagicMock()
+    canonical_scalars = MagicMock()
+    canonical_scalars.first.return_value = "tesouro-selic-01032031"
+    canonical_result.scalars.return_value = canonical_scalars
+    db.execute = AsyncMock(return_value=canonical_result)
+
+    resolved = await treasury_catalog_service.resolve_treasury_symbol(
+        db,
+        "TESOURO SELIC 2031",
+    )
+
+    assert resolved == "tesouro-selic-01032031"
+    assert db.execute.await_count == 1

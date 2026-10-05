@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, field_validator
+
+from app.schemas.password_policy import validate_strong_password
 
 
 class LoginRequest(BaseModel):
@@ -21,7 +23,12 @@ class ForgotPasswordResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=8)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_strong_password(v)
 
 
 class TokenResponse(BaseModel):

@@ -21,6 +21,7 @@ from app.services.pre_prod_dividends_seed_persistence import (
 )
 from app.services.pre_prod_dividends_seed_service import (
     DividendsSeedUnexpectedStageError,
+    load_dividends_seed_assets_for_portfolio,
     load_dividends_seed_assets,
     run_pre_prod_dividends_seed,
 )
@@ -43,6 +44,26 @@ async def test_asset_loader_excludes_fractional_tickers_before_providers() -> No
     assets = await load_dividends_seed_assets(db)
 
     assert assets == (StrictDividendAsset("ABEV3", "ACAO"),)
+
+
+@pytest.mark.asyncio
+async def test_portfolio_asset_loader_scopes_to_eligible_transaction_tickers() -> None:
+    db = AsyncMock()
+    result = Mock()
+    result.all.return_value = [
+        ("ABEV3", "ACAO"),
+        ("ABEV3F", "ACAO"),
+        ("BTC", "CRIPTO"),
+        ("MXRF11", "FII"),
+    ]
+    db.execute.return_value = result
+
+    assets = await load_dividends_seed_assets_for_portfolio(db, portfolio_id=15)
+
+    assert assets == (
+        StrictDividendAsset("ABEV3", "ACAO"),
+        StrictDividendAsset("MXRF11", "FII"),
+    )
 
 
 def _counts(asset_dividends: int = 0) -> DividendsSeedCounts:

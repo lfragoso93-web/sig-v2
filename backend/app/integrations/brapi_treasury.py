@@ -97,6 +97,11 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
     """Converte nomes públicos comuns para symbol canônico usado pelo SGI."""
     if not value:
         return None
+
+    raw = value.strip().lower()
+    if is_brapi_treasury_symbol(raw):
+        return raw
+
     slug = _slug_text(value)
     year = _year_from_text(value)
     if not year:
@@ -106,6 +111,16 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
         return f"tesouro-renda-mais-{year}"
     if "educa" in slug:
         return f"tesouro-educa-mais-{year}"
+    if "selic" in slug:
+        return f"tesouro-selic-0103{year}"
+    if "prefixado" in slug and "juros-semestrais" in slug:
+        return f"tesouro-prefixado-com-juros-semestrais-0101{year}"
+    if "prefixado" in slug:
+        return f"tesouro-prefixado-0101{year}"
+    if "ipca" in slug and "juros-semestrais" in slug:
+        return f"tesouro-ipca-com-juros-semestrais-1508{year}"
+    if "ipca" in slug:
+        return f"tesouro-ipca-1508{year}"
     return None
 
 

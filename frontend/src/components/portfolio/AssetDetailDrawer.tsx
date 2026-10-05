@@ -1,4 +1,5 @@
-import { X, TrendingUp, DollarSign, Zap } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { X, TrendingUp, DollarSign, Zap, CalendarDays } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAssetDetail } from '@/hooks/useAssetDetail'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -12,28 +13,69 @@ interface AssetDetailDrawerProps {
   onClose: () => void
 }
 
+const HISTORY_PERIODS = [
+  { label: '1 sem', days: 7 },
+  { label: '15 dias', days: 15 },
+  { label: '30 dias', days: 30 },
+  { label: '90 dias', days: 90 },
+  { label: '1 ano', days: 365 },
+  { label: 'Max', days: 1825 },
+] as const
+
+function variationForPeriod(
+  priceHistory: { date: string; price: number }[],
+  days: number,
+  currentPrice: number | null | undefined,
+) {
+  const lastPrice = currentPrice ?? priceHistory[priceHistory.length - 1]?.price
+  if (!lastPrice || priceHistory.length === 0) return null
+
+  const target = new Date()
+  target.setDate(target.getDate() - days)
+  const baseline = priceHistory.find(point => new Date(point.date) >= target) ?? priceHistory[0]
+  if (!baseline?.price) return null
+
+  const value = lastPrice - baseline.price
+  return {
+    value,
+    percent: baseline.price > 0 ? (value / baseline.price) * 100 : null,
+  }
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return '-'
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2).replace('.', ',')}%`
+}
+
 export default function AssetDetailDrawer({ asset, portfolioId, onClose }: AssetDetailDrawerProps) {
   if (!asset) return null
 
-  const { data: assetDetail, isLoading: loadingDetail } = useAssetDetail(asset.ticker, 90)
+  const [historyDays, setHistoryDays] = useState(90)
+  const { data: assetDetail, isLoading: loadingDetail } = useAssetDetail(asset.ticker, historyDays)
+  const { data: variationDetail } = useAssetDetail(asset.ticker, 365)
   const { data: txData } = useTransactions(portfolioId, { ticker: asset.ticker })
   const { data: dividends } = useDividends(portfolioId)
 
   const transactions = txData?.items ?? []
   const assetDividends = (dividends ?? []).filter(d => d.ticker === asset.ticker)
-
   const priceHistory = assetDetail?.price_history ?? []
   const chartData = priceHistory.map(p => ({
     date: new Date(p.date).toLocaleDateString('pt-BR', { month: '2-digit', day: '2-digit' }),
     price: p.price,
   }))
 
-  const avgPrice = transactions.length > 0
-    ? transactions.reduce((sum, tx) => sum + (tx.price * (tx.operation === 'buy' ? 1 : -1)), 0) / 
-      transactions.filter(tx => tx.operation === 'buy').length
-    : 0
-
-  const totalDividends = assetDividends.reduce((sum, d) => sum + d.amount, 0)
+  const avgPrice = asset.average_price ?? 0
+  const totalDividends = asset.proventos ?? assetDividends.reduce((sum, d) => sum + d.amount, 0)
+  const variationHistory = variationDetail?.price_history ?? priceHistory
+  const weekVariation = useMemo(
+    () => variationForPeriod(variationHistory, 7, assetDetail?.current_price),
+    [variationHistory, assetDetail?.current_price],
+  )
+  const quarterVariation = useMemo(
+    () => variationForPeriod(variationHistory, 90, assetDetail?.current_price),
+    [variationHistory, assetDetail?.current_price],
+  )
+  const historyLabel = HISTORY_PERIODS.find(period => period.days === historyDays)?.label ?? `${historyDays}d`
 
   return (
     <div style={{
@@ -82,6 +124,7 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
         </div>
         <button
           onClick={onClose}
+          aria-label="Fechar"
           style={{
             background: 'transparent',
             border: 'none',
@@ -102,7 +145,6 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Preço atual */}
           {assetDetail && (
             <div style={{
               background: 'var(--color-surface-offset)',
@@ -112,11 +154,11 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Preço Atual</span>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                  Histórico: 90d
+                  Histórico: {historyLabel}
                 </span>
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                {assetDetail.current_price ? formatBRL(assetDetail.current_price) : '—'}
+                {assetDetail.current_price ? formatBRL(assetDetail.current_price) : '-'}
               </div>
               {assetDetail.last_price_updated_at && (
                 <div style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)', marginTop: '0.5rem' }}>
@@ -126,16 +168,34 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
             </div>
           )}
 
-          {/* Gráfico de preços */}
           {loadingDetail ? (
             <div style={{ height: 200, background: 'var(--color-surface-offset)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>Carregando...</span>
             </div>
           ) : chartData.length > 0 ? (
             <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
-              <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem' }}>
-                Histórico de Preços
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                  Histórico de Preços
+                </h3>
+                <select
+                  aria-label="Período do histórico de preços"
+                  value={historyDays}
+                  onChange={e => setHistoryDays(Number(e.target.value))}
+                  style={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-divider)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--color-text)',
+                    fontSize: 'var(--text-xs)',
+                    padding: '0.35rem 0.5rem',
+                  }}
+                >
+                  {HISTORY_PERIODS.map(period => (
+                    <option key={period.days} value={period.days}>{period.label}</option>
+                  ))}
+                </select>
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={chartData}>
                   <CartesianGrid stroke="var(--color-divider)" vertical={false} />
@@ -154,7 +214,7 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
                       border: '1px solid var(--color-divider)',
                       borderRadius: 'var(--radius-md)',
                     }}
-                    formatter={(value: any) => formatBRL(value)}
+                    formatter={(value: unknown) => formatBRL(Number(value))}
                   />
                   <Line
                     type="monotone"
@@ -168,44 +228,58 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
             </div>
           ) : null}
 
-          {/* Métricas KPI */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div style={{
-              background: 'var(--color-surface-offset)',
-              padding: '0.75rem',
-              borderRadius: 'var(--radius-md)',
-            }}>
+            <div style={{ background: 'var(--color-surface-offset)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.5rem' }}>
                 <DollarSign size={14} style={{ color: 'var(--color-primary)' }} />
                 <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)' }}>Preço Médio</span>
               </div>
               <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)' }}>
-                {avgPrice > 0 ? formatBRL(avgPrice) : '—'}
+                {avgPrice > 0 ? formatBRL(avgPrice) : '-'}
               </div>
             </div>
 
-            <div style={{
-              background: 'var(--color-surface-offset)',
-              padding: '0.75rem',
-              borderRadius: 'var(--radius-md)',
-            }}>
+            <div style={{ background: 'var(--color-surface-offset)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.5rem' }}>
                 <Zap size={14} style={{ color: 'var(--color-primary)' }} />
-                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)' }}>Dividendos (Total)</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)' }}>Proventos (Total)</span>
               </div>
               <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)' }}>
-                {totalDividends > 0 ? formatBRL(totalDividends) : '—'}
+                {formatBRL(totalDividends)}
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--color-surface-offset)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.5rem' }}>
+                <CalendarDays size={14} style={{ color: 'var(--color-primary)' }} />
+                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)' }}>Variação 7 dias</span>
+              </div>
+              <div style={{
+                fontSize: 'var(--text-sm)',
+                fontWeight: 600,
+                color: (weekVariation?.value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
+              }}>
+                {formatPercent(weekVariation?.percent)}
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--color-surface-offset)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: '0.5rem' }}>
+                <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
+                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)' }}>Variação 90 dias</span>
+              </div>
+              <div style={{
+                fontSize: 'var(--text-sm)',
+                fontWeight: 600,
+                color: (quarterVariation?.value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
+              }}>
+                {formatPercent(quarterVariation?.percent)}
               </div>
             </div>
           </div>
 
-          {/* Transações */}
           {transactions.length > 0 && (
-            <div style={{
-              background: 'var(--color-surface-offset)',
-              padding: '1rem',
-              borderRadius: 'var(--radius-lg)',
-            }}>
+            <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
                 <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
                 <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
@@ -242,13 +316,8 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
             </div>
           )}
 
-          {/* Dividendos */}
           {assetDividends.length > 0 && (
-            <div style={{
-              background: 'var(--color-surface-offset)',
-              padding: '1rem',
-              borderRadius: 'var(--radius-lg)',
-            }}>
+            <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
                 <Zap size={14} style={{ color: 'var(--color-primary)' }} />
                 <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>

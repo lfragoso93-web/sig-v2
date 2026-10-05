@@ -13,6 +13,7 @@ from app.services.realized_pnl_projection_reader import (
     load_realized_disposals,
     load_realized_pnl_by_ticker,
 )
+from app.services.position_timeline_projection import CanonicalCorporateActionCashFlow
 
 
 def _tx(
@@ -182,6 +183,55 @@ async def test_detailed_reader_preserves_history_and_filters_disposal_period():
     assert disposal.disposal_date == date(2026, 1, 3)
     assert disposal.quantity_disposed == Decimal(4)
     assert disposal.realized_pnl_brl == Decimal(19)
+
+
+@pytest.mark.asyncio
+async def test_detailed_reader_does_not_treat_corporate_action_cash_flow_as_disposal():
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars().all.return_value = [
+        _tx(
+            operation=OperationType.buy,
+            day=1,
+            quantity="10",
+            price="18.53",
+        ),
+    ]
+    db.execute.return_value = result
+    projection = SimpleNamespace(
+        realized_disposals=(),
+        corporate_action_cash_flows=(
+            CanonicalCorporateActionCashFlow(
+                source_event_id="bonus-cash",
+                event_date=date(2026, 1, 2),
+                fractional_quantity=Decimal("0.10"),
+                unit_settlement_price_brl=Decimal("4.00"),
+                gross_amount_brl=Decimal("0.4000"),
+                cash_treatment="AUCTION_SETTLEMENT",
+            ),
+        ),
+    )
+
+    with (
+        patch(
+            "app.services.realized_pnl_projection_reader."
+            "load_global_corporate_actions_by_ticker",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "app.services.realized_pnl_projection_reader."
+            "project_transaction_timelines",
+            return_value={"TEST3": (projection, "ACAO", False)},
+        ),
+    ):
+        disposals = await load_realized_disposals(
+            db,
+            7,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 31),
+        )
+
+    assert disposals == ()
 
 
 @pytest.mark.asyncio

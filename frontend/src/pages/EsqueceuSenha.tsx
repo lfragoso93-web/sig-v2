@@ -5,13 +5,14 @@ import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import api from '@/services/api'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { PASSWORD_POLICY_HELP, strongPasswordSchema } from '@/utils/passwordPolicy'
 
 const emailSchema = z.object({
   email: z.string().email('E-mail inválido'),
 })
 
 const resetSchema = z.object({
-  new_password: z.string().min(8, 'Mínimo 8 caracteres'),
+  new_password: strongPasswordSchema,
   confirm_password: z.string(),
 }).refine((d) => d.new_password === d.confirm_password, {
   message: 'As senhas não coincidem',
@@ -120,8 +121,10 @@ export default function EsqueceuSenha() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
           <label style={labelStyle}>Nova senha</label>
-          <input {...resetForm.register('new_password')} type="password" autoFocus className="input w-full" />
-          {resetForm.formState.errors.new_password && <p style={errorStyle}>{resetForm.formState.errors.new_password.message}</p>}
+          <input {...resetForm.register('new_password')} type="password" autoFocus className="input w-full" placeholder="Minimo 10 caracteres" />
+          <p style={{ ...errorStyle, color: resetForm.formState.errors.new_password ? errorStyle.color : 'var(--color-text-muted)' }}>
+            {resetForm.formState.errors.new_password?.message ?? PASSWORD_POLICY_HELP}
+          </p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>

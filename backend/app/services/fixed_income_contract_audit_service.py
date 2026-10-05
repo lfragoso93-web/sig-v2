@@ -46,7 +46,7 @@ async def audit_fixed_income_contracts(db: AsyncSession) -> dict[str, object]:
 
     for tx in purchases:
         notes = getattr(tx, "notes", None)
-        indexer, rate, maturity = _parse_notes(notes)
+        indexer, rate, maturity, _benchmark_source = _parse_notes(notes)
         # O valuation pode assumir CDI por compatibilidade, mas a auditoria exige
         # que o contrato informe explicitamente o indexador.
         requires_rate = indexer in {"PREFIXADO", "IPCA_PLUS", "IGPM_PLUS"}

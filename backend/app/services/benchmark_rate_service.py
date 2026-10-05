@@ -3,6 +3,7 @@ Servico DB-first de benchmarks macroeconomicos para Renda Fixa.
 
 - Persiste series historicas oficiais do SGS/BCB em ``rate_history`` apenas em
   fluxos explicitos de bootstrap/backfill.
+- Persiste intervalos de cobertura comprovada separadamente das observacoes.
 - Fornece fatores acumulados e referencias anuais exclusivamente a partir do
   historico persistido durante requests financeiros.
 - Nao agenda nem dispara consultas externas recorrentes por conta propria.
@@ -12,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
+from enum import Enum
 from typing import Iterable, Optional
 
 from sqlalchemy import func, select
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.bcb_sgs import SGS_INDICATORS, fetch_many_sgs_series
 from app.models.rate_history import RateHistory
+from app.models.rate_history_coverage import RateHistoryCoverage
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,13 @@ DEFAULT_HISTORY_START = date(2010, 1, 1)
 _DAILY_INCREMENTAL_DAYS = 10
 _MONTHLY_INCREMENTAL_DAYS = 120
 _MONTHLY_INDICATORS = {"IPCA", "IGPM"}
+_OFFICIAL_BENCHMARK_SOURCES = ("BCB", "BCB_SGS")
+
+
+class BenchmarkCoverageStatus(str, Enum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    ABSENT = "absent"
 
 
 def _to_decimal(value: object, default: str = "0") -> Decimal:
@@ -52,6 +62,9 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
             "date": row["date"],
             "source": row.get("source", "BCB_SGS"),
         }
+        if values["source"] not in _OFFICIAL_BENCHMARK_SOURCES:
+            raise ValueError("official benchmark importer received a nonofficial source")
+
         if row["value_field"] == "rate_daily":
             values["rate_daily"] = row["value"]
             values["rate_monthly"] = None
@@ -69,11 +82,102 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
                     "rate_monthly": values.get("rate_monthly"),
                     "source": values["source"],
                 },
+                where=RateHistory.source.in_(_OFFICIAL_BENCHMARK_SOURCES),
             )
         )
-        await db.execute(stmt)
+        result = await db.execute(stmt)
+        if getattr(result, "rowcount", 1) == 0:
+            raise RuntimeError(
+                "benchmark observation collision with nonofficial persisted source: "
+                f"{values['indicator']} {values['date']}"
+            )
         inserted_or_updated += 1
     return inserted_or_updated
+
+
+async def record_benchmark_coverage(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    *,
+    source: str = "BCB_SGS",
+) -> None:
+    """Registra que todo o range solicitado foi obtido sem janela com falha."""
+    if end_date < start_date:
+        raise ValueError("end_date must be greater than or equal to start_date")
+
+    stmt = (
+        pg_insert(RateHistoryCoverage)
+        .values(
+            indicator=indicator.upper(),
+            start_date=start_date,
+            end_date=end_date,
+            source=source,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                RateHistoryCoverage.indicator,
+                RateHistoryCoverage.start_date,
+                RateHistoryCoverage.end_date,
+                RateHistoryCoverage.source,
+            ]
+        )
+    )
+    await db.execute(stmt)
+
+
+async def benchmark_coverage_status(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    *,
+    source: Optional[str] = None,
+) -> BenchmarkCoverageStatus:
+    """Classifica cobertura pela uniao dos ranges explicitamente comprovados.
+
+    Os ranges representam requisicoes concluidas ao provider, portanto cobrem
+    tambem finais de semana e feriados sem observacao. Isso evita inferir um
+    calendario financeiro a partir das linhas de ``rate_history``. Quando
+    ``source`` e informado, somente intervalos dessa proveniencia participam.
+    """
+    if end_date <= start_date:
+        return BenchmarkCoverageStatus.COMPLETE
+
+    filters = [
+        RateHistoryCoverage.indicator == indicator.upper(),
+        RateHistoryCoverage.start_date <= end_date,
+        RateHistoryCoverage.end_date >= start_date,
+    ]
+    if source is not None:
+        filters.append(RateHistoryCoverage.source == source)
+
+    result = await db.execute(
+        select(RateHistoryCoverage)
+        .where(*filters)
+        .order_by(
+            RateHistoryCoverage.start_date.asc(),
+            RateHistoryCoverage.end_date.asc(),
+        )
+    )
+    intervals = list(result.scalars().all())
+    if not intervals:
+        return BenchmarkCoverageStatus.ABSENT
+
+    cursor = start_date
+    for interval in intervals:
+        interval_start = interval.start_date
+        interval_end = interval.end_date
+        if interval_end < cursor:
+            continue
+        if interval_start > cursor:
+            return BenchmarkCoverageStatus.PARTIAL
+        cursor = max(cursor, interval_end + timedelta(days=1))
+        if cursor > end_date:
+            return BenchmarkCoverageStatus.COMPLETE
+
+    return BenchmarkCoverageStatus.PARTIAL
 
 
 async def import_benchmark_history(
@@ -96,6 +200,16 @@ async def import_benchmark_history(
     for indicator, rows in series.items():
         stats[indicator] = await _upsert_rate_rows(db, rows)
 
+    if start_date is not None and end_date is not None and limit_last is None:
+        for indicator in selected:
+            await record_benchmark_coverage(
+                db,
+                indicator,
+                start_date,
+                end_date,
+                source="BCB_SGS",
+            )
+
     if commit:
         await db.commit()
     logger.info("[benchmarks] importacao BCB concluida: %s", stats)
@@ -109,10 +223,10 @@ async def import_missing_benchmark_history(
     *,
     commit: bool = True,
 ) -> dict[str, int]:
-    """Backfill inicial e atualização incremental por frequência da série.
+    """Backfill inicial e atualizacao incremental por frequencia da serie.
 
-    Este é um fluxo operacional explícito de bootstrap/backfill. ``commit=False``
-    permite que um orquestrador controle a transação sem introduzir consultas a
+    Este e um fluxo operacional explicito de bootstrap/backfill. ``commit=False``
+    permite que um orquestrador controle a transacao sem introduzir consultas a
     provider em consumidores financeiros comuns.
     """
     today = end_date or date.today()
@@ -149,14 +263,20 @@ async def get_rate_rows(
     indicator: str,
     start_date: date,
     end_date: date,
+    *,
+    source: Optional[str] = None,
 ) -> list[RateHistory]:
+    filters = [
+        RateHistory.indicator == indicator.upper(),
+        RateHistory.date >= start_date,
+        RateHistory.date <= end_date,
+    ]
+    if source is not None:
+        filters.append(RateHistory.source == source)
+
     result = await db.execute(
         select(RateHistory)
-        .where(
-            RateHistory.indicator == indicator.upper(),
-            RateHistory.date >= start_date,
-            RateHistory.date <= end_date,
-        )
+        .where(*filters)
         .order_by(RateHistory.date.asc())
     )
     return list(result.scalars().all())
@@ -172,6 +292,50 @@ async def latest_rate(db: AsyncSession, indicator: str) -> Optional[RateHistory]
     return result.scalar_one_or_none()
 
 
+async def latest_covered_rate_date(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    *,
+    source: Optional[str] = None,
+) -> date | None:
+    """Ultima data observada que tambem esta dentro de cobertura comprovada."""
+
+    indicator = indicator.upper()
+    filters = [
+        RateHistory.indicator == indicator,
+        RateHistory.date >= start_date,
+        RateHistory.date <= end_date,
+    ]
+    if source is not None:
+        filters.append(RateHistory.source == source)
+
+    observed_date = (
+        await db.execute(select(func.max(RateHistory.date)).where(*filters))
+    ).scalar_one_or_none()
+    if observed_date is None:
+        return None
+
+    coverage_filters = [
+        RateHistoryCoverage.indicator == indicator,
+        RateHistoryCoverage.start_date <= observed_date,
+        RateHistoryCoverage.end_date >= start_date,
+    ]
+    if source is not None:
+        coverage_filters.append(RateHistoryCoverage.source == source)
+
+    covered_until = (
+        await db.execute(
+            select(func.max(RateHistoryCoverage.end_date)).where(*coverage_filters)
+        )
+    ).scalar_one_or_none()
+    if covered_until is None:
+        return None
+
+    return min(observed_date, covered_until, end_date)
+
+
 async def benchmark_factor(
     db: AsyncSession,
     indicator: str,
@@ -179,12 +343,20 @@ async def benchmark_factor(
     end_date: date,
     multiplier_pct: Decimal = Decimal("100"),
     spread_annual_pct: Decimal = Decimal("0"),
+    *,
+    source: Optional[str] = None,
 ) -> Decimal:
     indicator = indicator.upper()
     if end_date <= start_date:
         return Decimal("1")
 
-    rows = await get_rate_rows(db, indicator, start_date, end_date)
+    rows = await get_rate_rows(
+        db,
+        indicator,
+        start_date,
+        end_date,
+        source=source,
+    )
     factor = Decimal("1")
 
     if indicator in {"CDI", "SELIC"}:

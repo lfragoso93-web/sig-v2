@@ -39,4 +39,4 @@ REAL-DATA-GATE:CLOSED
 [oci-cert-test-go] CERT-03 passed: SGI v2 is cleared for integrated testing with fictitious/disposable data only
 ```
 
-After approval, the next macroblock is the real-data chain governed by #226 -> #216 -> #158. No step in that chain may be inferred from CERT-03 alone.
+After approval, the next macroblock is the real-data chain governed by #158 -> #269 -> #284 -> #227. No step in that chain may be inferred from CERT-03 alone.

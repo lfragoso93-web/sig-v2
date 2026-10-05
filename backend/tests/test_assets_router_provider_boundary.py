@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from app.routers.assets import _treasury_maturity_from_ticker
+
 ROUTER_PATH = Path(__file__).resolve().parents[1] / "app" / "routers" / "assets.py"
 
 
@@ -39,3 +41,9 @@ def test_quote_read_paths_use_persisted_price_readers_only() -> None:
     assert "get_persisted_prices_at_date_batch" in source
     assert "get_persisted_price_history" in source
     assert 'source = "market_data_provider"' not in source
+
+
+def test_treasury_maturity_is_extracted_from_official_names_and_slugs() -> None:
+    assert _treasury_maturity_from_ticker("tesouro-selic-01032031") == "2031-03-01"
+    assert _treasury_maturity_from_ticker("Tesouro Selic 01/03/2031") == "2031-03-01"
+    assert _treasury_maturity_from_ticker("Tesouro IPCA+ 2035-05-15") == "2035-05-15"

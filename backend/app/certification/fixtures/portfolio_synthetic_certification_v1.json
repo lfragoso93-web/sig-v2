@@ -108,7 +108,7 @@
       "date": "2026-01-11",
       "fees": "0.00",
       "currency": "BRL",
-      "notes": "synthetic fixed income CDI"
+      "notes": "synthetic fixed income | Indexador: CDI | Taxa: 100% | Benchmark Source: synthetic-certification"
     },
     {
       "ticker": "BOVA11",
@@ -148,22 +148,37 @@
       "BDR-COVERAGE-GAP"
     ]
   },
+  "benchmark_rates": {
+    "indicator": "CDI",
+    "source": "synthetic-certification",
+    "coverage_start": "2026-01-11",
+    "coverage_end": "2026-02-28",
+    "observations": [
+      {
+        "date": "2026-02-28",
+        "rate_daily": "1.00000000"
+      }
+    ]
+  },
   "income_events": [
     {
       "ticker": "MXRF11",
+      "record_date": "2026-02-05",
+      "ex_date": "2026-02-06",
       "payment_date": "2026-02-14",
+      "dividend_type": "RENDIMENTO",
       "quantity": "200",
       "value_per_unit": "0.10",
       "gross_amount": "20.00",
-      "source": "synthetic"
+      "source": "synthetic-certification"
     }
   ],
   "expected": {
     "holdings": {
       "PETR4": {
         "quantity": "90.00000000",
-        "remaining_cost": "1905.00",
-        "realized_pnl": "293.00",
+        "remaining_cost": "1864.80",
+        "realized_pnl": "252.80",
         "market_value": "2160.00"
       },
       "MXRF11": {
@@ -204,11 +219,11 @@
       }
     },
     "totals": {
-      "remaining_cost": "37669.50",
+      "remaining_cost": "37629.30",
       "market_value": "38960.00",
-      "realized_pnl": "491.00",
+      "realized_pnl": "450.80",
       "income": "20.00",
-      "open_pnl": "1290.50",
+      "open_pnl": "1330.70",
       "total_pnl": "1801.50"
     }
   }

@@ -26,8 +26,11 @@ from app.services.corporate_action_position_reader import (
 )
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
-    get_fixed_income_totals,
-    get_fixed_income_valuations,
+    IncompleteBenchmarkCoverageError,
+    get_fixed_income_principal_totals,
+    get_fixed_income_principal_valuations,
+    get_fixed_income_totals_with_coverage_fallback,
+    get_fixed_income_valuations_with_coverage_fallback,
     valuation_to_position_payload,
 )
 from app.services.fx_rate_reader import (
@@ -49,7 +52,7 @@ from app.services.position_timeline_projection import (
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 120
-_CACHE_PREFIX = "portfolio"
+_CACHE_PREFIX = "portfolio:v2"
 
 
 async def get_usd_brl_today(db: AsyncSession) -> float:
@@ -79,8 +82,12 @@ async def get_usd_brl_batch(db: AsyncSession, dates: list[str]) -> dict[str, flo
     return result
 
 
-def _cache_key(portfolio_id: int, suffix: str) -> str:
+def portfolio_cache_key(portfolio_id: int, suffix: str) -> str:
     return f"{_CACHE_PREFIX}:{portfolio_id}:{suffix}"
+
+
+def _cache_key(portfolio_id: int, suffix: str) -> str:
+    return portfolio_cache_key(portfolio_id, suffix)
 
 
 async def invalidate_portfolio_cache(portfolio_id: int) -> None:
@@ -508,7 +515,17 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         return cached
 
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
-    rf_totals = await get_fixed_income_totals(db, portfolio_id)
+    try:
+        rf_totals, _fixed_income_effective_date = (
+            await get_fixed_income_totals_with_coverage_fallback(db, portfolio_id)
+        )
+    except IncompleteBenchmarkCoverageError as exc:
+        logger.warning(
+            "[legacy_summary_fixed_income_unavailable] portfolio=%s reason=%s",
+            portfolio_id,
+            exc,
+        )
+        rf_totals = await get_fixed_income_principal_totals(db, portfolio_id)
 
     non_rf_invested = sum(p["total_invested"] for p in enriched)
     non_rf_current = sum(
@@ -577,7 +594,17 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     logos = await _fetch_logos_batch(db, tickers)
     dividends_by_ticker = await sum_dividends_by_ticker(db, portfolio_id, tickers)
 
-    valuations = await get_fixed_income_valuations(db, portfolio_id)
+    try:
+        valuations, _fixed_income_effective_date = (
+            await get_fixed_income_valuations_with_coverage_fallback(db, portfolio_id)
+        )
+    except IncompleteBenchmarkCoverageError as exc:
+        logger.warning(
+            "[positions_fixed_income_unavailable] portfolio=%s reason=%s",
+            portfolio_id,
+            exc,
+        )
+        valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
     rf_positions = [valuation_to_position_payload(v, idx + 1) for idx, v in enumerate(valuations)]
 
     total_current = sum(
@@ -625,6 +652,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "logo_url": logos.get(e["ticker"]),
             "is_usd": is_usd,
             "currency": "USD" if is_usd else "BRL",
+            "proventos": round(float(dividends_by_ticker.get(e["ticker"], 0.0)), 2),
         })
 
     if rf_positions:

@@ -52,6 +52,19 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _validate_runtime_commit_sha(expected_sha: str) -> None:
+    runtime_sha = os.getenv("APP_COMMIT_SHA", "").strip()
+    if runtime_sha in {"", "unknown"}:
+        raise BackupError(
+            "APP_COMMIT_SHA do runtime deve estar definido antes do backup"
+        )
+    if runtime_sha != expected_sha:
+        raise BackupError(
+            "APP_COMMIT_SHA do runtime diverge do commit informado: "
+            f"runtime={runtime_sha}, esperado={expected_sha}"
+        )
+
+
 async def _main(arguments: argparse.Namespace) -> int:
     if arguments.branch != "stable-15jun":
         raise BackupError("backup pré-produção deve executar na branch stable-15jun")
@@ -59,6 +72,7 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise BackupError("informe --commit-sha ou PRE_PROD_COMMIT_SHA")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", arguments.commit_sha):
         raise BackupError("commit SHA deve conter exatamente 40 caracteres hexadecimais")
+    _validate_runtime_commit_sha(arguments.commit_sha)
 
     async with AsyncSessionLocal() as snapshot_session:
         await snapshot_session.execute(

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   FileText,
   Download,
@@ -29,6 +29,7 @@ import type {
   GanhoCapitalMensal,
   RendimentoIsento,
   JCPItem,
+  IRPFCanonicalMonthlyAssessment,
   VendaMensal,
 } from '@/types/irpf'
 import clsx from 'clsx'
@@ -306,9 +307,114 @@ function RendimentosTable({
   )
 }
 
+function DARFMonthlyTable({
+  data,
+  paidMonths,
+  onTogglePaid,
+}: {
+  data: IRPFCanonicalMonthlyAssessment[]
+  paidMonths: Set<string>
+  onTogglePaid: (month: string) => void
+}) {
+  if (!data.length) return <Empty label="Nenhuma apuração mensal encontrada." />
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+            {['Mês', 'IR Swing', 'IR Day Trade', 'IRRF', 'Imposto Líquido', 'DARF do Mês', 'Saldo Acumulado', 'Pagamento'].map(h => (
+              <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((month, i) => {
+            const swingTax = Number(month.swing_gross_tax_due_brl)
+            const dayTradeTax = Number(month.day_trade_gross_tax_due_brl)
+            const withholding = Number(month.swing_withholding_brl) + Number(month.day_trade_withholding_brl)
+            const netTax = Number(month.total_net_tax_due_brl)
+            const paymentDue = Number(month.payment_due_brl)
+            const accumulated = Number(month.closing_accumulated_tax_brl)
+            const isPaid = paidMonths.has(month.competence_month)
+
+            return (
+              <tr
+                key={month.competence_month}
+                className="border-b"
+                style={{
+                  borderColor: 'var(--color-divider)',
+                  background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-offset)',
+                }}
+              >
+                <td className="px-3 py-2 font-medium">{mesLabel(month.competence_month)}</td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(swingTax)}</td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(dayTradeTax)}</td>
+                <td className="px-3 py-2 tabular-nums text-right" style={{ color: withholding > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                  {formatBRL(withholding)}
+                </td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(netTax)}</td>
+                <td className={clsx('px-3 py-2 tabular-nums text-right font-semibold', paymentDue > 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]')}>
+                  {formatBRL(paymentDue)}
+                </td>
+                <td className="px-3 py-2 tabular-nums text-right" style={{ color: accumulated > 0 ? 'var(--color-warning, #f59e0b)' : 'var(--color-text-muted)' }}>
+                  {formatBRL(accumulated)}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {paymentDue > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onTogglePaid(month.competence_month)}
+                      className="rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
+                      style={{
+                        background: isPaid ? 'rgba(34, 197, 94, 0.12)' : 'var(--color-surface-dynamic)',
+                        borderColor: isPaid ? 'rgba(34, 197, 94, 0.45)' : 'var(--color-border)',
+                        color: isPaid ? 'var(--color-success)' : 'var(--color-text)',
+                      }}
+                    >
+                      {isPaid ? 'Pago' : 'Marcar pago'}
+                    </button>
+                  ) : (
+                    <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>-</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '2px solid var(--color-divider)' }}>
+            <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>Total</td>
+            <td colSpan={4} />
+            <td className="px-3 py-2 tabular-nums text-right font-bold" style={{ color: 'var(--color-error)' }}>
+              {formatBRL(data.reduce((sum, month) => sum + Number(month.payment_due_brl), 0))}
+            </td>
+            <td colSpan={2} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
 function Empty({ label }: { label: string }) {
   return (
     <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>{label}</div>
+  )
+}
+
+function ErrorNotice({ label }: { label: string }) {
+  return (
+    <div
+      className="rounded-lg border px-3 py-2 text-sm"
+      style={{
+        background: 'rgba(239, 68, 68, 0.08)',
+        borderColor: 'rgba(239, 68, 68, 0.35)',
+        color: 'var(--color-error)',
+      }}
+    >
+      {label}
+    </div>
   )
 }
 
@@ -316,6 +422,7 @@ const TABS = [
   { key: 'resumo',       label: 'Resumo',          icon: FileText },
   { key: 'bens',         label: 'Bens e Direitos', icon: Wallet },
   { key: 'ganhos',       label: 'Ganhos de Capital', icon: TrendingUp },
+  { key: 'darf',         label: 'DARF Mensal',     icon: Landmark },
   { key: 'rendimentos',  label: 'Rendimentos',     icon: Banknote },
   { key: 'jcp',          label: 'JCP',             icon: BadgePercent },
 ] as const
@@ -331,6 +438,12 @@ export default function IRPFPage() {
   const [activeTab, setActiveTab] = useState<Tab>('resumo')
   const [downloading, setDownloading] = useState(false)
   const [downloadingCSV, setDownloadingCSV] = useState(false)
+  const [paidDARFMonths, setPaidDARFMonths] = useState<Set<string>>(new Set())
+
+  const paidDARFStorageKey = useMemo(
+    () => portfolioId && selectedYear ? `sgi.irpf.darf.paid.${portfolioId}.${selectedYear}` : null,
+    [portfolioId, selectedYear],
+  )
 
   const { data: anos, isLoading: loadingAnos } = useIRPFAnos(portfolioId)
 
@@ -339,21 +452,55 @@ export default function IRPFPage() {
     setActiveTab('resumo')
   }, [portfolioId, anos, fallbackYear])
 
+  useEffect(() => {
+    if (!paidDARFStorageKey) {
+      setPaidDARFMonths(new Set())
+      return
+    }
+
+    try {
+      const stored = window.localStorage.getItem(paidDARFStorageKey)
+      const months = stored ? JSON.parse(stored) : []
+      setPaidDARFMonths(new Set(Array.isArray(months) ? months : []))
+    } catch {
+      setPaidDARFMonths(new Set())
+    }
+  }, [paidDARFStorageKey])
+
+  const togglePaidDARFMonth = useCallback((month: string) => {
+    if (!paidDARFStorageKey) return
+
+    setPaidDARFMonths(previous => {
+      const next = new Set(previous)
+      if (next.has(month)) {
+        next.delete(month)
+      } else {
+        next.add(month)
+      }
+      window.localStorage.setItem(paidDARFStorageKey, JSON.stringify([...next].sort()))
+      return next
+    })
+  }, [paidDARFStorageKey])
+
   const {
     data: canonicalAssessment,
     isLoading: loadingCanonicalAssessment,
+    isError: isCanonicalAssessmentError,
   } = useIRPFCanonicalAnnualAssessment(portfolioId, selectedYear)
   const {
     data: canonicalAssets,
     isLoading: loadingCanonicalAssets,
+    isError: isCanonicalAssetsError,
   } = useIRPFCanonicalAssetsAssessment(portfolioId, selectedYear)
   const {
     data: canonicalCapitalGains,
     isLoading: loadingCanonicalCapitalGains,
+    isError: isCanonicalCapitalGainsError,
   } = useIRPFCanonicalCapitalGainsAssessment(portfolioId, selectedYear)
   const {
     data: canonicalIncome,
     isLoading: loadingCanonicalIncome,
+    isError: isCanonicalIncomeError,
   } = useIRPFCanonicalIncomeAssessment(portfolioId, selectedYear)
 
   const handleDownloadPDF = useCallback(async () => {
@@ -414,6 +561,7 @@ export default function IRPFPage() {
   )
   const bensDireitos = canonicalAssets?.items ?? []
   const ganhosCapital = canonicalCapitalGains?.months ?? []
+  const darfMonthly = canonicalAssessment?.monthly ?? []
   const dividendos = canonicalIncome?.dividends ?? []
   const jcp = canonicalIncome?.jcp ?? []
 
@@ -480,6 +628,10 @@ export default function IRPFPage() {
       <div className="kpi-grid">
         {loadingCanonicalAssessment ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : isCanonicalAssessmentError ? (
+          <div className="col-span-full">
+            <ErrorNotice label="Não foi possível carregar a apuração anual de IRPF." />
+          </div>
         ) : canonicalAssessment ? (
           <>
             <KpiCard
@@ -535,15 +687,23 @@ export default function IRPFPage() {
 
         <div className="p-4">
           {activeTab === 'resumo' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-6">
               <div>
                 <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
-                {loadingCanonicalAssets ? <SkeletonCard /> : <BensDireitosTable data={bensDireitos} />}
+                {loadingCanonicalAssets ? (
+                  <SkeletonCard />
+                ) : isCanonicalAssetsError ? (
+                  <ErrorNotice label="Não foi possível carregar Bens e Direitos." />
+                ) : (
+                  <BensDireitosTable data={bensDireitos} />
+                )}
               </div>
               <div>
                 <h2 className="text-sm font-semibold mb-3">Rendimentos</h2>
                 {loadingCanonicalIncome ? (
                   <SkeletonCard />
+                ) : isCanonicalIncomeError ? (
+                  <ErrorNotice label="Não foi possível carregar Rendimentos." />
                 ) : (
                   <RendimentosTable dividendos={dividendos} jcp={jcp} />
                 )}
@@ -551,17 +711,40 @@ export default function IRPFPage() {
             </div>
           )}
 
-          {activeTab === 'bens' && <BensDireitosTable data={bensDireitos} />}
+          {activeTab === 'bens' && (
+            isCanonicalAssetsError
+              ? <ErrorNotice label="Não foi possível carregar Bens e Direitos." />
+              : <BensDireitosTable data={bensDireitos} />
+          )}
           {activeTab === 'ganhos' && (
             loadingCanonicalCapitalGains
               ? <SkeletonCard />
+              : isCanonicalCapitalGainsError
+                ? <ErrorNotice label="Não foi possível carregar Ganhos de Capital." />
               : <GanhosCapitalTable data={ganhosCapital} />
           )}
+          {activeTab === 'darf' && (
+            loadingCanonicalAssessment
+              ? <SkeletonCard />
+              : isCanonicalAssessmentError
+                ? <ErrorNotice label="Não foi possível carregar DARF mensal." />
+              : (
+                <DARFMonthlyTable
+                  data={darfMonthly}
+                  paidMonths={paidDARFMonths}
+                  onTogglePaid={togglePaidDARFMonth}
+                />
+              )
+          )}
           {activeTab === 'rendimentos' && (
-            <RendimentosTable dividendos={dividendos} jcp={[]} />
+            isCanonicalIncomeError
+              ? <ErrorNotice label="Não foi possível carregar Rendimentos." />
+              : <RendimentosTable dividendos={dividendos} jcp={[]} />
           )}
           {activeTab === 'jcp' && (
-            <RendimentosTable dividendos={[]} jcp={jcp} />
+            isCanonicalIncomeError
+              ? <ErrorNotice label="Não foi possível carregar JCP." />
+              : <RendimentosTable dividendos={[]} jcp={jcp} />
           )}
         </div>
       </div>

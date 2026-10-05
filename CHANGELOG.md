@@ -1,318 +1,389 @@
 # Changelog — SGI v2
 
-Todas as mudanças relevantes do projeto são documentadas aqui.
-Formato baseado em Keep a Changelog.
+Todas as mudanças relevantes do projeto são documentadas aqui. O histórico detalhado anterior permanece preservado no Git e nos changelogs datados em `docs/changelog/`.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Removido — projeção e tabela legadas de Renda Fixa/Tesouro (#306, #307)
-
-- `transactions` foi consolidada como fonte canônica do lifecycle de Renda Fixa e Tesouro Direto; criação e atualização de transações não projetam mais estado paralelo em `fixed_income_investments`.
-- A #306 foi concluída no SHA `2c2e8a02909f8e265a142dcc40ec9d229496539c`, removendo o side effect legado do CRUD sem habilitar novo comportamento de TWR.
-- O relacionamento ORM legado foi retirado em `12ad5c4ff5ad5c2d05010db3be7d6da817bce473`.
-- A contração estrutural foi publicada em `b39c1cbec86a7103747086faa364dc31c7aa9724`: model/export ORM removidos, inventário pre-prod atualizado e migration `20260903_drop_fixed_income` criada para remover a tabela e seus enums dedicados.
-- A migration é fail-closed quando existem linhas legadas e foi validada em bancos descartáveis tanto no caminho vazio quanto no bloqueio com dado existente; migrations históricas permanecem imutáveis.
-- O banco local principal ainda não recebeu `alembic upgrade head` para essa contração; o SHA estrutural não é apresentado como runtime certificado.
-- `pre-prod-backup.v3` permanece o mecanismo operacional de recuperação; o export seletivo é evidência de auditoria/preservação, sem contrato de reidratação.
-- README, arquitetura, certificação e runbooks pre-prod foram sincronizados até `133ad9f5a72f6c8944eda58ce72da9ca5ce9238c`; o inventário corrente possui 23 tabelas, com 2 `export_before_cleanup`: `transactions` e `corporate_events`.
-
-### Alterado - base TWR dedicada Tesouro/Renda Fixa (#149)
-
-- Adicionada cadeia diaria pura de TWR para classes com historico dedicado, reutilizando o calculo canonico de retorno diario e composicao.
-- O contrato novo e fail-closed: ausencia de cobertura diaria dedicada publica indisponibilidade explicita, sem fallback para custo, curva nominal, taxa sintetica ou provider em runtime.
-- Cobertos cenarios sinteticos de variacao patrimonial por PU/preco, aporte como fluxo externo, rendimento/cupom como retorno, interrupcao por falta de cobertura e rejeicao de data duplicada.
-- A integracao produtiva com snapshots de Tesouro Direto e Renda Fixa segue pendente nos proximos blocos da #149.
-
-### Alterado - snapshots TWR Tesouro Direto (#149)
-
-- `rebuild_class_snapshots` passou a tratar Tesouro Direto em trilha dedicada, separada das classes de mercado que aceitam preco aproximado de janela.
-- O TWR de Tesouro consome somente fechamento exato persistido em `asset_prices` para o dia da carteira; falta de preco diario nao usa fallback de custo ou preco anterior.
-- Snapshots materializados de Tesouro recebem `return_is_estimated=false` e `valuation_status=complete`; a disponibilidade publica so fica positiva quando houver snapshot.
-- Renda Fixa permanece indisponivel para TWR dedicado porque o valuation corrente ainda possui fallback anual e nao constitui historico diario dedicado.
-
-### Alterado — rebaseline pós-merge PR #302 (01/09/2026)
-
-- Registrado que a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
-- `stable-15jun` segue como branch obrigatória de desenvolvimento em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
-- Documentada a diferença esperada: `main` está um commit à frente apenas pelo merge commit da #302.
-- Inventário de PRs abertas atualizado para Dependabot #295, #296, #297, #298, #299, #300 e #301.
-- Mantida a regra operacional de evitar PRs para microblocos e promover apenas macroblocos validados.
-
-### Alterado — IBOV persistido DB-first (#150)
-
-- O rebuild histórico B3/COTAHIST passa a garantir o ativo sintético `IBOV` como benchmark persistido em `assets`.
-- Fechamentos do `IBOV` vindos de COTAHIST são persistidos em `asset_prices` com `source=b3_cotahist`, sem provider em runtime financeiro.
-- O relatório do estágio B3 passa a incluir o benchmark sintético nas contagens operacionais de ativos/preços.
-- A leitura mensal de benchmarks em Rentabilidade compara datas de `asset_prices.timestamp` por dia calendário, evitando excluir o fechamento do próprio `end_date`.
-- Nenhum seed real, CSV, snapshot, full rebuild real ou `ready_for_real_data=true` foi executado.
-
-### Alterado — Dependabot security-actions (#301)
-
-- Absorvida em `stable-15jun` a atualização `hadolint/hadolint-action` de `v3.4.0` para `v3.5.0` nos jobs Dockerfile lint do CI.
-- PR #301 pode ser encerrada após confirmação do commit remoto em `stable-15jun`, sem abrir PR individual.
-
-### Alterado — Dependabot backend security (#298)
-
-- Absorvida em `stable-15jun` a atualização `cryptography` de `50.0.0` para `50.0.1` no backend.
-- PR #298 pode ser encerrada após validação local/container e push do commit, sem PR individual.
-
-### Alterado — Dependabot react-stack (#295)
-
-- Absorvida em `stable-15jun` a atualização `@types/react-dom` de `19.2.4` para `19.2.5` no frontend.
-- PR #295 pode ser encerrada após validação frontend e push do commit, sem PR individual.
-
-### Alterado — Dependabot frontend lucide-react (#300)
-
-- Absorvida em `stable-15jun` a atualização `lucide-react` de `1.33.0` para `1.35.0`.
-- PR #300 pode ser encerrada após validação frontend e push do commit, sem PR individual.
-
-### Alterado — Dependabot frontend TanStack Query (#296)
-
-- Absorvida em `stable-15jun` a atualização `@tanstack/react-query` e `@tanstack/query-core` de `5.101.4` para `5.102.8`.
-- PR #296 pode ser encerrada após validação frontend e push do commit, sem PR individual.
-
-### Alterado — Dependabot frontend eslint-stack (#297)
-
-- Absorvida em `stable-15jun` a atualização `eslint` de `10.9.0` para `10.9.1` e `typescript-eslint` de `8.67.0` para `8.68.0`.
-- PR #297 pode ser encerrada após validação frontend e push do commit, sem PR individual.
-
-### Alterado — Dependabot frontend build-tools parcial (#299)
-
-- Absorvida em `stable-15jun` apenas a atualização segura `@vitejs/plugin-react` de `6.1.0` para `6.1.1`.
-- TypeScript `7.0.2` permanece bloqueado por incompatibilidade com o peer range vigente de `typescript-eslint` (`<6.1.0`); PR #299 deve ser encerrada no formato atual.
-
-### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
-
-- O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
-- Adicionado upsert conservador de catálogo B3 mínimo a partir de COTAHIST, sem BRAPI/Yahoo, banco externo ou migrations novas.
-- O estágio B3 de pré-produção passou a montar o catálogo por COTAHIST antes do histórico quando `include_catalog=true`.
-- O rebuild histórico B3 passou a persistir `open`, `high`, `low`, `close`, `volume` e `source=b3_cotahist` a partir de `CotahistRecord` com `Decimal`, preservando precedência do mercado à vista sobre fracionário.
-- O seed BRAPI deixou de criar ativos B3 ausentes do baseline COTAHIST e passou a atuar como enriquecimento conservador de ativos B3 já persistidos.
-- O `system-bootstrap.v4` ganhou estágio explícito `b3_baseline` antes de `asset_catalog`; o início histórico pode ser configurado por ambiente e o fim é sempre o dia atual.
-- A CLI auditável `pre_prod_b3_seed` passou a derivar `--end-year` e `--cutoff-date` do dia atual quando não informados, preservando overrides explícitos.
-- `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
-- Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
-
-### Alterado — Proventos BRAPI authoritative / Yahoo fallback-only (30/08/2026)
-
-- O coletor estrito de Proventos passou a interromper a cadeia quando BRAPI possui cobertura válida, inclusive resposta vazia com cobertura.
-- Yahoo/yfinance só pode atuar depois de BRAPI declarar ausência real de cobertura; tentativa de usar Yahoo antes dessa condição passa a ser bloqueante.
-- A persistência global passou a rejeitar defensivamente coleções com linhas normalizadas simultâneas de BRAPI e Yahoo no mesmo ativo.
-- Caminhos internos obsoletos de reconciliação complementar/cross-source via Yahoo foram removidos da persistência.
-- O runbook e o wrapper OCI de contratos de Proventos foram alinhados para cobrir explicitamente o boundary Yahoo fallback-only.
-- O contrato documental de Proventos foi atualizado para remover a semântica de fonte concorrente/complementar.
-- As suítes unitárias de coletor, persistência e semântica foram atualizadas para o modelo fallback-only.
-
-### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
-
-- O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.
-- Roadmaps de lab/testes foram atualizados em 31/08/2026 com 7 PRs abertas, 18 Issues abertas e a previsão de entrada em testes integrados com dados descartáveis após três gates verdes.
-- Baseline de retomada registrado: `stable-15jun` em `a889edb6bbbb78feb7787c21b3439a0b835b73c6` e `main` em `3eeca232a8627f4562544739112d1dde82b879fb`.
-- PRs #290, #291 e #292 passam a compor o baseline de laboratório OCI: build frontend, Cloudflare HTTP/2 200, smoke OCI e validação repetível dos contratos de bootstrap sem seeds reais.
-- Evidências de contrato registradas: FX/Macro/Tesouro `81 passed, 1 skipped`; B3/Asset Bootstrap/System Bootstrap `70 passed`; Proventos `93 passed, 8 skipped`.
-- O smoke HTTP descartável passou a validar também o gate de SuperAdmin em `/api/v1/admin/bootstrap/status`, exigindo `403` para usuário comum.
-- `test_ready=true` permanece válido para dados fictícios/descartáveis; `ready_for_real_data=false` permanece obrigatório.
-- Ordem canônica atual: certificar lab e persistência → revalidar #227/#226/#216/#158 → executar operações reais somente quando autorizadas → reconciliar → GO/NO-GO.
-- A PR Dependabot #289, TypeScript 7, permanece bloqueada por incompatibilidade com `typescript-eslint 8.67.0` e não deve ser mergeada no estado atual.
-- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados com este rebaseline.
-
-### Alterado — baseline pós-segurança e gate para teste real (18/08/2026)
-
-- A sanitização arquitetural da #247 foi consolidada como concluída e promovida pela PR #281.
-- O bloco final de segurança da #269 foi promovido pela PR #282, cobrindo confinamento de paths de backup, sanitização residual de logs e publicação SARIF do Trivy da imagem backend.
-- `test_ready=true` permanece preservado; `ready_for_real_data=false` continua obrigatório.
-- A Issue #227 passa a refletir o novo foco: revalidar #226/#216/#158 e executar o TESTE REAL controlado somente quando os gates formais permitirem.
-- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados para remover o estado obsoleto que ainda tratava a #247 como trabalho corrente.
-- O `Security deep scan` continua sendo verificação periódica semanal/manual; a documentação não presume execução de scanners sem evidência explícita.
-
-### Alterado — composição explícita do full market rebuild (15/08/2026)
-
-- `full_market_rebuild_canonical_service.py` deixou de alterar temporariamente funções internas do orquestrador base por monkey-patching.
-- `full_market_rebuild_service.py` passou a receber explicitamente as operações de Tesouro, snapshots e leitura do resumo, preservando defaults e ordem das etapas.
-- A CLI canônica permanece em `python -m app.cli.full_market_rebuild`; nenhum rebuild, provider ou dado real foi executado durante a refatoração.
-- Adicionado gate estrutural contra a reintrodução de mutação global entre as duas camadas.
-
-### Removido — exemplo de ambiente paralelo e desatualizado (15/08/2026)
-
-- Removido `backend/.env.example`, que duplicava o contrato canônico da raiz e ainda documentava `DEBUG_RATE_LIMIT`, `ADMIN_SECRET`, router de debug e fallback via yfinance já removidos.
-- `.env.example` da raiz permanece como fonte única para aplicação, Docker Compose, frontend, bootstrap e operações controladas.
-- Adicionado gate estrutural exigindo a presença do exemplo canônico e a ausência do duplicado no backend.
-
-### Removido — hooks residuais sem consumidores (15/08/2026)
-
-- Removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, sem consumidores após a limpeza das páginas paralelas.
-- Leituras financeiras ativas continuam pelos readers/hooks específicos e DB-first.
-- O inventário de imports do frontend passou a apontar somente `test/setup.ts`, entrada configurada do Vitest, sem candidatos órfãos de runtime conhecidos.
-
-### Removido — implementação duplicada do logo (15/08/2026)
-
-- Removido `SigLogo`, SVG sem consumidores que duplicava a marca ativa.
-- `LogoSGI` permanece como implementação única, montada no Topbar e no layout de autenticação.
-- Gate estrutural protege a ausência da duplicata e as duas montagens canônicas.
-
-### Removido — formulário paralelo de transações (15/08/2026)
-
-- Removido `TransactionForm`, componente de 397 linhas sem consumidor.
-- `AddTransactionModal` permanece como superfície única, com criação e atualização pelos hooks canônicos.
-- Gate estrutural protege a ausência do formulário paralelo e a montagem global do modal ativo.
-
-### Removido — visualizações legadas de dividendos (15/08/2026)
-
-- Removidos `DividendChart` e `DividendTable`, sem consumidores e ligados ao contrato antigo de dividendos.
-- A página ativa de Proventos preserva donut, histórico mensal e tabela canônica de direitos recebidos.
-- Gate estrutural protege a ausência das visualizações paralelas e os três componentes ativos.
-
-### Removido — componentes órfãos de dashboard (15/08/2026)
-
-- Removidos gráfico de alocação, treemap de concentração e modal de carteira sem consumidores.
-- Preservados `AssetDonutChart`, distribuição por metas e criação de carteira na Sidebar como superfícies ativas.
-- Gate estrutural impede restauração das duplicatas sem montagem.
-
-### Removido — páginas não roteadas de Ativos e Lançamentos (15/08/2026)
-
-- Removidas `AssetsPage` e `LancamentosPage`, sem rota, menu ou consumidor.
-- `LancamentosPage` duplicava a página canônica `Transacoes`, que permanece em `/carteira/transacoes`.
-- Uma futura gestão do catálogo de ativos deverá ser implementada por issue e rota explícitas; gate protege a ausência das páginas invisíveis.
-
-### Removido — serviços HTTP frontend órfãos (15/08/2026)
-
-- Removidos seis módulos sem consumidores para transações, autenticação, câmbio, metas de classe, performance e metas.
-- Hooks/contextos canônicos foram preservados e passam a ser as únicas entradas HTTP dessas áreas.
-- Eliminadas também URLs mortas com prefixo `/api/v1` duplicado; gate estrutural protege ausências e entradas válidas.
-
-### Alterado — erros HTTP restantes sem `any` no frontend (15/08/2026)
-
-- Recuperação de senha, atualização de perfil e troca de senha usam extração tipada de detalhe Axios.
-- Removidos os três últimos `catch any` ativos do frontend sem alterar os fallbacks específicos das telas.
-- A fronteira compartilhada passou a expor separadamente detalhe HTTP textual e mensagem completa.
-
-### Removido — modais paralelos de lançamento (15/08/2026)
-
-- Removidos `ModalNovaTransacao` e `ModalNovoProvento`, sem consumidores no frontend.
-- Removido o hook órfão de criação manual de proventos; leituras canônicas permanecem disponíveis.
-- O lançamento de transações continua no `AddTransactionModal`; proventos permanecem derivados dos eventos canônicos persistidos.
-
-### Alterado — erros tipados na importação CSV (15/08/2026)
-
-- Validação e importação CSV deixaram de usar `catch any` e acesso inseguro ao payload Axios.
-- Listas de validação FastAPI são convertidas explicitamente pelas mensagens `msg`, sem `[object Object]`.
-- A fronteira compartilhada preserva detalhes textuais, erros nativos e fallback.
-
-### Alterado — erros Axios tipados no fluxo de Tesouro (15/08/2026)
-
-- Criada fronteira reutilizável para extrair `detail` textual de erros Axios sem `any`.
-- Carregamento e exclusão de Tesouro usam `unknown`, preservando mensagem da API, erro nativo e fallback seguro.
-- Testes unitários cobrem detalhe HTTP, erro nativo e payload desconhecido/estruturado.
-
-### Corrigido — falhas de proventos não convertidas em zero (15/08/2026)
-
-- As três agregações canônicas de proventos da carteira deixaram de converter erro SQL/dado inválido em `0.0` ou mapa vazio.
-- Falhas do reader agora são propagadas; zero permanece reservado a uma agregação válida sem direitos recebidos.
-- Testes cobrem as três fronteiras e impedem nova captura local.
-
-### Corrigido — conversão cambial fiscal DB-first (15/08/2026)
-
-- O cálculo legado de ganhos de capital deixou de consultar `USDBRL=X` por `price_history_service` com sessão nula.
-- Operações internacionais usam a última USD/BRL persistida até a data da transação, com a sessão do cálculo.
-- Ausência de cobertura deixa de assumir paridade `1.0` e falha explicitamente para não distorcer imposto.
-
-### Corrigido — falha de preços persistidos não mascarada (15/08/2026)
-
-- A leitura em lote de preços da carteira deixou de converter erro de banco em mapa vazio.
-- Falha de infraestrutura agora é propagada; somente ausência real de uma cotação permanece representada como preço indisponível.
-- Teste protege a distinção entre indisponibilidade do banco e cobertura parcial legítima.
-
-### Removido — calculadora legada e órfã de renda fixa (15/08/2026)
-
-- Removido `rf_calc_service.py`, sem qualquer consumidor de runtime ou teste.
-- O módulo duplicava a valuation canônica, abria sessões próprias e podia consultar BRAPI durante cálculo financeiro.
-- `fixed_income_valuation_service.py` permanece como única implementação consumida; gate estrutural protege a ausência do legado.
-
-### Corrigido — ausência de câmbio persistido sem taxa inventada (15/08/2026)
-
-- Resumos e snapshots deixaram de substituir ausência de USD/BRL persistido por `5.70`.
-- O reader DB-first agora falha explicitamente com a data efetiva sem cobertura, preservando a busca da última taxa disponível até a data.
-- Testes cobrem ausência de fallback fixo/provider e o erro de cobertura vazia.
-
-### Removido — serviço cambial legado em tempo de request (15/08/2026)
-
-- `fx_service.py` foi reduzido à persistência transacional usada pelo bootstrap.
-- Removidas APIs órfãs de leitura que consultavam BCB/AwesomeAPI em requests e podiam retornar taxa fixa `5.70`.
-- Consumidores financeiros permanecem nos readers DB-first; gate estrutural protege a fronteira sem provider e sem fallback.
-
-### Corrigido — erros explícitos nas consultas auxiliares de ativos (15/08/2026)
-
-- Buscas de ativos/Tesouro e preço histórico de título continuam fail-soft, mas passam a retornar erro explícito além de lista/preço vazio.
-- O modal de transação consolida e exibe a falha provider-neutral, distinguindo indisponibilidade de resultado vazio.
-- Falha no preço de Tesouro orienta preenchimento manual; teste estrutural cobre hooks e consumidor.
-
-### Corrigido — erro visível na consulta de cotação (15/08/2026)
-
-- `useTickerQuote` deixou de transformar falhas de rede/servidor em ausência silenciosa de erro.
-- 404 informa ativo ausente no catálogo; demais falhas apresentam mensagem recuperável já consumida pelo modal de transação.
-- Mensagem pública não expõe o provider e o catch deixou de usar `any`.
-
-### Corrigido — conclusão recuperável do onboarding (15/08/2026)
-
-- O `PATCH /users/me/onboarding` deixou de ter sua falha ignorada; navegação ocorre somente após persistência e atualização do usuário.
-- Falhas mantêm o usuário na tela com mensagem recuperável.
-- Se a carteira já tiver sido criada, o retry repete apenas a confirmação idempotente e não cria carteira duplicada.
-- Adicionado teste estrutural do contrato de persistência, refresh e retry.
-
-### Alterado — cache Redis fail-open com observabilidade (15/08/2026)
-
-- As cinco capturas amplas da fronteira Redis deixaram de falhar silenciosamente e agora registram operação, chave/padrão sanitizado, tipo e mensagem sanitizada da exceção.
-- A política fail-open foi preservada: indisponibilidade do Redis não interrompe requests nem persistência.
-- Valores armazenados não são incluídos nos logs; gate AST protege ausência de `pass` e uso da sanitização.
-
-### Alterado — invalidação de cache sem captura silenciosa duplicada (15/08/2026)
-
-- Removidos `except Exception: pass` redundantes das invalidações de cache em atualização e exclusão de carteira.
-- Os serviços agora delegam diretamente à fronteira Redis fail-open de `cache_delete`, sem alterar disponibilidade ou transações.
-- Gate AST exige as duas chaves canônicas e impede nova captura silenciosa local.
-
-### Preservado — redirects externos de Metas e IRPF (15/08/2026)
-
-- Auditados `/metas` e `/irpf`: ambos apenas redirecionam com `replace` para as rotas canônicas sob `/carteira`.
-- Os caminhos não possuem páginas, loaders, escritas ou cálculos próprios e não são usados pela navegação interna.
-- Compatibilidade foi preservada para favoritos externos; teste estrutural impede que os aliases adquiram lógica funcional.
-
-### Corrigido — hierarquia de rotas de Patrimônio (14/08/2026)
-
-- `main.tsx` passou a importar diretamente a página consolidada canônica; removido o re-export intermediário em `pages/patrimonio/PatrimonioPage.tsx`.
-- Subrotas de renda variável, Tesouro e renda fixa deixaram de ser filhas de uma página sem `<Outlet>` e passaram a ser registradas diretamente.
-- `/carteira/patrimonio` preserva a visão consolidada e as três URLs específicas passam a renderizar seus componentes.
-- Gate estrutural cobre o import canônico, a ausência do alias e a hierarquia corrigida.
-
-### Removido — ação frontend para rota inexistente de Análise (14/08/2026)
-
-- Removida do menu de posições a ação “Análise do Ativo”, que direcionava para `/carteira/analise` sem rota registrada.
-- Preservadas as ações funcionais de adicionar e consultar lançamentos.
-- O teste do menu passou a exigir duas ações e a ausência do link morto; o módulo de Análise continua bloqueado pela #57.
-
-### Removido — placeholders e entradas paralelas do frontend (14/08/2026)
-
-- Removidos placeholders órfãos de Análise/Histórico, stubs antigos de Login/Register, router alternativo e `ProtectedRoute` duplicado.
-- Preservadas as entradas canônicas em `main.tsx`, `router/ProtectedRoute.tsx` e `pages/auth/*`.
-- `MetasPage.tsx` não foi alterada e permanece bloqueada para o redesenho conjunto #246 + #57.
-- Adicionado gate estrutural cobrindo ausência dos seis arquivos e presença das entradas válidas.
-
-### Removido — entrada React vazia e duplicada (14/08/2026)
-
-- Removido `frontend/src/App.tsx`, arquivo sem consumidores que continha apenas `export {}`.
-- `frontend/src/main.tsx` permanece como entrada única para providers, roteamento e montagem React.
-- Adicionado gate estrutural contra a restauração do placeholder ou a perda do contrato mínimo da entrada canônica.
-
-### Removido — router administrativo de debug (14/08/2026)
-
-- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinição de senha e criação de `superadmin` mediante segredo estático paralelo.
-- Removidas a montagem condicional no `main.py` e as configurações órfãs `ADMIN_SECRET` e `DEBUG_RATE_LIMIT`.
-- Gestão legítima de usuários permanece em `/api/v1/admin`, protegida por JWT e `require_superadmin`.
-- Adicionado gate de segurança contra a reintrodução do arquivo, rota ou configuração.
-
-### Removido — backfill legado de Proventos (14/08/2026)
-
-- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.
-- Removidos testes exclusivos do fluxo antigo; as nove regras úteis de normalização foram migradas para uma suíte unitária canônica.
-- Preservado o teste DB-first que impede eventos não monetários de contaminarem agregados financeiros.
-- O gate estrutural agora exige a ausência física do serviço; ingestão permanece exclusiva do seed/bootstrap certificado e explicitamente habilitado.
+### 23/09/2026 - rebaseline documental pós-#370
+
+- README, ROADMAP e DEVELOPMENT_CONTINUITY foram alinhados ao estado mais novo
+  registrado no checklist da #158;
+- a documentação raiz deixa de afirmar que eventos corporativos materiais ainda
+  permanecem `UNRECONCILED`;
+- estado vigente: AMOB3 formalizada como `MATCHED`/`CONFLICT`, KLBN11 em
+  `CONFLICT` revisável, e zero eventos corporativos materiais com posição
+  aberta em `UNRECONCILED`;
+- KLBN11 continua bloqueada para eventual `MATCHED` até haver evidência
+  documental de liquidação fracionária; `ready_for_real_data=false` permanece.
+
+### 23/09/2026 - #158 checkpoint operacional de runtime
+
+- checklist da #158 registrou o SHA `b39edd8f86e7f94b95ea5a45585480cca092cdb2`
+  com gates locais sem escrita aprovados: 137 testes focados, `compileall`,
+  `mypy app --check-untyped-defs` e `git diff --check`;
+- congelamento final da #158 segue bloqueado por runtime Docker/Postgres:
+  `localhost:5432` indisponível, Docker/Docker Compose sem resposta dentro do
+  timeout operacional, `com.docker.service` parado e WSL com `E_ACCESSDENIED`;
+- não houve seed, rebuild, migration, `--execute`, escrita em banco, alteração
+  de ledger ou promoção de `ready_for_real_data`;
+- retomada permitida quando o runtime voltar: `docker compose ps`,
+  `user_test_readiness` no backend e validação de reconciliacao runtime,
+  restart, persistência e idempotência no mesmo SHA candidato.
+
+### 23/09/2026 - #158 runtime Docker/Postgres validado
+
+- no SHA `7b5b5838dcab3d50145152fc72955e697b9d2f94`, Docker/Postgres estavam
+  ativos; o bloqueio era permissão do usuário corrente no pipe
+  `dockerDesktopLinuxEngine`, contornado por execução elevada sem remover
+  volumes, containers ou dados;
+- `docker compose ps` mostrou `backend`, `db`, `redis`, `frontend` e
+  `cloudflared` ativos, com `backend`, `db` e `redis` saudáveis;
+- `user_test_readiness` retornou `GO_ASSISTED`, `blockers=[]`, `warnings=[]`,
+  `writes_executed=0`, `ready_for_real_data=false`, com 8 usuários,
+  7 carteiras, 423 transações, 3677 ativos, 4409462 preços, 978 snapshots,
+  431 Proventos, 123 eventos corporativos e 2 metas;
+- inventário `pre-prod-inventory.v2` retornou 21 tabelas, 4437703 linhas,
+  0 tabelas não classificadas e 0 findings bloqueantes;
+- `/health=200` com Postgres/Redis `ok`; `/ready=503` permanece esperado;
+- AMOB3 está formalizada como `CONFLICT`/`MATCHED`, KLBN11 2025 como
+  `CONFLICT`, e a consulta de eventos `UNRECONCILED` com posição positiva na
+  data do evento retornou 0 linhas;
+- restart controlado de `backend` e, depois, de `db` + `backend` preservou
+  health, readiness e contagens, validando persistência/idempotência runtime
+  sem seed, rebuild, migration, `--execute`, alteração de ledger ou promoção
+  de dados reais amplos.
+
+### 23/09/2026 - #269 CERT-01B iniciado
+
+- gate local de segurança iniciado sobre o SHA
+  `e5bc987b92335eb943e5cf1aeda9008ffc051f13`;
+- Gitleaks encontrou um falso positivo documental em
+  `docs/changelog/2026-09-15-promotion-reconciliation-158-corporate-event-decision.md`,
+  causado por texto técnico `BRAPI: label=GRUPAMENTO`;
+- `.gitleaks.toml` recebeu allowlist cirúrgica para esse trecho específico e a
+  reexecução do Gitleaks varreu 4036 commits com `no leaks found`;
+- Hadolint passou para `backend/Dockerfile` e `frontend/Dockerfile`;
+- imagens runtime backend/frontend foram buildadas no SHA candidato;
+- identidades runtime confirmadas como não-root: backend UID 1000 e frontend
+  UID 101;
+- smoke HTTP do frontend runtime serviu `/` com sucesso e o container
+  temporário foi removido;
+- Trivy filesystem foi concluído em worktree limpo do SHA publicado, sem
+  artefatos locais não rastreados como `.env`, `.agents`, `.tmp` e cache do
+  scanner: 0 vulnerabilidades HIGH/CRITICAL, 0 secrets e 0 misconfigs nos
+  alvos detectados;
+- Trivy runtime image passou para frontend Alpine 3.24.1 com 0
+  vulnerabilidades HIGH/CRITICAL;
+- Trivy runtime image passou para backend Debian 13.7 e pacotes Python com 0
+  vulnerabilidades HIGH/CRITICAL.
+
+### 23/09/2026 - #269 inventario externo GitHub
+
+- Code Scanning aberto no GitHub: 0 alertas;
+- Secret Scanning aberto no GitHub: 0 alertas, sem impressao de valores de
+  segredo;
+- Dependabot aberto no GitHub: 2 alertas `medium`, ambos em dev dependencies do
+  frontend no default branch: `vitest` e `@vitest/mocker`, advisory
+  `GHSA-82fw-gwwq-j7x9` / `CVE-2026-84373`, corrigido em 4.1.11;
+- o SHA candidato em `stable-15jun` ja usa `vitest` 4.1.11,
+  `@vitest/mocker` 4.1.11 e `@vitest/coverage-v8` 4.1.11 no
+  `frontend/package-lock.json`;
+- `npm audit --omit=dev --audit-level=moderate`: `found 0 vulnerabilities`;
+- `npm audit --audit-level=moderate`: `found 0 vulnerabilities`;
+- conclusao: alertas Dependabot pertencem ao default branch ainda defasado, nao
+  ao SHA candidato de `stable-15jun`; a baixa efetiva deve ocorrer quando o
+  macrobloco certificado for promovido para `main` ou quando `main` receber
+  backport dedicado da atualizacao Vitest.
+
+### 23/09/2026 - rebaseline documental para #284
+
+- README, ROADMAP e DEVELOPMENT_CONTINUITY foram alinhados ao estado em que
+  #158 e #269 possuem evidencia local publicada no SHA candidato;
+- o proximo bloco operacional passa a ser homologacao OCI (#284) sobre o mesmo
+  SHA candidato;
+- `ready_for_real_data=false` permanece obrigatorio ate decisao GO/NO-GO da
+  #227.
+
+### 23/09/2026 - #284 preflight local e pacote exact-SHA
+
+- `scripts/oci_compose_preflight.ps1` foi alinhado ao contrato real do backend:
+  workers sao controlados por `BACKEND_WORKERS=1` no ambiente e consumidos pelo
+  `entrypoint.sh`;
+- `scripts/oci_local_readiness.ps1` passou em `stable-15jun` com arvore
+  rastreada limpa, sem artefatos sensiveis rastreados, Compose OCI sem portas
+  publicadas para backend/frontend e `cloudflared` presente;
+- pacote de fonte OCI gerado via `git archive`; o manifesto local registra SHA,
+  SHA-256 e contagem de arquivos rastreados para o operador validar antes da
+  transferencia;
+- pacote/manifesto permanecem em `artifacts/oci-source-package/`, ignorados por
+  Git, para transferencia operacional controlada; `ready_for_real_data=false`
+  nao foi alterado.
+
+### 15/09/2026 - #158 eventos corporativos materiais decididos
+
+- os 15 eventos corporativos inicialmente materiais foram cruzados com a
+  exposicao real da carteira 15 na data de cada evento;
+- todos continuam `UNRECONCILED/requires_review=true` e, pelo contrato
+  fail-closed atual, nao entram nas projecoes financeiras;
+- 4 eventos possuem quantidade positiva no evento e bloqueiam o GO ate
+  reconciliacao ou descarte formal: `AMOB3` bonificacao/grupamento e `KLBN11`
+  bonificacao/desdobramento;
+- os demais 11 eventos ocorreram sem posicao na data; `POMO4` possui posicao
+  final aberta, mas seus eventos de 2025 ocorreram antes das recompras de 2026;
+- simulacao read-only pelo motor puro mostrou que aplicar mecanicamente os 4
+  eventos pendentes mudaria realizado e deixaria residuo de posicao em
+  `KLBN11`, logo #370 exige reconciliacao economica antes de rebuild;
+- normalizador BRAPI passou a respeitar labels explicitos `GRUPAMENTO` e
+  `DESDOBRAMENTO` em `stockDividends`, prevenindo nova classificacao semantica
+  errada como bonificacao;
+- simulacao por fonte isolada concluiu que nenhum dos 4 eventos de
+  `AMOB3`/`KLBN11` pode ser marcado como `MATCHED` no dataset candidato sem
+  reconciliacao adicional de extrato/fracao/residuo;
+- decisao arquitetural: eventos corporativos materiais fazem parte do lifecycle
+  do investidor e #370 permanece blocker da #158 ate associacao/reconciliacao
+  no banco ou politica canonica de conflito/fração/residuo;
+- contrato puro de reconciliacao criado para planejar `CONFLICT` e `MATCHED`
+  sem escrever no banco, sem rebuild e sem colocar eventos revisaveis na
+  projecao financeira;
+- CLI read-only de dry-run emite planos auditaveis para `AMOB3` e `KLBN11`
+  com `database_writes_executed=0` e `dry_run=true`, preparando persistencia
+  controlada posterior de `CONFLICT`;
+- executor controlado persistiu `CONFLICT` para os quatro eventos materiais no
+  banco restaurado isolado, mantendo `requires_review=true`,
+  `is_canonical=false` e os eventos fora da projecao financeira;
+- contrato de evidencia para futuro `MATCHED` agora exige referencia de
+  extrato/corretora e politica explicita de fracao/residuo; `MANUAL_REVIEW`
+  nao autoriza evento reconciliado;
+- foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
+  PR estrutural para `main` e `ready_for_real_data=true`.
+
+### 14/09/2026 — A1/#352 validada e fechada
+
+- #352 foi corrigida e validada manualmente: o seletor de `Tipo de ativo`
+  substitui a barra de classes no modal de lancamento;
+- a transacao foi adicionada com sucesso no fluxo atualizado;
+- #352 deixou de ser candidato P1 aberto e passa a ser evidencia consumida por
+  #303;
+- #354 permanece fechada enquanto a politica de senha frontend/backend seguir
+  alinhada;
+- `PORTFOLIO-TEST-READY` foi consolidado em #303 no SHA publicado, sem alterar
+  `ready_for_real_data=false`;
+- #226 e #216 foram posteriormente consumidas; o gate corrente da Trilha A é
+  #158.
+
+### 14/09/2026 — #226 Proventos decidido
+
+- a evidência portfolio-scoped/idempotente de Proventos foi aceita como
+  suficiente para o escopo de promoção controlada;
+- não haverá seed global mecânico apenas por checklist histórico;
+- eventual global controlado fica condicionado a necessidade material nova em
+  #216/#158;
+- `asset_dividends` permanece a única persistência canônica global e direitos de
+  carteira continuam calculados sob demanda.
+
+### 14/09/2026 — #216 gate agregado fechado
+
+- benchmarks e câmbio permanecem como evidências consolidadas;
+- a decisão de #226 foi consumida como componente material restante de
+  Proventos;
+- não haverá seed global de Proventos por repetição de checklist histórico;
+- #158 passa a ser o próximo gate da Trilha A;
+- PR `stable-15jun` -> `main` continua bloqueada até #158, #269, #284 e #227.
+
+### 14/09/2026 — #158 rebaseline operacional iniciado
+
+- #158 passa a consumir #303, #226 e #216 como evidências fechadas;
+- promotion reconciliation deve executar somente o delta necessário sobre
+  SHA/dataset congelados;
+- seeds globais, rebuilds amplos, importações e contrações físicas continuam
+  proibidos sem gate explícito dentro da própria #158;
+- checklist executável publicado em
+  `docs/promotion-reconciliation-158-checklist.md`;
+- o próximo avanço deve produzir evidência operacional antes de #269, #284 e
+  #227.
+
+### 14/09/2026 — #158 validação local read-only preparada
+
+- banco Docker local estava sem tabelas públicas; foi migrado em base vazia até
+  `20260910_goals_runtime`, alvo runtime-safe do entrypoint;
+- a cadeia Alembic aplicada inclui `20260731_drop_legacy_divs`; neste ambiente
+  não havia dados/tabelas prévias, portanto não houve perda de dataset;
+- inventário `pre-prod-inventory.v2` passou com 20 tabelas, 0 unclassified e 0
+  blocking findings;
+- `user-test-readiness.v1` retornou `NO_GO` por ausência de usuários,
+  carteiras, transações, ativos, preços, snapshots, Proventos e eventos;
+- nenhuma importação, seed, rebuild, provider ou promoção de
+  `ready_for_real_data=true` foi executada.
+
+### 14/09/2026 — #158 dataset candidato bloqueado
+
+- busca local em `artifacts/` e em `C:\Users\Acer\Documents\Codex` não encontrou
+  `pre-prod-backup.v3`, `backup-report.json`, `database.dump` ou
+  `origin-inventory.json`;
+- checklist da #158 passou a exigir caminho local do artefato de backup aprovado
+  ou justificativa explícita para dataset sintético/controlado antes de qualquer
+  import/rebuild;
+- banco apenas migrado com schema e sem usuários/carteiras/transações permanece
+  NO-GO para reconciliation operacional.
+
+### 14/09/2026 — #158 artefato candidato bloqueado por identidade runtime
+
+- artefato `pre-prod-backup.v3` gerado para o SHA
+  `1e7c3fca6e6acaea19a75c1197f036a1f1021199` em
+  `C:\Users\Acer\Documents\Codex\sgi-v2-backups\20260914-233314`;
+- backup com snapshot consistente, `pg_dump`/PostgreSQL major 16/16,
+  `database.dump` de 40.977.216 bytes e SHA-256
+  `486d971f25e7924249fac2c8b2630e59b746e16aeaa93bc5dc963093d9e33b81`;
+- inventário de origem registrou 20 tabelas, 4.434.193 linhas, 0 tabelas sem
+  classificação e 0 findings bloqueantes;
+- `scripts\oci_backup_artifact_check.ps1` aprovou presença dos arquivos
+  obrigatórios, JSONs, conteúdo do dump e checksum;
+- verificação posterior encontrou runtime `APP_COMMIT_SHA=unknown` no container
+  de origem e checkout local divergente do SHA informado;
+- o artefato fica bloqueado para restore candidato e deve ser regenerado em
+  runtime com `APP_COMMIT_SHA` igual ao SHA certificado;
+- a CLI `pre_prod_backup` passou a falhar quando `APP_COMMIT_SHA` estiver
+  ausente/`unknown` ou divergir do `--commit-sha` informado;
+- restore, import, rebuild, cleanup, migration destrutiva e
+  `ready_for_real_data=true` continuam bloqueados.
+
+### 14/09/2026 — #158 backup candidato regenerado com SHA runtime
+
+- imagem backend temporaria `sig-v2-backup:48b5041c` foi construida a partir do
+  SHA `48b5041ceaf3240384065c42578fde6689ce17db`;
+- novo `pre-prod-backup.v3` foi gerado contra o Postgres local de origem sem
+  alterar o checkout operacional sujo em `E:\Sistema Investimentos\App\SGFP\sig-v2`;
+- artefato local:
+  `artifacts\pre-prod-rebuild\20260915-002119`;
+- backup com snapshot consistente, `pg_dump`/PostgreSQL major 16/16,
+  `database.dump` de 40.981.404 bytes e SHA-256
+  `d42efc2f507854b58ab30429530aee10462c3b41ad29467db57ab91dfe77b4c9`;
+- inventario de origem registrou 20 tabelas, 4.434.818 linhas, 0 tabelas sem
+  classificacao e 0 findings bloqueantes;
+- `scripts\oci_backup_artifact_check.ps1` aprovou presenca dos arquivos
+  obrigatorios, JSONs, conteudo do dump e checksum;
+- proximo passo permitido: restore isolado/descartavel para reconciliation;
+  import, rebuild, cleanup, migration destrutiva e `ready_for_real_data=true`
+  continuam bloqueados.
+
+### 14/09/2026 — #158 restore isolado reconciliado
+
+- artefato `20260915-002119` restaurado em banco descartavel
+  `sgi_restore_20260915_002119`;
+- `restore-report.json` retornou `pre-prod-restore.v1` com `ok=true`;
+- `reconciliation-report.json` retornou `pre-prod-reconciliation.v1` com
+  `ok=true`;
+- migrations de origem e destino coincidiram:
+  `20260906_rate_source32`, `20260910_goals_runtime`;
+- nao houve tabelas ausentes, tabelas inesperadas, divergencias de
+  classificacao, divergencias de contagem ou divergencias de findings;
+- seguranca preservada: zero escritas na origem, restore somente no alvo,
+  sem cleanup e sem rebuild;
+- proximo passo permitido: iniciar as validacoes read-only da reconciliation
+  sobre o dataset restaurado; import/rebuild/cleanup real e
+  `ready_for_real_data=true` continuam bloqueados.
+
+### 14/09/2026 — #158 validação read-only do dataset restaurado
+
+- `pre-prod-inventory.v2` passou sobre `sgi_restore_20260915_002119` com
+  20 tabelas, 4.434.818 linhas, 0 tabelas sem classificacao e 0 findings
+  bloqueantes;
+- `user-test-readiness.v1` retornou `GO_ASSISTED`, sem blockers/warnings e com
+  `ready_for_real_data=false`;
+- dataset restaurado contem 6 carteiras, 7 usuarios, 366 transacoes, 608
+  snapshots consolidados, 5.121 snapshots por classe, 184 eventos globais de
+  Proventos e 123 eventos corporativos;
+- eventos corporativos seguem como delta material: 122 `PENDENTE/UNRECONCILED`
+  e 1 `APLICADO/UNRECONCILED`, todos `requires_review=true`;
+- snapshots preservam explicitamente dias com cobertura parcial/preco estimado,
+  sem mascarar ausencia como zero;
+- evidencia Tesouro lida em `transactions` mostrou pares legado/canonico com
+  quantidades liquidas opostas/complementares; o achado foi registrado na #365
+  sem iniciar Trilha B;
+- nao ha tabelas fisicas `irpf*`; IRPF deve continuar validado por servicos
+  runtime suportados, sem recriar legado;
+- proximo passo permitido: reconciliation read-only focada nos deltas materiais
+  antes de qualquer import/rebuild/cleanup.
+
+### 15/09/2026 — #158 reconciliation read-only focada
+
+- eventos corporativos materiais foram reduzidos de 123 pendencias brutas para
+  15 eventos a decidir no escopo da carteira 15;
+- 14 eventos globais pendentes caem dentro da janela de exposicao da carteira
+  15 e 1 `TICKER_CHANGE` de `PETZ3` ja aplicado permanece
+  `UNRECONCILED/requires_review=true`;
+- os 15 eventos materiais envolvem `AMOB3`, `FIQE3`, `GOAU4`, `ITSA4`,
+  `KLBN11`, `KLBN4`, `PETZ3` e `POMO4`;
+- `POMO4` e o unico ticker material com posicao liquida aberta observada
+  (30 unidades); os demais estao zerados no ledger, mas ainda podem afetar
+  historico, custo, snapshots e IRPF;
+- auditoria Tesouro read-only retornou 152 ativos, 151 grupos canonicos, 0
+  duplicidades, 0 candidatos de migracao e `destructive_changes=false`;
+- IRPF runtime da carteira 15 emitiu `irpf-annual-assessment.v1` para 2025 e
+  2026 sem tabelas fisicas legadas;
+- nenhum import, rebuild, cleanup real, migration destrutiva, seed global ou
+  promocao de `ready_for_real_data=true` foi executado.
+
+### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
+
+- a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
+- contratos de snapshot foram alinhados ao writer único `portfolio_snapshot_canonical_twr_service.py`, mantendo `portfolio_snapshot_service.py` restrito à invalidação;
+- o contrato vigente de Proventos foi explicitado como `pre-prod-dividends-seed.v2`;
+- `asset_dividends` permanece a única persistência canônica de eventos globais de Proventos;
+- direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira;
+- README, ROADMAP e CHANGELOG foram sincronizados para refletir essa fronteira canônica.
+
+### 10/09/2026 — rebaseline de governança e certificação
+
+- `user-test-readiness.v1` consolidado como gate read-only para validação assistida;
+- estado registrado: `GO_ASSISTED`, `ready_for_real_data=false`, `/health=200`, `/ready=503`;
+- #303 rebaselined para governar o fechamento de `PORTFOLIO-TEST-READY` e o SHA candidato;
+- #226, #216, #158 e #227 rebaselined para consumir evidências já certificadas, evitando repetição destrutiva por checklist histórico;
+- cadeia de promoção formalizada como #303 → #226 → #216 → #158 → homologação OCI → #227;
+- OCI redefinida como ambiente de homologação do SHA exato certificado localmente, não ambiente de desenvolvimento;
+- deploy OCI deve confirmar `APP_COMMIT_SHA == git rev-parse HEAD`;
+- `/ready=503` permanece comportamento esperado enquanto `ready_for_real_data=false`;
+- #58 reclassificada como parcialmente implementada após validação do detalhe de ativo;
+- #149 reclassificada como dívida financeira parcial, não blocker automático quando a ausência de TWR é explícita;
+- #246 atualizada para reconhecer Metas operacionalmente funcional após migration runtime-safe, preservando o macroprojeto definitivo como futuro;
+- #351 classificada como epic pós-GO;
+- #352 identificada como candidato P1 se ainda reproduzível;
+- #354 foi fechada após alinhamento da política de senha frontend/backend;
+- #353 classificada como P2 por padrão;
+- #355–#361 classificados como evolução pós-GO, com #360 precedendo #361;
+- README, ROADMAP e CHANGELOG rebaselined para remover baselines históricos tratados como instruções vigentes.
+
+### Evidências funcionais acumuladas
+
+- backend completo anteriormente certificado com `1880 passed, 1 skipped, 10 warnings` no ciclo #303;
+- frontend anteriormente certificado com `npm ci`, typecheck, lint, Vitest e build;
+- CSV sintético/assistido com dry-run, import, replay, atomicidade e rebuild canônico;
+- carteira assistida com 308 transações e 65 ativos distintos;
+- rebuild histórico observado com 493 snapshots entre 22/10/2024 e 10/09/2026;
+- Proventos portfolio-scoped idempotentes com 49 ativos elegíveis e 183 eventos na janela validada;
+- Tesouro DB-first, Renda Fixa dedicada e IRPF para classes suportadas exercitados em runtime;
+- eventos corporativos portfolio-scoped disponíveis; no dataset alvo, a varredura
+  mais recente registrou zero eventos materiais em `UNRECONCILED`, com KLBN11
+  preservada em `CONFLICT` revisável.
+
+### Arquitetura preservada
+
+- `transactions` é a fonte canônica do lifecycle;
+- runtime financeiro é DB-first;
+- providers ficam fora do read path financeiro;
+- `summary.v2`, `rentabilidade.v2`, snapshots e projetores compartilhados continuam contratos canônicos;
+- Proventos pertencem ao ativo em `asset_dividends`;
+- eventos corporativos pertencem ao ativo em `corporate_events`;
+- ausência/cobertura parcial permanecem explícitas e não viram zero/fallback silencioso.
+
+### Pendências para o primeiro GO
+
+1. executar o delta final #158;
+2. executar #269 no mesmo SHA candidato;
+3. homologar exatamente o mesmo SHA na OCI (#284);
+4. #227 emitir GO/NO-GO;
+5. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
+
+## Histórico
+
+O detalhamento de sanitização arquitetural, segurança, BRAPI/COTAHIST, Proventos, TWR, dependências, OCI e demais microblocos anteriores a este rebaseline permanece disponível no histórico Git e nos documentos datados. A partir deste ponto, este arquivo prioriza marcos de release e governança para evitar que microcommits históricos sejam interpretados como estado operacional atual.

@@ -22,10 +22,6 @@ RUN pip install --no-cache-dir --upgrade pip==26.2 \
 # ---- runtime stage ----
 FROM python:3.12-slim AS runtime
 
-ARG APP_COMMIT_SHA=unknown
-ENV APP_COMMIT_SHA=$APP_COMMIT_SHA
-LABEL org.opencontainers.image.revision=$APP_COMMIT_SHA
-
 WORKDIR /app
 
 # Atualiza todos os pacotes do SO para garantir patches de seguranca
@@ -67,6 +63,12 @@ RUN sed -i 's/\r//' /app/entrypoint.sh \
     && chmod +x /app/entrypoint.sh \
     && mkdir -p /app/artifacts \
     && chown app:app /app/artifacts
+
+# A identidade muda a cada commit, mas nao altera o filesystem da imagem.
+# Declara-la depois das camadas pesadas preserva o cache de pacotes e codigo.
+ARG APP_COMMIT_SHA=unknown
+ENV APP_COMMIT_SHA=$APP_COMMIT_SHA
+LABEL org.opencontainers.image.revision=$APP_COMMIT_SHA
 
 USER 1000:1000
 

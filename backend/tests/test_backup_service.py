@@ -318,7 +318,10 @@ def test_find_existing_backup_path_rejects_symlink_escape(tmp_path):
     backups_dir.mkdir()
     outside = tmp_path / "outside.sql.gz"
     outside.write_bytes(b"outside")
-    (backups_dir / "backup_20240101_120000.sql.gz").symlink_to(outside)
+    try:
+        (backups_dir / "backup_20240101_120000.sql.gz").symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is not available in this environment: {exc}")
 
     with patch("app.services.backup_service.BACKUPS_DIR", backups_dir):
         with pytest.raises(ValueError, match="Invalid backup filename"):

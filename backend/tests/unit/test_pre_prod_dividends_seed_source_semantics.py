@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from app.models.dividend_enums import DividendType
 from app.services.dividend_event_normalizer import (
     ParsedDividendEvent,
     parse_dividend_event,
@@ -541,7 +540,6 @@ async def test_estimated_components_ignore_their_provisional_payment_date() -> N
             (0.06, "csv:payment_date_estimated"),
         ),
         ((0.03, "csv:payment_date_estimated"), (0.03, "")),
-        ((0.03, ""), (0.09, ""), (0.06, "")),
     ],
 )
 async def test_estimated_component_policy_does_not_hide_other_conflicts(
@@ -588,6 +586,52 @@ async def test_estimated_component_policy_does_not_hide_other_conflicts(
         match="evento global conflitante na mesma fonte",
     ):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+
+@pytest.mark.asyncio
+async def test_three_canonical_same_source_occurrences_are_persisted() -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    events = tuple(
+        ParsedDividendEvent(
+            record_date=date(2015, 2, 27),
+            ex_date=date(2015, 3, 2),
+            payment_date=date(2015, 3, 31),
+            approved_on=None,
+            value_per_unit=value,
+            dividend_type="JCP",
+            remarks="",
+            raw_payload={"rate": value, "remarks": ""},
+        )
+        for value in (0.03, 0.09, 0.06)
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(
+            StrictDividendSourceCollection(
+                source="brapi",
+                raw_rows=len(events),
+                normalized_rows=events,
+                rejected_rows=0,
+                empty_reason=None,
+            ),
+        ),
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 3
+    assert result.updated == 0
+    assert result.unchanged == 0
+    assert db.add.call_count == 3
 
 
 @pytest.mark.asyncio

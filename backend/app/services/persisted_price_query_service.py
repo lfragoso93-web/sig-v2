@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_safety import sanitize_log_value
@@ -40,13 +40,24 @@ async def get_persisted_prices_at_date_batch(
     ref = _parse_date_utc(target_date)
     since = ref - timedelta(days=5)
     until = ref + timedelta(hours=23, minutes=59, seconds=59)
-    tickers = [ticker.upper() for ticker, _ in tickers_with_types]
+    requested = {
+        ticker.strip().upper(): ticker.strip().lower()
+        for ticker, _ in tickers_with_types
+        if ticker.strip()
+    }
+    tickers = list(requested.keys())
 
     assets_result = await db.execute(
-        select(Asset.id, Asset.ticker).where(Asset.ticker.in_(tickers))
+        select(Asset.id, Asset.ticker).where(
+            func.lower(Asset.ticker).in_(set(requested.values()))
+        )
     )
     asset_rows = assets_result.all()
-    asset_id_to_ticker = {row.id: row.ticker.upper() for row in asset_rows}
+    lower_to_requested = {lookup: ticker for ticker, lookup in requested.items()}
+    asset_id_to_ticker = {
+        row.id: lower_to_requested.get(str(row.ticker).strip().lower(), str(row.ticker).strip().upper())
+        for row in asset_rows
+    }
 
     if not asset_id_to_ticker:
         for ticker in tickers:
@@ -90,12 +101,12 @@ async def get_persisted_price_history(
     days: int = 365,
 ) -> list[dict[str, str | float]]:
     """Retorna a série persistida no contrato público ``date``/``price``."""
-    normalized = ticker.strip().upper()
+    normalized = ticker.strip().lower()
     if not normalized:
         return []
 
     asset_result = await db.execute(
-        select(Asset.id).where(Asset.ticker == normalized)
+        select(Asset.id).where(func.lower(Asset.ticker) == normalized)
     )
     asset_id = asset_result.scalar_one_or_none()
     if asset_id is None:

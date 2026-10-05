@@ -112,7 +112,7 @@ describe('ResumePage position states', () => {
 
     render(<ResumePage />)
 
-    expect(mocks.useMonthlyEvolution).toHaveBeenCalledWith(46, '12m')
+    expect(mocks.useMonthlyEvolution).toHaveBeenCalledWith(46, 'all')
     expect(screen.getByTestId('patrimonio-chart').textContent).toBe('portfolio_snapshot')
   })
 
@@ -139,7 +139,7 @@ describe('ResumePage position states', () => {
       target: { value: 'FII' },
     })
 
-    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, 'FII', '12m')
+    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, 'FII', 'all')
     expect(screen.getByTestId('patrimonio-chart').textContent).toBe('portfolio_class_snapshot')
   })
 
@@ -162,7 +162,7 @@ describe('ResumePage position states', () => {
       target: { value: 'FII' },
     })
 
-    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, null, '12m')
+    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, null, 'all')
     expect(screen.getByText('Histórico ainda não materializado.')).toBeTruthy()
   })
 

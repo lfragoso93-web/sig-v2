@@ -4,8 +4,8 @@
 > Backup e restauração isolada: #183  
 > Executor e ensaio isolado: #196  
 > Limpeza real controlada: #199  
-> Seed isolado de proventos: #226  
-> Última atualização: 28/07/2026
+> Seed isolado de proventos: #226 — concluída como portfolio-scoped suficiente
+> Última atualização: 08/09/2026
 
 ## Objetivo
 
@@ -48,17 +48,13 @@ A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada 
 
 A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_service.py`. Cada tabela recebe classificação e justificativa no relatório `pre-prod-inventory.v2`.
 
-O inventário corrente contém 23 tabelas: 11 preservadas, 2 exportáveis e 10 reconstruíveis.
+O inventário corrente contém 20 tabelas: 7 preservadas, 2 exportáveis e 11 reconstruíveis.
 
-### Preservar — 11 tabelas
+### Preservar — 7 tabelas
 
 - `alembic_version`;
 - `audit_logs`;
-- `goal_allocations`;
 - `goals`;
-- `irpf_losses`;
-- `irpf_records`;
-- `irpf_reports`;
 - `portfolio_class_targets`;
 - `portfolios`;
 - `system_configs`;
@@ -77,22 +73,25 @@ Artefatos produzidos por SHAs anteriores à contração `20260903_drop_fixed_inc
 
 A recuperação operacional da base é feita pelo backup completo `pre-prod-backup.v3` e restore validado com `pg_restore`. O export seletivo é evidência de auditoria/preservação e não deve ser tratado como mecanismo de reidratação.
 
-### Reconstruir — 10 tabelas
+### Reconstruir — 11 tabelas
 
 - `asset_aliases`;
 - `asset_dividends`;
 - `asset_prices`;
+- `asset_universe_memberships`;
 - `assets`;
 - `dividends`;
+- `dividends_sync_jobs`;
 - `fx_rates`;
 - `portfolio_class_snapshots`;
 - `portfolio_positions`;
 - `portfolio_snapshots`;
-- `rate_history`.
+- `rate_history`;
+- `rate_history_coverages`.
 
 Essas tabelas possuem fonte oficial, pipeline idempotente ou são projeções derivadas dos dados preservados/exportados.
 
-`app_configs` e `dividends_sync_jobs` não pertencem ao inventário canônico atual e não devem ser inseridas manualmente na política escrita.
+`app_configs`, `goal_allocations`, `irpf_losses`, `irpf_records` e `irpf_reports` não pertencem ao inventário canônico atual e não devem ser inseridas manualmente na política escrita sem retorno confirmado ao schema ativo.
 
 Qualquer tabela nova ou desconhecida permanece `unclassified`, faz a CLI retornar código diferente de zero e exige revisão arquitetural antes da limpeza.
 
@@ -183,6 +182,7 @@ $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
 $CommitSha = (git rev-parse HEAD).Trim()
 
 docker compose exec `
+  -e "APP_COMMIT_SHA=$CommitSha" `
   -e "PRE_PROD_BRANCH=stable-15jun" `
   -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
   backend python -m app.cli.pre_prod_backup --run-id $RunId
@@ -311,6 +311,13 @@ Confirmar nos artefatos:
 
 ### 9. Recriar dados canônicos em blocos separados
 
+Checklist operacional corrente da #158:
+`docs/promotion-reconciliation-158-checklist.md`.
+
+Antes de qualquer importação/rebuild desta fase, confirmar que o ambiente local
+possui dataset candidato aprovado. Banco apenas migrado com schema e sem
+usuários/carteiras/transações permanece NO-GO para reconciliation operacional.
+
 Ordem:
 
 1. catálogo e aliases;
@@ -324,7 +331,7 @@ Ordem:
 9. snapshots consolidados e por classe;
 10. auditoria final;
 
-O estágio de proventos não pode reutilizar scheduler, endpoint em background, backfill pós-transação, asset seed, pipeline de mercado ou `full_market_rebuild`. Sua implementação deve obedecer à Issue #226 e ao contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`, com advisory lock dedicado, transação única, rollback integral, fontes explícitas e duas execuções controladas comparadas offline.
+O estágio de proventos não pode reutilizar scheduler, endpoint em background, backfill pós-transação, asset seed, pipeline de mercado ou `full_market_rebuild`. A #226 aceitou a evidência portfolio-scoped/idempotente como suficiente para a promoção controlada. Execução global controlada só volta ao escopo se esta #158 encontrar necessidade material nova e registrar gate explícito.
 
 O primeiro estágio possui entrada dedicada e não dispara os demais:
 
@@ -384,11 +391,17 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 - Issue #199: limpeza real concluída e reconciliada.
 - Cadeia `20260724-145110`: limpeza confirmada no commit operacional
   `43886774608b816f921c9a76406a261b320cb514`.
-- Issue #226: contrato canônico `pre-prod-dividends-seed.v2`, implementação,
-  comparador, wrapper e migração funcional concluídos; duas execuções reais
-  controladas permanecem pendentes.
+- Issue #226: fechada. Contrato canônico `pre-prod-dividends-seed.v2`,
+  implementação, comparador, wrapper e migração funcional concluídos; evidência
+  portfolio-scoped/idempotente aceita como suficiente para promoção controlada.
+- Issue #216: fechada. Benchmarks/câmbio permanecem consolidados e a decisão da
+  #226 foi consumida como componente material restante de Proventos.
 - Migration `20260731_drop_legacy_divs`: preparada e testada, sem execução; a
   contração física depende da janela da #158, backup aprovado, inventário e
   contagem zero em `dividends` e `dividends_sync_jobs`.
-- Próximo gate operacional de proventos: autorizar explicitamente e executar as
-  duas rodadas v2 no mesmo SHA e janela, preservando as três evidências.
+- Próximo gate operacional: executar somente o delta da #158 sobre SHA/dataset
+  congelados; não repetir Proventos global, seeds ou rebuilds sem finding novo.
+- Bloco 08/09/2026: inventário read-only local apontou 20 tabelas, zero findings
+  bloqueantes e `rate_history_coverages` como única tabela sem política. A tabela
+  foi classificada como reconstruível por ser cobertura derivada/idempotente de
+  `rate_history`; o próximo inventário deve exigir `unclassified_tables=0`.

@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,6 +69,10 @@ async def test_updates_existing_canonical_superadmin_idempotently(
     _configure_seed(monkeypatch, db)
 
     await seed.main()
+    first_hash = (await _users(db))[0].hashed_password
+
+    commit_spy = AsyncMock(wraps=db.commit)
+    monkeypatch.setattr(db, "commit", commit_spy)
     await seed.main()
 
     users = await _users(db)
@@ -77,6 +83,8 @@ async def test_updates_existing_canonical_superadmin_idempotently(
     assert users[0].role == UserRole.superadmin
     assert users[0].is_active is True
     assert users[0].name == "Super Admin"
+    assert users[0].hashed_password == first_hash
+    commit_spy.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -1,19 +1,26 @@
 """Testes para csv_import_service — importacao de transacoes via CSV."""
-import pytest
+import inspect
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.transaction import Transaction, OperationType
+import pytest
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
-from app.services.csv_import_service import (
-    generate_csv_template,
-    parse_csv_content,
-    import_csv_transactions,
-    _parse_date,
-    CSVRow,
+from app.models.transaction import Transaction
+from app.services import csv_import_service
+from app.services.asset_universe_membership_service import (
+    CRYPTO_TOP100_UNIVERSE_KEY,
 )
+from app.services.csv_import_service import (
+    CSVRow,
+    _parse_date,
+    _validate_writer_preflight,
+    generate_csv_template,
+    import_csv_transactions,
+    parse_csv_content,
+)
+from app.services.transaction_write_service import TransactionWriteError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestGenerateCSVTemplate:
@@ -44,6 +51,72 @@ class TestGenerateCSVTemplate:
         reader = csv.DictReader(io.StringIO(template))
         rows = list(reader)
         assert len(rows) == 3
+
+
+def test_import_csv_transactions_uses_canonical_write_boundary():
+    source = inspect.getsource(csv_import_service.import_csv_transactions)
+
+    assert "add_transaction_record(" in source
+    assert "Transaction(" not in source
+
+
+@pytest.mark.asyncio
+async def test_writer_preflight_blocks_market_asset_without_persisted_prices():
+    row = CSVRow(
+        2,
+        {
+            "ticker": "NVDA",
+            "asset_type": "STOCK",
+            "operation": "buy",
+            "quantity": "1",
+            "price": "100",
+            "date": "2026-03-03",
+            "fees": "0",
+            "currency": "USD",
+        },
+    )
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.all.return_value = []
+    db.execute.return_value = result
+
+    await _validate_writer_preflight([row], db)
+
+    assert row.errors == [
+        "NVDA STOCK nao elegivel para importacao: ativo nao esta no catalogo persistido"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_writer_preflight_allows_market_asset_with_persisted_prices():
+    row = CSVRow(
+        2,
+        {
+            "ticker": "PETR4",
+            "asset_type": "ACAO",
+            "operation": "buy",
+            "quantity": "1",
+            "price": "30",
+            "date": "2026-03-03",
+            "fees": "0",
+            "currency": "BRL",
+        },
+    )
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.all.return_value = [
+        MagicMock(
+            ticker="PETR4",
+            asset_type="ACAO",
+            last_price=30,
+            price_rows=10,
+        )
+    ]
+    db.execute.return_value = result
+
+    await _validate_writer_preflight([row], db)
+
+    assert row.errors == []
 
 
 class TestCSVRowClass:
@@ -123,6 +196,56 @@ VALE3,ACAO,buy,50,80.00,2024-02-20,5.00,BRL,"""
         assert len(rows) == 2
         assert rows[0].is_valid()
         assert rows[1].is_valid()
+
+    async def test_parse_normalizes_common_crypto_names_to_canonical_tickers(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,
+ethereum,CRIPTO,buy,0.10,15000,2026-01-16,0,BRL,
+CARDANO,CRIPTO,buy,10,5,2026-01-17,0,BRL,"""
+
+        db = AsyncMock(spec=AsyncSession)
+        rows, global_errors = await parse_csv_content(content, 1, db)
+
+        assert global_errors == []
+        assert [row.data["ticker"] for row in rows] == ["BTC", "ETH", "ADA"]
+        assert all(row.is_valid() for row in rows)
+
+    async def test_parse_resolves_treasury_names_to_canonical_catalog_symbols(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Tesouro Selic 2031,TESOURO_DIRETO,buy,0.01,15000,2026-01-15,0,BRL,"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        with patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new_callable=AsyncMock,
+            return_value="tesouro-selic-01032031",
+        ) as resolve_symbol:
+            rows, global_errors = await parse_csv_content(content, 1, db)
+
+        resolve_symbol.assert_awaited_once_with(db, "Tesouro Selic 2031")
+        assert global_errors == []
+        assert rows[0].data["ticker"] == "tesouro-selic-01032031"
+        assert rows[0].is_valid()
+
+    async def test_parse_rejects_unresolved_treasury_names(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Tesouro Inventado 2099,TESOURO_DIRETO,buy,0.01,15000,2026-01-15,0,BRL,"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        with patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            rows, global_errors = await parse_csv_content(content, 1, db)
+
+        assert global_errors == []
+        assert rows[0].data["ticker"] == "TESOURO INVENTADO 2099"
+        assert rows[0].errors == [
+            "ticker de Tesouro Direto nao encontrado no catalogo persistido"
+        ]
 
     async def test_parse_csv_missing_headers(self):
         content = """ticker,quantity,price
@@ -283,11 +406,23 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         existing_tx_result = MagicMock()
         existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        coverage_result = MagicMock()
+        coverage_result.all.return_value = [
+            MagicMock(
+                ticker="PETR4",
+                asset_type="ACAO",
+                last_price=25.50,
+                price_rows=1,
+            )
+        ]
         
         asset_result = MagicMock()
         asset_result.scalar_one_or_none = MagicMock(return_value=None)
         
-        db.execute = AsyncMock(side_effect=[portfolio_result, existing_tx_result, asset_result])
+        db.execute = AsyncMock(
+            side_effect=[portfolio_result, existing_tx_result, coverage_result, asset_result]
+        )
         db.commit = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
@@ -297,6 +432,160 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         assert result["success"] is True
         assert result["imported_count"] == 1
+
+    async def test_import_uses_canonical_crypto_ticker_aliases(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        existing_tx_result = MagicMock()
+        existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(side_effect=[portfolio_result, existing_tx_result])
+        db.commit = AsyncMock()
+
+        with (
+            patch(
+                "app.services.csv_import_service.add_transaction_record",
+                new_callable=AsyncMock,
+            ) as add_record,
+            patch(
+                "app.services.csv_import_service.require_financially_certified_crypto_asset",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.csv_import_service.invalidate_portfolio_cache",
+                new_callable=AsyncMock,
+            ),
+        ):
+            add_record.return_value = Transaction()
+            result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is True
+        assert result["imported_count"] == 1
+        payload = add_record.await_args.kwargs["payload"]
+        assert payload.ticker == "BTC"
+        assert result["rows"][0]["ticker"] == "BTC"
+
+    async def test_dry_run_surfaces_non_certified_crypto_before_import(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        existing_tx_result = MagicMock()
+        existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        crypto_asset = Asset(
+            id=10,
+            ticker="BTC",
+            asset_type=AssetType.CRIPTO.value,
+            provider="brapi",
+            provider_status="ACTIVE",
+        )
+        crypto_asset_result = MagicMock()
+        crypto_asset_result.scalar_one_or_none = MagicMock(return_value=crypto_asset)
+
+        membership_result = MagicMock()
+        membership_result.all = MagicMock(
+            return_value=[(CRYPTO_TOP100_UNIVERSE_KEY, "coingecko")]
+        )
+
+        db.execute = AsyncMock(
+            side_effect=[
+                portfolio_result,
+                existing_tx_result,
+                crypto_asset_result,
+                membership_result,
+            ]
+        )
+
+        result = await csv_import_service.import_transactions_csv(
+            db=db,
+            portfolio_id=1,
+            user_id=1,
+            file=MagicMock(read=AsyncMock(return_value=content.encode("utf-8"))),
+            dry_run=True,
+        )
+
+        assert result["success"] is False
+        assert result["imported_count"] == 0
+        assert result["error_count"] == 1
+        assert result["rows"][0]["status"] == "error"
+        assert "histórico financeiro não certificado" in result["rows"][0]["errors"][0]
+
+    async def test_import_rolls_back_when_later_canonical_writer_row_fails(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,ok
+UNKNOWN,CRIPTO,buy,1,10,2024-01-16,0,BRL,erro"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        first_duplicate_check = MagicMock()
+        first_duplicate_check.scalar_one_or_none = MagicMock(return_value=None)
+        second_duplicate_check = MagicMock()
+        second_duplicate_check.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(
+            side_effect=[
+                portfolio_result,
+                first_duplicate_check,
+                second_duplicate_check,
+            ]
+        )
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        with (
+            patch(
+                "app.services.csv_import_service.add_transaction_record",
+                new_callable=AsyncMock,
+            ) as add_record,
+            patch(
+                "app.services.csv_import_service._validate_writer_preflight",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.csv_import_service.invalidate_portfolio_cache",
+                new_callable=AsyncMock,
+            ) as invalidate,
+        ):
+            add_record.side_effect = [
+                Transaction(),
+                TransactionWriteError("cripto invalida"),
+            ]
+            result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is False
+        assert result["imported_count"] == 0
+        assert result["error_count"] == 1
+        assert add_record.await_count == 2
+        assert result["rows"][0]["status"] == "skipped"
+        assert result["rows"][0]["warnings"] == [
+            "transaction rolled back because batch has errors"
+        ]
+        db.rollback.assert_awaited_once()
+        db.commit.assert_not_awaited()
+        invalidate.assert_not_awaited()
 
     async def test_import_skips_duplicate_transaction_without_reinserting(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes

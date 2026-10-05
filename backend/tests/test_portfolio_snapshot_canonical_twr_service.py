@@ -1,0 +1,366 @@
+from datetime import date
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from app.models.transaction import OperationType
+from app.services import portfolio_snapshot_canonical_twr_service as service
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
+from app.services.fixed_income_valuation_service import IncompleteBenchmarkCoverageError
+
+
+class _Scalars:
+    def all(self):
+        return [
+            SimpleNamespace(
+                ticker="PETR4",
+                asset_type="ACAO",
+                operation=OperationType.buy,
+                quantity=1,
+                price=10,
+                fees=0,
+                date=date(2026, 9, 7),
+                fx_rate=None,
+                notes=None,
+            )
+        ]
+
+
+class _Result:
+    def scalars(self):
+        return _Scalars()
+
+
+class _FixedToday:
+    @classmethod
+    def today(cls):
+        return date(2026, 9, 9)
+
+
+@pytest.mark.asyncio
+async def test_days_back_preserves_same_twr_chain_as_full_rebuild(monkeypatch):
+    transaction = SimpleNamespace(
+        ticker="PETR4",
+        asset_type="ACAO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=10,
+        fees=0,
+        date=date(2026, 9, 1),
+        fx_rate=None,
+        notes=None,
+    )
+
+    class HistoricalScalars:
+        def all(self):
+            return [transaction]
+
+    class HistoricalResult:
+        def scalars(self):
+            return HistoricalScalars()
+
+    market_values = {
+        date(2026, 9, 1): Decimal("10.00"),
+        date(2026, 9, 2): Decimal("11.00"),
+        date(2026, 9, 3): Decimal("12.00"),
+        date(2026, 9, 4): Decimal("12.00"),
+        date(2026, 9, 5): Decimal("12.00"),
+        date(2026, 9, 6): Decimal("12.00"),
+        date(2026, 9, 7): Decimal("12.00"),
+        date(2026, 9, 8): Decimal("12.00"),
+        date(2026, 9, 9): Decimal("12.00"),
+    }
+
+    async def valuation(_db, _portfolio_id, snapshot_date, **_kwargs):
+        value = market_values[snapshot_date]
+        return {
+            "market_value": value,
+            "cost_basis": Decimal("10.00"),
+            "invested_total": Decimal("10.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": value - Decimal("10.00"),
+            "total_pnl": value - Decimal("10.00"),
+            "return_pct": Decimal("0.0000"),
+        }
+
+    async def run(days_back):
+        persisted = {}
+
+        async def capture_upsert(_db, _portfolio_id, snapshot_date, values):
+            persisted[snapshot_date] = dict(values)
+
+        monkeypatch.setattr(
+            service,
+            "load_portfolio_dividend_entitlements",
+            AsyncMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            service,
+            "calculate_canonical_portfolio_totals",
+            valuation,
+        )
+        monkeypatch.setattr(
+            service,
+            "has_partial_prices_silent",
+            AsyncMock(return_value=False),
+        )
+        monkeypatch.setattr(
+            service,
+            "upsert_enriched_snapshot",
+            capture_upsert,
+        )
+
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=HistoricalResult())
+        db.commit = AsyncMock()
+
+        count = await service.backfill_canonical_snapshots_with_returns(
+            db,
+            portfolio_id=13,
+            days_back=days_back,
+            end_date=date(2026, 9, 9),
+        )
+
+        return count, persisted
+
+    full_count, full = await run(None)
+    bounded_count, bounded = await run(1)
+
+    assert full_count == bounded_count
+    assert set(full) == set(bounded)
+
+    old_bounded_start = date(2026, 9, 8)
+
+    assert date(2026, 9, 2) < old_bounded_start
+    assert full[date(2026, 9, 2)]["daily_return_pct"] != Decimal("0")
+
+    for snapshot_date in full:
+        assert (
+            bounded[snapshot_date]["market_value"]
+            == full[snapshot_date]["market_value"]
+        )
+        assert (
+            bounded[snapshot_date]["daily_return_pct"]
+            == full[snapshot_date]["daily_return_pct"]
+        )
+        assert (
+            bounded[snapshot_date]["accumulated_return_pct"]
+            == full[snapshot_date]["accumulated_return_pct"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
+    persisted_values = []
+
+    async def _capture_upsert(_db, _portfolio_id, _snapshot_date, values):
+        persisted_values.append(values)
+
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        service,
+        "calculate_canonical_portfolio_totals",
+        AsyncMock(
+            return_value={
+                "market_value": Decimal("10.00"),
+                "cost_basis": Decimal("10.00"),
+                "invested_total": Decimal("10.00"),
+                "realized_pnl": Decimal("0.00"),
+                "unrealized_pnl": Decimal("0.00"),
+                "total_pnl": Decimal("0.00"),
+                "return_pct": Decimal("0.0000"),
+                "market_value_by_class": {"ACAO": Decimal("10.00")},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "date", _FixedToday)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(
+        db,
+        portfolio_id=13,
+    )
+
+    assert count == 3
+    assert persisted_values
+    assert "market_value_by_class" not in persisted_values[0]
+    assert set(persisted_values[0]).issubset(service._SNAPSHOT_COLUMNS)
+
+
+@pytest.mark.asyncio
+async def test_canonical_twr_keeps_corporate_action_cash_flow_out_of_snapshot_math(
+    monkeypatch,
+):
+    persisted_values = {}
+
+    async def _capture_upsert(_db, _portfolio_id, snapshot_date, values):
+        persisted_values[snapshot_date] = dict(values)
+
+    async def valuation(_db, _portfolio_id, snapshot_date, **_kwargs):
+        return {
+            "market_value": Decimal("10.00"),
+            "cost_basis": Decimal("10.00"),
+            "invested_total": Decimal("10.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": Decimal("0.00"),
+            "total_pnl": Decimal("0.00"),
+            "return_pct": Decimal("0.0000"),
+            "corporate_action_cash_flow_total": Decimal("0.40"),
+            "market_value_by_class": {"ACAO": Decimal("10.00")},
+        }
+
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(service, "calculate_canonical_portfolio_totals", valuation)
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "date", _FixedToday)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(
+        db,
+        portfolio_id=13,
+    )
+
+    assert count == 3
+    second_day = persisted_values[date(2026, 9, 8)]
+    assert "corporate_action_cash_flow_total" not in second_day
+    assert second_day["net_external_flow"] == Decimal("0.00")
+    assert second_day["dividends_day"] == Decimal("0")
+    assert second_day["daily_return_pct"] == Decimal("0.000000")
+
+
+@pytest.mark.asyncio
+async def test_canonical_twr_stops_at_dedicated_coverage_boundary(monkeypatch):
+    persisted_dates = []
+
+    async def _capture_upsert(_db, _portfolio_id, snapshot_date, _values):
+        persisted_dates.append(snapshot_date)
+
+    totals = {
+        "market_value": Decimal("10.00"),
+        "cost_basis": Decimal("10.00"),
+        "invested_total": Decimal("10.00"),
+        "realized_pnl": Decimal("0.00"),
+        "unrealized_pnl": Decimal("0.00"),
+        "total_pnl": Decimal("0.00"),
+        "return_pct": Decimal("0.0000"),
+    }
+    valuation = AsyncMock(
+        side_effect=[
+            totals,
+            IncompleteBenchmarkCoverageError(
+                "CDI",
+                date(2026, 9, 7),
+                date(2026, 9, 8),
+                BenchmarkCoverageStatus.PARTIAL,
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(service, "calculate_canonical_portfolio_totals", valuation)
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "date", _FixedToday)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(db, 13)
+
+    assert count == 1
+    assert persisted_dates == [date(2026, 9, 7)]
+    assert valuation.await_count == 2
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_canonical_twr_skips_persisted_price_gap_and_continues(monkeypatch):
+    persisted_dates = []
+
+    async def _capture_upsert(_db, _portfolio_id, snapshot_date, _values):
+        persisted_dates.append(snapshot_date)
+
+    totals = {
+        "market_value": Decimal("10.00"),
+        "cost_basis": Decimal("10.00"),
+        "invested_total": Decimal("10.00"),
+        "realized_pnl": Decimal("0.00"),
+        "unrealized_pnl": Decimal("0.00"),
+        "total_pnl": Decimal("0.00"),
+        "return_pct": Decimal("0.0000"),
+    }
+    valuation = AsyncMock(
+        side_effect=[
+            totals,
+            RuntimeError("cobertura persistida de preço indisponível para: RBRF11"),
+            totals,
+        ]
+    )
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(service, "calculate_canonical_portfolio_totals", valuation)
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "date", _FixedToday)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(db, 13)
+
+    assert count == 2
+    assert persisted_dates == [date(2026, 9, 7), date(2026, 9, 9)]
+    assert valuation.await_count == 3
+    db.commit.assert_awaited_once()
+
+
+def test_persisted_price_gap_detection_accepts_encoded_and_unicode_messages():
+    assert service._is_persisted_price_gap(
+        RuntimeError("cobertura persistida de preÃ§o indisponÃ­vel para: RBRF11")
+    )
+    assert service._is_persisted_price_gap(
+        RuntimeError("cobertura persistida de preço indisponível para: NU")
+    )
+    assert not service._is_persisted_price_gap(RuntimeError("erro inesperado"))

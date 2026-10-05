@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 01/08/2026
+> Última atualização: 08/09/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -77,6 +77,10 @@ Aprovar somente quando:
 - `writes_executed=0`;
 - todas as tabelas possuem classificação e justificativa.
 
+No baseline de 08/09/2026, `rate_history_coverages` pertence ao grupo
+`rebuildable`, pois guarda cobertura derivada do seed idempotente de
+`rate_history`.
+
 ## Backup e restore isolado
 
 ```powershell
@@ -84,6 +88,7 @@ $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
 $CommitSha = (git rev-parse stable-15jun).Trim()
 
 docker compose exec `
+    -e "APP_COMMIT_SHA=$CommitSha" `
     -e "PRE_PROD_BRANCH=stable-15jun" `
     -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
     backend python -m app.cli.pre_prod_backup --run-id $RunId

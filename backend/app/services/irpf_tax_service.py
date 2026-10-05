@@ -6,6 +6,7 @@ serviço canônico ``irpf_bens_direitos_service``.
 
 from collections import defaultdict
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,14 @@ ISENCAO_ACOES_MENSAL = 20_000.0
 
 _ACAO_TYPES = {"ACAO", "STOCK", "BDR"}
 _INTL_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
+
+
+def _decimal(value) -> Decimal:
+    return Decimal(str(value or 0))
+
+
+def _money_float(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _detect_day_trades(txs: list) -> set[tuple[date, str]]:
@@ -99,21 +108,22 @@ async def calc_ganhos_capital(
         )
         asset_type = (tx.asset_type or "").upper()
         currency = getattr(tx, "currency", "BRL") or "BRL"
-        price_brl = tx.price
+        price_brl = _decimal(tx.price)
         if currency != "BRL" and asset_type in _INTL_TYPES:
-            price_brl = tx.price * await _get_usd_brl_rate(db, tx.date)
-        fees = getattr(tx, "fees", 0.0) or 0.0
-        cost = price_brl * tx.quantity + fees
+            price_brl *= _decimal(await _get_usd_brl_rate(db, tx.date))
+        quantity = _decimal(tx.quantity)
+        fees = _decimal(getattr(tx, "fees", 0))
+        cost = price_brl * quantity + fees
         position = average_costs.setdefault(
             ticker,
-            {"qty": 0.0, "cost": 0.0, "asset_type": asset_type},
+            {"qty": Decimal("0"), "cost": Decimal("0"), "asset_type": asset_type},
         )
         if operation == "buy":
-            position["qty"] += tx.quantity
+            position["qty"] += quantity
             position["cost"] += cost
         elif operation == "sell" and position["qty"] > 0:
             average = position["cost"] / position["qty"]
-            position["qty"] = max(0.0, position["qty"] - tx.quantity)
+            position["qty"] = max(Decimal("0"), position["qty"] - quantity)
             position["cost"] = position["qty"] * average
 
     sales_by_month: dict[str, list] = defaultdict(list)
@@ -126,38 +136,39 @@ async def calc_ganhos_capital(
             else str(tx.operation)
         )
         currency = getattr(tx, "currency", "BRL") or "BRL"
-        price_brl = tx.price
+        price_brl = _decimal(tx.price)
         if currency != "BRL" and asset_type in _INTL_TYPES:
-            price_brl = tx.price * await _get_usd_brl_rate(db, tx.date)
-        fees = getattr(tx, "fees", 0.0) or 0.0
-        cost = price_brl * tx.quantity + fees
+            price_brl *= _decimal(await _get_usd_brl_rate(db, tx.date))
+        quantity = _decimal(tx.quantity)
+        fees = _decimal(getattr(tx, "fees", 0))
+        cost = price_brl * quantity + fees
 
         position = average_costs.setdefault(
             ticker,
-            {"qty": 0.0, "cost": 0.0, "asset_type": asset_type},
+            {"qty": Decimal("0"), "cost": Decimal("0"), "asset_type": asset_type},
         )
         if operation == "buy":
-            position["qty"] += tx.quantity
+            position["qty"] += quantity
             position["cost"] += cost
         elif operation == "sell" and position["qty"] > 0:
             average = position["cost"] / position["qty"]
-            acquisition_cost = average * tx.quantity
-            profit = price_brl * tx.quantity - acquisition_cost - fees
+            acquisition_cost = average * quantity
+            profit = price_brl * quantity - acquisition_cost - fees
             month = tx.date.strftime("%Y-%m")
             sales_by_month[month].append(
                 {
                     "ticker": ticker,
                     "asset_type": asset_type,
                     "data": str(tx.date),
-                    "quantidade": tx.quantity,
-                    "preco_venda": round(price_brl, 2),
-                    "custo_aquisicao": round(average, 2),
-                    "lucro_bruto": round(profit, 2),
+                    "quantidade": float(quantity),
+                    "preco_venda": _money_float(price_brl),
+                    "custo_aquisicao": _money_float(average),
+                    "lucro_bruto": _money_float(profit),
                     "is_day_trade": (tx.date, ticker) in day_trade_keys,
-                    "total_venda_brl": round(price_brl * tx.quantity, 2),
+                    "total_venda_brl": _money_float(price_brl * quantity),
                 }
             )
-            position["qty"] = max(0.0, position["qty"] - tx.quantity)
+            position["qty"] = max(Decimal("0"), position["qty"] - quantity)
             position["cost"] = position["qty"] * average
 
     accumulated_loss = 0.0

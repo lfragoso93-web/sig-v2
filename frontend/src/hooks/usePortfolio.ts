@@ -17,6 +17,7 @@ export interface PositionItem {
   allocation_pct: number
   logo_url?: string | null
   quote_updated_at?: string | null
+  proventos?: number
 }
 
 export interface PositionGroup {

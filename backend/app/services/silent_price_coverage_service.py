@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
-from app.services.portfolio_snapshot_twr_service import build_open_quote_requirements
+from app.services.portfolio_snapshot_twr_components import build_open_quote_requirements
 
 
 async def has_partial_prices_silent(

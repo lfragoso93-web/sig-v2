@@ -231,10 +231,10 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
     try:
         from app.core.database import AsyncSessionLocal
         from app.models.portfolio import Portfolio
-        from app.services.portfolio_snapshot_service import (
-            backfill_snapshots,
-            invalidate_snapshots_from,
+        from app.services.portfolio_snapshot_canonical_twr_service import (
+            backfill_canonical_snapshots_with_returns,
         )
+        from app.services.portfolio_snapshot_service import invalidate_snapshots_from
         from sqlalchemy import select
         from datetime import date
 
@@ -264,7 +264,7 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
                             pid, deleted,
                         )
 
-                    count = await backfill_snapshots(db, pid)
+                    count = await backfill_canonical_snapshots_with_returns(db, pid)
                     total_snapshots += count
                     logger.info(
                         "[snapshot_backfill_bg] portfolio=%s: %d snapshots gerados",

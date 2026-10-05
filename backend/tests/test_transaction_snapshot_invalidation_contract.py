@@ -58,5 +58,7 @@ def test_snapshot_backfill_invalidates_before_rebuild() -> None:
     calls = _call_order(_function("_run_snapshot_backfill"))
 
     assert "invalidate_snapshots_from" in calls
-    assert "backfill_snapshots" in calls
-    assert calls.index("invalidate_snapshots_from") < calls.index("backfill_snapshots")
+    assert "backfill_canonical_snapshots_with_returns" in calls
+    assert calls.index("invalidate_snapshots_from") < calls.index(
+        "backfill_canonical_snapshots_with_returns"
+    )

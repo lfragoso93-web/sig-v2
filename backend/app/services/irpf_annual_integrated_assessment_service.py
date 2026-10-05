@@ -50,6 +50,8 @@ from app.services.irpf_withholding_policy import (
     assess_common_withholding,
     assess_day_trade_withholding,
 )
+from app.services.irpf_tax_policy import resolve_tax_policy
+from app.services.portfolio_service import normalize_type
 from app.services.realized_pnl_projection_reader import load_realized_disposals
 
 
@@ -87,6 +89,14 @@ def _annual_bounds(year: int) -> tuple[date, date]:
     if year < 1900 or year > 9999:
         raise ValueError("ano fiscal inválido")
     return date(year, 1, 1), date(year, 12, 31)
+
+
+def _has_supported_tax_policy(asset_type: object) -> bool:
+    try:
+        resolve_tax_policy(normalize_type(asset_type))
+    except ValueError:
+        return False
+    return True
 
 
 def _compensate_common_withholding(
@@ -171,7 +181,11 @@ async def assess_annual_integrated_operations(
         )
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
-    transactions = tx_result.scalars().all()
+    transactions = [
+        tx
+        for tx in tx_result.scalars().all()
+        if _has_supported_tax_policy(tx.asset_type)
+    ]
     operations = adapt_ordered_transactions(transactions)
     day_trade_projection = project_day_trades_by_month(operations)
     day_trade_monthly = assess_day_trade_months(day_trade_projection)
@@ -187,7 +201,15 @@ async def assess_annual_integrated_operations(
         start_date=start_date,
         end_date=end_date,
     )
-    swing_disposals = project_swing_remainder_disposals(disposals, matches)
+    supported_disposals = tuple(
+        disposal
+        for disposal in disposals
+        if _has_supported_tax_policy(disposal.asset_type)
+    )
+    swing_disposals = project_swing_remainder_disposals(
+        supported_disposals,
+        matches,
+    )
     swing_entries = adapt_realized_disposals(swing_disposals)
     swing_groups = group_common_entries_by_month(swing_entries)
     swing_assessments = assess_common_monthly_groups(swing_groups)

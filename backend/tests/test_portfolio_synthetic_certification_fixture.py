@@ -1,7 +1,6 @@
 import csv
 import json
 from collections import defaultdict
-from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from io import StringIO
 from pathlib import Path
@@ -18,6 +17,7 @@ from app.services.rentabilidade_reconciliation_service import (
 )
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
+    PRICE_HISTORY_REQUIRED_TYPES,
     import_csv_transactions,
     import_transactions_csv,
     parse_csv_content,
@@ -33,6 +33,7 @@ FIXTURE_PATH = (
 )
 CENT = Decimal("0.01")
 QTY = Decimal("0.00000001")
+_TREASURY_SYMBOL = "tesouro-selic-2029"
 
 
 class FakeUpload:
@@ -41,12 +42,6 @@ class FakeUpload:
 
     async def read(self) -> bytes:
         return self._content
-
-
-@dataclass
-class Lot:
-    quantity: Decimal
-    unit_cost: Decimal
 
 
 def _money(value: Decimal) -> Decimal:
@@ -69,6 +64,29 @@ def _to_csv(transactions: list[dict[str, str]]) -> str:
     return output.getvalue()
 
 
+def _price_coverage_result(fixture: dict) -> MagicMock:
+    seen: set[tuple[str, str]] = set()
+    rows = []
+    for transaction in fixture["transactions"]:
+        ticker = transaction["ticker"].strip().upper()
+        asset_type = transaction["asset_type"].strip().upper()
+        key = (ticker, asset_type)
+        if asset_type not in PRICE_HISTORY_REQUIRED_TYPES or key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            SimpleNamespace(
+                ticker=ticker,
+                asset_type=asset_type,
+                last_price=Decimal(fixture["market_prices"]["prices"][ticker]),
+                price_rows=1,
+            )
+        )
+    result = MagicMock()
+    result.all.return_value = rows
+    return result
+
+
 def _expected_classes(fixture: dict) -> dict[str, dict[str, str]]:
     ticker_classes = {
         row["ticker"]: row["asset_type"]
@@ -84,7 +102,9 @@ def _reconcile(
     transactions: list[dict[str, str]],
     prices: dict[str, str],
 ) -> dict:
-    lots: dict[str, list[Lot]] = defaultdict(list)
+    positions: dict[str, tuple[Decimal, Decimal]] = defaultdict(
+        lambda: (Decimal("0"), Decimal("0"))
+    )
     realized: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
 
     for tx in sorted(transactions, key=lambda row: row["date"]):
@@ -94,36 +114,28 @@ def _reconcile(
         fees = Decimal(tx["fees"])
 
         if tx["operation"] == "buy":
-            lots[ticker].append(
-                Lot(
-                    quantity=quantity,
-                    unit_cost=(quantity * price + fees) / quantity,
-                )
+            held_quantity, held_cost = positions[ticker]
+            positions[ticker] = (
+                held_quantity + quantity,
+                held_cost + quantity * price + fees,
             )
             continue
 
-        remaining_to_sell = quantity
+        held_quantity, held_cost = positions[ticker]
+        average_cost = held_cost / held_quantity if held_quantity > 0 else Decimal("0")
         proceeds = quantity * price - fees
-        cost_released = Decimal("0")
-
-        while remaining_to_sell > 0:
-            current_lot = lots[ticker][0]
-            consumed = min(current_lot.quantity, remaining_to_sell)
-            cost_released += consumed * current_lot.unit_cost
-            current_lot.quantity -= consumed
-            remaining_to_sell -= consumed
-            if current_lot.quantity == 0:
-                lots[ticker].pop(0)
-
+        cost_released = quantity * average_cost
         realized[ticker] += proceeds - cost_released
+        remaining_quantity = held_quantity - quantity
+        positions[ticker] = (
+            max(remaining_quantity, Decimal("0")),
+            max(held_cost - cost_released, Decimal("0")),
+        )
 
     holdings = {}
-    for ticker, ticker_lots in lots.items():
-        quantity = sum((lot.quantity for lot in ticker_lots), Decimal("0"))
-        remaining_cost = sum(
-            (lot.quantity * lot.unit_cost for lot in ticker_lots),
-            Decimal("0"),
-        )
+    for ticker, (quantity, remaining_cost) in positions.items():
+        if quantity <= 0:
+            continue
         market_value = quantity * Decimal(prices[ticker])
         holdings[ticker] = {
             "quantity": f"{_quantity(quantity):.8f}",
@@ -207,11 +219,15 @@ def test_portfolio_synthetic_fixture_covers_required_cases() -> None:
 async def test_portfolio_synthetic_fixture_is_valid_csv_contract() -> None:
     fixture = _load_fixture()
 
-    rows, global_errors = await parse_csv_content(
-        _to_csv(fixture["transactions"]),
-        portfolio_id=303,
-        db=AsyncSession,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        rows, global_errors = await parse_csv_content(
+            _to_csv(fixture["transactions"]),
+            portfolio_id=303,
+            db=AsyncMock(spec=AsyncSession),
+        )
 
     assert global_errors == []
     assert len(rows) == len(fixture["transactions"])
@@ -233,15 +249,26 @@ async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
         duplicate_result = MagicMock()
         duplicate_result.scalar_one_or_none.return_value = None
         execute_results.append(duplicate_result)
+    execute_results.append(_price_coverage_result(fixture))
     db.execute = AsyncMock(side_effect=execute_results)
 
-    result = await import_transactions_csv(
-        db=db,
-        portfolio_id=303,
-        user_id=303,
-        file=FakeUpload(_to_csv(fixture["transactions"]).encode("utf-8")),
-        dry_run=True,
-    )
+    with (
+        patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await import_transactions_csv(
+            db=db,
+            portfolio_id=303,
+            user_id=303,
+            file=FakeUpload(_to_csv(fixture["transactions"]).encode("utf-8")),
+            dry_run=True,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == 0
@@ -265,34 +292,73 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     assets_seen: set[tuple[str, str]] = set()
     transactions = fixture["transactions"]
     execute_results = [portfolio_result]
+    prior_transactions: list[dict[str, str]] = []
 
     for _transaction in transactions:
         duplicate_result = MagicMock()
         duplicate_result.scalar_one_or_none.return_value = None
         execute_results.append(duplicate_result)
 
+    execute_results.append(_price_coverage_result(fixture))
+
     for transaction in transactions:
+        if transaction["operation"] == "sell":
+            quantity_result = MagicMock()
+            quantity_result.all.return_value = [
+                (row["operation"], float(row["quantity"]))
+                for row in prior_transactions
+                if row["ticker"] == transaction["ticker"]
+                and row["asset_type"] == transaction["asset_type"]
+            ]
+            execute_results.append(quantity_result)
+
         asset_key = (transaction["ticker"], transaction["asset_type"])
-        asset_result = MagicMock()
-        asset_result.scalar_one_or_none.return_value = (
-            SimpleNamespace(ticker=transaction["ticker"])
-            if asset_key in assets_seen
-            else None
-        )
-        execute_results.append(asset_result)
-        assets_seen.add(asset_key)
+        if transaction["asset_type"] != "CRIPTO":
+            asset_result = MagicMock()
+            asset_result.scalar_one_or_none.return_value = (
+                SimpleNamespace(ticker=transaction["ticker"])
+                if asset_key in assets_seen
+                else None
+            )
+            execute_results.append(asset_result)
+            assets_seen.add(asset_key)
+
+        prior_transactions.append(transaction)
 
     db.execute = AsyncMock(side_effect=execute_results)
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(transactions),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with (
+        patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.transaction_write_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.transaction_write_service."
+            "require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.csv_import_service.invalidate_portfolio_cache",
+            new=AsyncMock(),
+        ) as invalidate_cache,
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(transactions),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == len(transactions)
@@ -300,9 +366,10 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     assert result["error_count"] == 0
     assert all(row["status"] == "imported" for row in result["rows"])
     assert db.add.call_count == len(transactions) + len(assets_seen)
-    assert db.flush.await_count == len(assets_seen)
+    assert db.flush.await_count == len(transactions) + len(assets_seen)
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
+    invalidate_cache.assert_awaited_once_with(303)
 
 
 @pytest.mark.asyncio
@@ -325,12 +392,16 @@ async def test_synthetic_fixture_repeat_import_skips_duplicates() -> None:
     db.add = MagicMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(fixture["transactions"]),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(fixture["transactions"]),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == 0
@@ -361,12 +432,16 @@ async def test_synthetic_fixture_invalid_row_blocks_persistence() -> None:
     db.add = MagicMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(transactions),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(transactions),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is False
     assert result["imported_count"] == 0
@@ -464,8 +539,7 @@ async def test_synthetic_fixture_surfaces_partial_twr_by_design() -> None:
             "cost_basis": float(row["remaining_cost"]),
             "dedicated_history_required": asset_type
             in {"TESOURO_DIRETO", "RENDA_FIXA"},
-            "twr_available": asset_type
-            not in {"TESOURO_DIRETO", "RENDA_FIXA"},
+            "twr_available": asset_type != "TESOURO_DIRETO",
         }
         for asset_type, row in _expected_classes(fixture).items()
     ]
@@ -509,6 +583,5 @@ async def test_synthetic_fixture_surfaces_partial_twr_by_design() -> None:
     assert result["is_reconciled"] is True
     assert result["unsupported_class_twr"] == [
         "TESOURO_DIRETO",
-        "RENDA_FIXA",
     ]
     assert result["twr_comparability_status"] == "partial_by_design"

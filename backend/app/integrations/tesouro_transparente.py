@@ -167,18 +167,37 @@ def _parse_decimal(value: str) -> float | None:
     return float(parsed) if parsed > 0 else None
 
 
+def _rate_from_row(row: dict[str, str]) -> float | None:
+    for field in (
+        "Taxa Compra Manha",
+        "Taxa Compra Manhã",
+        "Taxa Base Manha",
+        "Taxa Base Manhã",
+        "Taxa Venda Manha",
+        "Taxa Venda Manhã",
+        "Taxa Compra Tarde",
+        "Taxa Base Tarde",
+        "Taxa Venda Tarde",
+        "Taxa",
+    ):
+        rate = _parse_decimal(_first(row, field))
+        if rate is not None:
+            return rate
+    return None
+
+
 def parse_history_csv(
     text: str,
     symbols: Iterable[str] | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-) -> dict[str, list[tuple[datetime, float]]]:
+) -> dict[str, list[tuple[datetime, float, float | None]]]:
     """Converte um recurso CSV oficial em séries diárias por símbolo canônico."""
     sample = text[:8192]
     delimiter = ";" if sample.count(";") >= sample.count(",") else ","
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     selected = {str(symbol).strip().lower() for symbol in symbols or [] if symbol}
-    output: dict[str, dict[datetime, float]] = {}
+    output: dict[str, dict[datetime, tuple[float, float | None]]] = {}
 
     for row in reader:
         title = _first(row, "Tipo Titulo", "Tipo Título", "Titulo", "Título", "Nome")
@@ -218,22 +237,75 @@ def parse_history_csv(
                 break
         if price is None:
             continue
-        output.setdefault(symbol, {})[dt] = price
+        output.setdefault(symbol, {})[dt] = (price, _rate_from_row(row))
 
     return {
-        symbol: sorted(rows.items(), key=lambda item: item[0])
+        symbol: [
+            (timestamp, price, rate)
+            for timestamp, (price, rate) in sorted(rows.items(), key=lambda item: item[0])
+        ]
         for symbol, rows in output.items()
     }
+
+
+def parse_quote_csv(
+    text: str,
+    symbol: str,
+    target_date: date,
+) -> tuple[datetime, float, float | None] | None:
+    """Retorna PU e taxa oficial de um titulo na data alvo, quando disponivel."""
+    sample = text[:8192]
+    delimiter = ";" if sample.count(";") >= sample.count(",") else ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    wanted = str(symbol or "").strip().lower()
+    best: tuple[datetime, float, float | None] | None = None
+
+    for row in reader:
+        title = _first(row, "Tipo Titulo", "Tipo Título", "Titulo", "Título", "Nome")
+        maturity = _first(row, "Data Vencimento", "Vencimento")
+        row_symbol = _canonical_symbol(title, maturity)
+        if not row_symbol or row_symbol.lower() != wanted:
+            continue
+
+        dt = _parse_date(_first(row, "Data Base", "Data", "Data Referencia", "Data Referência"))
+        if dt is None or dt.date() > target_date:
+            continue
+
+        price = None
+        for field in (
+            "PU Compra Manha",
+            "PU Compra Manhã",
+            "PU Base Manha",
+            "PU Base Manhã",
+            "PU Venda Manha",
+            "PU Venda Manhã",
+            "PU Compra Tarde",
+            "PU Base Tarde",
+            "PU Venda Tarde",
+            "Preco Unitario",
+            "Preço Unitário",
+        ):
+            price = _parse_decimal(_first(row, field))
+            if price is not None:
+                break
+        if price is None:
+            continue
+
+        candidate = (dt, price, _rate_from_row(row))
+        if best is None or candidate[0] > best[0]:
+            best = candidate
+
+    return best
 
 
 async def fetch_official_treasury_history(
     symbols: Iterable[str],
     start_date: date,
     end_date: date,
-) -> dict[str, list[tuple[datetime, float]]]:
+) -> dict[str, list[tuple[datetime, float, float | None]]]:
     """Busca histórico oficial do Tesouro Transparente para os símbolos pedidos."""
     selected = sorted({str(symbol).strip().lower() for symbol in symbols if symbol})
-    output: dict[str, list[tuple[datetime, float]]] = {symbol: [] for symbol in selected}
+    output: dict[str, list[tuple[datetime, float, float | None]]] = {symbol: [] for symbol in selected}
     if not selected:
         return output
 
@@ -266,3 +338,30 @@ async def fetch_official_treasury_history(
         covered,
     )
     return output
+
+
+async def fetch_official_treasury_quote(
+    symbol: str,
+    target_date: date,
+) -> tuple[datetime, float, float | None] | None:
+    """Busca PU e taxa oficial em ou antes da data alvo para um titulo."""
+    wanted = str(symbol or "").strip().lower()
+    if not wanted:
+        return None
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        resources = await discover_csv_resources(client)
+        best: tuple[datetime, float, float | None] | None = None
+        for url in resources:
+            try:
+                response = await client.get(url, timeout=90.0)
+                response.raise_for_status()
+                parsed = parse_quote_csv(response.text, wanted, target_date)
+            except Exception as exc:
+                logger.info("[tesouro_transparente] falha quote recurso=%s erro=%s", url, exc)
+                continue
+            if parsed is not None and (best is None or parsed[0] > best[0]):
+                best = parsed
+                if parsed[0].date() == target_date:
+                    break
+    return best

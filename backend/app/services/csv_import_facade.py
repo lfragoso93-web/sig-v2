@@ -12,6 +12,8 @@ from app.services.csv_import_service import (
     CSVImportError,
     _read_upload_text,
     _safe_float,
+    _validate_duplicate_transactions,
+    _validate_writer_preflight,
     import_csv_transactions,
     parse_csv_content,
 )
@@ -45,6 +47,10 @@ async def _build_dry_run_result(
         }
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        await _validate_duplicate_transactions(rows, portfolio_id, db)
+    if not global_errors:
+        await _validate_writer_preflight(rows, db)
     response_rows: list[dict[str, Any]] = []
     error_count = len(global_errors)
     skipped_count = 0

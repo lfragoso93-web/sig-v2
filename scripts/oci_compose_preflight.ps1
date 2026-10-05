@@ -50,10 +50,10 @@ if ($text -notmatch "(?m)^  cloudflared:") {
 }
 Ok "cloudflared service is present"
 
-if ($text -notmatch "(?ms)^  backend:.*?--workers\s*\n\s*-\s*""1""") {
-    Fail "backend worker count is not rendered as 1"
+if ($text -notmatch "(?ms)^  backend:.*?BACKEND_WORKERS:\s*""?1""?") {
+    Fail "backend worker environment is not rendered as 1"
 }
-Ok "backend worker count renders as 1"
+Ok "backend worker environment renders as 1"
 
 if ($text -match "CLOUDFLARE_TUNNEL_TOKEN=.*[A-Za-z0-9_-]{20}") {
     Fail "rendered config appears to include a real tunnel token"

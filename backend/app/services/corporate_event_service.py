@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import warnings
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
@@ -26,6 +25,7 @@ from app.services.corporate_action_engine import (
     NormalizedCorporateAction,
     normalize_brapi_corporate_actions,
     normalize_yahoo_splits,
+    source_payload_hash,
 )
 from app.services.dividend_history_seed_service import _yf_symbol
 
@@ -111,13 +111,7 @@ async def fetch_yahoo_splits(symbol: str) -> list[tuple[date, float]]:
 
 
 def _source_payload_hash(action: NormalizedCorporateAction) -> str:
-    payload = json.dumps(
-        action.raw_payload,
-        sort_keys=True,
-        ensure_ascii=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return source_payload_hash(action)
 
 
 async def sync_corporate_events_for_asset(
@@ -140,12 +134,27 @@ async def sync_corporate_events_for_asset(
 
     brapi_fetcher = brapi_fetcher or fetch_brapi_corporate_actions_payload
     yahoo_fetcher = yahoo_fetcher or fetch_yahoo_splits
-    brapi_payload = await brapi_fetcher(ticker)
-    yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
-    actions = (
-        *normalize_brapi_corporate_actions(ticker, brapi_payload),
-        *normalize_yahoo_splits(ticker, yahoo_rows),
-    )
+    try:
+        brapi_payload = await brapi_fetcher(ticker)
+    except CorporateActionCollectionError as exc:
+        logger.warning(
+            "[corporate_events] BRAPI indisponivel para %s; usando Yahoo como fallback: %s",
+            ticker,
+            exc,
+        )
+        yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
+        actions = tuple(
+            replace(
+                action,
+                raw_payload={
+                    **action.raw_payload,
+                    "provider_fallback": "brapi_unavailable",
+                },
+            )
+            for action in normalize_yahoo_splits(ticker, yahoo_rows)
+        )
+    else:
+        actions = normalize_brapi_corporate_actions(ticker, brapi_payload)
     if not actions:
         return []
 

@@ -1,9 +1,11 @@
 from datetime import date
 
+from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 from app.integrations.tesouro_transparente import (
     _canonical_symbol,
     _legacy_maturity_symbol,
     parse_history_csv,
+    parse_quote_csv,
 )
 
 
@@ -52,6 +54,21 @@ def test_commercial_year_rules_for_renda_and_educa():
     ) == "tesouro-educa-mais-2026"
 
 
+def test_common_treasury_text_resolves_to_full_canonical_symbols():
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO SELIC 2031")
+        == "tesouro-selic-01032031"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO PREFIXADO 2028")
+        == "tesouro-prefixado-01012028"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO IPCA+ 2035")
+        == "tesouro-ipca-15082035"
+    )
+
+
 def test_legacy_maturity_symbols_are_available_for_migration():
     assert _legacy_maturity_symbol(
         "Tesouro Renda+ Aposentadoria Extra", "15/12/2079"
@@ -78,3 +95,91 @@ Tesouro RendA+ Aposentadoria Extra;15/12/2079;15/07/2026;1.245,60
     assert list(parsed) == ["tesouro-selic-01032031"]
     assert len(parsed["tesouro-selic-01032031"]) == 1
     assert parsed["tesouro-selic-01032031"][0][1] == 15247.81
+
+
+def test_parse_quote_csv_returns_price_and_rate_at_or_before_target_date():
+    csv_text = """Tipo Titulo;Data Vencimento;Data Base;PU Compra Manha;Taxa Compra Manha
+Tesouro Selic;01/03/2031;14/07/2026;15.240,00;13,12
+Tesouro Selic;01/03/2031;15/07/2026;15.247,81;13,10
+"""
+
+    parsed = parse_quote_csv(
+        csv_text,
+        "tesouro-selic-01032031",
+        date(2026, 7, 16),
+    )
+
+    assert parsed is not None
+    assert parsed[0].date() == date(2026, 7, 15)
+    assert parsed[1] == 15247.81
+    assert parsed[2] == 13.10
+
+
+def test_canonical_treasury_symbol_preserves_specific_historical_prefixado_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01042006"
+        )
+        == "tesouro-prefixado-01042006"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01072006"
+        )
+        == "tesouro-prefixado-01072006"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01102006"
+        )
+        == "tesouro-prefixado-01102006"
+    )
+
+
+def test_canonical_treasury_symbol_preserves_specific_coupon_prefixado_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-com-juros-semestrais-01072010"
+        )
+        == "tesouro-prefixado-com-juros-semestrais-01072010"
+    )
+
+
+def test_canonical_treasury_symbol_preserves_specific_ipca_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-ipca-15052029"
+        )
+        == "tesouro-ipca-15052029"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-ipca-com-juros-semestrais-15052035"
+        )
+        == "tesouro-ipca-com-juros-semestrais-15052035"
+    )
+
+
+def test_canonical_treasury_symbol_keeps_commercial_name_heuristics():
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO PREFIXADO 2028")
+        == "tesouro-prefixado-01012028"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO SELIC 2031")
+        == "tesouro-selic-01032031"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO IPCA+ 2035")
+        == "tesouro-ipca-15082035"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "TESOURO RENDA+ APOSENTADORIA EXTRA 2030"
+        )
+        == "tesouro-renda-mais-2030"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO EDUCA+ 2026")
+        == "tesouro-educa-mais-2026"
+    )

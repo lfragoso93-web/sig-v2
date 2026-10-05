@@ -27,6 +27,7 @@ ALLOWED_DRIFT_TABLES = frozenset({"goals"})
 class DriftInspection:
     tables: frozenset[str]
     unknown_operations: tuple[str, ...]
+    operation_descriptions: tuple[str, ...] = ()
 
     @property
     def has_drift(self) -> bool:
@@ -48,11 +49,27 @@ def _operation_children(operation: Any) -> Iterable[Any]:
     return tuple(children)
 
 
+def _describe_leaf_operation(operation: Any, table_name: str | None) -> str:
+    parts = [type(operation).__name__]
+    if table_name:
+        parts.append(f"table={table_name}")
+    for attr in ("column_name", "index_name", "constraint_name"):
+        value = getattr(operation, attr, None)
+        if value:
+            parts.append(f"{attr}={value}")
+    column = getattr(operation, "column", None)
+    column_name = getattr(column, "name", None)
+    if column_name:
+        parts.append(f"column={column_name}")
+    return " ".join(parts)
+
+
 def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
     """Classifica operações de autogenerate por tabela, falhando fechado no desconhecido."""
 
     tables: set[str] = set()
     unknown_operations: list[str] = []
+    operation_descriptions: list[str] = []
 
     def visit(operation: Any, inherited_table: str | None = None) -> None:
         table_name = getattr(operation, "table_name", None) or inherited_table
@@ -66,6 +83,10 @@ def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
                 visit(child, str(table_name) if table_name else inherited_table)
             return
 
+        normalized_table = str(table_name) if table_name else None
+        operation_descriptions.append(
+            _describe_leaf_operation(operation, normalized_table)
+        )
         if not table_name:
             unknown_operations.append(type(operation).__name__)
 
@@ -75,6 +96,7 @@ def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
     return DriftInspection(
         tables=frozenset(tables),
         unknown_operations=tuple(unknown_operations),
+        operation_descriptions=tuple(operation_descriptions),
     )
 
 
@@ -113,6 +135,10 @@ def main() -> int:
         return 0
 
     print(f"Alembic metadata drift gate: BLOCKED; drift tables: {tables}.")
+    if inspection.operation_descriptions:
+        print("Autogenerate operations:")
+        for description in inspection.operation_descriptions:
+            print(f"- {description}")
     if inspection.unknown_operations:
         print(
             "Unclassified autogenerate operations: "

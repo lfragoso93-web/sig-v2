@@ -59,11 +59,11 @@ class RateHistory(Base):
     rate_annual: Optional[Decimal] = Column(
         Numeric(10, 4),
         nullable=True,
-        comment="Taxa anual em % a.a.",
+        comment="Taxa anual em % a.a. (ex: 10.5000)",
     )
 
     source: str = Column(
-        String(20),
+        String(32),
         nullable=False,
         default="BCB",
         comment="Fonte da observacao persistida; canonicamente BCB_SGS para benchmarks",

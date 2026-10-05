@@ -9,6 +9,7 @@ _SERVICES = _BACKEND / "app" / "services"
 _MODEL = _BACKEND / "app" / "models" / "corporate_event.py"
 _ALLOWED_PORTFOLIO_SCOPE_MODULES = {
     "corporate_action_position_reader.py",
+    "corporate_event_ledger_preflight.py",
     "corporate_event_service.py",
     "ticker_change_event_service.py",
     "ticker_change_processor.py",

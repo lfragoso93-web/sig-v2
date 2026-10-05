@@ -197,6 +197,7 @@ app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
+app.include_router(irpf.router,            prefix=f"{PREFIX}/portfolios",   tags=["irpf"])
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 
 

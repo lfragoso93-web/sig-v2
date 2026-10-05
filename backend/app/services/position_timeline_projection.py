@@ -12,6 +12,9 @@ from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
 )
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolutionPolicy,
+)
 
 
 class PositionMovementKind(StrEnum):
@@ -55,6 +58,18 @@ class CanonicalRealizedDisposal:
 
 
 @dataclass(frozen=True)
+class CanonicalCorporateActionCashFlow:
+    """Fluxo financeiro derivado de evento corporativo, fora do ledger."""
+
+    source_event_id: str
+    event_date: date
+    fractional_quantity: Decimal
+    unit_settlement_price_brl: Decimal
+    gross_amount_brl: Decimal
+    cash_treatment: str
+
+
+@dataclass(frozen=True)
 class PositionTimelineProjection:
     quantity: Decimal
     total_cost: Decimal
@@ -63,6 +78,9 @@ class PositionTimelineProjection:
     applied_event_ids: tuple[str, ...]
     subscription_event_ids: tuple[str, ...]
     realized_disposals: tuple[CanonicalRealizedDisposal, ...] = ()
+    corporate_action_cash_flows: tuple[
+        CanonicalCorporateActionCashFlow, ...
+    ] = ()
 
     @property
     def average_price(self) -> Decimal:
@@ -98,6 +116,7 @@ def project_position_timeline(
     applied: list[str] = []
     subscriptions: list[str] = []
     disposals: list[CanonicalRealizedDisposal] = []
+    corporate_action_cash_flows: list[CanonicalCorporateActionCashFlow] = []
 
     timeline: list[tuple[date, int, str, object]] = []
     for index, movement in enumerate(movements):
@@ -164,7 +183,73 @@ def project_position_timeline(
             continue
         if quantity <= 0:
             continue
-        quantity *= action.quantity_factor
+
+        projected_quantity = quantity * action.quantity_factor
+        resolution = action.fractional_resolution
+
+        if resolution is not None:
+            if resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
+                fractional_quantity = resolution.fractional_quantity
+                settlement_price = resolution.settlement_price
+                cash_treatment = str(resolution.cash_treatment or "").strip()
+
+                if fractional_quantity is None or fractional_quantity <= 0:
+                    raise ValueError(
+                        "CASH_SETTLEMENT exige fractional_quantity positiva"
+                    )
+
+                if settlement_price is None or settlement_price < 0:
+                    raise ValueError(
+                        "CASH_SETTLEMENT exige settlement_price nao negativo"
+                    )
+
+                if not cash_treatment:
+                    raise ValueError(
+                        "CASH_SETTLEMENT exige cash_treatment"
+                    )
+
+                if fractional_quantity >= projected_quantity:
+                    raise ValueError(
+                        "CASH_SETTLEMENT possui fractional_quantity invalida"
+                    )
+
+                whole_quantity = projected_quantity.to_integral_value(
+                    rounding="ROUND_FLOOR"
+                )
+                projected_fraction = projected_quantity - whole_quantity
+
+                if fractional_quantity != projected_fraction:
+                    raise ValueError(
+                        "CASH_SETTLEMENT fractional_quantity diverge da fracao projetada"
+                    )
+
+                quantity_after_settlement = whole_quantity
+
+                corporate_action_cash_flows.append(
+                    CanonicalCorporateActionCashFlow(
+                        source_event_id=action.source_event_id,
+                        event_date=action.event_date,
+                        fractional_quantity=fractional_quantity,
+                        unit_settlement_price_brl=settlement_price,
+                        gross_amount_brl=(
+                            fractional_quantity * settlement_price
+                        ),
+                        cash_treatment=cash_treatment,
+                    )
+                )
+
+                projected_quantity = quantity_after_settlement
+
+            if (
+                resolution.policy
+                == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+                and projected_quantity != projected_quantity.to_integral_value()
+            ):
+                raise ValueError(
+                    "NO_FRACTIONAL_RESIDUE incompativel com quantidade projetada"
+                )
+
+        quantity = projected_quantity
         applied.append(action.source_event_id)
 
     return PositionTimelineProjection(
@@ -175,4 +260,5 @@ def project_position_timeline(
         applied_event_ids=tuple(applied),
         subscription_event_ids=tuple(subscriptions),
         realized_disposals=tuple(disposals),
+        corporate_action_cash_flows=tuple(corporate_action_cash_flows),
     )

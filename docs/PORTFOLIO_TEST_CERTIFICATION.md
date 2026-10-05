@@ -4,7 +4,7 @@
 
 Este documento define o gate funcional anterior ao uso de carteiras e dados reais no SGI v2.
 
-A certificação deve provar, com dados sintéticos e reproduzíveis, que o fluxo financeiro ponta a ponta permanece consistente antes de avançar para os gates reais #226, #216, #158 e #227.
+A certificação deve provar, com dados sintéticos e reproduzíveis, que o fluxo financeiro ponta a ponta permanece consistente antes de avançar para os gates reais #158, #269, #284 e #227.
 
 Issue canônica: #303.
 
@@ -57,7 +57,7 @@ Durante toda esta certificação:
 
 - `test_ready=true` permite usuário, carteira e dados fictícios/descartáveis;
 - `ready_for_real_data=false` permanece obrigatório;
-- nenhuma flag deve ser forçada para contornar #226/#216/#158/#227;
+- nenhuma flag deve ser forçada para contornar #158/#269/#284/#227;
 - nenhum seed real de Proventos é autorizado por este documento;
 - nenhum CSV real é autorizado por este documento.
 
@@ -82,9 +82,10 @@ Baseline atual publicado em `stable-15jun`:
   a antiga projeção auxiliar `fixed_income_investments`; esse contrato foi
   posteriormente aposentado, e `transactions` passou a ser a fonte canônica
   exclusiva do lifecycle `RENDA_FIXA`/`TESOURO_DIRETO`;
-- `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada com
-  `TESOURO_DIRETO` e `RENDA_FIXA` sem TWR dedicado, como
-  `partial_by_design`;
+- `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada no
+  contrato historico `partial_by_design`; posteriormente, `RENDA_FIXA` passou a
+  ter TWR dedicado por contrato/indexador, mantendo apenas `TESOURO_DIRETO`
+  condicionado a cobertura oficial exata;
 - `39d2ee8c0fd64fa82aa264e8ad88343431580b3e`: classes fiscais comuns do
   fixture mapeadas para a matriz sintetica de IRPF;
 - `ad9b027a9087173e270117741ecebea4cd4279ab`: modal de importacao CSV
@@ -105,11 +106,13 @@ Baseline atual publicado em `stable-15jun`:
   canonica alinhada para `admin@sgi.com`; seed idempotente e nao destrutivo,
   workaround `.local` removido do frontend e identidade legada preservada.
 
-Esses blocos avancam os itens B, C, D, E, F e G. O marco
-`PORTFOLIO-TEST-READY` ainda nao esta aprovado: as provas operacionais de
-Compose, restart, persistencia PostgreSQL, snapshots/cache e smoke UI ja foram
-executadas, mas o fechamento deve continuar orientado pelos criterios funcionais
-restantes e pela selecao de um SHA final aprovado para homologacao OCI.
+Esses blocos avancaram os itens B, C, D, E, F e G. Em 14/09/2026, apos a
+recuperacao dos gates tecnicos (#363), preservacao da politica de senha (#354)
+e validacao manual do seletor de tipo de ativo (#352), o marco
+`PORTFOLIO-TEST-READY` foi aprovado para o SHA registrado na Issue #303.
+
+Essa aprovacao nao altera `ready_for_real_data=false` e nao substitui os gates
+reais #158, #269, #284 e #227.
 
 Estado consolidado da certificacao local:
 
@@ -118,10 +121,14 @@ Estado consolidado da certificacao local:
   fail-closed parcial, matriz IRPF, modal CSV critico e Redis fail-open;
 - concluido em nivel operacional: Compose local, health de PostgreSQL/Redis,
   restart de backend/Redis/Compose, persistencia do volume PostgreSQL,
-  verificacao de snapshots/cache apos restart e smoke UI autenticado;
-- pendente para aprovar o gate: revisar os criterios funcionais ainda sem
-  evidencia conclusiva, corrigir blockers remanescentes caso existam, manter a
-  documentacao sincronizada e registrar o SHA final aprovado.
+  verificacao de snapshots/cache apos restart, smoke UI autenticado e banco
+  local alimentado para a carteira sintetica #303;
+- status em 08/09/2026: GO para validacao assistida por usuarios com dados
+  ficticios/descartaveis no baseline
+  `59a6a9fc741d557324233065137a9c1a25d4af64`;
+- pendente para `ready_for_real_data=true`: concluir formalmente os gates reais
+  #158, #269, #284 e #227, corrigir blockers remanescentes caso existam,
+  manter a documentacao sincronizada e registrar o SHA final aprovado.
 
 Evidencia local adicional:
 
@@ -230,6 +237,45 @@ Evidencia operacional de runtime alinhado ao HEAD:
 - `/health` retornou `status=ok`, `postgres=ok`, `redis=ok` e
   `ready_for_real_data=false`;
 - `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
+
+Evidencia operacional de validacao assistida descartavel - 08/09/2026:
+
+- runbook de validacao com usuarios de teste publicado em
+  `docs/USER_VALIDATION_RUNBOOK.md`;
+- SHA local/remoto validado: `9ce6331540bb3c96dcb21df0a5660e494a9b860a`;
+- frontend local validado com `npm ci`, `typecheck`, `lint`, Vitest e build;
+- backend local validado com suite completa fora do sandbox:
+  `1880 passed`, `1 skipped`, `10 warnings`;
+- Docker local permaneceu saudavel para `backend`, `db`, `redis`, `frontend` e
+  `cloudflared`;
+- certificacoes sinteticas Docker permaneceram `PASS` para reconciliacao,
+  IRPF, disponibilidade TWR e ciclo de snapshot;
+- smoke HTTP descartavel executado no backend Docker:
+  `TEST-READY-HTTP-SMOKE:PASS portfolio_id=14 btc_tx_id=None sell_tx_id=81 canonical_transactions=6`;
+- limpeza automatica do usuario/carteira descartavel e do FX sintetico retornou
+  `PASS`;
+- `/ready` permaneceu fechado com `ready_for_real_data=false`.
+
+Evidencia operacional de banco alimentado para testes assistidos - 08/09/2026:
+
+- backend reconstruido e recriado localmente antes do seed operacional;
+- seed sintetico idempotente executado com senha descartavel fornecida por
+  ambiente, sem credencial versionada:
+  `CERT303-SEED user_id=14 portfolio_id=13 user_created=false portfolio_created=false password_rotated=false transactions_created=0 transactions_reused=11 crypto_membership_created=0 crypto_membership_reused=1 market_prices_created=0 market_prices_reused=5 dividends_created=0 dividends_reused=1 treasury_prices_created=0 treasury_prices_reused=1 benchmark_rates_created=0 benchmark_rates_reused=1 benchmark_coverages_created=0 benchmark_coverages_reused=1`;
+- normalizacao fail-closed aplicada ao ativo sintetico legado `CERT303-BTC`,
+  restrita a ticker, classe, nome e moeda da identidade reservada #303;
+- certificacao de reconciliacao Docker:
+  `CERT303-RECONCILE portfolio_id=13 date=2026-02-28 positions=7 remaining_cost=37629.30 market_value=38960.00 realized_pnl=450.80 open_pnl=1330.70 income=20.00 total_pnl_with_income=1801.50 status=PASS`;
+- certificacao IRPF Docker:
+  `CERT303-IRPF portfolio_id=13 year=2026 disposals=2 gross_sales=3700.00 swing_realized=450.80 taxable_base=198.00 gross_tax=29.70 irrf=0.19 net_tax=29.51 payment_due=29.51 day_trade_tax=0.00 status=PASS`;
+- certificacao TWR Docker permaneceu `PASS`, com `RENDA_FIXA` explicitamente
+  indisponivel para cadeia diaria dedicada ate a #149;
+- ciclo de snapshot Docker:
+  `CERT303-SNAPSHOT-CYCLE portfolio_id=13 date=2026-02-28 market_value=38960.00 cost_basis=37629.30 realized_pnl=450.80 unrealized_pnl=1330.70 total_pnl=1781.50 replay_rows=1 invalidated=1 mutated_total_pnl=1780.50 restored_total_pnl=1781.50 status=PASS`;
+- smoke HTTP interno confirmou login `200` e listagem `200` da carteira
+  `PORTFOLIO-TEST-READY synthetic multiclasse` para `user_id=14`;
+- banco local esta pronto para validacao assistida de carteiras apenas com dados
+  ficticios/descartaveis; `/ready` e `ready_for_real_data` permanecem fechados.
 
 ## Ordem obrigatória
 
@@ -439,11 +485,15 @@ O gate local só é aprovado quando:
 - documentação viva refletir o resultado;
 - existir SHA exato da `stable-15jun` aprovado para homologação OCI.
 
+Status em 14/09/2026: aprovado para `PORTFOLIO-TEST-READY` no SHA publicado e
+registrado na Issue #303. A aprovacao e restrita ao gate local/assistido e nao
+autoriza `ready_for_real_data=true`.
+
 ## Próxima etapa após aprovação
 
 Após `PORTFOLIO-TEST-READY`:
 
-1. executar somente então os gates reais #226 → #216 → #158 → #227;
+1. executar somente entao os gates reais #158 -> #269 -> #284 -> #227;
 2. selecionar um SHA exato já certificado localmente;
 3. atualizar OCI para esse SHA;
 4. realizar homologação reduzida e operacional;

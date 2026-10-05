@@ -16,6 +16,9 @@ param(
     [ValidatePattern('^\d{4}-\d{2}-\d{2}$')]
     [string]$EndDate,
 
+    [ValidateRange(1, [int]::MaxValue)]
+    [int]$PortfolioId = 0,
+
     [ValidateNotNullOrEmpty()]
     [string]$ArtifactRoot = 'artifacts/pre-prod-rebuild'
 )
@@ -182,6 +185,9 @@ function Invoke-DividendsSeed {
         '--end-date'
         $EndDate
     )
+    if ($PortfolioId -gt 0) {
+        $DockerArguments += @('--portfolio-id', ([string]$PortfolioId))
+    }
 
     $SeedOutput = @(& docker @DockerArguments)
     $SeedExitCode = $LASTEXITCODE
@@ -234,6 +240,7 @@ if ($null -eq $CompareExitCode) {
     commit_sha = $NormalizedCommitSha
     start_date = $StartDate
     end_date = $EndDate
+    portfolio_id = $(if ($PortfolioId -gt 0) { $PortfolioId } else { $null })
     first_run_id = $FirstRunId
     second_run_id = $SecondRunId
     first_evidence = $FirstEvidenceHostPath

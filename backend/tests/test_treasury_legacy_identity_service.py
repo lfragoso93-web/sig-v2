@@ -18,6 +18,13 @@ class _ScalarsResult:
         return proxy
 
 
+def test_legacy_educa_identity_map_uses_product_year_not_maturity_year():
+    assert service.LEGACY_EDUCA_IDENTITIES == (
+        ("tesouro-educa-15122030", "tesouro-educa-mais-2026"),
+        ("tesouro-educa-15122031", "tesouro-educa-mais-2027"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_consolidation_moves_price_creates_alias_and_removes_legacy(monkeypatch):
     monkeypatch.setattr(

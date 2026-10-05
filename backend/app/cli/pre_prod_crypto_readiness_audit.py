@@ -212,7 +212,7 @@ async def _run() -> dict:
 
     return {
         "read_only": True,
-        "universe_policy": "top_100_market_cap_coingecko_intersect_brapi",
+        "universe_policy": "top_50_market_cap_coingecko_intersect_brapi",
         "supported_universe_size": len(supported_tickers),
         "persisted_candidate_memberships": len(persisted_memberships),
         "missing_candidate_memberships": missing_memberships,

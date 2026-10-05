@@ -8,7 +8,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 COINGECKO_MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
-TOP_CRYPTO_LIMIT = 100
+TOP_CRYPTO_LIMIT = 50
 
 
 def _normalize_market_item(item: Any) -> dict | None:

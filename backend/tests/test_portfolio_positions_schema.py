@@ -46,6 +46,7 @@ def _group_payload() -> dict:
                 "logo_url": None,
                 "is_usd": False,
                 "currency": "BRL",
+                "proventos": 25.0,
             }
         ],
     }
@@ -60,6 +61,7 @@ def test_position_group_contract_preserves_canonical_class_totals():
 
     assert group.total_invested == 1234.56
     assert group.count == len(group.positions)
+    assert group.positions[0].proventos == 25.0
 
 
 @pytest.mark.parametrize("legacy_field", ["rentabilidade_pct", "retorno_pct"])

@@ -11,20 +11,22 @@ from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
-from app.schemas.asset import AssetCreate
 from app.schemas.transaction import (
     PagedTransactions,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
 )
-from app.services.asset_service import get_or_create_asset
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
     require_financially_certified_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_service import list_transactions_paginated
+from app.services.transaction_write_service import (
+    TransactionWriteError,
+    create_transaction_record,
+)
 
 log = logging.getLogger(__name__)
 
@@ -76,11 +78,13 @@ async def _calc_current_quantity(
     db: AsyncSession,
     portfolio_id: int,
     ticker: str,
+    asset_type: str,
     exclude_tx_id: int | None = None,
 ) -> float:
     stmt = select(Transaction.operation, Transaction.quantity).where(
         Transaction.portfolio_id == portfolio_id,
         Transaction.ticker == ticker,
+        Transaction.asset_type == asset_type,
     )
     if exclude_tx_id is not None:
         stmt = stmt.where(Transaction.id != exclude_tx_id)
@@ -102,10 +106,17 @@ async def _validate_sell(
     db: AsyncSession,
     portfolio_id: int,
     ticker: str,
+    asset_type: str,
     quantity: float,
     exclude_tx_id: int | None = None,
 ) -> None:
-    current_qty = await _calc_current_quantity(db, portfolio_id, ticker, exclude_tx_id)
+    current_qty = await _calc_current_quantity(
+        db,
+        portfolio_id,
+        ticker,
+        asset_type,
+        exclude_tx_id,
+    )
     if quantity > current_qty:
         raise HTTPException(
             status_code=400,
@@ -167,35 +178,16 @@ async def create_transaction(
 ):
     await _get_portfolio(portfolio_id, current_user, db)
 
-    ticker = payload.ticker.strip().upper()
-    asset_type = payload.asset_type
-    operation = _to_operation(payload.operation)
-
-    await _validate_crypto_transaction_asset(db, ticker, asset_type)
-
-    if operation == OperationType.sell:
-        await _validate_sell(db, portfolio_id, ticker, payload.quantity)
-
-    tx = Transaction(
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        asset_type=asset_type,
-        operation=operation,
-        quantity=payload.quantity,
-        price=payload.price,
-        fees=payload.fees or 0.0,
-        date=payload.date,
-        currency=payload.currency or "BRL",
-        notes=payload.notes,
-    )
-    db.add(tx)
-
-    await db.commit()
-    await db.refresh(tx)
-
-    if asset_type != "CRIPTO":
-        asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
-        await get_or_create_asset(db, asset_data)
+    try:
+        tx = await create_transaction_record(
+            db,
+            portfolio_id=portfolio_id,
+            payload=payload,
+        )
+    except TransactionWriteError as exc:
+        detail = str(exc)
+        status_code = 400 if detail.startswith("Quantidade insuficiente") else 422
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
     # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
     # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
@@ -257,6 +249,7 @@ async def update_transaction(
             db,
             portfolio_id,
             ticker,
+            asset_type,
             quantity,
             exclude_tx_id=transaction_id,
         )
@@ -335,10 +328,11 @@ async def delete_transaction(
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     try:
-        from app.services.portfolio_snapshot_service import (
-            backfill_snapshots,
-            invalidate_snapshots_from,
+        from app.services.portfolio_snapshot_canonical_twr_service import (
+            backfill_canonical_snapshots_with_returns,
         )
+        from app.services.portfolio_snapshot_service import invalidate_snapshots_from
+        from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
         async with AsyncSessionLocal() as db:
             deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
@@ -351,7 +345,11 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
                 tx_date,
                 deleted,
             )
-            count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
+            count = await backfill_canonical_snapshots_with_returns(
+                db=db,
+                portfolio_id=portfolio_id,
+            )
+            await invalidate_rentabilidade_cache(portfolio_id)
             log.info(
                 "[snapshot_backfill] portfolio=%s — %s snapshots recalculados",
                 portfolio_id,

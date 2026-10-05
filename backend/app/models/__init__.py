@@ -5,6 +5,9 @@ from app.models.asset_price import AssetPrice
 from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.audit_log import AuditAction, AuditLog
 from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event_reconciliation_evidence import (
+    CorporateEventReconciliationEvidence,
+)
 from app.models.fx_rate import FxRate
 from app.models.goal import Goal
 from app.models.portfolio import Portfolio
@@ -13,6 +16,7 @@ from app.models.portfolio_class_target import PortfolioClassTarget
 from app.models.portfolio_position import PortfolioPosition
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.rate_history import RateHistory
+from app.models.rate_history_coverage import RateHistoryCoverage
 from app.models.system_config import SystemConfig
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -26,6 +30,7 @@ __all__ = [
     "AuditAction",
     "AuditLog",
     "CorporateEvent",
+    "CorporateEventReconciliationEvidence",
     "FxRate",
     "Goal",
     "Portfolio",
@@ -34,6 +39,7 @@ __all__ = [
     "PortfolioPosition",
     "PortfolioSnapshot",
     "RateHistory",
+    "RateHistoryCoverage",
     "SystemConfig",
     "Transaction",
     "User",

@@ -24,7 +24,10 @@ FROM nginx:1.30.4-alpine3.24 AS runtime
 # porta interna 80 por compatibilidade com Compose/Cloudflare, mas concedemos
 # apenas CAP_NET_BIND_SERVICE ao binário e executamos o runtime como nginx.
 RUN apk upgrade --no-cache \
-    && apk add --no-cache libcap \
+    && apk add --no-cache \
+        libcap \
+        'libexpat>=2.8.5-r0' \
+        'pcre2>=10.49-r0' \
     && rm /etc/nginx/conf.d/default.conf \
     && touch /var/run/nginx.pid \
     && chown -R nginx:nginx \

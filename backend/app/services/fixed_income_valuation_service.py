@@ -12,10 +12,13 @@ Regra de negócio:
     2. indexador
     3. percentual/taxa informado
     4. vencimento
+    5. fonte de benchmark, quando explicitamente informada
 - O valor aplicado e a data de aplicação NÃO entram na chave de agrupamento.
 
-A correção usa a série histórica persistida em rate_history, importada do SGS/BCB.
-Quando não há histórico suficiente, cai para um fallback anual conservador.
+CDI e SELIC exigem cobertura histórica persistida e comprovada para todo o
+período de valuation. Ausência ou cobertura parcial falham explicitamente em vez
+de serem mascaradas por uma referência anual aproximada. Produtos com taxa
+contratual própria, como PREFIXADO, preservam a composição anual do contrato.
 """
 from __future__ import annotations
 
@@ -29,8 +32,14 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.transaction import Transaction, OperationType
-from app.services.benchmark_rate_service import benchmark_factor, latest_annual_reference_pct
+from app.models.transaction import OperationType, Transaction
+from app.services.benchmark_rate_service import (
+    BenchmarkCoverageStatus,
+    benchmark_coverage_status,
+    benchmark_factor,
+    latest_covered_rate_date,
+    latest_annual_reference_pct,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +49,25 @@ _DEFAULT_CDI_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_SELIC_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_IPCA_ANNUAL_PCT = Decimal("4.50")
 _DEFAULT_IGPM_ANNUAL_PCT = Decimal("4.00")
+_SOURCE_QUALIFIED_BENCHMARKS = {"synthetic-certification"}
+
+
+class IncompleteBenchmarkCoverageError(RuntimeError):
+    def __init__(
+        self,
+        indicator: str,
+        start: date,
+        target: date,
+        status: BenchmarkCoverageStatus,
+    ) -> None:
+        self.indicator = indicator
+        self.start = start
+        self.target = target
+        self.status = status
+        super().__init__(
+            f"{indicator} benchmark coverage is {status.value} for "
+            f"{start.isoformat()}..{target.isoformat()}"
+        )
 
 
 @dataclass(frozen=True)
@@ -48,6 +76,7 @@ class FixedIncomeKey:
     indexer: str
     rate_pct: Decimal
     maturity: Optional[date]
+    benchmark_source: Optional[str] = None
 
 
 @dataclass
@@ -116,11 +145,14 @@ def _normalize_indexer(raw: Optional[str]) -> str:
     return value
 
 
-def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
+def _parse_notes(
+    notes: Optional[str],
+) -> tuple[str, Decimal, Optional[date], Optional[str]]:
     text = notes or ""
     indexer: Optional[str] = None
     rate = Decimal("0")
     maturity: Optional[date] = None
+    benchmark_source: Optional[str] = None
 
     m = re.search(r"Indexador:\s*([^|\-\n]+)", text, re.IGNORECASE)
     if m:
@@ -142,7 +174,17 @@ def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
         except ValueError:
             maturity = None
 
-    return _normalize_indexer(indexer), rate, maturity
+    m = re.search(
+        r"(?:Benchmark Source|Fonte Benchmark):\s*([^|\n]+)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        candidate = m.group(1).strip() or None
+        if candidate in _SOURCE_QUALIFIED_BENCHMARKS:
+            benchmark_source = candidate
+
+    return _normalize_indexer(indexer), rate, maturity, benchmark_source
 
 
 async def _latest_refs(db: AsyncSession) -> dict[str, Decimal]:
@@ -183,6 +225,8 @@ def _compound_value(principal: Decimal, annual_rate_pct: Decimal, start: date, t
 
 
 async def _fallback_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
+    if _normalize_indexer(key.indexer) == "PREFIXADO":
+        return _compound_value(Decimal("1"), key.rate_pct, start, target)
     refs = await _latest_refs(db)
     annual = _annual_rate_pct(key.indexer, key.rate_pct, refs)
     return _compound_value(Decimal("1"), annual, start, target)
@@ -190,12 +234,83 @@ async def _fallback_factor(db: AsyncSession, key: FixedIncomeKey, start: date, t
 
 async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
     idx = _normalize_indexer(key.indexer)
+
+    if idx in {"CDI", "SELIC"}:
+        effective_target = target
+        coverage = await benchmark_coverage_status(
+            db,
+            idx,
+            start,
+            effective_target,
+            source=key.benchmark_source,
+        )
+        if coverage is BenchmarkCoverageStatus.ABSENT:
+            last_covered = await latest_covered_rate_date(
+                db,
+                idx,
+                start,
+                target,
+                source=key.benchmark_source,
+            )
+            if last_covered is None or last_covered <= start:
+                observed_factor = await benchmark_factor(
+                    db,
+                    idx,
+                    start,
+                    target,
+                    multiplier_pct=key.rate_pct or Decimal("100"),
+                    source=key.benchmark_source,
+                )
+                if observed_factor != Decimal("1"):
+                    return observed_factor
+                return Decimal("1")
+            raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
+        if coverage is BenchmarkCoverageStatus.PARTIAL:
+            last_covered = await latest_covered_rate_date(
+                db,
+                idx,
+                start,
+                target,
+                source=key.benchmark_source,
+            )
+            if last_covered is None or last_covered <= start:
+                return Decimal("1")
+            effective_target = last_covered
+            effective_coverage = await benchmark_coverage_status(
+                db,
+                idx,
+                start,
+                effective_target,
+                source=key.benchmark_source,
+            )
+            if effective_coverage is not BenchmarkCoverageStatus.COMPLETE:
+                observed_factor = await benchmark_factor(
+                    db,
+                    idx,
+                    start,
+                    effective_target,
+                    multiplier_pct=key.rate_pct or Decimal("100"),
+                    source=key.benchmark_source,
+                )
+                if observed_factor != Decimal("1"):
+                    return observed_factor
+                raise IncompleteBenchmarkCoverageError(
+                    idx,
+                    start,
+                    target,
+                    coverage,
+                )
+        return await benchmark_factor(
+            db,
+            idx,
+            start,
+            effective_target,
+            multiplier_pct=key.rate_pct or Decimal("100"),
+            source=key.benchmark_source,
+        )
+
     try:
-        if idx == "CDI":
-            factor = await benchmark_factor(db, "CDI", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        elif idx == "SELIC":
-            factor = await benchmark_factor(db, "SELIC", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        elif idx == "IPCA_PLUS":
+        if idx == "IPCA_PLUS":
             factor = await benchmark_factor(db, "IPCA", start, target, spread_annual_pct=key.rate_pct)
         elif idx == "IGPM_PLUS":
             factor = await benchmark_factor(db, "IGPM", start, target, spread_annual_pct=key.rate_pct)
@@ -222,13 +337,19 @@ async def _load_fixed_income_transactions(db: AsyncSession, portfolio_id: int) -
 
 def _application_from_buy(tx: Transaction) -> FixedIncomeApplication:
     name = str(tx.ticker or "RENDA_FIXA").strip().upper()
-    indexer, rate, maturity = _parse_notes(getattr(tx, "notes", None))
+    indexer, rate, maturity, benchmark_source = _parse_notes(getattr(tx, "notes", None))
     amount = (
         _decimal_from_str(getattr(tx, "quantity", 0))
         * _decimal_from_str(getattr(tx, "price", 0))
         + _decimal_from_str(getattr(tx, "fees", 0))
     )
-    key = FixedIncomeKey(name=name, indexer=indexer, rate_pct=_pct(rate), maturity=maturity)
+    key = FixedIncomeKey(
+        name=name,
+        indexer=indexer,
+        rate_pct=_pct(rate),
+        maturity=maturity,
+        benchmark_source=benchmark_source,
+    )
     return FixedIncomeApplication(
         key=key,
         invested_amount=_money(amount),
@@ -246,9 +367,17 @@ def _apply_redemption(applications: list[FixedIncomeApplication], tx: Transactio
         return
 
     name = str(tx.ticker or "").strip().upper()
-    idx, rate, maturity = _parse_notes(getattr(tx, "notes", None))
-    has_full_key = bool(getattr(tx, "notes", None)) and (idx or rate or maturity)
-    key = FixedIncomeKey(name=name, indexer=idx, rate_pct=_pct(rate), maturity=maturity)
+    idx, rate, maturity, benchmark_source = _parse_notes(getattr(tx, "notes", None))
+    has_full_key = bool(getattr(tx, "notes", None)) and (
+        idx or rate or maturity or benchmark_source
+    )
+    key = FixedIncomeKey(
+        name=name,
+        indexer=idx,
+        rate_pct=_pct(rate),
+        maturity=maturity,
+        benchmark_source=benchmark_source,
+    )
 
     for app in applications:
         if redeem_amount <= 0:
@@ -308,6 +437,19 @@ async def get_fixed_income_valuations(
 ) -> list[FixedIncomeValuation]:
     target = target_date or date.today()
     txs = await _load_fixed_income_transactions(db, portfolio_id)
+    return await get_fixed_income_valuations_from_transactions(db, txs, target)
+
+
+async def get_fixed_income_valuations_from_transactions(
+    db: AsyncSession,
+    transactions: list[Transaction],
+    target_date: date,
+) -> list[FixedIncomeValuation]:
+    txs = [
+        tx
+        for tx in transactions
+        if tx.date <= target_date and str(tx.asset_type or "").upper() == RENDA_FIXA_TYPE
+    ]
 
     applications: list[FixedIncomeApplication] = []
     for tx in txs:
@@ -318,7 +460,146 @@ async def get_fixed_income_valuations(
         elif _is_sell(tx.operation):
             _apply_redemption(applications, tx)
 
-    return await _aggregate_applications(db, applications, target)
+    return await _aggregate_applications(db, applications, target_date)
+
+
+async def get_fixed_income_totals_from_transactions(
+    db: AsyncSession,
+    transactions: list[Transaction],
+    target_date: date,
+) -> dict[str, Decimal]:
+    valuations = await get_fixed_income_valuations_from_transactions(
+        db,
+        transactions,
+        target_date,
+    )
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    current = _money(sum((v.current_value for v in valuations), Decimal("0")))
+    income = _money(current - invested)
+    income_pct = _pct((income / invested * Decimal("100")) if invested > 0 else Decimal("0"))
+    return {
+        "invested_amount": invested,
+        "current_value": current,
+        "income_amount": income,
+        "income_pct": income_pct,
+    }
+
+
+async def _covered_target_or_none(
+    db: AsyncSession,
+    exc: IncompleteBenchmarkCoverageError,
+) -> date | None:
+    covered = await latest_covered_rate_date(
+        db,
+        exc.indicator,
+        exc.start,
+        exc.target,
+    )
+    if covered is None or covered <= exc.start:
+        return None
+    return covered
+
+
+async def get_fixed_income_valuations_with_coverage_fallback(
+    db: AsyncSession,
+    portfolio_id: int,
+    target_date: Optional[date] = None,
+) -> tuple[list[FixedIncomeValuation], date | None]:
+    target = target_date or date.today()
+    try:
+        return await get_fixed_income_valuations(db, portfolio_id, target), target
+    except IncompleteBenchmarkCoverageError as exc:
+        covered = await _covered_target_or_none(db, exc)
+        if covered is None:
+            raise
+        logger.warning(
+            "[fixed_income] benchmark incompleto ate %s; usando ultima cobertura %s",
+            target,
+            covered,
+        )
+        return await get_fixed_income_valuations(db, portfolio_id, covered), covered
+
+
+async def get_fixed_income_totals_with_coverage_fallback(
+    db: AsyncSession,
+    portfolio_id: int,
+    target_date: Optional[date] = None,
+) -> tuple[dict[str, Decimal], date | None]:
+    valuations, effective_date = await get_fixed_income_valuations_with_coverage_fallback(
+        db,
+        portfolio_id,
+        target_date,
+    )
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    current = _money(sum((v.current_value for v in valuations), Decimal("0")))
+    income = _money(current - invested)
+    income_pct = _pct((income / invested * Decimal("100")) if invested > 0 else Decimal("0"))
+    return {
+        "invested_amount": invested,
+        "current_value": current,
+        "income_amount": income,
+        "income_pct": income_pct,
+    }, effective_date
+
+
+async def get_fixed_income_principal_valuations(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[FixedIncomeValuation]:
+    txs = await _load_fixed_income_transactions(db, portfolio_id)
+
+    applications: list[FixedIncomeApplication] = []
+    for tx in txs:
+        if _is_buy(tx.operation):
+            app = _application_from_buy(tx)
+            if app.invested_amount > 0:
+                applications.append(app)
+        elif _is_sell(tx.operation):
+            _apply_redemption(applications, tx)
+
+    grouped: dict[FixedIncomeKey, dict[str, Decimal | int]] = {}
+    for app in applications:
+        if app.remaining_principal <= 0:
+            continue
+        if app.key not in grouped:
+            grouped[app.key] = {"invested": Decimal("0"), "count": 0}
+        grouped[app.key]["invested"] = (
+            grouped[app.key]["invested"] + app.remaining_principal  # type: ignore[operator]
+        )
+        grouped[app.key]["count"] = int(grouped[app.key]["count"]) + 1
+
+    result: list[FixedIncomeValuation] = []
+    for key, values in grouped.items():
+        invested = _money(values["invested"])  # type: ignore[arg-type]
+        result.append(
+            FixedIncomeValuation(
+                key=key,
+                invested_amount=invested,
+                current_value=invested,
+                income_amount=Decimal("0.00"),
+                income_pct=Decimal("0.0000"),
+                applications_count=int(values["count"]),
+            )
+        )
+
+    result.sort(
+        key=lambda item: (item.key.name, item.key.indexer, item.key.maturity or date.max)
+    )
+    return result
+
+
+async def get_fixed_income_principal_totals(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict[str, Decimal]:
+    valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    return {
+        "invested_amount": invested,
+        "current_value": invested,
+        "income_amount": Decimal("0.00"),
+        "income_pct": Decimal("0.0000"),
+    }
 
 
 async def get_fixed_income_totals(

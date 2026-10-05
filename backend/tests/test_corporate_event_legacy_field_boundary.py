@@ -10,6 +10,7 @@ _ALLOWED_COMPATIBILITY_MODULES = {
     "corporate_event_legacy_backfill_plan_service.py",
     "corporate_event_legacy_dry_run_service.py",
     "corporate_event_legacy_inventory_service.py",
+    "corporate_event_semantic_repair.py",
     "corporate_event_service.py",
     "ticker_change_event_service.py",
     "ticker_change_processor.py",

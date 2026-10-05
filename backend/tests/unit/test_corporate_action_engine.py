@@ -62,6 +62,28 @@ def test_brapi_invalid_bonus_factor_is_blocking() -> None:
         normalize_brapi_corporate_actions("ITSA4", payload)
 
 
+def test_brapi_stock_dividend_respects_explicit_split_labels() -> None:
+    payload = {
+        "results": [{
+            "symbol": "AMOB3",
+            "data": {
+                "stockDividends": [{
+                    "label": "GRUPAMENTO",
+                    "assetIssued": "BRAMOBACNOR9",
+                    "factor": 0.02,
+                    "completeFactor": "1 para 50",
+                    "lastDatePrior": "2025-05-28T03:00:00.000Z",
+                }],
+            },
+        }],
+    }
+
+    [action] = normalize_brapi_corporate_actions("AMOB3", payload)
+
+    assert action.kind == CorporateActionKind.REVERSE_SPLIT
+    assert action.quantity_factor == Decimal("0.02")
+
+
 def test_yahoo_split_factors_use_one_quantity_multiplier_convention() -> None:
     actions = normalize_yahoo_splits(
         "AERI3",

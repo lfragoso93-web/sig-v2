@@ -34,6 +34,15 @@ python -m app.cli.pre_prod_backup \
   --commit-sha "$APP_COMMIT_SHA"
 ```
 
+The runtime must expose the same SHA:
+
+```bash
+test "$(printenv APP_COMMIT_SHA)" = "$APP_COMMIT_SHA"
+```
+
+The backup CLI fails when runtime `APP_COMMIT_SHA` is empty, `unknown`, or
+different from the requested `--commit-sha`.
+
 Expected artifact root:
 
 ```text

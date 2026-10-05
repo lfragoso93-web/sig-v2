@@ -40,6 +40,7 @@ def _legacy_group() -> dict:
                 "logo_url": None,
                 "is_usd": False,
                 "currency": "BRL",
+                "proventos": 0.0,
                 "legacy_extra": "must not leak",
             }
         ],
@@ -58,6 +59,7 @@ def test_projected_group_validates_against_strict_response_schema() -> None:
     assert validated.variation_pct == -0.7369
     assert validated.variation_reference_date == "2026-08-11"
     assert validated.positions[0].ticker == "BTC"
+    assert validated.positions[0].proventos == 0.0
 
 
 def test_projection_drops_legacy_group_and_position_extras() -> None:

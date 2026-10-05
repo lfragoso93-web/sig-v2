@@ -276,6 +276,10 @@ def _collapse_declared_same_source_aggregate(group: list) -> tuple[tuple, tuple]
 
 def _collapse_estimated_payment_components(
     events: tuple,
+    *,
+    ticker: str = "<unknown>",
+    asset_type: str = "<unknown>",
+    source: str = "<unknown>",
 ) -> tuple[tuple, tuple]:
     """Reconcilia estimativas e agregados da mesma fonte de forma conservadora."""
 
@@ -330,9 +334,44 @@ def _collapse_estimated_payment_components(
                 retained.extend(aggregate_retained)
                 collapsed.extend(aggregate_collapsed)
                 continue
+
+            by_occurrence: dict[tuple, list] = {}
+            for event in group:
+                occurrence_key = (
+                    event.ex_date,
+                    normalize_dividend_type(event.dividend_type),
+                    event.payment_date or event.ex_date,
+                    _storage_value(_decimal(event.value_per_unit)),
+                )
+                by_occurrence.setdefault(occurrence_key, []).append(event)
+
+            deduped: list = []
+            duplicated: list = []
+            has_conflict = False
+            for occurrence_events in by_occurrence.values():
+                first, *rest = occurrence_events
+                first_values = _event_values(first, source)
+                for duplicate in rest:
+                    duplicate_values = _event_values(duplicate, source)
+                    if _conflicting_event_fields(first_values, duplicate_values):
+                        has_conflict = True
+                        break
+                if has_conflict:
+                    break
+                deduped.append(first)
+                duplicated.extend(rest)
+
+            if not has_conflict:
+                retained.extend(deduped)
+                collapsed.extend(duplicated)
+                continue
         if estimated or len(group) >= 3:
+            sample = group[0]
             raise DividendsSeedPersistenceError(
-                "evento global conflitante na mesma fonte"
+                "evento global conflitante na mesma fonte: "
+                f"{ticker}/{asset_type}/{sample.ex_date}/"
+                f"{normalize_dividend_type(sample.dividend_type).value}/"
+                f"{source}; eventos={len(group)}"
             )
         retained.extend(group)
     return tuple(retained), tuple(collapsed)
@@ -399,7 +438,10 @@ async def persist_asset_dividends_strict(
         for source_collection in sorted(collection.sources, key=_source_sort_key):
             source = source_collection.source.strip().lower()
             retained, _collapsed = _collapse_estimated_payment_components(
-                source_collection.normalized_rows
+                source_collection.normalized_rows,
+                ticker=collection.ticker,
+                asset_type=collection.asset_type,
+                source=source,
             )
 
             for event in retained:

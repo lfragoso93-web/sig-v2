@@ -20,10 +20,10 @@ async def test_invalidates_summary_and_positions_for_affected_portfolios(monkeyp
 
     assert invalidated == 2
     assert cache_delete.await_count == 4
-    cache_delete.assert_any_await("portfolio:3:summary")
-    cache_delete.assert_any_await("portfolio:3:positions")
-    cache_delete.assert_any_await("portfolio:8:summary")
-    cache_delete.assert_any_await("portfolio:8:positions")
+    cache_delete.assert_any_await("portfolio:v2:3:summary")
+    cache_delete.assert_any_await("portfolio:v2:3:positions")
+    cache_delete.assert_any_await("portfolio:v2:8:summary")
+    cache_delete.assert_any_await("portfolio:v2:8:positions")
 
 
 @pytest.mark.asyncio

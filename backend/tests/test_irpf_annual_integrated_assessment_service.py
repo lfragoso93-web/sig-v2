@@ -19,8 +19,8 @@ async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> 
     session = AsyncMock()
     query_result = MagicMock()
     query_result.scalars.return_value.all.return_value = [
-        SimpleNamespace(id=1),
-        SimpleNamespace(id=2),
+        SimpleNamespace(id=1, asset_type="ETF"),
+        SimpleNamespace(id=2, asset_type="ETF"),
     ]
     session.execute.return_value = query_result
     operations = (SimpleNamespace(),)
@@ -111,6 +111,70 @@ async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> 
     assert result.day_trade_withholding_monthly[0].current_withholding_brl == Decimal(
         "0.10"
     )
+
+
+@pytest.mark.asyncio
+async def test_integrated_assessment_ignores_unsupported_tax_classes() -> None:
+    session = AsyncMock()
+    query_result = MagicMock()
+    query_result.scalars.return_value.all.return_value = [
+        SimpleNamespace(id=1, asset_type="CRIPTO"),
+        SimpleNamespace(id=2, asset_type="TESOURO_DIRETO"),
+        SimpleNamespace(id=3, asset_type="ACAO"),
+    ]
+    session.execute.return_value = query_result
+    supported_disposal = CanonicalRealizedDisposal(
+        transaction_id=3,
+        ticker="PETR4",
+        asset_type="ACAO",
+        disposal_date=date(2025, 3, 10),
+        quantity_requested=Decimal(10),
+        quantity_disposed=Decimal(10),
+        unit_proceeds_brl=Decimal(15),
+        gross_proceeds_brl=Decimal(150),
+        cost_basis_brl=Decimal(100),
+        fees_brl=Decimal(0),
+        realized_pnl_brl=Decimal(50),
+        currency="BRL",
+        gross_proceeds_original_currency=Decimal(150),
+        applied_event_ids=(),
+    )
+    unsupported_disposal = CanonicalRealizedDisposal(
+        transaction_id=2,
+        ticker="TESOURO",
+        asset_type="TESOURO_DIRETO",
+        disposal_date=date(2025, 3, 10),
+        quantity_requested=Decimal(1),
+        quantity_disposed=Decimal(1),
+        unit_proceeds_brl=Decimal(1000),
+        gross_proceeds_brl=Decimal(1000),
+        cost_basis_brl=Decimal(900),
+        fees_brl=Decimal(0),
+        realized_pnl_brl=Decimal(100),
+        currency="BRL",
+        gross_proceeds_original_currency=Decimal(1000),
+        applied_event_ids=(),
+    )
+
+    with (
+        patch(
+            "app.services.irpf_annual_integrated_assessment_service.adapt_ordered_transactions",
+            return_value=(),
+        ) as adapt,
+        patch(
+            "app.services.irpf_annual_integrated_assessment_service.project_day_trades_by_month",
+            return_value=(),
+        ),
+        patch(
+            "app.services.irpf_annual_integrated_assessment_service.load_realized_disposals",
+            new=AsyncMock(return_value=(unsupported_disposal, supported_disposal)),
+        ),
+    ):
+        result = await assess_annual_integrated_operations(session, 15, 2025)
+
+    adapted_transactions = adapt.call_args.args[0]
+    assert [tx.id for tx in adapted_transactions] == [3]
+    assert result.total_swing_realized_pnl_brl == Decimal("50.00")
 
 
 @pytest.mark.asyncio

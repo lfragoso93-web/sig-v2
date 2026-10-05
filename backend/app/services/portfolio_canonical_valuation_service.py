@@ -6,6 +6,8 @@ substituídos pelos respectivos motores dedicados antes do retorno.
 """
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
 
@@ -14,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
 from app.models.transaction import OperationType, Transaction
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
@@ -25,14 +28,15 @@ from app.services.fixed_income_valuation_service import (
 )
 from app.services.fx_rate_reader import load_usd_brl_rate_at_or_before
 from app.services.lifecycle_aware_price_service import get_prices_at_date_with_lifecycle
-from app.services.portfolio_snapshot_service import _build_positions_at
-from app.services.price_history_service import get_price_at_date
+from app.services.portfolio_position_state_service import build_positions_at
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _PCT = Decimal("0.0001")
+_CLASS_TOTAL_ROUNDING_TOLERANCE = Decimal("0.02")
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
+_SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
 _NON_MARKET_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 
 
@@ -44,13 +48,93 @@ def _asset_type(value: object) -> AssetType:
         return AssetType.ACAO
 
 
+def _average_price_from_state(state: object) -> Decimal:
+    """Deriva o custo médio da projeção canônica sem depender de campo legado."""
+    qty = Decimal(str(getattr(state, "qty", 0) or 0))
+    cost = Decimal(str(getattr(state, "cost", 0) or 0))
+    return cost / qty if qty else _ZERO
+
+
+def _corporate_action_cash_flow_total(positions: dict) -> Decimal:
+    """Soma fluxos economicos derivados sem mistura-los a valor de mercado/PnL."""
+    total = _ZERO
+    for state in positions.values():
+        for cash_flow in getattr(state, "corporate_action_cash_flows", ()) or ():
+            total += Decimal(str(getattr(cash_flow, "gross_amount_brl", 0) or 0))
+    return total.quantize(_MONEY)
+
+
+async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
+    result = await db.execute(
+        select(Asset.ticker).where(
+            Asset.asset_type == _TREASURY_TYPE,
+            func.lower(Asset.ticker) == canonical.lower(),
+        )
+    )
+    found = result.scalars().first()
+    return str(found) if found else canonical
+
+
+async def _synthetic_certification_treasury_ticker(
+    db: AsyncSession,
+    ticker: str,
+) -> str | None:
+    result = await db.execute(
+        select(Asset.ticker).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == _TREASURY_TYPE,
+            Asset.provider == _SYNTHETIC_CERTIFICATION_PROVIDER,
+        )
+    )
+    found = result.scalars().first()
+    return str(found) if found else None
+
+
+async def _treasury_price_at_or_before(
+    db: AsyncSession,
+    ticker: str,
+    target_date: date,
+) -> Decimal | None:
+    prices = await _treasury_prices_at_or_before_batch(db, [ticker], target_date)
+    return prices.get(ticker.lower())
+
+
+async def _treasury_prices_at_or_before_batch(
+    db: AsyncSession,
+    tickers: Iterable[str],
+    target_date: date,
+) -> dict[str, Decimal]:
+    normalized = sorted({str(ticker).lower() for ticker in tickers if ticker})
+    if not normalized:
+        return {}
+
+    result = await db.execute(
+        select(func.lower(Asset.ticker), AssetPrice.close)
+        .join(AssetPrice, AssetPrice.asset_id == Asset.id)
+        .where(
+            Asset.asset_type == _TREASURY_TYPE,
+            func.lower(Asset.ticker).in_(normalized),
+            func.date(AssetPrice.timestamp) <= target_date,
+        )
+        .distinct(func.lower(Asset.ticker))
+        .order_by(func.lower(Asset.ticker).asc(), AssetPrice.timestamp.desc())
+    )
+    return {
+        str(ticker).lower(): Decimal(str(close))
+        for ticker, close in result.all()
+        if close is not None
+    }
+
+
 async def _base_totals_without_dedicated_lookup(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
-) -> dict[str, Decimal]:
+    positions: dict | None = None,
+) -> dict:
     """Replica a base patrimonial sem consultar preços para classes dedicadas."""
-    positions = await _build_positions_at(db, portfolio_id, target_date)
+    if positions is None:
+        positions = await build_positions_at(db, portfolio_id, target_date)
     if not positions:
         return {
             "market_value": _ZERO,
@@ -60,8 +144,10 @@ async def _base_totals_without_dedicated_lookup(
             "unrealized_pnl": _ZERO,
             "total_pnl": _ZERO,
             "return_pct": _ZERO,
+            "corporate_action_cash_flow_total": _ZERO,
             "pre_listing_assets": 0,
             "real_price_gaps": 0,
+            "market_value_by_class": {},
         }
 
     tickers = list(positions)
@@ -87,6 +173,12 @@ async def _base_totals_without_dedicated_lookup(
     else:
         prices, pre_listing, real_gaps = {}, set(), set()
 
+    if real_gaps:
+        raise RuntimeError(
+            "cobertura persistida de preço indisponível para: "
+            + ", ".join(sorted(real_gaps))
+        )
+
     fx_snapshot = Decimal("1")
     if any(state.is_usd for state in positions.values()):
         persisted_fx = await load_usd_brl_rate_at_or_before(db, target_date)
@@ -97,16 +189,20 @@ async def _base_totals_without_dedicated_lookup(
         fx_snapshot = persisted_fx.rate
 
     market_value = _ZERO
+    market_value_by_class: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     cost_basis = _ZERO
     realized_pnl = _ZERO
     for ticker, state in positions.items():
         current_type = effective_types[ticker]
-        if current_type in _NON_MARKET_TYPES:
-            close = state.avg_price
+        average_price = _average_price_from_state(state)
+        if current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
+            close = average_price
         else:
-            close = Decimal(str(prices.get(ticker.upper(), float(state.avg_price))))
+            close = Decimal(str(prices[ticker.upper()]))
         close_brl = close * fx_snapshot if state.is_usd else close
-        market_value += state.qty * close_brl
+        position_value = state.qty * close_brl
+        market_value += position_value
+        market_value_by_class[current_type.value] += position_value
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
@@ -153,8 +249,14 @@ async def _base_totals_without_dedicated_lookup(
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),
+        "corporate_action_cash_flow_total": _corporate_action_cash_flow_total(
+            positions,
+        ),
         "pre_listing_assets": len(pre_listing),
         "real_price_gaps": len(real_gaps),
+        "market_value_by_class": {
+            key: value.quantize(_MONEY) for key, value in market_value_by_class.items()
+        },
     }
 
 
@@ -162,20 +264,30 @@ async def _fixed_income_totals_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    transactions: list[Transaction] | None = None,
 ) -> dict[str, Decimal]:
     """Calcula Renda Fixa usando somente lançamentos existentes até a data-alvo."""
-    result = await db.execute(
-        select(Transaction)
-        .where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.asset_type == RENDA_FIXA_TYPE,
-            Transaction.date <= target_date,
+    if transactions is None:
+        result = await db.execute(
+            select(Transaction)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.asset_type == RENDA_FIXA_TYPE,
+                Transaction.date <= target_date,
+            )
+            .order_by(Transaction.date.asc(), Transaction.id.asc())
         )
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
+        fixed_income_transactions = list(result.scalars().all())
+    else:
+        fixed_income_transactions = [
+            tx
+            for tx in transactions
+            if tx.date <= target_date
+            and str(getattr(tx, "asset_type", "") or "").upper() == RENDA_FIXA_TYPE
+        ]
 
     applications = []
-    for tx in result.scalars().all():
+    for tx in fixed_income_transactions:
         if _is_buy(tx.operation):
             application = _application_from_buy(tx)
             if application.invested_amount > 0:
@@ -197,35 +309,60 @@ async def _treasury_correction_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    positions: dict | None = None,
+    treasury_symbol_cache: dict[str, str | None] | None = None,
+    treasury_ticker_cache: dict[str, str] | None = None,
 ) -> dict[str, Decimal | int]:
     """Substitui o proxy por custo médio pelo preço do ativo oficial do Tesouro."""
-    positions = await _build_positions_at(db, portfolio_id, target_date)
+    if positions is None:
+        positions = await build_positions_at(db, portfolio_id, target_date)
     correction = _ZERO
     matched = 0
     unresolved = 0
+    treasury_positions: list[tuple[object, str]] = []
 
     for ticker, state in positions.items():
         raw_type = state.asset_type.value if hasattr(state.asset_type, "value") else str(state.asset_type or "")
         if raw_type.upper() != _TREASURY_TYPE:
             continue
 
-        canonical = await resolve_treasury_symbol(db, ticker)
+        synthetic_ticker = await _synthetic_certification_treasury_ticker(db, ticker)
+        if synthetic_ticker:
+            treasury_positions.append((state, synthetic_ticker))
+            continue
+
+        canonical = None
+        if treasury_symbol_cache is not None and ticker in treasury_symbol_cache:
+            canonical = treasury_symbol_cache[ticker]
+        else:
+            canonical = await resolve_treasury_symbol(db, ticker)
+            if treasury_symbol_cache is not None:
+                treasury_symbol_cache[ticker] = canonical
         if not canonical:
             unresolved += 1
             continue
 
-        price = await get_price_at_date(
-            db,
-            canonical,
-            AssetType.TESOURO_DIRETO,
-            target_date.isoformat(),
-        )
+        if treasury_ticker_cache is not None and canonical in treasury_ticker_cache:
+            price_ticker = treasury_ticker_cache[canonical]
+        else:
+            price_ticker = await _persisted_treasury_ticker(db, canonical)
+            if treasury_ticker_cache is not None:
+                treasury_ticker_cache[canonical] = price_ticker
+        treasury_positions.append((state, price_ticker))
+
+    prices = await _treasury_prices_at_or_before_batch(
+        db,
+        [price_ticker for _, price_ticker in treasury_positions],
+        target_date,
+    )
+    for state, price_ticker in treasury_positions:
+        price = prices.get(price_ticker.lower())
         if price is None:
             unresolved += 1
             continue
 
-        canonical_value = state.qty * Decimal(str(price))
-        proxy_value = state.qty * state.avg_price
+        canonical_value = state.qty * price
+        proxy_value = state.cost
         correction += canonical_value - proxy_value
         matched += 1
 
@@ -240,20 +377,73 @@ async def calculate_canonical_portfolio_totals(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    transactions: list[Transaction] | None = None,
+    treasury_symbol_cache: dict[str, str | None] | None = None,
+    treasury_ticker_cache: dict[str, str] | None = None,
 ) -> dict:
     """Retorna totais de mercado corrigidos por Renda Fixa e Tesouro."""
-    totals = await _base_totals_without_dedicated_lookup(db, portfolio_id, target_date)
-    fixed_income = await _fixed_income_totals_at_date(db, portfolio_id, target_date)
-    treasury = await _treasury_correction_at_date(db, portfolio_id, target_date)
+    positions = await build_positions_at(db, portfolio_id, target_date)
+    totals = await _base_totals_without_dedicated_lookup(
+        db,
+        portfolio_id,
+        target_date,
+        positions=positions,
+    )
+    fixed_income = await _fixed_income_totals_at_date(
+        db,
+        portfolio_id,
+        target_date,
+        transactions=transactions,
+    )
+    treasury = await _treasury_correction_at_date(
+        db,
+        portfolio_id,
+        target_date,
+        positions=positions,
+        treasury_symbol_cache=treasury_symbol_cache,
+        treasury_ticker_cache=treasury_ticker_cache,
+    )
 
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
-    total_correction = fixed_income_correction + Decimal(str(treasury["correction"]))
+    treasury_correction = Decimal(str(treasury["correction"]))
+    total_correction = fixed_income_correction + treasury_correction
     market_value = Decimal(str(totals["market_value"])) + total_correction
     unrealized_pnl = Decimal(str(totals["unrealized_pnl"])) + total_correction
     realized_pnl = Decimal(str(totals["realized_pnl"]))
     total_pnl = realized_pnl + unrealized_pnl
     cost_basis = Decimal(str(totals["cost_basis"]))
     invested_total = Decimal(str(totals["invested_total"]))
+
+    market_value_by_class = dict(totals["market_value_by_class"])
+    if fixed_income["invested_amount"] or fixed_income["current_value"]:
+        market_value_by_class[AssetType.RENDA_FIXA.value] = (
+            Decimal(str(market_value_by_class.get(AssetType.RENDA_FIXA.value, _ZERO)))
+            + fixed_income_correction
+        ).quantize(_MONEY)
+    if treasury_correction:
+        market_value_by_class[AssetType.TESOURO_DIRETO.value] = (
+            Decimal(str(market_value_by_class.get(AssetType.TESOURO_DIRETO.value, _ZERO)))
+            + treasury_correction
+        ).quantize(_MONEY)
+
+    class_total = sum(market_value_by_class.values(), _ZERO).quantize(_MONEY)
+    rounded_market_value = market_value.quantize(_MONEY)
+    class_delta = rounded_market_value - class_total
+    if class_delta and abs(class_delta) <= _CLASS_TOTAL_ROUNDING_TOLERANCE:
+        adjustment_key = max(
+            market_value_by_class,
+            key=lambda item: abs(market_value_by_class[item]),
+        )
+        market_value_by_class[adjustment_key] = (
+            market_value_by_class[adjustment_key] + class_delta
+        ).quantize(_MONEY)
+        class_total = sum(market_value_by_class.values(), _ZERO).quantize(_MONEY)
+
+    if class_total != rounded_market_value:
+        raise RuntimeError(
+            "distribuição canônica por classe divergiu do patrimônio: "
+            f"classes={class_total} total={rounded_market_value}"
+        )
 
     return_base = cost_basis + max(realized_pnl, _ZERO)
     if return_base > 0:
@@ -269,6 +459,7 @@ async def calculate_canonical_portfolio_totals(
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),
+        "market_value_by_class": market_value_by_class,
         "fixed_income_invested": fixed_income["invested_amount"],
         "fixed_income_current": fixed_income["current_value"],
         "fixed_income_income": fixed_income["income_amount"],

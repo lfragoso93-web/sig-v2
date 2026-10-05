@@ -192,7 +192,9 @@ async def _sync_benchmarks() -> dict[str, int]:
 
 
 async def _rebuild_all_twr_snapshots() -> dict[str, int]:
-    from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
+    from app.services.portfolio_snapshot_canonical_twr_service import (
+        backfill_canonical_snapshots_with_returns,
+    )
 
     async with AsyncSessionLocal() as db:
         rows = await db.execute(
@@ -210,7 +212,10 @@ async def _rebuild_all_twr_snapshots() -> dict[str, int]:
     for portfolio_id in portfolio_ids:
         try:
             async with AsyncSessionLocal() as db:
-                snapshots += await backfill_snapshots_with_returns(db, portfolio_id)
+                snapshots += await backfill_canonical_snapshots_with_returns(
+                    db,
+                    portfolio_id,
+                )
             processed += 1
         except Exception:
             errors += 1

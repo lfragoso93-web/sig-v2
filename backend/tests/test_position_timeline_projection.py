@@ -1,9 +1,15 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
+)
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolution,
+    FractionalResolutionPolicy,
 )
 from app.services.position_timeline_projection import (
     PositionMovement,
@@ -138,6 +144,22 @@ def test_repurchase_after_event_is_not_transformed_retroactively():
     assert result.applied_event_ids == ()
 
 
+def test_full_sale_resets_average_price_before_repurchase():
+    result = project_position_timeline(
+        movements=[
+            _buy(1, "10", "10"),
+            _sell(2, "10", "12"),
+            _buy(3, "5", "20"),
+        ],
+        actions=[],
+    )
+
+    assert result.quantity == Decimal(5)
+    assert result.total_cost == Decimal(100)
+    assert result.average_price == Decimal(20)
+    assert result.realized_pnl == Decimal(20)
+
+
 def test_bonus_and_reverse_split_are_applied_in_chronological_order():
     result = project_position_timeline(
         movements=[_buy(1, "100", "10")],
@@ -170,3 +192,202 @@ def test_subscription_is_recorded_without_changing_quantity():
     assert result.total_cost == Decimal(1000)
     assert result.realized_pnl == 0
     assert result.subscription_event_ids == ("subscription",)
+
+
+def test_cash_settlement_projects_whole_quantity_and_separate_event_cash_flow():
+    action = _action(
+        "bonus-cash",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("0.10"),
+            settlement_price=Decimal("4.00"),
+            cash_treatment="AUCTION_SETTLEMENT",
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[_buy(1, "10", "18.53")],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("10")
+    assert result.total_cost == Decimal("185.30")
+    assert result.realized_pnl == Decimal("0")
+
+    assert len(result.corporate_action_cash_flows) == 1
+    cash_flow = result.corporate_action_cash_flows[0]
+
+    assert cash_flow.source_event_id == "bonus-cash"
+    assert cash_flow.event_date == date(2026, 1, 2)
+    assert cash_flow.fractional_quantity == Decimal("0.10")
+    assert cash_flow.unit_settlement_price_brl == Decimal("4.00")
+    assert cash_flow.gross_amount_brl == Decimal("0.4000")
+    assert cash_flow.cash_treatment == "AUCTION_SETTLEMENT"
+
+
+def test_cash_settlement_rejects_fraction_that_differs_from_projected_residue():
+    action = _action(
+        "bonus-invalid-fraction",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("1.10"),
+            settlement_price=Decimal("4.00"),
+            cash_treatment="AUCTION_SETTLEMENT",
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="fractional_quantity diverge da fracao projetada",
+    ):
+        project_position_timeline(
+            movements=[_buy(1, "10", "18.53")],
+            actions=[action],
+        )
+
+
+def test_cash_settlement_projection_is_deterministic_on_replay():
+    action = _action(
+        "bonus-replay",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("0.10"),
+            settlement_price=Decimal("4.00"),
+            cash_treatment="AUCTION_SETTLEMENT",
+        ),
+    )
+
+    first = project_position_timeline(
+        movements=[_buy(1, "10", "18.53")],
+        actions=[action],
+    )
+    second = project_position_timeline(
+        movements=[_buy(1, "10", "18.53")],
+        actions=[action],
+    )
+
+    assert second == first
+    assert second.quantity == Decimal("10")
+    assert second.total_cost == Decimal("185.30")
+    assert second.realized_pnl == Decimal("0")
+    assert len(second.corporate_action_cash_flows) == 1
+    assert (
+        second.corporate_action_cash_flows[0].gross_amount_brl
+        == Decimal("0.4000")
+    )
+
+
+def test_cash_settlement_requires_complete_evidence():
+    action = _action(
+        "bonus",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("0.10"),
+            settlement_price=None,
+            cash_treatment="TEST_ONLY",
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="CASH_SETTLEMENT exige settlement_price nao negativo",
+    ):
+        project_position_timeline(
+            movements=[_buy(1, "10", "18.53")],
+            actions=[action],
+        )
+
+
+def test_no_fractional_residue_rejects_fractional_projected_quantity():
+    action = _action(
+        "bonus",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="NO_FRACTIONAL_RESIDUE incompativel com quantidade projetada",
+    ):
+        project_position_timeline(
+            movements=[_buy(1, "10", "18.53")],
+            actions=[action],
+        )
+
+
+def test_bonus_without_fractional_resolution_preserves_existing_behavior():
+    result = project_position_timeline(
+        movements=[_buy(1, "10", "18.53")],
+        actions=[
+            _action(
+                "bonus",
+                date(2026, 1, 2),
+                CorporateActionKind.STOCK_BONUS,
+                "1.01",
+            )
+        ],
+    )
+
+    assert result.quantity == Decimal("10.10")
+    assert result.total_cost == Decimal("185.30")
