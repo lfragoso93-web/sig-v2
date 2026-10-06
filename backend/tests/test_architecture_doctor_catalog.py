@@ -14,6 +14,7 @@ from app.doctor.contracts import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DOCUMENTATION = REPOSITORY_ROOT / "docs" / "ARCHITECTURE_DOCTOR.md"
 
 
 def _result(finding_id: str, status: DoctorFindingStatus) -> DoctorFindingResult:
@@ -33,6 +34,22 @@ def test_catalog_has_stable_unique_ordered_ids_and_existing_evidence() -> None:
         for entry in ARCHITECTURE_CHECKS
         for evidence in entry.evidence
     )
+
+
+def test_documentation_covers_catalog_and_contribution_contract() -> None:
+    documentation = DOCUMENTATION.read_text(encoding="utf-8")
+
+    assert all(
+        entry.finding_id in documentation for entry in ARCHITECTURE_CHECKS
+    )
+    for required_contract in (
+        "## Como adicionar um finding",
+        "não podem ser reutilizados, renumerados",
+        "backend/tests/test_*.py",
+        "sem banco, rede ou",
+        "Preserve os gates pytest originais",
+    ):
+        assert required_contract in documentation
 
 
 def test_error_severity_failure_is_blocking() -> None:

@@ -5,15 +5,16 @@ já são protegidos por gates do SGI. Ele não substitui `pytest`, Flake8, mypy,
 Alembic ou os testes arquiteturais existentes: esses continuam sendo a fonte de
 verdade e aparecem como evidência no catálogo.
 
-## Escopo deste bloco
+## Escopo atual
 
 O catálogo inicial vive em `backend/app/doctor/catalog.py` e registra os IDs
 `SGI001` a `SGI011`, título, severidade, tipo de check e arquivos que hoje
 protegem cada regra. Os contratos em `backend/app/doctor/contracts.py` definem o
-envelope de resultado e os códigos de saída. Ainda não existe CLI.
+envelope de resultado e os códigos de saída. A CLI canônica é exposta por
+`python -m app.doctor`.
 
 O runner de `backend/app/doctor/static_runner.py` aceita uma lista explícita de
-IDs e executa, separadamente, apenas evidências de regras classificadas como
+IDs e executa apenas evidências de regras classificadas como
 `static`. Cada evidência deve ser um arquivo `backend/tests/test_*.py` já
 registrado no catálogo. O runner reutiliza esses testes como autoridade e chama
 pytest com o cache desabilitado, sem criar uma implementação paralela da regra.
@@ -84,3 +85,38 @@ bloqueante nunca é promovida a sucesso.
 Adicionar um ID não autoriza executar o respectivo gate. Qualquer runner deve
 declarar quais tipos de check suporta, preservar o comportamento fail-closed e
 continuar read-only por padrão.
+
+## Como adicionar um finding
+
+1. Crie ou identifique primeiro o gate autoritativo. O Doctor deve orquestrar
+   uma proteção existente, não reimplementar a regra arquitetural.
+2. Reserve o próximo ID sequencial livre no formato `SGIxxx`. IDs publicados
+   não podem ser reutilizados, renumerados ou ter seu significado trocado.
+3. Registre em `backend/app/doctor/catalog.py` um título acionável, severidade,
+   tipo e pelo menos uma evidência versionada no repositório.
+4. Use severidade `error` quando a violação deve bloquear. `warning` é apenas
+   consultivo e exige justificativa explícita na documentação.
+5. Classifique o check como `static`, `behavioral`, `database` ou `runtime` de
+   acordo com a dependência real. Não reduza a classificação para fazê-lo caber
+   no runner básico.
+6. Para execução pelo runner estático, todas as evidências devem ser arquivos
+   `backend/tests/test_*.py`, read-only, determinísticos e sem banco, rede ou
+   provedor. Outros tipos permanecem apenas catalogados até terem runner próprio
+   com opt-in e fronteira documentada.
+7. Atualize a tabela deste documento e os testes do catálogo, runner e CLI.
+   Preserve os gates pytest originais durante qualquer consolidação.
+
+Validação mínima do contrato do Doctor:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m pytest tests/test_architecture_doctor_catalog.py tests/test_architecture_doctor_static_runner.py tests/test_architecture_doctor_cli.py tests/test_architecture_doctor_module_entrypoint.py -q -p no:cacheprovider
+..\.venv\Scripts\python.exe -m flake8 app/doctor app/cli/architecture_doctor.py tests/test_architecture_doctor_*.py --jobs=1
+..\.venv\Scripts\python.exe -m mypy app
+..\.venv\Scripts\python.exe -m compileall -q app/doctor app/cli/architecture_doctor.py
+```
+
+No Windows deste checkout, se o pytest falhar antes das asserções com
+`WinError 5` ao preparar `tmp_path`, repita o teste em container Linux com a
+raiz do repositório montada read-only. Não interprete o erro de ACL como finding
+do Doctor.
