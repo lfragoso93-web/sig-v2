@@ -22,8 +22,8 @@ A CLI exige seleção explícita e continua limitada aos checks estáticos:
 
 ```powershell
 cd backend
-..\.venv\Scripts\python.exe -m app.cli.architecture_doctor --check SGI004
-..\.venv\Scripts\python.exe -m app.cli.architecture_doctor --all-static --format json
+..\.venv\Scripts\python.exe -m app.doctor --check SGI004
+..\.venv\Scripts\python.exe -m app.doctor --all-static --format json
 ```
 
 `--check` pode ser repetido. A saída JSON usa o schema
