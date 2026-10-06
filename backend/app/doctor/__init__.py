@@ -9,6 +9,7 @@ from app.doctor.contracts import (
     DoctorSeverity,
     resolve_exit_code,
 )
+from app.doctor.static_runner import StaticDoctorReport, run_static_checks
 
 __all__ = [
     "ARCHITECTURE_CHECKS",
@@ -17,6 +18,8 @@ __all__ = [
     "DoctorFindingResult",
     "DoctorFindingStatus",
     "DoctorSeverity",
+    "StaticDoctorReport",
     "architecture_check_by_id",
     "resolve_exit_code",
+    "run_static_checks",
 ]

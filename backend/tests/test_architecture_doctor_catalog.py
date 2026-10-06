@@ -68,6 +68,13 @@ def test_unknown_finding_is_internal_error() -> None:
     )
 
 
+def test_empty_result_set_is_internal_error() -> None:
+    assert (
+        resolve_exit_code([], architecture_check_by_id)
+        is DoctorExitCode.INTERNAL_ERROR
+    )
+
+
 def test_warning_failure_or_skip_does_not_block() -> None:
     warning_catalog = {
         "SGI900": DoctorCatalogEntry(

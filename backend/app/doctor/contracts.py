@@ -58,6 +58,9 @@ def resolve_exit_code(
 ) -> DoctorExitCode:
     """Consolida resultados sem transformar ausência de evidência em sucesso."""
 
+    if not results:
+        return DoctorExitCode.INTERNAL_ERROR
+
     if any(result.finding_id not in catalog for result in results):
         return DoctorExitCode.INTERNAL_ERROR
 

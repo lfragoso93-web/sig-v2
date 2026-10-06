@@ -1,0 +1,139 @@
+"""Runner focado dos gates estáticos já existentes.
+
+Somente arquivos de teste explicitamente associados a checks ``static`` podem
+ser executados. O módulo não conhece banco, runtime, provedores ou operações de
+escrita da aplicação.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+import subprocess
+import sys
+
+from app.doctor.catalog import architecture_check_by_id
+from app.doctor.contracts import (
+    DoctorCheckKind,
+    DoctorExitCode,
+    DoctorFindingResult,
+    DoctorFindingStatus,
+    resolve_exit_code,
+)
+
+
+StaticCheckExecutor = Callable[[tuple[str, ...], Path], int]
+
+
+@dataclass(frozen=True)
+class StaticDoctorReport:
+    results: tuple[DoctorFindingResult, ...]
+    exit_code: DoctorExitCode
+
+
+def _execute_pytest(command: tuple[str, ...], backend_root: Path) -> int:
+    completed = subprocess.run(command, cwd=backend_root, check=False)
+    return completed.returncode
+
+
+def _test_paths(finding_id: str, repository_root: Path) -> tuple[Path, ...]:
+    entry = architecture_check_by_id[finding_id]
+    tests_root = (repository_root / "backend" / "tests").resolve()
+    paths: list[Path] = []
+
+    for evidence in entry.evidence:
+        path = (repository_root / evidence).resolve()
+        if path.parent != tests_root or not path.name.startswith("test_"):
+            raise ValueError(
+                f"{finding_id} possui evidência não executável no runner estático: "
+                f"{evidence}"
+            )
+        if not path.is_file():
+            raise FileNotFoundError(f"evidência ausente para {finding_id}: {evidence}")
+        paths.append(path)
+
+    return tuple(paths)
+
+
+def _command(paths: Sequence[Path], backend_root: Path) -> tuple[str, ...]:
+    relative_paths = tuple(str(path.relative_to(backend_root)) for path in paths)
+    return (
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        *relative_paths,
+    )
+
+
+def run_static_checks(
+    finding_ids: Sequence[str],
+    *,
+    repository_root: Path,
+    executor: StaticCheckExecutor = _execute_pytest,
+) -> StaticDoctorReport:
+    """Executa somente os IDs estáticos solicitados, um gate por resultado."""
+
+    if len(set(finding_ids)) != len(finding_ids):
+        raise ValueError("finding_ids não pode conter IDs duplicados")
+
+    backend_root = (repository_root / "backend").resolve()
+    results: list[DoctorFindingResult] = []
+
+    for finding_id in finding_ids:
+        entry = architecture_check_by_id.get(finding_id)
+        if entry is None:
+            results.append(
+                DoctorFindingResult(
+                    finding_id=finding_id,
+                    status=DoctorFindingStatus.ERROR,
+                    detail="ID não existe no catálogo",
+                )
+            )
+            continue
+        if entry.kind is not DoctorCheckKind.STATIC:
+            results.append(
+                DoctorFindingResult(
+                    finding_id=finding_id,
+                    status=DoctorFindingStatus.ERROR,
+                    detail=f"check {entry.kind.value} não é permitido pelo runner estático",
+                )
+            )
+            continue
+
+        try:
+            paths = _test_paths(finding_id, repository_root.resolve())
+            return_code = executor(_command(paths, backend_root), backend_root)
+        except (OSError, ValueError) as exc:
+            results.append(
+                DoctorFindingResult(
+                    finding_id=finding_id,
+                    status=DoctorFindingStatus.ERROR,
+                    detail=str(exc),
+                )
+            )
+            continue
+
+        status = (
+            DoctorFindingStatus.PASS
+            if return_code == 0
+            else DoctorFindingStatus.FAIL
+            if return_code == 1
+            else DoctorFindingStatus.ERROR
+        )
+        results.append(
+            DoctorFindingResult(
+                finding_id=finding_id,
+                status=status,
+                detail=f"pytest exit_code={return_code}",
+            )
+        )
+
+    frozen_results = tuple(results)
+    return StaticDoctorReport(
+        results=frozen_results,
+        exit_code=resolve_exit_code(frozen_results, architecture_check_by_id),
+    )

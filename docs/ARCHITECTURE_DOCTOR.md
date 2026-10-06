@@ -10,11 +10,18 @@ verdade e aparecem como evidência no catálogo.
 O catálogo inicial vive em `backend/app/doctor/catalog.py` e registra os IDs
 `SGI001` a `SGI011`, título, severidade, tipo de check e arquivos que hoje
 protegem cada regra. Os contratos em `backend/app/doctor/contracts.py` definem o
-envelope de resultado e os códigos de saída, mas ainda não existe runner ou CLI.
+envelope de resultado e os códigos de saída. Ainda não existe CLI.
 
-Nenhum código deste bloco acessa banco, rede, provedor, variáveis de ambiente ou
-executa writes. Checks de banco e runtime estão apenas classificados; um bloco
-posterior deverá definir opt-in/contexto explícito antes de executá-los.
+O runner de `backend/app/doctor/static_runner.py` aceita uma lista explícita de
+IDs e executa, separadamente, apenas evidências de regras classificadas como
+`static`. Cada evidência deve ser um arquivo `backend/tests/test_*.py` já
+registrado no catálogo. O runner reutiliza esses testes como autoridade e chama
+pytest com o cache desabilitado, sem criar uma implementação paralela da regra.
+
+Nenhum código deste bloco acessa banco, rede, provedor ou executa writes da
+aplicação. Checks behavioral, database e runtime são rejeitados antes da
+execução; um bloco posterior deverá definir opt-in/contexto explícito antes de
+considerá-los.
 
 ## Semântica de resultado
 
@@ -51,6 +58,6 @@ bloqueante nunca é promovida a sucesso.
 | SGI010 | readiness | behavioral | contratos de sistema e teste assistido |
 | SGI011 | identidade do runtime | runtime | SHA do Compose e execução do bootstrap |
 
-Adicionar um ID não autoriza executar o respectivo gate. O runner futuro deve
+Adicionar um ID não autoriza executar o respectivo gate. Qualquer runner deve
 declarar quais tipos de check suporta, preservar o comportamento fail-closed e
 continuar read-only por padrão.
