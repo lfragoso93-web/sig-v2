@@ -1,6 +1,6 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 05/10/2026.
+> Documento obrigatório para retomar desenvolvimento. Atualizado em 06/10/2026.
 
 ## Baseline atual
 
@@ -16,7 +16,9 @@ Estado de governança pós-promoção:
 - documentação raiz rebaselined para o estado atual;
 - #158, #269 e #227 fechadas;
 - OCI/#284 fora do caminho crítico atual e preservada como backlog futuro;
-- #384 separa promoção arquitetural de autorização persistente para dados reais.
+- #345 concluída e promovida pela PR #385;
+- a fundação persistente da #384 foi promovida pelas PRs #386 e #387, sem
+  ativação de `/ready` nem execução real.
 
 ## Ordem obrigatória de trabalho
 
@@ -45,15 +47,28 @@ ready_for_real_data=false
 ```text
 governança pós-#362
   -> baseline local do HEAD
-  -> #345
+  -> #345 (concluída)
   -> #346
   -> #347
   -> #365
   -> #364
 ```
 
-Não iniciar #345 sem baseline verde. #384 governa qualquer futura mudança de
-`ready_for_real_data`; #284 não bloqueia essa sequência local.
+Prosseguir pela #346/#347 com baseline verde. Em paralelo, a #384 governa
+qualquer futura mudança de `ready_for_real_data`; a prova PostgreSQL isolada de
+restart/concorrência já está verde. #284 não bloqueia essa sequência local.
+
+### #384 — certificação para dados reais (em andamento)
+
+- persistence append-only, leitor DB-first, relatório, contrato, executor e CLI
+  estão publicados;
+- dry-run é o padrão; `--execute` exige confirmação forte e autorização
+  operacional explícita;
+- provas PostgreSQL de restart/concorrência/stale-plan concluídas em banco
+  efêmero;
+- `/ready` integrado ao resolvedor independente de identidade e ao leitor
+  persistido, permanecendo 503 sem promoção válida;
+- runbook canônico: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Pendências de curto prazo
 

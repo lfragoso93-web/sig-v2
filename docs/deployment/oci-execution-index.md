@@ -1,8 +1,11 @@
 # SGI v2 OCI Execution Index
 
-Status: homologacao de SHA certificado localmente.
+Status: backlog futuro de homologacao de SHA certificado localmente (#284).
 
-Atualizado em 10/09/2026.
+Atualizado em 06/10/2026.
+
+> Este índice permanece como referência de retomada. OCI não integra o caminho
+> atual de desenvolvimento nem a ativação da #384.
 
 ## Fronteira operacional obrigatoria
 
@@ -18,7 +21,10 @@ Fluxo vigente:
 6. se OCI revelar falha de codigo/contrato, reproduzir e corrigir localmente, gerar novo SHA e homologar novamente;
 7. nunca editar codigo na VM OCI como forma de correcao permanente.
 
-`GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. `ready_for_real_data=false` permanece obrigatorio ate #158 -> #269 -> #284 -> #227.
+`GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. Os gates
+#158, #269 e #227 foram concluídos; `ready_for_real_data=false` permanece
+obrigatório até uma decisão persistente própria da #384. OCI/#284 não é
+pré-requisito atual dessa decisão.
 
 ## Phase 0. Freeze Candidate SHA
 
@@ -94,7 +100,8 @@ Enquanto o projeto estiver somente `GO_ASSISTED`:
 - nao executar seed global real apenas para testar deploy;
 - nao executar contracao destrutiva sem gate especifico.
 
-Restore/importacao real pertencem aos gates #158/#269/#284/#227 e so entram no deploy de promocao quando formalmente autorizados.
+Restore/importacao real exigem autorização formal e não são liberados pela
+certificação de infraestrutura OCI nem pela #384.
 
 ## Phase 6. Start App
 
@@ -136,15 +143,15 @@ ready_for_real_data = false
 
 Nao alterar readiness manualmente para fazer o smoke passar.
 
-## Phase 9. Promotion Homologation
+## Phase 9. Promotion Homologation (historical reference)
 
-Somente depois de #303, #226, #216 e #158 fornecerem o SHA/dataset de promocao:
+Os gates históricos #303, #226, #216, #158 e #227 já foram concluídos. Quando
+OCI for retomada:
 
 - homologar exatamente esse SHA na OCI;
 - executar os smokes e gates de resiliencia/seguranca aplicaveis;
-- entregar a evidencia a #227;
-- #227 registra GO ou NO-GO;
-- somente um GO formal pode autorizar avaliar `ready_for_real_data=true`.
+- registrar a evidência de infraestrutura sem promover readiness manualmente;
+- manter a decisão de dados reais sob o contrato e runbook da #384.
 
 ## Phase 10. Operate And Recover
 

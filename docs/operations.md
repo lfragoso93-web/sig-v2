@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 08/09/2026
+> Última atualização: 06/10/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -52,7 +52,7 @@ inventário
 → restore isolado
 → cleanup impact
 → exportação
-→ limpeza controlada (pendente)
+→ limpeza controlada guardada
 → seeds
 → reimportação
 → posições e snapshots
@@ -189,12 +189,48 @@ Runbook: `docs/pre-prod-export-runbook.md`.
 
 ## Limpeza controlada
 
-A limpeza executável ainda não está implementada. Até a conclusão do próximo sub-bloco da Issue #158:
+A limpeza isolada possui executor guardado e runbook próprio. Ela não deve ser
+repetida no dataset corrente por checklist histórico.
 
+- usar somente banco restaurado e explicitamente isolado;
+- começar pelo dry-run e validar artefatos/gates;
 - não executar `DELETE`, `TRUNCATE`, `DROP` ou limpeza manual;
-- não editar os artefatos aprovados;
-- não assumir que `full_market_rebuild` restaura dados de negócio;
-- exigir contrato versionado, validação dos artefatos, gate, ordem do DAG, contagens antes/depois e falha atômica.
+- não assumir que `full_market_rebuild` restaura dados de negócio.
+
+Runbook: `docs/pre-prod-cleanup-execution-runbook.md`.
+
+## Certificação persistente para dados reais (#384)
+
+A CLI é dry-run por padrão e não recebe a evidência `GO_ASSISTED`. Ela exige o
+contrato próprio `real-data-promotion-evidence.v1` com identidade completa do
+dataset. Os artefatos locais ficam montados em `/app/artifacts` no backend.
+
+Antes do dry-run, configure `APP_BRANCH`, `APP_COMMIT_SHA` e
+`REAL_DATASET_REFERENCE` no runtime com os mesmos valores candidatos. O
+`/ready` lê a revision Alembic diretamente do banco e permanece 503 se qualquer
+componente da identidade estiver ausente ou divergente.
+
+```powershell
+$CommitSha = (git rev-parse HEAD).Trim()
+$Evidence = "/app/artifacts/real-data-certification/evidence.json"
+
+docker compose exec backend python -m app.cli.real_data_certification `
+    --action promote `
+    --environment local `
+    --evidence-file $Evidence `
+    --branch stable-15jun `
+    --commit-sha $CommitSha `
+    --dataset-reference "DATASET-REFERENCE" `
+    --alembic-revision "ALEMBIC-REVISION" `
+    --gate-issue-reference "#227" `
+    --pull-request-reference "#362" `
+    --actor "OPERATOR" `
+    --reason "ISSUE-384"
+```
+
+No estado atual, execute somente esse dry-run. Não usar `--execute`; nenhuma
+promoção real foi autorizada. Runbook completo:
+`docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Rebuild completo de mercado
 

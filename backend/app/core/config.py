@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
     APP_DEBUG: bool = False
     ENVIRONMENT: str = "development"
+    APP_BRANCH: str = ""
+    APP_COMMIT_SHA: str = ""
+    REAL_DATASET_REFERENCE: str = ""
     ENABLE_BOOT_MARKET_SYNC: bool = False
     B3_BOOTSTRAP_START_YEAR: Optional[int] = None
 

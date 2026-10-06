@@ -1,6 +1,6 @@
 # Governança de Issues — SGI v2
 
-Atualizado em 05/10/2026.
+Atualizado em 06/10/2026.
 
 ## Objetivo
 
@@ -11,8 +11,9 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 1. #158, #269 e #227 estão fechadas;
 2. a PR #362 promoveu a baseline arquitetural para `main`;
 3. OCI/#284 é backlog futuro e não bloqueia o desenvolvimento atual;
-4. #384 governa separadamente a autorização persistente para dados reais;
-5. a Epic #344 deve iniciar pela #345 somente após baseline local verde.
+4. #384 governa separadamente a autorização persistente para dados reais; sua
+   fundação foi promovida pelas PRs #386 e #387, sem ativação;
+5. #345 foi concluída e promovida pela PR #385; a Epic #344 segue por #346/#347.
 
 ## Classificação atual
 
@@ -24,13 +25,14 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #158 — reconciliação final de promoção, fechada;
 - #269 — security gate, fechada;
 - #227 — decisão formal GO/NO-GO, fechada;
-- #384 — readiness persistente e auditável, aberta;
+- #384 — readiness persistente e auditável, implementação concluída e execução
+  operacional real pendente;
 - #284 — OCI, backlog futuro.
 
 ### Hardening arquitetural
 
 - #344 — Epic de enforcement;
-- #345 -> #346 -> #347 — fundação recomendada;
+- #345 concluída; #346 -> #347 — sequência recomendada;
 - #365 deve preceder migration estrutural ampla de #364.
 
 ### Bugs acompanhados no primeiro GO

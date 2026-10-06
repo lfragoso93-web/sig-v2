@@ -1,4 +1,4 @@
-"""Compose bootstrap and persisted certification without activating real data."""
+"""Compose diagnostic bootstrap state with persisted certification authority."""
 
 from __future__ import annotations
 
@@ -27,16 +27,15 @@ class RealDataReadinessReport:
 
     @property
     def eligible_for_activation(self) -> bool:
-        return self.bootstrap_complete and self.certification.ready_for_real_data
+        return self.certification.ready_for_real_data
 
     @property
     def activation_required(self) -> bool:
-        return self.eligible_for_activation
+        return False
 
     @property
     def ready_for_real_data(self) -> bool:
-        # Promotion remains a separate, explicitly controlled future operation.
-        return False
+        return self.certification.ready_for_real_data
 
     def to_dict(self) -> dict[str, Any]:
         certification = asdict(self.certification)

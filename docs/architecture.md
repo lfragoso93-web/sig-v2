@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 10/09/2026.
+> Última atualização: 06/10/2026.
 
 ## Objetivo
 
@@ -137,6 +137,7 @@ Separar:
 2. Incremental Sync;
 3. Full Market Rebuild;
 4. Promotion Reconciliation (#158).
+5. Real-data Certification (#384).
 
 `full_market_rebuild` não substitui bootstrap inicial nem a reconciliação de promoção. Não repetir operações destrutivas já certificadas somente por checklist histórico.
 
@@ -148,7 +149,7 @@ Existem estados distintos:
 2. ambiente apto a validação assistida;
 3. ambiente pronto para dados reais.
 
-Estado registrado em 10/09/2026:
+Estado operacional preservado em 06/10/2026:
 
 ```text
 user-test-readiness.v1=GO_ASSISTED
@@ -157,15 +158,27 @@ ready_for_real_data=false
 /ready=503
 ```
 
-`GO_ASSISTED` não implica `/ready=200`.
+`GO_ASSISTED` não implica `/ready=200` e não satisfaz o contrato de promoção da
+#384, que exige evidência própria com `status=GO`.
 
-A cadeia para promoção ampla é:
+A decisão histórica da #227 e a promoção arquitetural da PR #362 já foram
+concluídas. A fronteira corrente é persistente e append-only:
 
 ```text
-#303 → #226 → #216 → #158 → #269 → OCI exact-SHA homologation → #227
+evidência real-data-promotion-evidence.v1
+        → plano determinístico + confirmação forte
+        → advisory lock PostgreSQL + validação de stale plan
+        → real_data_certification_events
+        → leitor DB-first / relatório
+        → integração fail-closed com /ready
 ```
 
-Somente #227 pode registrar o GO/NO-GO amplo antes de avaliar `ready_for_real_data=true`.
+A memória do processo não é autoridade. O último evento persistido determina o
+estado auditável; promoção e revogação criam novos eventos, nunca alteram ou
+apagam o histórico. O `/ready` resolve sua identidade esperada fora do log de
+certificação e somente abre diante de promoção persistida exatamente compatível.
+Sem evento real no dataset corrente, o endpoint continua fechado. O contrato operacional está em
+`docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Local x OCI
 
@@ -175,9 +188,9 @@ Ambiente oficial de desenvolvimento, correção, migrations de teste, suítes pe
 
 ### OCI
 
-Ambiente de homologação do SHA exato já certificado localmente. Valida deploy, migrations, restart, persistência, recursos, rede/tunnel e segurança/resiliência aplicáveis.
-
-Não manter hotfix permanente na VM. Defeito encontrado em OCI volta ao ambiente local e produz novo SHA.
+Backlog futuro sob #284; não integra o caminho atual de desenvolvimento ou a
+ativação da #384. Quando retomado, deve homologar o SHA exato já certificado,
+sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
 ## Segurança e operação
 
