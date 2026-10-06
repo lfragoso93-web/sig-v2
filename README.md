@@ -13,8 +13,8 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 ## Status atual — 06/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
-promovida para `main` pela PR #362; essa promoção não altera automaticamente o
-readiness para dados reais.
+promovida para `main` pela PR #362 e a certificação persistente para dados reais
+foi concluída pela #384 para a identidade runtime atualmente implantada.
 
 Estado operacional registrado:
 
@@ -22,9 +22,9 @@ Estado operacional registrado:
 test_ready=true
 user-test-readiness.v1=GO_ASSISTED
 go_for_assisted_user_tests=true
-ready_for_real_data=false
+ready_for_real_data=true
 /health=200
-/ready=503
+/ready=200
 ```
 
 ### Rebaseline pós-promoção
@@ -36,8 +36,9 @@ ready_for_real_data=false
 - #158, #269 e #227 estão fechadas; a PR #362 foi mergeada em `main`;
 - OCI/#284 saiu do caminho crítico atual e permanece backlog futuro de
   infraestrutura/cloud;
-- `ready_for_real_data=false` permanece obrigatório até uma decisão explícita,
-  persistente e auditável tratada pela #384;
+- a #384 foi concluída com evento `PROMOTE` append-only, validação DB-first e
+  persistência comprovada após restart; qualquer nova identidade de runtime
+  exige novo ciclo de certificação;
 - #370 avancou a fronteira de eventos corporativos materiais: a varredura de
   22/09/2026 registrou zero eventos materiais em `UNRECONCILED`; AMOB3 esta
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
@@ -45,13 +46,13 @@ ready_for_real_data=false
   eventual `MATCHED`.
 - #345 foi concluída e promovida para `main` pela PR #385; a sequência da Epic
   #344 continua em #346 e #347;
-- #384 já possui persistência append-only, leitura DB-first, relatório,
-  contrato, executor transacional e CLI guardada, promovidos pelas PRs #386 e
-  #387; concorrência, stale-plan e restart foram comprovados em PostgreSQL 16
-  isolado. O `/ready` agora consome essa autoridade DB-first e valida identidade
-  runtime completa; a certificação operacional real ainda não foi executada.
+- #384 possui persistência append-only, leitura DB-first, relatório, contrato,
+  executor transacional e CLI guardada; a promoção operacional real foi
+  executada para o dataset/SHA registrados e `/ready` consome essa autoridade.
 
-`GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
+`GO_ASSISTED` continua descrevendo apenas testes acompanhados. A abertura atual
+para dados reais vem exclusivamente do evento persistido da #384; a CLI
+assistida não altera `/ready` manualmente.
 
 A cadeia histórica de promoção foi concluída. O mapa vigente é:
 
@@ -63,9 +64,22 @@ governança pós-#362
         -> #347 Certification Proof
         -> #365 antes de qualquer migration ampla de #364
 
-#384 permanece em andamento: implementação concluída; execução real pendente.
+#384 foi concluída; promoções futuras continuam vinculadas à identidade exata.
 #284 permanece backlog futuro e não bloqueia desenvolvimento local.
 ```
+
+## Agent Skills versionadas
+
+Instruções operacionais para agentes vivem em `.agents/skills` e devem ser
+atualizadas no mesmo bloco que alterar um contrato correspondente:
+
+- `sgi-development` — branch, governança, Architecture Doctor e testes;
+- `sgi-financial-data` — ledger, projeções e writes financeiros;
+- `sgi-market-data` — providers, provenance, seeds e eventos corporativos;
+- `sgi-certification` — identidade, `/ready`, promoção e revogação.
+
+As skills orientam a leitura dos contratos vivos; não substituem Issues,
+runbooks, testes ou autorização explícita para operações destrutivas/escritas.
 
 ## Ambiente de desenvolvimento e OCI
 
@@ -134,13 +148,13 @@ Princípios obrigatórios:
 | Analysis Engine | planejado (#360) |
 | IA | planejada após #360/#246 (#361) |
 
-## Itens que podem afetar o primeiro GO
+## Pendências financeiras pós-GO
 
 - #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
 - #370 permanece fail-closed para KLBN11 até evidência documental suficiente;
-- #384 deve manter a liberação para dados reais explícita, persistente e
-  separada da promoção para `main`.
+- #384 foi concluída e mantém a liberação para dados reais explícita,
+  persistente e separada da promoção para `main`.
 
 #149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
 
