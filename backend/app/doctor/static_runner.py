@@ -86,6 +86,21 @@ def _command(paths: Sequence[Path], backend_root: Path) -> tuple[str, ...]:
     )
 
 
+def _execution_detail(execution: StaticCheckExecution) -> str:
+    detail = f"pytest exit_code={execution.return_code}"
+    if execution.return_code != 0 and execution.output.strip():
+        detail += f"; output={execution.output.strip()[-4000:]}"
+    return detail
+
+
+def _status(return_code: int) -> DoctorFindingStatus:
+    if return_code == 0:
+        return DoctorFindingStatus.PASS
+    if return_code == 1:
+        return DoctorFindingStatus.FAIL
+    return DoctorFindingStatus.ERROR
+
+
 def run_static_checks(
     finding_ids: Sequence[str],
     *,
@@ -99,6 +114,56 @@ def run_static_checks(
 
     backend_root = (repository_root / "backend").resolve()
     results: list[DoctorFindingResult] = []
+    batch_failure: StaticCheckExecution | None = None
+
+    entries = [architecture_check_by_id.get(finding_id) for finding_id in finding_ids]
+    can_batch = len(entries) > 1 and all(
+        entry is not None and entry.kind is DoctorCheckKind.STATIC for entry in entries
+    )
+    if can_batch:
+        try:
+            unique_paths = tuple(
+                dict.fromkeys(
+                    path
+                    for finding_id in finding_ids
+                    for path in _test_paths(finding_id, repository_root.resolve())
+                )
+            )
+            batch_execution = executor(
+                _command(unique_paths, backend_root), backend_root
+            )
+        except (OSError, ValueError) as exc:
+            frozen_results = tuple(
+                DoctorFindingResult(
+                    finding_id=finding_id,
+                    status=DoctorFindingStatus.ERROR,
+                    detail=f"falha no lote estático: {exc}",
+                )
+                for finding_id in finding_ids
+            )
+            return StaticDoctorReport(
+                results=frozen_results,
+                exit_code=resolve_exit_code(
+                    frozen_results, architecture_check_by_id
+                ),
+            )
+
+        if batch_execution.return_code == 0:
+            frozen_results = tuple(
+                DoctorFindingResult(
+                    finding_id=finding_id,
+                    status=DoctorFindingStatus.PASS,
+                    detail="pytest batch exit_code=0",
+                )
+                for finding_id in finding_ids
+            )
+            return StaticDoctorReport(
+                results=frozen_results,
+                exit_code=resolve_exit_code(
+                    frozen_results, architecture_check_by_id
+                ),
+            )
+        batch_failure = batch_execution
 
     for finding_id in finding_ids:
         entry = architecture_check_by_id.get(finding_id)
@@ -134,16 +199,8 @@ def run_static_checks(
             )
             continue
 
-        status = (
-            DoctorFindingStatus.PASS
-            if execution.return_code == 0
-            else DoctorFindingStatus.FAIL
-            if execution.return_code == 1
-            else DoctorFindingStatus.ERROR
-        )
-        detail = f"pytest exit_code={execution.return_code}"
-        if status is not DoctorFindingStatus.PASS and execution.output.strip():
-            detail += f"; output={execution.output.strip()[-4000:]}"
+        status = _status(execution.return_code)
+        detail = _execution_detail(execution)
         results.append(
             DoctorFindingResult(
                 finding_id=finding_id,
@@ -151,6 +208,19 @@ def run_static_checks(
                 detail=detail,
             )
         )
+
+    if batch_failure is not None and all(
+        result.status is DoctorFindingStatus.PASS for result in results
+    ):
+        batch_detail = _execution_detail(batch_failure)
+        results = [
+            DoctorFindingResult(
+                finding_id=result.finding_id,
+                status=DoctorFindingStatus.ERROR,
+                detail=f"lote falhou, mas isolamento passou; {batch_detail}",
+            )
+            for result in results
+        ]
 
     frozen_results = tuple(results)
     return StaticDoctorReport(

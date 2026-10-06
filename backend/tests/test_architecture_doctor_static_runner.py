@@ -80,6 +80,76 @@ def test_runner_maps_pytest_failure_and_execution_error() -> None:
     assert "pytest error" in error.results[0].detail
 
 
+def test_runner_batches_and_deduplicates_green_static_evidence() -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def executor(command: tuple[str, ...], cwd: Path) -> StaticCheckExecution:
+        calls.append(command)
+        return StaticCheckExecution(0)
+
+    report = run_static_checks(
+        ["SGI002", "SGI009"],
+        repository_root=REPOSITORY_ROOT,
+        executor=executor,
+    )
+
+    assert report.exit_code is DoctorExitCode.OK
+    assert len(calls) == 1
+    assert sum(
+        Path(argument).as_posix()
+        == "tests/test_removed_model_consumers_and_main_import.py"
+        for argument in calls[0]
+    ) == 1
+    assert [result.detail for result in report.results] == [
+        "pytest batch exit_code=0",
+        "pytest batch exit_code=0",
+    ]
+
+
+def test_runner_falls_back_to_isolation_after_batch_failure() -> None:
+    executions = iter(
+        (
+            StaticCheckExecution(1, "batch failed"),
+            StaticCheckExecution(0),
+            StaticCheckExecution(1, "SGI009 failed"),
+        )
+    )
+
+    report = run_static_checks(
+        ["SGI002", "SGI009"],
+        repository_root=REPOSITORY_ROOT,
+        executor=lambda command, cwd: next(executions),
+    )
+
+    assert report.exit_code is DoctorExitCode.FINDINGS
+    assert [result.status for result in report.results] == [
+        DoctorFindingStatus.PASS,
+        DoctorFindingStatus.FAIL,
+    ]
+    assert "SGI009 failed" in report.results[1].detail
+
+
+def test_inconsistent_batch_and_isolated_results_fail_closed() -> None:
+    executions = iter(
+        (
+            StaticCheckExecution(1, "batch failed"),
+            StaticCheckExecution(0),
+            StaticCheckExecution(0),
+        )
+    )
+
+    report = run_static_checks(
+        ["SGI002", "SGI009"],
+        repository_root=REPOSITORY_ROOT,
+        executor=lambda command, cwd: next(executions),
+    )
+
+    assert report.exit_code is DoctorExitCode.INTERNAL_ERROR
+    assert all(
+        result.status is DoctorFindingStatus.ERROR for result in report.results
+    )
+
+
 def test_runner_rejects_empty_or_duplicate_selection() -> None:
     empty = run_static_checks([], repository_root=REPOSITORY_ROOT)
     assert empty.exit_code is DoctorExitCode.INTERNAL_ERROR

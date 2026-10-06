@@ -30,6 +30,12 @@ cd backend
 `architecture-doctor.v1` e o processo devolve os códigos `0`, `1` ou `2`
 definidos pelo contrato.
 
+Quando mais de um ID estático é selecionado, o caminho verde usa um único
+processo pytest e remove evidências duplicadas. Se esse lote falhar, o runner
+repete os checks isoladamente para atribuir a falha ao finding correto. Uma
+divergência em que o lote falha e todos os checks isolados passam resulta em
+`INTERNAL_ERROR`, sem promover um resultado inconsistente a sucesso.
+
 Nenhum código deste bloco acessa banco, rede, provedor ou executa writes da
 aplicação. Checks behavioral, database e runtime são rejeitados antes da
 execução; um bloco posterior deverá definir opt-in/contexto explícito antes de
