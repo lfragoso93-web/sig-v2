@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.doctor.contracts import DoctorExitCode, DoctorFindingStatus
-from app.doctor.static_runner import run_static_checks
+from app.doctor.static_runner import StaticCheckExecution, run_static_checks
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -12,9 +12,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 def test_runner_executes_only_requested_static_evidence() -> None:
     calls: list[tuple[tuple[str, ...], Path]] = []
 
-    def executor(command: tuple[str, ...], cwd: Path) -> int:
+    def executor(command: tuple[str, ...], cwd: Path) -> StaticCheckExecution:
         calls.append((command, cwd))
-        return 0
+        return StaticCheckExecution(0)
 
     report = run_static_checks(
         ["SGI004"], repository_root=REPOSITORY_ROOT, executor=executor
@@ -39,10 +39,10 @@ def test_runner_executes_only_requested_static_evidence() -> None:
 def test_runner_rejects_non_static_checks_without_execution(finding_id: str) -> None:
     called = False
 
-    def executor(command: tuple[str, ...], cwd: Path) -> int:
+    def executor(command: tuple[str, ...], cwd: Path) -> StaticCheckExecution:
         nonlocal called
         called = True
-        return 0
+        return StaticCheckExecution(0)
 
     report = run_static_checks(
         [finding_id], repository_root=REPOSITORY_ROOT, executor=executor
@@ -64,18 +64,20 @@ def test_runner_maps_pytest_failure_and_execution_error() -> None:
     failure = run_static_checks(
         ["SGI004"],
         repository_root=REPOSITORY_ROOT,
-        executor=lambda command, cwd: 1,
+        executor=lambda command, cwd: StaticCheckExecution(1, "assertion failed"),
     )
     error = run_static_checks(
         ["SGI004"],
         repository_root=REPOSITORY_ROOT,
-        executor=lambda command, cwd: 5,
+        executor=lambda command, cwd: StaticCheckExecution(5, "pytest error"),
     )
 
     assert failure.exit_code is DoctorExitCode.FINDINGS
     assert failure.results[0].status is DoctorFindingStatus.FAIL
+    assert "assertion failed" in failure.results[0].detail
     assert error.exit_code is DoctorExitCode.INTERNAL_ERROR
     assert error.results[0].status is DoctorFindingStatus.ERROR
+    assert "pytest error" in error.results[0].detail
 
 
 def test_runner_rejects_empty_or_duplicate_selection() -> None:

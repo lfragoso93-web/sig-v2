@@ -18,6 +18,18 @@ IDs e executa, separadamente, apenas evidências de regras classificadas como
 registrado no catálogo. O runner reutiliza esses testes como autoridade e chama
 pytest com o cache desabilitado, sem criar uma implementação paralela da regra.
 
+A CLI exige seleção explícita e continua limitada aos checks estáticos:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m app.cli.architecture_doctor --check SGI004
+..\.venv\Scripts\python.exe -m app.cli.architecture_doctor --all-static --format json
+```
+
+`--check` pode ser repetido. A saída JSON usa o schema
+`architecture-doctor.v1` e o processo devolve os códigos `0`, `1` ou `2`
+definidos pelo contrato.
+
 Nenhum código deste bloco acessa banco, rede, provedor ou executa writes da
 aplicação. Checks behavioral, database e runtime são rejeitados antes da
 execução; um bloco posterior deverá definir opt-in/contexto explícito antes de

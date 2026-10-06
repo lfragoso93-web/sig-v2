@@ -23,7 +23,13 @@ from app.doctor.contracts import (
 )
 
 
-StaticCheckExecutor = Callable[[tuple[str, ...], Path], int]
+@dataclass(frozen=True)
+class StaticCheckExecution:
+    return_code: int
+    output: str = ""
+
+
+StaticCheckExecutor = Callable[[tuple[str, ...], Path], StaticCheckExecution]
 
 
 @dataclass(frozen=True)
@@ -32,9 +38,20 @@ class StaticDoctorReport:
     exit_code: DoctorExitCode
 
 
-def _execute_pytest(command: tuple[str, ...], backend_root: Path) -> int:
-    completed = subprocess.run(command, cwd=backend_root, check=False)
-    return completed.returncode
+def _execute_pytest(
+    command: tuple[str, ...], backend_root: Path
+) -> StaticCheckExecution:
+    completed = subprocess.run(
+        command,
+        cwd=backend_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return StaticCheckExecution(completed.returncode, completed.stdout)
 
 
 def _test_paths(finding_id: str, repository_root: Path) -> tuple[Path, ...]:
@@ -106,7 +123,7 @@ def run_static_checks(
 
         try:
             paths = _test_paths(finding_id, repository_root.resolve())
-            return_code = executor(_command(paths, backend_root), backend_root)
+            execution = executor(_command(paths, backend_root), backend_root)
         except (OSError, ValueError) as exc:
             results.append(
                 DoctorFindingResult(
@@ -119,16 +136,19 @@ def run_static_checks(
 
         status = (
             DoctorFindingStatus.PASS
-            if return_code == 0
+            if execution.return_code == 0
             else DoctorFindingStatus.FAIL
-            if return_code == 1
+            if execution.return_code == 1
             else DoctorFindingStatus.ERROR
         )
+        detail = f"pytest exit_code={execution.return_code}"
+        if status is not DoctorFindingStatus.PASS and execution.output.strip():
+            detail += f"; output={execution.output.strip()[-4000:]}"
         results.append(
             DoctorFindingResult(
                 finding_id=finding_id,
                 status=status,
-                detail=f"pytest exit_code={return_code}",
+                detail=detail,
             )
         )
 
