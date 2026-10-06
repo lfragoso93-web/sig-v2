@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import pytest
 import pytest_asyncio
+from app.core.config import Settings
 from app.models.real_data_certification_event import RealDataCertificationEvent
 from app.services.real_data_certification_contract import (
     REAL_DATA_PROMOTION_EVIDENCE_SCHEMA_VERSION,
@@ -29,7 +30,9 @@ from app.services.real_data_certification_reader import (
     RealDataCertificationStatus,
     read_real_data_certification,
 )
-from sqlalchemy import Table, func, select
+from app.services.real_data_readiness_report import build_real_data_readiness_report
+from app.services.real_data_runtime_identity import resolve_real_data_runtime_identity
+from sqlalchemy import Table, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -61,11 +64,22 @@ async def postgres_engine() -> AsyncIterator[AsyncEngine]:
     async with engine.begin() as connection:
         await connection.run_sync(table.create, checkfirst=True)
         await connection.execute(table.delete())
+        await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        await connection.execute(
+            text("CREATE TABLE alembic_version (version_num VARCHAR(64))")
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO alembic_version (version_num) "
+                "VALUES ('20261005_real_data_certification')"
+            )
+        )
     try:
         yield engine
     finally:
         async with engine.begin() as connection:
             await connection.run_sync(table.drop, checkfirst=True)
+            await connection.execute(text("DROP TABLE alembic_version"))
         await engine.dispose()
 
 
@@ -192,3 +206,49 @@ async def test_postgresql_reader_reconstructs_state_after_engine_restart(
 
     assert state.status is RealDataCertificationStatus.CERTIFIED
     assert state.ready_for_real_data is True
+
+
+@pytest.mark.asyncio
+async def test_postgresql_runtime_identity_and_report_survive_engine_restart(
+    postgres_engine: AsyncEngine,
+) -> None:
+    sessions = async_sessionmaker(postgres_engine, expire_on_commit=False)
+    async with sessions() as session:
+        plan = await _plan(session, "runtime-restart")
+        await execute_real_data_certification_plan(
+            session,
+            plan=plan,
+            confirmation=plan.confirmation,
+        )
+        await session.commit()
+
+    await postgres_engine.dispose()
+    restarted_engine = create_async_engine(_test_database_url())
+    runtime_settings = Settings.model_validate(
+        {
+            "ENVIRONMENT": _identity().environment,
+            "APP_BRANCH": _identity().branch,
+            "APP_COMMIT_SHA": _identity().commit_sha,
+            "REAL_DATASET_REFERENCE": _identity().dataset_reference,
+        }
+    )
+    try:
+        restarted_sessions = async_sessionmaker(
+            restarted_engine,
+            expire_on_commit=False,
+        )
+        async with restarted_sessions() as restarted:
+            runtime_identity = await resolve_real_data_runtime_identity(
+                restarted,
+                runtime_settings=runtime_settings,
+            )
+            report = await build_real_data_readiness_report(
+                restarted,
+                runtime_identity,
+            )
+    finally:
+        await restarted_engine.dispose()
+
+    assert runtime_identity == _identity()
+    assert report.bootstrap_complete is False
+    assert report.ready_for_real_data is True
