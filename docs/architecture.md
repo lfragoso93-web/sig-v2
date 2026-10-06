@@ -66,7 +66,9 @@ A prova assistida portfolio-scoped já demonstrou idempotência. A #226 aceitou 
 
 Eventos pertencem ao ativo em `corporate_events`. Transações históricas não são mutadas para aplicar split, grupamento, bonificação, subscrição ou troca de ticker.
 
-Eventos complexos podem permanecer `UNRECONCILED` até tratamento canônico. Para promoção, devem ser reconciliados os eventos materiais ao dataset aprovado.
+Eventos complexos podem permanecer `UNRECONCILED` até tratamento canônico.
+Eventos materiais precisam estar reconciliados ou formalizados como `CONFLICT`
+fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência.
 
 ## Renda Fixa e Tesouro
 
@@ -149,17 +151,18 @@ Existem estados distintos:
 2. ambiente apto a validação assistida;
 3. ambiente pronto para dados reais.
 
-Estado operacional preservado em 06/10/2026:
+Estado operacional certificado em 06/10/2026 para a identidade runtime vigente:
 
 ```text
 user-test-readiness.v1=GO_ASSISTED
-ready_for_real_data=false
+ready_for_real_data=true
 /health=200
-/ready=503
+/ready=200
 ```
 
 `GO_ASSISTED` não implica `/ready=200` e não satisfaz o contrato de promoção da
-#384, que exige evidência própria com `status=GO`.
+#384. O `/ready=200` atual existe porque houve evidência própria com `status=GO`
+e um evento `PROMOTE` persistido para a identidade exata.
 
 A decisão histórica da #227 e a promoção arquitetural da PR #362 já foram
 concluídas. A fronteira corrente é persistente e append-only:
@@ -177,7 +180,9 @@ A memória do processo não é autoridade. O último evento persistido determina
 estado auditável; promoção e revogação criam novos eventos, nunca alteram ou
 apagam o histórico. O `/ready` resolve sua identidade esperada fora do log de
 certificação e somente abre diante de promoção persistida exatamente compatível.
-Sem evento real no dataset corrente, o endpoint continua fechado. O contrato operacional está em
+O evento `PROMOTE` vigente foi persistido e sobreviveu ao restart do backend.
+Qualquer divergência futura de SHA, dataset ou schema volta a fechar o endpoint
+até novo ciclo guardado. O contrato operacional está em
 `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Local x OCI
@@ -202,14 +207,12 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
 ## Ordem arquitetural corrente
 
-1. consumir #303 como `PORTFOLIO-TEST-READY` aprovado;
-2. consumir #226 como Proventos portfolio-scoped suficiente;
-3. consumir #216 como gate agregado fechado;
-4. executar delta #158;
-5. executar #269 no mesmo SHA candidato;
-6. homologar o mesmo SHA em OCI (#284);
-7. #227 emitir GO/NO-GO;
-8. somente depois promover macrobloco para `main` e avançar backlog de produto.
+1. preservar a certificação vigente enquanto sua identidade continuar exata;
+2. concluir #346 com Agent Skills versionadas;
+3. gerar Certification Proof reproduzível em #347;
+4. avançar #349, #348 e #350 em microblocos independentes;
+5. tratar #365 antes de qualquer migration ampla de #364;
+6. manter OCI/#284 como backlog futuro até retomada explícita.
 
 ## Backlog pós-GO por padrão
 

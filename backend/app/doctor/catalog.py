@@ -113,6 +113,13 @@ ARCHITECTURE_CHECKS = (
             "backend/tests/test_asset_bootstrap_execution_identity.py",
         ),
     ),
+    DoctorCatalogEntry(
+        finding_id="SGI012",
+        title="Agent Skills versionadas cobrem os contratos do SGI",
+        severity=DoctorSeverity.ERROR,
+        kind=DoctorCheckKind.STATIC,
+        evidence=("backend/tests/test_agent_skills_contract.py",),
+    ),
 )
 
 architecture_check_by_id = MappingProxyType(
