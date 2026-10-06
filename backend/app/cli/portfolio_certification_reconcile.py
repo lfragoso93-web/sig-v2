@@ -16,8 +16,9 @@ from app.certification.portfolio_financial_reconciliation import (
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import AsyncSessionLocal
-from app.services.dividend_service import list_dividends
+from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividends
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
@@ -48,10 +49,15 @@ async def main() -> None:
 
     async with AsyncSessionLocal() as db:
         portfolio_id, user_id = await load_certification_portfolio_identity(db)
+        access = PortfolioAccessContext.for_user(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            permissions=frozenset({READ_PORTFOLIO_DIVIDENDS}),
+        )
         positions = await build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
         snapshot_totals = {field: totals[field] for field in _SNAPSHOT_TOTAL_FIELDS}
-        dividends = await list_dividends(db, portfolio_id, user_id)
+        dividends = await list_dividends(db, access)
 
     failures: list[str] = []
     for ticker, expected_holding in expected.holdings.items():

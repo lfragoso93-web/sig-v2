@@ -62,6 +62,15 @@ crítica falha no startup sem registrar valores sensíveis, e budgets de queries
 protegem leitores prioritários contra regressões N+1. O contrato operacional
 está em `docs/DETERMINISTIC_RUNTIME.md`.
 
+### Autorização com escopo explícito
+
+Dados sensíveis por carteira não confiam em `portfolio_id` livre vindo do
+cliente. Verticais migradas recebem `PortfolioAccessContext`, declaram a
+permissão no service e aplicam ownership no repository. Dividendos é a primeira
+vertical completa. Jobs e CLIs devem usar identidade de usuário comprovada ou
+contexto sistêmico com finalidade explícita; bypass implícito é proibido. O
+contrato e o inventário de migração estão em `docs/ACCESS_CONTEXT.md`.
+
 ## Proventos
 
 Eventos monetários pertencem ao ativo e são persistidos em `asset_dividends`.
