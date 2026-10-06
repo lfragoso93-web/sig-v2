@@ -1,10 +1,14 @@
 # Gate de readiness para testes assistidos
 
-Atualizado em 10/09/2026.
+Atualizado em 05/10/2026.
 
 ## Objetivo
 
-O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza dados reais irrestritos. O ambiente continua `ready_for_real_data=false` ate a decisao formal dos gates #158, #269, #284 e #227.
+O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas
+assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza
+dados reais irrestritos. #158, #269 e #227 foram fechadas e a PR #362 foi
+promovida, mas `ready_for_real_data=false` permanece ate decisao explicita,
+persistente e auditavel sob a #384.
 
 ## Execucao
 
@@ -35,9 +39,9 @@ A validacao assistida ja produziu evidencia reutilizavel de CSV/rebuild, mercado
 ## Fronteira local x OCI
 
 - **Local:** desenvolvimento, correcoes e certificacao pesada do SHA candidato.
-- **OCI:** homologacao do SHA exato ja certificado localmente.
+- **OCI:** backlog futuro de infraestrutura/cloud (#284), fora do caminho atual.
 
-OCI valida deploy, migrations, restart, persistencia, recursos, rede/tunnel e smoke. Nao e ambiente de desenvolvimento.
+Nao executar desenvolvimento, testes ou homologacao OCI na fase atual.
 
 Durante a fase assistida, esta combinacao e valida:
 
@@ -48,11 +52,12 @@ GO_ASSISTED = true
 ready_for_real_data = false
 ```
 
-`/ready=503` nao deve ser contornado. Se OCI revelar defeito de codigo, a correcao volta ao ambiente local e gera novo SHA para nova homologacao.
+`/ready=503` nao deve ser contornado. Promocao para `main` nao equivale a
+autorizacao para dados reais.
 
 Ver `docs/deployment/oci-execution-index.md`.
 
-## Gates reais
+## Evidencia historica dos gates concluidos
 
 ### #226 — Proventos
 
@@ -66,20 +71,17 @@ Fechado em 14/09/2026. Benchmarks e cambio estao concluidos, e a decisao de #226
 
 Preserva etapas destrutivas/estruturais ja certificadas e executa somente o delta operacional sobre SHA/dataset congelados: importacao quando necessaria, derivados canonicos, reconciliacao financeira, eventos corporativos materiais, restart/idempotencia e eventual contracao protegida.
 
-### #227 — GO/NO-GO
+### #227 — GO/NO-GO (fechada)
 
-Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homologacao OCI do mesmo SHA antes de qualquer avaliacao de `ready_for_real_data=true`.
+A decisao arquitetural foi concluida e consumida pela PR #362. Ela nao promove
+automaticamente `ready_for_real_data`.
 
-## Sequencia de promocao
+## Sequencia vigente
 
-1. consumir #303 como `PORTFOLIO-TEST-READY`;
-2. consumir #226 como portfolio-scoped suficiente;
-3. consumir #216 como concluida;
-4. executar delta #158;
-5. executar #269 no mesmo SHA candidato;
-6. homologar exatamente o SHA candidato na OCI;
-7. produzir GO/NO-GO na #227;
-8. somente depois avaliar `ready_for_real_data=true`.
+1. preservar as evidencias historicas de #303, #226, #216, #158, #269 e #227;
+2. executar desenvolvimento e gates no ambiente local canonico;
+3. manter OCI/#284 como backlog futuro;
+4. tratar eventual liberacao de dados reais exclusivamente pela #384.
 
 ## Governanca documental
 

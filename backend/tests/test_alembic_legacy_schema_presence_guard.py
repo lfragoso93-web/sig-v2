@@ -29,10 +29,16 @@ def test_current_persisted_schema_objects_are_registered_in_metadata() -> None:
 
     assert CURRENT_PERSISTED_SCHEMA_OBJECTS == (
         "fx_rates",
+        "real_data_certification_events",
         "system_configs",
     )
     assert "from app.models.fx_rate import FxRate" in source
     assert '"FxRate"' in source
+    assert (
+        "from app.models.real_data_certification_event import "
+        "RealDataCertificationEvent"
+    ) in source
+    assert '"RealDataCertificationEvent"' in source
     assert "from app.models.system_config import SystemConfig" in source
     assert '"SystemConfig"' in source
 

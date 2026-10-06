@@ -1,20 +1,22 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 23/09/2026.
+> Documento obrigatório para retomar desenvolvimento. Atualizado em 05/10/2026.
 
 ## Baseline atual
 
 Branch obrigatória: `stable-15jun`.
 
-Estado de governança após GOV-01..05:
+Estado de governança pós-promoção:
 
 - núcleo financeiro DB-first consolidado;
-- certificação funcional em `GO_ASSISTED`;
+- baseline funcional promovida pela PR #362;
 - `ready_for_real_data=false`;
 - `/health=200`;
 - `/ready=503` enquanto o gate amplo permanecer fechado;
 - documentação raiz rebaselined para o estado atual;
-- OCI definida como ambiente de homologação do SHA exato certificado localmente.
+- #158, #269 e #227 fechadas;
+- OCI/#284 fora do caminho crítico atual e preservada como backlog futuro;
+- #384 separa promoção arquitetural de autorização persistente para dados reais.
 
 ## Ordem obrigatória de trabalho
 
@@ -38,25 +40,20 @@ ready_for_real_data=false
 
 `GO_ASSISTED` permite usuários convidados e massa sintética/controlada. Não autoriza abertura ampla com dados reais.
 
-## Cadeia de promoção
+## Mapa vigente pós-promoção
 
 ```text
-#303
-  ↓
-#226 (concluida)
-  ↓
-#216 (concluida)
-  ↓
-#158 (certificada localmente)
-  ↓
-#269 (certificada localmente)
-  ↓
-#284 OCI: homologação do SHA exato (agora)
-  ↓
-#227 GO / NO-GO
+governança pós-#362
+  -> baseline local do HEAD
+  -> #345
+  -> #346
+  -> #347
+  -> #365
+  -> #364
 ```
 
-Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
+Não iniciar #345 sem baseline verde. #384 governa qualquer futura mudança de
+`ready_for_real_data`; #284 não bloqueia essa sequência local.
 
 ## Pendências de curto prazo
 
@@ -82,7 +79,7 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 - global controlado volta ao escopo somente se #158 encontrar necessidade
   material nova.
 
-### #158
+### #158 (fechada)
 
 - checklist operacional: `docs/promotion-reconciliation-158-checklist.md`;
 - evidencia local publicada no SHA candidato;
@@ -92,7 +89,7 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
   formalizada como `MATCHED`/`CONFLICT` e KLBN11 em `CONFLICT` revisável até
   haver evidência documental de liquidação fracionária.
 
-### #269
+### #269 (fechada)
 
 - Gitleaks, Hadolint, builds runtime, identidade nao-root, smoke frontend,
   Trivy filesystem, Trivy image backend/frontend e inventario externo GitHub
@@ -102,9 +99,10 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
   no SHA candidato de `stable-15jun`;
 - nao promove `ready_for_real_data`.
 
-### #284 — OCI
+### #284 — OCI (backlog futuro)
 
-- checkout do SHA candidato exato;
+- não executar no caminho atual;
+- quando retomada, checkout do SHA candidato exato;
 - `APP_COMMIT_SHA == git rev-parse HEAD`;
 - migrations aprovadas;
 - smoke, tunnel, restart, persistência, recursos e segurança/resiliência;
@@ -163,7 +161,8 @@ Ambiente oficial para desenvolvimento, correção, suítes pesadas, migrations d
 
 ### OCI
 
-Ambiente oficial para homologar o SHA já certificado. Não executar desenvolvimento permanente, não usar o host pequeno para suítes pesadas e não forçar readiness.
+Backlog futuro de infraestrutura/cloud. Não executar desenvolvimento, testes ou
+homologação OCI na fase atual e não forçar readiness.
 
 ## Documentos canônicos para retomada
 
@@ -174,8 +173,8 @@ Ambiente oficial para homologar o SHA já certificado. Não executar desenvolvim
 - `docs/USER_TEST_READINESS_GATE.md`;
 - `docs/USER_VALIDATION_RUNBOOK.md`;
 - `docs/BOOTSTRAP_DATA_FLOW.md`;
-- `docs/deployment/oci-execution-index.md`;
-- Issues #303, #226, #216, #158, #227, #284 e #293.
+- `docs/deployment/oci-execution-index.md` (referência futura OCI);
+- Issues #344, #345, #365, #364, #370, #384 e #284 (backlog futuro).
 
 ## Regra para histórico
 

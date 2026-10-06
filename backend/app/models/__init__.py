@@ -17,6 +17,7 @@ from app.models.portfolio_position import PortfolioPosition
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.rate_history import RateHistory
 from app.models.rate_history_coverage import RateHistoryCoverage
+from app.models.real_data_certification_event import RealDataCertificationEvent
 from app.models.system_config import SystemConfig
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -40,6 +41,7 @@ __all__ = [
     "PortfolioSnapshot",
     "RateHistory",
     "RateHistoryCoverage",
+    "RealDataCertificationEvent",
     "SystemConfig",
     "Transaction",
     "User",

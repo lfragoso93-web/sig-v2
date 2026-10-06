@@ -1,20 +1,18 @@
 # Governança de Issues — SGI v2
 
-Atualizado em 14/09/2026.
+Atualizado em 05/10/2026.
 
 ## Objetivo
 
 Manter uma hierarquia única para certificação, dados reais, operação, dívida técnica e evolução de produto. Issues não devem competir como fontes de verdade para o mesmo trabalho.
 
-## Cadeia de promoção para dados reais
+## Estado pós-promoção
 
-1. #303 — `PORTFOLIO-TEST-READY` aprovado e SHA candidato registrado;
-2. #226 — estratégia operacional de Proventos fechada;
-3. #216 — gate agregado de seeds/bootstrap fechado;
-4. #158 — executar `promotion reconciliation` sobre SHA/dataset congelados;
-5. #284 — homologar exatamente o mesmo SHA na OCI;
-6. #227 — emitir GO/NO-GO amplo;
-7. somente depois avaliar `ready_for_real_data=true` e promoção para `main`.
+1. #158, #269 e #227 estão fechadas;
+2. a PR #362 promoveu a baseline arquitetural para `main`;
+3. OCI/#284 é backlog futuro e não bloqueia o desenvolvimento atual;
+4. #384 governa separadamente a autorização persistente para dados reais;
+5. a Epic #344 deve iniciar pela #345 somente após baseline local verde.
 
 ## Classificação atual
 
@@ -23,9 +21,17 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #303 — certificação funcional assistida, concluida para `PORTFOLIO-TEST-READY`;
 - #226 — Proventos, fechado;
 - #216 — gate agregado, fechado;
-- #158 — reconciliação final de promoção;
-- #284 — homologação OCI;
-- #227 — decisão formal GO/NO-GO.
+- #158 — reconciliação final de promoção, fechada;
+- #269 — security gate, fechada;
+- #227 — decisão formal GO/NO-GO, fechada;
+- #384 — readiness persistente e auditável, aberta;
+- #284 — OCI, backlog futuro.
+
+### Hardening arquitetural
+
+- #344 — Epic de enforcement;
+- #345 -> #346 -> #347 — fundação recomendada;
+- #365 deve preceder migration estrutural ampla de #364.
 
 ### Bugs acompanhados no primeiro GO
 
@@ -72,9 +78,11 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 ## Estado da sanitização
 
-GOV-01..05 concluíram o rebaseline de readiness, gates reais, OCI, backlog funcional e documentação raiz. A próxima etapa é **GOV-06 — sanitização final de Issues**.
+O rebaseline pós-#362 retirou OCI do caminho crítico e preservou #284 como
+backlog futuro. GOV-07 não deve ser executado.
 
-GOV-06 deve localizar Issues abertas que descrevem trabalho já concluído, duplicidades/overlaps residuais e trackers com dependências superadas. Fechar somente com evidência ou Issue canônica substituta, preservando histórico útil antes do encerramento.
+Qualquer saneamento futuro deve localizar Issues com dependências superadas e
+fechar somente com evidência ou Issue canônica substituta.
 
 #293 permanece aberta até essa segunda passada terminar.
 

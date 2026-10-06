@@ -1,10 +1,11 @@
 # Roadmap — SGI v2
 
-> Última atualização: 23/09/2026.
+> Última atualização: 05/10/2026.
 
 ## Estado do projeto
 
-O SGI v2 está em fase de **certificação assistida e preparação do primeiro GO controlado**, com o núcleo DB-first consolidado.
+O SGI v2 está em fase de **pós-GO e hardening arquitetural**, com a baseline
+funcional promovida para `main` pela PR #362 e o núcleo DB-first consolidado.
 
 Estado registrado:
 
@@ -48,7 +49,7 @@ a evidência portfolio-scoped de Proventos é suficiente para a promoção
 controlada, sem seed global mecânico. Global controlado só volta ao escopo se
 #158 encontrar necessidade material nova.
 
-## Fase 4 — promotion reconciliation (#158) — CERTIFICADA LOCALMENTE
+## Fase 4 — promotion reconciliation (#158) — CONCLUÍDA
 
 Executar apenas o delta necessário sobre SHA/dataset congelados:
 
@@ -65,9 +66,10 @@ Estado: runtime Docker/Postgres, `user_test_readiness`, restart, persistência,
 idempotência, eventos corporativos materiais e segurança #269 foram validados
 localmente no SHA candidato publicado em `stable-15jun`.
 
-## Fase 5 — homologação OCI (#284) — AGORA
+## Fase 5 — OCI (#284) — BACKLOG FUTURO
 
-OCI recebe exatamente o SHA certificado localmente.
+OCI não faz parte do caminho atual. O escopo abaixo permanece como referência
+para retomada futura de infraestrutura/cloud.
 
 Validar:
 
@@ -82,17 +84,28 @@ Validar:
 
 Falhas de código retornam ao ambiente local; não há desenvolvimento permanente na VM.
 
-## Fase 6 — GO / NO-GO (#227)
+## Fase 6 — GO / NO-GO (#227) — CONCLUÍDA
 
-A #227 consome as evidências de #303, #226, #216, #158 e homologação OCI.
+A decisão da #227 foi concluída e consumida pela promoção da PR #362.
 
-Somente GO formal permite avaliar:
+A promoção arquitetural não altera automaticamente:
 
 ```text
 ready_for_real_data=true
 ```
 
-Depois do GO, preparar PR estrutural `stable-15jun` → `main` do macrobloco certificado.
+Qualquer mudança futura desse estado pertence ao contrato persistente e
+auditável da #384.
+
+## Fase 7 — enforcement arquitetural (#344)
+
+Sequência recomendada, condicionada a baseline local verde:
+
+1. #345 Architecture Doctor;
+2. #346 Agent Skills;
+3. #347 Certification Proof;
+4. #365 antes de qualquer migration estrutural ampla de #364;
+5. demais hardenings antes de UX/features, Analysis Engine e IA.
 
 ## Dívidas financeiras não bloqueantes por padrão
 

@@ -61,6 +61,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "preserved",
         "Entidade principal da carteira e seus metadados.",
     ),
+    "real_data_certification_events": (
+        "preserved",
+        "Trilha imutavel de promocoes e revogacoes de prontidao para dados reais.",
+    ),
     "system_configs": (
         "preserved",
         "Configuração operacional persistida do sistema.",

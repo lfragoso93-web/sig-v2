@@ -4,6 +4,11 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
+> Rebaseline em 05/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
+> promovida. As evidencias datadas permanecem validas como historico, mas
+> OCI/#284 nao integra o caminho atual. `ready_for_real_data=false` continua
+> governado separadamente pela #384.
+
 ## Status atual - 10/09/2026
 
 GO para usuarios convidados testarem jornadas assistidas com contas, carteiras,
@@ -200,13 +205,12 @@ somente quando:
   rentabilidade, Proventos ou IRPF;
 - documentacao viva estiver sincronizada.
 
-Depois disso, a ordem permanece:
+Depois da promocao, a ordem vigente e:
 
-1. #158 - importacao/rebuild/reconciliacao operacional;
-2. #269 - security gate sobre o mesmo SHA candidato;
-3. #284 - homologacao OCI do SHA exato;
-4. #227 - decisao formal GO/NO-GO;
-5. somente entao avaliar `ready_for_real_data=true`.
+1. preservar as evidencias concluidas de #158, #269 e #227;
+2. manter OCI/#284 como backlog futuro;
+3. executar hardening e validacoes no ambiente local canonico;
+4. avaliar `ready_for_real_data=true` somente pelo contrato da #384.
 
 ## Criterios de bloqueio
 
@@ -321,8 +325,8 @@ Panorama de liberacao para testes com usuarios:
 - ainda bloqueado: abertura ampla para usuarios com dados reais, execucoes reais
   de seeds/proventos fora de janela autorizada e mudanca de
   `ready_for_real_data=true`;
-- proximos gates obrigatorios: importacao/rebuild operacional (#158), security
-  gate (#269), homologacao OCI (#284) e decisao formal GO/NO-GO (#227).
+- os gates #158, #269 e #227 estao concluidos; OCI/#284 e backlog futuro e a
+  liberacao para dados reais permanece separada sob a #384.
 
 Bloco Proventos real controlado - finding e correcao parcial:
 

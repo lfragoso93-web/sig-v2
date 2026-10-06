@@ -21,6 +21,7 @@ LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION = (
 
 CURRENT_PERSISTED_SCHEMA_OBJECTS = (
     "fx_rates",
+    "real_data_certification_events",
     "system_configs",
 )
 
