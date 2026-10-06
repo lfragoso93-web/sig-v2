@@ -23,9 +23,14 @@ A fundação está implementada e promovida pelas PRs #386 e #387:
 
 Nenhuma promoção ou revogação real foi executada. Em 06/10/2026, a suíte
 opt-in passou em PostgreSQL 16 efêmero e comprovou concorrência, stale-plan e
-restart sem tocar o banco canônico. A integração com `/ready` ainda está
-pendente; portanto, `ready_for_real_data=false` e `/ready=503` permanecem
-obrigatórios.
+restart sem tocar o banco canônico. O `/ready` já consome o estado persistido e
+a identidade runtime independente; como nenhuma promoção real ocorreu,
+`ready_for_real_data=false` e `/ready=503` permanecem obrigatórios.
+
+Para resolver a identidade, o runtime exige `ENVIRONMENT`, `APP_BRANCH`,
+`APP_COMMIT_SHA` completo e `REAL_DATASET_REFERENCE`; a revision Alembic é lida
+diretamente do banco. Campo ausente, `unknown`, múltiplos heads ou divergência
+com o evento resultam em 503.
 
 ## Invariantes
 
@@ -136,7 +141,7 @@ revogação deve falhar sem escrita.
 
 ## Concorrência, restart e stale plan
 
-Antes da integração com `/ready`, a suíte PostgreSQL deve comprovar:
+A suíte PostgreSQL que antecedeu a integração com `/ready` comprovou:
 
 - duas execuções concorrentes não criam decisões conflitantes;
 - advisory lock serializa a identidade alvo;

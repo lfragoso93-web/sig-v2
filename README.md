@@ -48,8 +48,8 @@ ready_for_real_data=false
 - #384 já possui persistência append-only, leitura DB-first, relatório,
   contrato, executor transacional e CLI guardada, promovidos pelas PRs #386 e
   #387; concorrência, stale-plan e restart foram comprovados em PostgreSQL 16
-  isolado. A integração final com `/ready` e a certificação operacional real
-  ainda não foram executadas.
+  isolado. O `/ready` agora consome essa autoridade DB-first e valida identidade
+  runtime completa; a certificação operacional real ainda não foi executada.
 
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
@@ -63,7 +63,7 @@ governança pós-#362
         -> #347 Certification Proof
         -> #365 antes de qualquer migration ampla de #364
 
-#384 permanece em andamento: fundação guardada concluída; ativação pendente.
+#384 permanece em andamento: implementação concluída; execução real pendente.
 #284 permanece backlog futuro e não bloqueia desenvolvimento local.
 ```
 

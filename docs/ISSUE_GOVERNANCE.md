@@ -25,7 +25,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #158 — reconciliação final de promoção, fechada;
 - #269 — security gate, fechada;
 - #227 — decisão formal GO/NO-GO, fechada;
-- #384 — readiness persistente e auditável, aberta e em implementação;
+- #384 — readiness persistente e auditável, implementação concluída e execução
+  operacional real pendente;
 - #284 — OCI, backlog futuro.
 
 ### Hardening arquitetural

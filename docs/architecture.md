@@ -170,13 +170,14 @@ evidência real-data-promotion-evidence.v1
         → advisory lock PostgreSQL + validação de stale plan
         → real_data_certification_events
         → leitor DB-first / relatório
-        → futura integração controlada com /ready
+        → integração fail-closed com /ready
 ```
 
 A memória do processo não é autoridade. O último evento persistido determina o
 estado auditável; promoção e revogação criam novos eventos, nunca alteram ou
-apagam o histórico. A integração com `/ready` ainda está pendente e, portanto,
-o endpoint continua fechado. O contrato operacional está em
+apagam o histórico. O `/ready` resolve sua identidade esperada fora do log de
+certificação e somente abre diante de promoção persistida exatamente compatível.
+Sem evento real no dataset corrente, o endpoint continua fechado. O contrato operacional está em
 `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Local x OCI

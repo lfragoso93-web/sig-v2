@@ -205,6 +205,11 @@ A CLI é dry-run por padrão e não recebe a evidência `GO_ASSISTED`. Ela exige
 contrato próprio `real-data-promotion-evidence.v1` com identidade completa do
 dataset. Os artefatos locais ficam montados em `/app/artifacts` no backend.
 
+Antes do dry-run, configure `APP_BRANCH`, `APP_COMMIT_SHA` e
+`REAL_DATASET_REFERENCE` no runtime com os mesmos valores candidatos. O
+`/ready` lê a revision Alembic diretamente do banco e permanece 503 se qualquer
+componente da identidade estiver ausente ou divergente.
+
 ```powershell
 $CommitSha = (git rev-parse HEAD).Trim()
 $Evidence = "/app/artifacts/real-data-certification/evidence.json"

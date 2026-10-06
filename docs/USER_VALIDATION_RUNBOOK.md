@@ -17,7 +17,8 @@ Branch obrigatoria: `stable-15jun`
 - nenhuma execucao real de promocao/revogacao ocorreu;
 - `/ready=503` e `ready_for_real_data=false` permanecem;
 - provas de restart/concorrencia/stale-plan passaram em PostgreSQL 16 efemero;
-  a integracao final com `/ready` continua pendente.
+- `/ready` agora consome a identidade runtime e a decisao persistida de forma
+  fail-closed; nenhuma promocao real foi executada.
 
 Runbook: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 

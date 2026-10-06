@@ -65,7 +65,9 @@ restart/concorrência já está verde. #284 não bloqueia essa sequência local.
 - dry-run é o padrão; `--execute` exige confirmação forte e autorização
   operacional explícita;
 - provas PostgreSQL de restart/concorrência/stale-plan concluídas em banco
-  efêmero; falta a integração final com `/ready`;
+  efêmero;
+- `/ready` integrado ao resolvedor independente de identidade e ao leitor
+  persistido, permanecendo 503 sem promoção válida;
 - runbook canônico: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Pendências de curto prazo

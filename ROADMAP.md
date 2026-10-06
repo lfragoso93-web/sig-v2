@@ -125,9 +125,13 @@ idempotência, rejeição de stale plan e reconstrução após restart.
 Blocos restantes:
 
 1. manter documentação e evidências operacionais convergentes;
-2. integrar o estado persistido a `/ready` somente após os contratos acima;
-3. executar uma promoção real apenas mediante evidência `GO` própria da #384 e
+2. executar uma promoção real apenas mediante evidência `GO` própria da #384 e
    autorização operacional explícita.
+
+Integração concluída em 06/10/2026: `/ready` resolve ambiente, branch, SHA,
+dataset e revision Alembic independentemente do evento, consulta a decisão
+persistida e falha fechado em qualquer ausência ou divergência. O bootstrap em
+memória permanece apenas diagnóstico.
 
 Até lá, `ready_for_real_data=false` e `/ready=503` permanecem obrigatórios.
 

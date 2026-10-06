@@ -14,6 +14,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   e `/ready=503` permanecem;
 - uma suíte opt-in, restrita a banco explicitamente de teste, comprovou advisory
   lock, idempotência concorrente, stale-plan e restart em PostgreSQL 16 efêmero;
+- `/ready` passou a resolver a identidade runtime independentemente, validar a
+  revision Alembic viva e consumir a certificação persistida; configuração
+  ausente, mismatch, revogação ou erro de leitura permanecem em 503;
 - a documentação operacional foi rebaselizada e ganhou um runbook canônico para
   impedir comandos e critérios divergentes.
 

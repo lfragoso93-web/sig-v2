@@ -251,5 +251,5 @@ ready_for_real_data = false
 Os gates #303, #226, #216, #158, #269 e #227 foram concluídos e consumidos pela
 promoção da PR #362. A fundação da #384 foi promovida pelas PRs #386 e #387.
 As provas PostgreSQL isoladas de restart/concorrência/stale-plan estão verdes.
-Restam a integração final com `/ready` e uma decisão operacional explícita.
-Nenhuma promoção real foi executada.
+A integração DB-first com `/ready` também está concluída. Resta uma decisão
+operacional explícita; nenhuma promoção real foi executada.
