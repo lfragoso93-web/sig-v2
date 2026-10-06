@@ -20,6 +20,13 @@ Keep changes narrow and reviewable. Prefer existing services and contracts to a
 parallel abstraction. Update tests and living documentation in the same block
 when behavior or an invariant changes.
 
+For date-sensitive financial logic, inject `app.core.clock.Clock`; production
+uses `SystemClock` and deterministic tests use timezone-aware `FrozenClock`.
+Production configuration must fail before startup when its exact branch, SHA or
+dataset identity is invalid, without logging received secret values. Protect
+critical database readers with explicit query budgets when a stable ceiling is
+known; do not hide N+1 regressions behind a broadly increased limit.
+
 Use the project `.venv` or Docker. Choose focused tests first, then gates
 proportional to risk. Run `git diff --check`; use Flake8 with `--jobs=1` on
 Windows when needed. A pytest `WinError 5` during temporary-directory setup is

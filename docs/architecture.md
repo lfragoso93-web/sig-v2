@@ -54,6 +54,14 @@ Bootstrap, seeds, sincronizações, migrations e rebuilds devem produzir estado 
 
 Cobertura parcial, preços ausentes, retornos estimados, fontes e datas efetivas ficam observáveis. Indisponibilidade não é convertida em número aparentemente válido.
 
+### Runtime determinístico
+
+Lógica financeira sensível a datas usa o `Clock` canônico quando migrada;
+Proventos é a primeira vertical protegida por `FrozenClock`. Configuração
+crítica falha no startup sem registrar valores sensíveis, e budgets de queries
+protegem leitores prioritários contra regressões N+1. O contrato operacional
+está em `docs/DETERMINISTIC_RUNTIME.md`.
+
 ## Proventos
 
 Eventos monetários pertencem ao ativo e são persistidos em `asset_dividends`.
