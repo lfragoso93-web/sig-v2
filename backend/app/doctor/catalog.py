@@ -120,6 +120,13 @@ ARCHITECTURE_CHECKS = (
         kind=DoctorCheckKind.STATIC,
         evidence=("backend/tests/test_agent_skills_contract.py",),
     ),
+    DoctorCatalogEntry(
+        finding_id="SGI013",
+        title="Runtime deterministico valida clock, config e query budgets",
+        severity=DoctorSeverity.ERROR,
+        kind=DoctorCheckKind.BEHAVIORAL,
+        evidence=("backend/tests/test_deterministic_runtime_contract.py",),
+    ),
 )
 
 architecture_check_by_id = MappingProxyType(

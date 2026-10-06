@@ -82,6 +82,7 @@ async def test_loads_global_event_and_derives_historical_right_read_only():
     assert results[0].ticker == "ABCD3"
     assert results[0].entitlement.eligible_quantity == Decimal("10")
     assert results[0].entitlement.net_amount == Decimal("12.50")
+    assert db.calls == 2
 
 
 @pytest.mark.asyncio

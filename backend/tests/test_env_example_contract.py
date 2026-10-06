@@ -9,6 +9,7 @@ from app.core.config import Settings
 BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
 ENV_EXAMPLE = ROOT / ".env.example"
+ENV_OCI_EXAMPLE = ROOT / ".env.oci.example"
 COMPOSE = ROOT / "docker-compose.yml"
 
 
@@ -37,6 +38,21 @@ def test_env_example_covers_every_application_setting() -> None:
     settings = set(Settings.model_fields)
 
     assert settings - declared == set()
+
+
+def test_oci_example_covers_application_settings_except_image_bound_sha() -> None:
+    if not ENV_OCI_EXAMPLE.is_file():
+        pytest.skip("contrato OCI indisponivel na imagem backend isolada")
+    declared = {
+        line.split("=", 1)[0]
+        for raw_line in ENV_OCI_EXAMPLE.read_text(encoding="utf-8").splitlines()
+        if (line := raw_line.strip())
+        and not line.startswith("#")
+        and "=" in line
+    }
+    expected = set(Settings.model_fields) - {"APP_COMMIT_SHA"}
+
+    assert expected - declared == set()
 
 
 def test_env_example_covers_operational_and_docker_variables() -> None:

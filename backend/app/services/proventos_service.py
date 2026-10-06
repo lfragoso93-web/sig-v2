@@ -10,6 +10,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import asset_type_label
+from app.core.clock import SYSTEM_CLOCK, Clock
 from app.models.dividend_enums import DividendStatus, DividendType
 from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
@@ -67,8 +68,9 @@ async def _load_filtered(
     year: int | None = None,
     asset_type: str | None = None,
     dividend_type: DividendType | None = None,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> tuple[list[PortfolioDividendEntitlement], date]:
-    today = date.today()
+    today = clock.today()
     items = await load_portfolio_dividend_entitlements(db, portfolio_id)
     return (
         [
@@ -102,6 +104,8 @@ async def get_summary(
     year: int | None = None,
     asset_type: str | None = None,
     dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> dict:
     items, today = await _load_filtered(
         db,
@@ -110,6 +114,7 @@ async def get_summary(
         year=year,
         asset_type=asset_type,
         dividend_type=dividend_type,
+        clock=clock,
     )
     cash_items = _eligible_cash(items)
     received = [
@@ -163,6 +168,8 @@ async def list_items(
     dividend_type: DividendType | None = None,
     page: int = 1,
     page_size: int = 50,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> dict:
     items, today = await _load_filtered(
         db,
@@ -171,6 +178,7 @@ async def list_items(
         year=year,
         asset_type=asset_type,
         dividend_type=dividend_type,
+        clock=clock,
     )
     visible = [
         item
@@ -230,6 +238,8 @@ async def get_monthly_history(
     year: int | None = None,
     asset_type: str | None = None,
     dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> list[dict]:
     items, _ = await _load_filtered(
         db,
@@ -238,6 +248,7 @@ async def get_monthly_history(
         year=year,
         asset_type=asset_type,
         dividend_type=dividend_type,
+        clock=clock,
     )
     data: dict[int, dict[int, dict[str, Decimal]]] = {}
     for item in _eligible_cash(items):
@@ -305,6 +316,8 @@ async def get_distribution(
     year: int | None = None,
     asset_type: str | None = None,
     dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> list[dict]:
     items, today = await _load_filtered(
         db,
@@ -313,6 +326,7 @@ async def get_distribution(
         year=year,
         asset_type=asset_type,
         dividend_type=dividend_type,
+        clock=clock,
     )
     start = today - relativedelta(months=months)
     totals: dict[tuple[str, str], Decimal] = {}

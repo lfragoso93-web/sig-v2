@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from pydantic import field_validator, model_validator
@@ -83,6 +84,34 @@ class Settings(BaseSettings):
         object.__setattr__(self, "BRAPI_RATE_LIMIT", rate_limit)
         object.__setattr__(self, "MARKET_DATA_RATE_BURST", rate_burst)
         object.__setattr__(self, "BRAPI_RATE_BURST", rate_burst)
+        return self
+
+    @model_validator(mode="after")
+    def validate_runtime_configuration(self) -> "Settings":
+        if not self.DATABASE_URL.strip():
+            raise ValueError("DATABASE_URL deve ser configurada")
+        if not self.ASYNC_DATABASE_URL.startswith("postgresql+asyncpg://"):
+            raise ValueError("ASYNC_DATABASE_URL deve usar postgresql+asyncpg")
+        if not 1 <= self.REDIS_PORT <= 65535:
+            raise ValueError("REDIS_PORT deve estar entre 1 e 65535")
+        if self.ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES deve ser positivo")
+        if self.REFRESH_TOKEN_EXPIRE_DAYS <= 0:
+            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS deve ser positivo")
+        if self.BRAPI_RATE_LIMIT <= 0 or self.BRAPI_RATE_BURST <= 0:
+            raise ValueError("limites do provedor devem ser positivos")
+
+        if self.ENVIRONMENT.strip().lower() == "production":
+            if self.APP_BRANCH != "stable-15jun":
+                raise ValueError("APP_BRANCH de producao deve ser stable-15jun")
+            if not re.fullmatch(r"[0-9a-f]{40}", self.APP_COMMIT_SHA):
+                raise ValueError("APP_COMMIT_SHA de producao deve ser SHA completo")
+            if not self.REAL_DATASET_REFERENCE.startswith(
+                "pre-prod-backup.v3:sha256:"
+            ):
+                raise ValueError(
+                    "REAL_DATASET_REFERENCE de producao deve ser canonica"
+                )
         return self
 
     @field_validator("SECRET_KEY")
