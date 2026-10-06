@@ -1,4 +1,4 @@
-"""Tests for the non-promoting persisted readiness report."""
+"""Tests for the persisted readiness report."""
 
 from datetime import datetime, timezone
 
@@ -51,7 +51,7 @@ def _promotion(identity: RealDataCertificationIdentity) -> RealDataCertification
 
 
 @pytest.mark.asyncio
-async def test_valid_promotion_without_bootstrap_is_not_eligible(
+async def test_valid_promotion_survives_process_bootstrap_reset(
     db: AsyncSession,
 ) -> None:
     identity = _identity()
@@ -66,13 +66,13 @@ async def test_valid_promotion_without_bootstrap_is_not_eligible(
 
     assert report.bootstrap_complete is False
     assert report.certification.ready_for_real_data is True
-    assert report.eligible_for_activation is False
+    assert report.eligible_for_activation is True
     assert report.activation_required is False
-    assert report.ready_for_real_data is False
+    assert report.ready_for_real_data is True
 
 
 @pytest.mark.asyncio
-async def test_valid_promotion_and_bootstrap_require_separate_activation(
+async def test_valid_promotion_with_bootstrap_is_ready(
     db: AsyncSession,
 ) -> None:
     identity = _identity()
@@ -86,8 +86,8 @@ async def test_valid_promotion_and_bootstrap_require_separate_activation(
     )
 
     assert report.eligible_for_activation is True
-    assert report.activation_required is True
-    assert report.ready_for_real_data is False
+    assert report.activation_required is False
+    assert report.ready_for_real_data is True
     assert report.to_dict()["certification"]["status"] == "certified"
 
 

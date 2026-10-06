@@ -242,9 +242,30 @@ async def health():
 @app.get("/ready", tags=["health"])
 async def ready():
     """Indica se o ambiente está certificado para receber dados reais."""
-    from app.services.system_readiness_service import get_bootstrap_readiness
+    from app.services.real_data_readiness_report import (
+        build_real_data_readiness_report,
+    )
+    from app.services.real_data_runtime_identity import (
+        RealDataRuntimeIdentityError,
+        resolve_real_data_runtime_identity,
+    )
 
-    readiness = get_bootstrap_readiness()
-    payload = readiness.to_dict()
-    status_code = 200 if readiness.ready_for_real_data else 503
+    async with AsyncSessionLocal() as session:
+        try:
+            identity = await resolve_real_data_runtime_identity(session)
+            readiness = await build_real_data_readiness_report(session, identity)
+            payload = readiness.to_dict()
+        except RealDataRuntimeIdentityError as exc:
+            payload = {
+                "bootstrap_complete": False,
+                "certification": {
+                    "status": "runtime_identity_error",
+                    "ready_for_real_data": False,
+                    "detail": str(exc),
+                },
+                "eligible_for_activation": False,
+                "activation_required": False,
+                "ready_for_real_data": False,
+            }
+    status_code = 200 if payload["ready_for_real_data"] else 503
     return JSONResponse(content=payload, status_code=status_code)
