@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from app.doctor import static_runner
 from app.doctor.contracts import DoctorExitCode, DoctorFindingStatus
+from app.doctor.contracts import DoctorCatalogEntry, DoctorCheckKind, DoctorSeverity
 from app.doctor.static_runner import StaticCheckExecution, run_static_checks
 
 
@@ -166,3 +168,40 @@ def test_real_static_gate_runs_without_pytest_cache() -> None:
 
     assert report.exit_code is DoctorExitCode.OK
     assert report.results[0].status is DoctorFindingStatus.PASS
+
+
+def test_artificial_architecture_violation_returns_findings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    evidence = (
+        tmp_path
+        / "backend"
+        / "tests"
+        / "test_artificial_architecture_violation.py"
+    )
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text(
+        "def test_architecture_violation():\n    assert False, 'artificial violation'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        static_runner,
+        "architecture_check_by_id",
+        {
+            "SGI900": DoctorCatalogEntry(
+                finding_id="SGI900",
+                title="Violação arquitetural artificial",
+                severity=DoctorSeverity.ERROR,
+                kind=DoctorCheckKind.STATIC,
+                evidence=(
+                    "backend/tests/test_artificial_architecture_violation.py",
+                ),
+            )
+        },
+    )
+
+    report = run_static_checks(["SGI900"], repository_root=tmp_path)
+
+    assert report.exit_code is DoctorExitCode.FINDINGS
+    assert report.results[0].status is DoctorFindingStatus.FAIL
+    assert "artificial violation" in report.results[0].detail

@@ -36,6 +36,11 @@ repete os checks isoladamente para atribuir a falha ao finding correto. Uma
 divergência em que o lote falha e todos os checks isolados passam resulta em
 `INTERNAL_ERROR`, sem promover um resultado inconsistente a sucesso.
 
+Os testes do runner incluem uma violação arquitetural artificial em diretório
+temporário. O pytest real falha, o finding recebe status `fail` e o Doctor
+devolve `FINDINGS` (`exit_code=1`). A fixture temporária não modifica o checkout
+nem qualquer banco.
+
 Nenhum código deste bloco acessa banco, rede, provedor ou executa writes da
 aplicação. Checks behavioral, database e runtime são rejeitados antes da
 execução; um bloco posterior deverá definir opt-in/contexto explícito antes de
