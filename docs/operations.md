@@ -105,6 +105,20 @@ Garantias:
 - SHA-256 registrado;
 - zero escritas na origem.
 
+Depois de alinhar o runtime e as migrations ao estado candidato, derive a
+referência imutável do dataset a partir do backup recém-gerado:
+
+```powershell
+$ArtifactDir = "/app/artifacts/pre-prod-rebuild/$RunId"
+docker compose exec -T backend python -m app.cli.real_data_dataset_identity `
+    --artifact-directory $ArtifactDir
+```
+
+Contrato: `real-data-dataset-identity.v1`. A referência emitida tem o formato
+`pre-prod-backup.v3:sha256:<sha256-do-dump>` e só é produzida quando dump,
+manifesto, inventário read-only, listagem de conteúdo e garantias de segurança
+forem coerentes. O comando não escreve no banco nem altera o artefato.
+
 Restore em banco vazio e exclusivo:
 
 ```powershell
@@ -213,6 +227,7 @@ componente da identidade estiver ausente ou divergente.
 ```powershell
 $CommitSha = (git rev-parse HEAD).Trim()
 $Evidence = "/app/artifacts/real-data-certification/evidence.json"
+$DatasetReference = "pre-prod-backup.v3:sha256:<sha256-do-dump-validado>"
 
 docker compose exec backend python -m app.cli.real_data_certification `
     --action promote `
@@ -220,7 +235,7 @@ docker compose exec backend python -m app.cli.real_data_certification `
     --evidence-file $Evidence `
     --branch stable-15jun `
     --commit-sha $CommitSha `
-    --dataset-reference "DATASET-REFERENCE" `
+    --dataset-reference $DatasetReference `
     --alembic-revision "ALEMBIC-REVISION" `
     --gate-issue-reference "#227" `
     --pull-request-reference "#362" `
