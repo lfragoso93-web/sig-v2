@@ -48,6 +48,8 @@ def test_env_example_covers_operational_and_docker_variables() -> None:
         "APP_PORT",
         "BACKEND_PORT",
         "APP_COMMIT_SHA",
+        "APP_BRANCH",
+        "REAL_DATASET_REFERENCE",
         "VITE_API_URL",
         "SGI_BOOTSTRAP_COMMIT_SHA",
         "SGI_BOOTSTRAP_ENABLE_DIVIDENDS",
