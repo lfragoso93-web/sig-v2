@@ -32,6 +32,11 @@ Para resolver a identidade, o runtime exige `ENVIRONMENT`, `APP_BRANCH`,
 diretamente do banco. Campo ausente, `unknown`, múltiplos heads ou divergência
 com o evento resultam em 503.
 
+A referência canônica do dataset é derivada exclusivamente de um backup
+`pre-prod-backup.v3` consistente e validado. Seu formato é
+`pre-prod-backup.v3:sha256:<sha256-do-dump>`. Não usar nomes livres, timestamps,
+contagens do inventário ou um backup histórico de outro estado do banco.
+
 ## Invariantes
 
 - memória de processo não é fonte de verdade;
@@ -83,6 +88,34 @@ formal do dataset candidato.
 
 OCI/#284 não faz parte do caminho atual.
 
+## Identidade canônica do dataset
+
+Depois de alinhar aplicação e migrations e congelar writers não autorizados,
+gere o backup `pre-prod-backup.v3` pelo fluxo de `docs/operations.md`. Em seguida,
+derive a identidade sem alterar banco ou artefatos:
+
+```powershell
+$ArtifactDir = "/app/artifacts/pre-prod-rebuild/$RunId"
+$DatasetIdentity = docker compose exec -T backend `
+    python -m app.cli.real_data_dataset_identity `
+    --artifact-directory $ArtifactDir | ConvertFrom-Json
+$DatasetReference = $DatasetIdentity.dataset_reference
+```
+
+Aprovar somente quando:
+
+- `schema_version=real-data-dataset-identity.v1`;
+- `backup_schema_version=pre-prod-backup.v3`;
+- branch e SHA do backup correspondem ao estado candidato;
+- `database_writes_executed=0`;
+- o checksum foi recalculado sobre `database.dump` e coincide com
+  `backup-report.json` e `database.dump.sha256`;
+- inventário read-only e listagem do dump estão presentes e válidos.
+
+Qualquer mudança posterior no banco invalida a fotografia candidata e exige
+novo backup. A identidade de um artefato histórico pode validar o contrato da
+CLI, mas não identifica o dataset corrente.
+
 ## Dry-run de promoção
 
 Coloque a evidência em
@@ -98,7 +131,7 @@ docker compose exec backend python -m app.cli.real_data_certification `
     --environment local `
     --branch stable-15jun `
     --commit-sha $CommitSha `
-    --dataset-reference "DATASET-REFERENCE" `
+    --dataset-reference $DatasetReference `
     --alembic-revision "ALEMBIC-REVISION" `
     --gate-issue-reference "#227" `
     --pull-request-reference "#362" `
