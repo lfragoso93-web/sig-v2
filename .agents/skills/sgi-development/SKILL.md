@@ -27,6 +27,11 @@ dataset identity is invalid, without logging received secret values. Protect
 critical database readers with explicit query budgets when a stable ceiling is
 known; do not hide N+1 regressions behind a broadly increased limit.
 
+For portfolio-scoped sensitive data, pass `PortfolioAccessContext` across the
+controller/service/repository boundary. Client-provided IDs are not authority.
+User contexts require ownership and explicit permission; system jobs require a
+non-empty purpose and must never rely on an implicit bypass.
+
 Use the project `.venv` or Docker. Choose focused tests first, then gates
 proportional to risk. Run `git diff --check`; use Flake8 with `--jobs=1` on
 Windows when needed. A pytest `WinError 5` during temporary-directory setup is

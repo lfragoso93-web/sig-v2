@@ -10,10 +10,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from app.core.access_context import PortfolioAccessContext
 from app.models.dividend_enums import DividendType
 from app.models.transaction import OperationType
 from app.schemas.dividend import DividendRead
 from app.services.dividend_service import (
+    READ_PORTFOLIO_DIVIDENDS,
     build_dividend_projection,
     calculate_quantity_on_date,
     list_dividends,
@@ -155,7 +157,12 @@ async def test_list_dividends_queries_canonical_data_and_preserves_order() -> No
         transaction_result,
     ]
 
-    projections = await list_dividends(db, portfolio_id=7, user_id=3)
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=7,
+        permissions=frozenset({READ_PORTFOLIO_DIVIDENDS}),
+    )
+    projections = await list_dividends(db, access)
 
     assert [projection.ex_date for projection in projections] == [
         date(2026, 3, 1),

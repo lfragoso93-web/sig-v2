@@ -6,11 +6,15 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.schemas.dividend import DividendRead
+
+
+READ_PORTFOLIO_DIVIDENDS = "portfolio:dividends:read"
 
 
 def _normalize_ticker(ticker: str) -> str:
@@ -63,17 +67,14 @@ def build_dividend_projection(
 
 async def list_dividends(
     db: AsyncSession,
-    portfolio_id: int,
-    user_id: int,
+    access: PortfolioAccessContext,
 ) -> list[DividendRead]:
-    portfolio = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user_id,
-        )
+    await get_accessible_portfolio(
+        db,
+        access,
+        required_permission=READ_PORTFOLIO_DIVIDENDS,
     )
-    if not portfolio.scalar_one_or_none():
-        raise ValueError("Carteira nao encontrada ou sem permissao")
+    portfolio_id = access.portfolio_id
 
     event_result = await db.execute(
         select(AssetDividend, Asset.ticker)

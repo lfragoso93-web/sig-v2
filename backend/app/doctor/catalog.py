@@ -127,6 +127,13 @@ ARCHITECTURE_CHECKS = (
         kind=DoctorCheckKind.BEHAVIORAL,
         evidence=("backend/tests/test_deterministic_runtime_contract.py",),
     ),
+    DoctorCatalogEntry(
+        finding_id="SGI014",
+        title="Acesso sensivel por carteira exige contexto explicito",
+        severity=DoctorSeverity.ERROR,
+        kind=DoctorCheckKind.BEHAVIORAL,
+        evidence=("backend/tests/test_portfolio_access_context.py",),
+    ),
 )
 
 architecture_check_by_id = MappingProxyType(
