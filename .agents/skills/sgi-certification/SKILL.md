@@ -14,6 +14,13 @@ canonical dataset reference, single Alembic revision, gate #227 and PR #362.
 The dataset reference must come from a validated consistent
 `pre-prod-backup.v3` artifact via `app.cli.real_data_dataset_identity`.
 
+Generate summarized evidence with `app.cli.certification_proof` only after the
+underlying test suites have passed. Its `sgi-certification.v1` output is
+read-only and fail-closed: checkout/runtime SHA mismatch, non-certified DB-first
+state, a required suite failure, or an Architecture Doctor failure prevents
+`result=passed`. Never place raw logs, commands, environment values, or secrets
+in its allowlisted test-evidence input.
+
 Promotion and revocation are append-only events. The DB-first reader used by
 `/ready` is authoritative. `GO_ASSISTED` is a separate diagnostic and neither
 opens nor closes the productive gate.

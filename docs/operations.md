@@ -243,9 +243,14 @@ docker compose exec backend python -m app.cli.real_data_certification `
     --reason "ISSUE-384"
 ```
 
-No estado atual, execute somente esse dry-run. Não usar `--execute`; nenhuma
-promoção real foi autorizada. Runbook completo:
+A promoção autorizada de 06/10/2026 certificou a identidade exata então em
+execução. Para qualquer nova identidade, comece novamente pelo dry-run e não
+use `--execute` sem autorização explícita para aquele plano. Runbook completo:
 `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
+
+Após testes, Doctor e validação operacional, gere o resumo read-only
+`sgi-certification.v1` conforme `docs/CERTIFICATION_PROOF.md`. Divergência entre
+o SHA do checkout e o runtime impede `result=passed`.
 
 ## Rebuild completo de mercado
 

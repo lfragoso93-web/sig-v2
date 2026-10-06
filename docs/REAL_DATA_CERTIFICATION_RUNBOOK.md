@@ -21,11 +21,12 @@ A fundação está implementada e promovida pelas PRs #386 e #387:
 - executor transacional sob advisory lock PostgreSQL;
 - CLI dry-run por padrão.
 
-Nenhuma promoção ou revogação real foi executada. Em 06/10/2026, a suíte
-opt-in passou em PostgreSQL 16 efêmero e comprovou concorrência, stale-plan e
-restart sem tocar o banco canônico. O `/ready` já consome o estado persistido e
-a identidade runtime independente; como nenhuma promoção real ocorreu,
-`ready_for_real_data=false` e `/ready=503` permanecem obrigatórios.
+Em 06/10/2026, a promoção autorizada foi persistida para a identidade exata do
+runtime no SHA `3ab054f61e34f440dddf93c170259958243d58af`; o `/ready` retornou
+`200` com `ready_for_real_data=true`, inclusive após restart. A suíte opt-in em
+PostgreSQL 16 efêmero também comprovou concorrência, stale-plan e restart sem
+tocar o banco canônico. Qualquer novo SHA ou dataset exige outro ciclo completo
+de evidência, dry-run, autorização e validação.
 
 Para resolver a identidade, o runtime exige `ENVIRONMENT`, `APP_BRANCH`,
 `APP_COMMIT_SHA` completo e `REAL_DATASET_REFERENCE`; a revision Alembic é lida
@@ -149,10 +150,11 @@ Aprovar o dry-run somente quando:
 - identidade, hash, ação e referências conferem;
 - `plan.confirmation` foi preservado sem alteração.
 
-## Execução real — não autorizada no estado atual
+## Execução real
 
-Quando houver autorização operacional explícita, repetir o comando sobre o
-mesmo estado acrescentando:
+A promoção de 06/10/2026 foi executada com autorização operacional explícita.
+Para uma promoção ou revogação futura, repetir o comando sobre o mesmo estado
+do dry-run acrescentando:
 
 ```text
 --execute --confirmation "<plan.confirmation exato do dry-run>"
@@ -161,6 +163,10 @@ mesmo estado acrescentando:
 Qualquer mudança de identidade, evidência ou evento predecessor invalida o
 plano. Não ajustar a confirmação manualmente. O resultado aprovado deve
 registrar uma escrita, transação commitada e a chave do evento esperado.
+
+Depois da validação operacional, gere o resumo read-only versionado pelo fluxo
+de `docs/CERTIFICATION_PROOF.md`. O proof não substitui o evento persistido nem
+autoriza uma nova promoção.
 
 ## Revogação
 
