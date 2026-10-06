@@ -10,7 +10,7 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 05/10/2026
+## Status atual — 06/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362; essa promoção não altera automaticamente o
@@ -43,8 +43,13 @@ ready_for_real_data=false
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
   revisavel ate haver evidencia documental de liquidacao fracionaria para
   eventual `MATCHED`.
-- a próxima fase arquitetural é a Epic #344, iniciando pela #345 somente após
-  baseline local verde e governança coerente.
+- #345 foi concluída e promovida para `main` pela PR #385; a sequência da Epic
+  #344 continua em #346 e #347;
+- #384 já possui persistência append-only, leitura DB-first, relatório,
+  contrato, executor transacional e CLI guardada, promovidos pelas PRs #386 e
+  #387; concorrência, stale-plan e restart foram comprovados em PostgreSQL 16
+  isolado. A integração final com `/ready` e a certificação operacional real
+  ainda não foram executadas.
 
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
@@ -53,12 +58,12 @@ A cadeia histórica de promoção foi concluída. O mapa vigente é:
 ```text
 governança pós-#362
         -> baseline local do HEAD
-        -> #345 Architecture Doctor
+        -> #345 Architecture Doctor (concluída)
         -> #346 Agent Skills
         -> #347 Certification Proof
         -> #365 antes de qualquer migration ampla de #364
 
-#384 permanece a fronteira separada para eventual ready_for_real_data=true.
+#384 permanece em andamento: fundação guardada concluída; ativação pendente.
 #284 permanece backlog futuro e não bloqueia desenvolvimento local.
 ```
 
@@ -184,5 +189,6 @@ docker compose run --rm backend python -m app.cli.user_test_readiness
 - `docs/USER_TEST_READINESS_GATE.md`;
 - `docs/USER_VALIDATION_RUNBOOK.md`;
 - `docs/BOOTSTRAP_DATA_FLOW.md`;
+- `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`;
 - `docs/deployment/oci-execution-index.md` (referência futura OCI);
 - Issues #344, #345, #365, #364, #370, #384 e #284 (backlog futuro).

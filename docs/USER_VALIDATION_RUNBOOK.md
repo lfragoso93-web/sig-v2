@@ -4,10 +4,22 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
-> Rebaseline em 05/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
+> Rebaseline em 06/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
 > promovida. As evidencias datadas permanecem validas como historico, mas
 > OCI/#284 nao integra o caminho atual. `ready_for_real_data=false` continua
 > governado separadamente pela #384.
+
+## Bloco #384 - certificacao persistente guardada - 06/10/2026
+
+- PR #386: evento append-only, migration, leitor DB-first e relatorio;
+- PR #387: contrato versionado, plano deterministico, confirmacao forte,
+  executor transacional sob advisory lock PostgreSQL e CLI dry-run por padrao;
+- nenhuma execucao real de promocao/revogacao ocorreu;
+- `/ready=503` e `ready_for_real_data=false` permanecem;
+- provas de restart/concorrencia/stale-plan passaram em PostgreSQL 16 efemero;
+  a integracao final com `/ready` continua pendente.
+
+Runbook: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Status atual - 10/09/2026
 

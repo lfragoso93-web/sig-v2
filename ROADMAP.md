@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 05/10/2026.
+> Última atualização: 06/10/2026.
 
 ## Estado do projeto
 
@@ -97,15 +97,39 @@ ready_for_real_data=true
 Qualquer mudança futura desse estado pertence ao contrato persistente e
 auditável da #384.
 
-## Fase 7 — enforcement arquitetural (#344)
+## Fase 7 — enforcement arquitetural (#344) — EM ANDAMENTO
 
 Sequência recomendada, condicionada a baseline local verde:
 
-1. #345 Architecture Doctor;
+1. #345 Architecture Doctor — concluída e promovida pela PR #385;
 2. #346 Agent Skills;
 3. #347 Certification Proof;
 4. #365 antes de qualquer migration estrutural ampla de #364;
 5. demais hardenings antes de UX/features, Analysis Engine e IA.
+
+## Fase 8 — certificação persistente para dados reais (#384) — EM ANDAMENTO
+
+Fundação já promovida pelas PRs #386 e #387:
+
+- evento append-only persistido e migration dedicada;
+- leitor DB-first e relatório composto;
+- evidência versionada `real-data-promotion-evidence.v1`;
+- plano determinístico, confirmação forte e executor transacional sob advisory
+  lock PostgreSQL;
+- CLI dry-run por padrão, com escrita condicionada a `--execute` e à confirmação
+  exata emitida no dry-run.
+
+Prova PostgreSQL isolada concluída em 06/10/2026: concorrência serializada,
+idempotência, rejeição de stale plan e reconstrução após restart.
+
+Blocos restantes:
+
+1. manter documentação e evidências operacionais convergentes;
+2. integrar o estado persistido a `/ready` somente após os contratos acima;
+3. executar uma promoção real apenas mediante evidência `GO` própria da #384 e
+   autorização operacional explícita.
+
+Até lá, `ready_for_real_data=false` e `/ready=503` permanecem obrigatórios.
 
 ## Dívidas financeiras não bloqueantes por padrão
 

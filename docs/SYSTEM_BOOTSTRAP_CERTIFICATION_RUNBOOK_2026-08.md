@@ -9,6 +9,11 @@ Definir a sequência operacional segura para certificar o `system-bootstrap.v4` 
 
 Este runbook **não autoriza** execução de providers por si só. Etapas com gates explícitos continuam exigindo autorização operacional correspondente.
 
+> Rebaseline em 06/10/2026: este documento prepara evidência de bootstrap, mas
+> não autoriza `--execute` na certificação da #384. OCI/#284 é backlog futuro.
+> A decisão persistente segue exclusivamente
+> `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
+
 ## Pré-condições globais
 
 Antes de qualquer estágio:
@@ -199,7 +204,7 @@ Após cada estágio real:
 
 ## Critério para certificação final
 
-`ready_for_real_data=true` só pode ser avaliado após:
+Uma evidência candidata à #384 só pode ser preparada após:
 
 - nove estágios concluídos ou formalmente dispensados com justificativa;
 - cobertura operacional suficiente registrada por domínio;
@@ -208,7 +213,11 @@ Após cada estágio real:
 - #248/#250 atualizadas com evidências finais;
 - documentação sincronizada;
 - checkpoint técnico final verde;
-- decisão formal explícita de certificação.
+- decisão formal explícita de certificação;
+- identidade completa do dataset e referências a #227 e PR #362.
+
+Mesmo com esses itens, a promoção exige dry-run e confirmação forte conforme o
+runbook da #384. Este runbook não autoriza a escrita.
 
 ## Regra de rollback
 

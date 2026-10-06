@@ -2,18 +2,20 @@
 
 > Documento arquitetural canônico para reconstrução inicial, sincronização incremental e rebuild de dados globais. Qualquer seed, backfill, rebuild ou Central de Bootstrap deve respeitar este fluxo.
 
-Atualizado em 10/09/2026 para separar bootstrap técnico, `GO_ASSISTED` e promoção para dados reais.
+Atualizado em 06/10/2026 para separar bootstrap técnico, `GO_ASSISTED` e certificação persistente para dados reais.
 
 ## Objetivo
 
 Evitar que estágios de carga sejam executados fora de ordem, sobrescrevam dados certificados ou misturem fontes com responsabilidades diferentes.
 
-Este documento distingue quatro operações que não são equivalentes:
+Este documento distingue cinco operações que não são equivalentes:
 
 1. **Initial Bootstrap** — construção de uma base vazia ou recém-reconstruída;
 2. **Incremental Sync** — atualização rotineira de dados já persistidos;
 3. **Full Market Rebuild** — reconstrução de derivados/cobertura sobre uma base global já preparada;
 4. **Promotion Reconciliation** — delta final e controlado executado sobre SHA/dataset candidato depois dos gates de certificação.
+5. **Real-data Certification** — decisão auditável e append-only da #384, sem
+   mutar fatos financeiros nem substituir os gates anteriores.
 
 `full_market_rebuild` não substitui Initial Bootstrap nem Promotion Reconciliation.
 
@@ -26,7 +28,9 @@ Este documento distingue quatro operações que não são equivalentes:
 - operações idempotentes preferem escrita conservadora e nunca fazem downgrade silencioso de autoridade;
 - evidência já certificada deve ser reutilizada; não repetir operação destrutiva apenas por checklist histórico;
 - `GO_ASSISTED` permite validação controlada e não equivale a `ready_for_real_data=true`;
-- `ready_for_real_data=true` somente pode ser avaliado após #158 -> #269 -> #284 -> #227.
+- `ready_for_real_data=true` somente pode ser avaliado pelo contrato próprio da
+  #384, após evidência `GO` referenciar os gates concluídos #227 e PR #362;
+- OCI/#284 permanece backlog futuro e não integra esse caminho local.
 
 ## Ambientes
 
@@ -106,7 +110,8 @@ Auditar cobertura temporal, gaps, duplicidades, órfãos, fontes, lifecycle e bl
 Há duas políticas distintas:
 
 - **validação assistida:** pode usar carteira/dados controlados quando `GO_ASSISTED` autorizar;
-- **abertura ampla real:** somente depois dos gates #158/#269/#284 e decisão #227.
+- **abertura ampla real:** somente após evento persistido de promoção da #384 e
+  futura integração controlada do estado com `/ready`.
 
 Importação não pode descobrir provider silenciosamente nem substituir catálogo global.
 
@@ -139,7 +144,21 @@ Com #303, #226 e #216 consumidos, #158 executa somente o delta necessário sobre
 
 A evidência é entregue à #227. Somente #227 registra GO/NO-GO amplo.
 
-## 4. Sincronização incremental
+## 4. Real-data Certification
+
+Checklist operacional corrente: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
+
+A #384 consome uma evidência `real-data-promotion-evidence.v1`, valida a
+identidade completa do dataset e registra somente a decisão de prontidão. Essa
+operação não executa seed, import, rebuild, migration, reconciliação financeira
+ou qualquer escrita no ledger.
+
+O fluxo é dry-run primeiro. Uma escrita exige `--execute`, confirmação exata,
+advisory lock PostgreSQL, plano ainda atual e transação do chamador. Revogação é
+um novo evento append-only. No estado atual, nenhuma execução real foi feita e
+`ready_for_real_data=false` permanece.
+
+## 5. Sincronização incremental
 
 Não repetir Initial Bootstrap indiscriminadamente.
 
@@ -150,7 +169,7 @@ Não repetir Initial Bootstrap indiscriminadamente.
 - Proventos seguem autoridade/fallback do domínio;
 - fallbacks ficam observáveis em source/evidência.
 
-## 5. Full Market Rebuild
+## 6. Full Market Rebuild
 
 É manutenção/reconstrução sobre base preparada. Pode atuar em preços, Tesouro, benchmarks, snapshots/TWR, manutenção e auditoria de cobertura conforme contrato vigente.
 
@@ -163,7 +182,7 @@ Não deve:
 - substituir #158;
 - ser executado globalmente apenas para repetir evidência já certificada.
 
-## 6. Matriz de autoridade
+## 7. Matriz de autoridade
 
 | Domínio | Fonte primária/canônica | Complementar/fallback | Escrita principal |
 | --- | --- | --- | --- |
@@ -179,7 +198,7 @@ Não deve:
 | Posições | cálculo interno | — | derivados |
 | Snapshots/TWR | cálculo interno | — | snapshots |
 
-## 7. Gates operacionais
+## 8. Gates operacionais
 
 Antes de cada operação real:
 
@@ -194,7 +213,7 @@ Antes de cada operação real:
 
 Para OCI, adicionalmente: checkout deve corresponder exatamente ao SHA certificado localmente.
 
-## 8. Relação com Issues
+## 9. Relação com Issues
 
 - #303 — certificação funcional/`GO_ASSISTED`;
 - #226 — decisão operacional de Proventos;
@@ -202,11 +221,12 @@ Para OCI, adicionalmente: checkout deve corresponder exatamente ao SHA certifica
 - #158 — Promotion Reconciliation;
 - #227 — GO/NO-GO amplo;
 - #284 — homologação OCI;
+- #384 — certificação persistente e revogável para dados reais;
 - #129 — eventos corporativos;
 - #253 — futura Central de Bootstrap;
 - #130 — evolução BRAPI.
 
-## 9. Estado atual — 10/09/2026
+## 10. Estado atual — 06/10/2026
 
 Já comprovado:
 
@@ -228,13 +248,8 @@ GO_ASSISTED = true
 ready_for_real_data = false
 ```
 
-Pendências de promoção:
-
-1. consumir #303 como `PORTFOLIO-TEST-READY`;
-2. consumir #226 como portfolio-scoped suficiente;
-3. consumir #216 como gate agregado fechado;
-4. executar delta #158;
-5. executar #269 no mesmo SHA candidato;
-6. homologar o mesmo SHA na OCI (#284);
-7. #227 emitir GO/NO-GO;
-8. somente após GO avaliar `ready_for_real_data=true`.
+Os gates #303, #226, #216, #158, #269 e #227 foram concluídos e consumidos pela
+promoção da PR #362. A fundação da #384 foi promovida pelas PRs #386 e #387.
+As provas PostgreSQL isoladas de restart/concorrência/stale-plan estão verdes.
+Restam a integração final com `/ready` e uma decisão operacional explícita.
+Nenhuma promoção real foi executada.

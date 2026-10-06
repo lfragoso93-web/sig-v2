@@ -4,6 +4,24 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 06/10/2026 - #384 certificação persistente guardada
+
+- as PRs #386 e #387 promoveram o modelo append-only, migration, leitor
+  DB-first, relatório, contrato de evidência, executor transacional e CLI;
+- a CLI permanece dry-run por padrão e exige `--execute` mais confirmação forte
+  para gravar um único evento auditável;
+- nenhuma promoção ou revogação real foi executada; `ready_for_real_data=false`
+  e `/ready=503` permanecem;
+- uma suíte opt-in, restrita a banco explicitamente de teste, comprovou advisory
+  lock, idempotência concorrente, stale-plan e restart em PostgreSQL 16 efêmero;
+- a documentação operacional foi rebaselizada e ganhou um runbook canônico para
+  impedir comandos e critérios divergentes.
+
+### 06/10/2026 - #345 Architecture Doctor
+
+- o enforcement arquitetural foi concluído e promovido para `main` pela PR
+  #385; a sequência da Epic #344 continua em #346 e #347.
+
 ### 23/09/2026 - rebaseline documental pós-#370
 
 - README, ROADMAP e DEVELOPMENT_CONTINUITY foram alinhados ao estado mais novo

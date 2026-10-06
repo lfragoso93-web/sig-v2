@@ -1,6 +1,6 @@
 # Gate de readiness para testes assistidos
 
-Atualizado em 05/10/2026.
+Atualizado em 06/10/2026.
 
 ## Objetivo
 
@@ -9,6 +9,11 @@ assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza
 dados reais irrestritos. #158, #269 e #227 foram fechadas e a PR #362 foi
 promovida, mas `ready_for_real_data=false` permanece ate decisao explicita,
 persistente e auditavel sob a #384.
+
+A fundacao da #384 ja existe (evento append-only, leitor DB-first, relatorio,
+contrato, executor e CLI), mas ainda nao foi ativada em `/ready` e nenhuma
+promocao real foi executada. `GO_ASSISTED` nao pode ser reutilizado como
+`status=GO` no contrato de dados reais.
 
 ## Execucao
 
@@ -82,6 +87,8 @@ automaticamente `ready_for_real_data`.
 2. executar desenvolvimento e gates no ambiente local canonico;
 3. manter OCI/#284 como backlog futuro;
 4. tratar eventual liberacao de dados reais exclusivamente pela #384.
+
+Runbook: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Governanca documental
 
