@@ -61,6 +61,8 @@ services:
       SECRET_KEY:         ${SECRET_KEY:-dev-secret-key-troque-em-producao}
       BRAPI_TOKEN:        ${BRAPI_TOKEN:-}
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+      APP_BRANCH: ${APP_BRANCH:-unknown}
+      REAL_DATASET_REFERENCE: ${REAL_DATASET_REFERENCE:-}
     volumes:
       - ./artifacts:/app/artifacts
     depends_on:
