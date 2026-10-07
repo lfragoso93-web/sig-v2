@@ -98,15 +98,20 @@ ready_for_real_data=true
 Qualquer mudança futura desse estado pertence ao contrato persistente e
 auditável da #384.
 
-## Fase 7 — enforcement arquitetural (#344) — EM ANDAMENTO
+## Fase 7 — enforcement arquitetural (#344) — CONCLUÍDA
 
-Sequência recomendada, condicionada a baseline local verde:
+Blocos concluídos e promovidos para `main`:
 
 1. #345 Architecture Doctor — concluída e promovida pela PR #385;
-2. #346 Agent Skills;
-3. #347 Certification Proof;
-4. #365 antes de qualquer migration estrutural ampla de #364;
-5. demais hardenings antes de UX/features, Analysis Engine e IA.
+2. #346 Agent Skills — concluída;
+3. #347 Certification Proof — concluída pela PR #393;
+4. #349 Deterministic Runtime — concluída pela PR #394;
+5. #348 Authorization / Access Context — concluída pela PR #395;
+6. #350 Reliable Async — concluída pela PR #396, com lease distribuído e
+   decisão documentada de não introduzir outbox sem caso concreto.
+
+Próxima fronteira: hygiene e upgrades Dependabot priorizados, nova baseline
+técnica e somente então #365 antes de qualquer migration ampla da #364.
 
 ## Fase 8 — certificação persistente para dados reais (#384) — CONCLUÍDA
 

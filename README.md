@@ -44,8 +44,9 @@ ready_for_real_data=true
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
   revisavel ate haver evidencia documental de liquidacao fracionaria para
   eventual `MATCHED`.
-- #345 foi concluída e promovida para `main` pela PR #385; a sequência da Epic
-  #344 continua em #346 e #347;
+- a Epic #344 foi concluída: #345–#350 estão fechadas e os blocos de Doctor,
+  Agent Skills, Certification Proof, runtime determinístico, Access Context e
+  Reliable Async foram promovidos para `main`;
 - #384 possui persistência append-only, leitura DB-first, relatório, contrato,
   executor transacional e CLI guardada; a promoção operacional real foi
   executada para o dataset/SHA registrados e `/ready` consome essa autoridade.
@@ -59,9 +60,9 @@ A cadeia histórica de promoção foi concluída. O mapa vigente é:
 ```text
 governança pós-#362
         -> baseline local do HEAD
-        -> #345 Architecture Doctor (concluída)
-        -> #346 Agent Skills
-        -> #347 Certification Proof
+        -> #344 Architecture Enforcement (concluída)
+        -> hygiene e upgrades Dependabot priorizados
+        -> nova baseline técnica
         -> #365 antes de qualquer migration ampla de #364
 
 #384 foi concluída; promoções futuras continuam vinculadas à identidade exata.

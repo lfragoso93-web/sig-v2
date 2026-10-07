@@ -4,6 +4,18 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 06/10/2026 - #344 Architecture Enforcement concluída
+
+- #345–#350 foram fechadas após implementação e validação dos seis blocos da
+  Epic;
+- o Architecture Doctor cataloga SGI001–SGI015 e preserva os gates originais;
+- Agent Skills versionadas, Certification Proof, runtime determinístico,
+  Access Context e lease distribuído do scheduler foram integrados;
+- a avaliação de Reliable Async documentou a decisão de não introduzir
+  transactional outbox sem uma escrita de domínio e trabalho durável que
+  precisem compartilhar a mesma transação;
+- os macroblocos foram promovidos para `main` pelas PRs #385 e #393–#396.
+
 ### 06/10/2026 - #384 certificação persistente guardada
 
 - as PRs #386 e #387 promoveram o modelo append-only, migration, leitor
@@ -23,11 +35,6 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   ausente, mismatch, revogação ou erro de leitura permanecem em 503;
 - a documentação operacional foi rebaselizada e ganhou um runbook canônico para
   impedir comandos e critérios divergentes.
-
-### 06/10/2026 - #345 Architecture Doctor
-
-- o enforcement arquitetural foi concluído e promovido para `main` pela PR
-  #385; a sequência da Epic #344 continua em #346 e #347.
 
 ### 23/09/2026 - rebaseline documental pós-#370
 
