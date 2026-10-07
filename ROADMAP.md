@@ -11,9 +11,9 @@ Estado registrado:
 
 ```text
 GO_ASSISTED=true
-ready_for_real_data=false
+ready_for_real_data=true
 /health=200
-/ready=503
+/ready=200
 ```
 
 Branch obrigatória: `stable-15jun`.
@@ -28,7 +28,8 @@ Estado:
 2. #352 fechado apos validacao manual do seletor `Tipo de ativo`;
 3. #354 preservado fechado;
 4. `PORTFOLIO-TEST-READY` registrado formalmente na #303;
-5. `ready_for_real_data=false` permanece obrigatorio.
+5. `ready_for_real_data=false` permaneceu obrigatorio durante este gate
+   funcional, antes da promocao persistente posterior da #384.
 
 Não é necessário concluir #149, #351, #360, #361, OAuth, exportações ou calculadoras para fechar #303, desde que indisponibilidades sejam explícitas e não prejudiquem jornada crítica.
 
@@ -107,7 +108,7 @@ Sequência recomendada, condicionada a baseline local verde:
 4. #365 antes de qualquer migration estrutural ampla de #364;
 5. demais hardenings antes de UX/features, Analysis Engine e IA.
 
-## Fase 8 — certificação persistente para dados reais (#384) — EM ANDAMENTO
+## Fase 8 — certificação persistente para dados reais (#384) — CONCLUÍDA
 
 Fundação já promovida pelas PRs #386 e #387:
 
@@ -122,18 +123,23 @@ Fundação já promovida pelas PRs #386 e #387:
 Prova PostgreSQL isolada concluída em 06/10/2026: concorrência serializada,
 idempotência, rejeição de stale plan e reconstrução após restart.
 
-Blocos restantes:
+Conclusão operacional em 06/10/2026:
 
-1. manter documentação e evidências operacionais convergentes;
-2. executar uma promoção real apenas mediante evidência `GO` própria da #384 e
-   autorização operacional explícita.
+1. identidade canônica derivada de backup consistente `pre-prod-backup.v3`;
+2. evidência própria `real-data-promotion-evidence.v1` aprovada;
+3. evento `PROMOTE` persistido para a identidade exata do runtime no SHA
+   `3ab054f61e34f440dddf93c170259958243d58af`;
+4. `/ready=200` e `ready_for_real_data=true` reconstruídos pela autoridade
+   DB-first, inclusive após restart.
 
 Integração concluída em 06/10/2026: `/ready` resolve ambiente, branch, SHA,
 dataset e revision Alembic independentemente do evento, consulta a decisão
 persistida e falha fechado em qualquer ausência ou divergência. O bootstrap em
 memória permanece apenas diagnóstico.
 
-Até lá, `ready_for_real_data=false` e `/ready=503` permanecem obrigatórios.
+Qualquer mudança posterior de environment, branch, SHA, dataset ou revision
+Alembic invalida essa correspondência e exige novo ciclo completo. O contrato
+permanece fail-closed em qualquer ausência, revogação ou divergência.
 
 ## Dívidas financeiras não bloqueantes por padrão
 
@@ -192,7 +198,7 @@ para eventual `MATCHED`.
 | Metas operacional | 🟢 básico funcional |
 | Análise/IA | ⚪ planejado |
 | Usuários assistidos | 🟢 GO_ASSISTED |
-| Dados reais amplos | 🔴 NO-GO atual |
+| Dados reais amplos | 🟢 GO somente para a identidade runtime certificada pela #384; fail-closed em qualquer divergência |
 
 ## Governança
 

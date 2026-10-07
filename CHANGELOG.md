@@ -10,8 +10,12 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   DB-first, relatório, contrato de evidência, executor transacional e CLI;
 - a CLI permanece dry-run por padrão e exige `--execute` mais confirmação forte
   para gravar um único evento auditável;
-- nenhuma promoção ou revogação real foi executada; `ready_for_real_data=false`
-  e `/ready=503` permanecem;
+- a promoção operacional real foi executada para a identidade runtime no SHA
+  `3ab054f61e34f440dddf93c170259958243d58af`, com evento `PROMOTE` append-only;
+- o reader DB-first validou cadeia, hash, evidência e identidade completa;
+  `ready_for_real_data=true` e `/ready=200` persistiram após restart;
+- mudanças futuras de SHA, dataset ou revision Alembic exigem novo ciclo de
+  evidência e certificação e falham fechado até nova promoção válida;
 - uma suíte opt-in, restrita a banco explicitamente de teste, comprovou advisory
   lock, idempotência concorrente, stale-plan e restart em PostgreSQL 16 efêmero;
 - `/ready` passou a resolver a identidade runtime independentemente, validar a

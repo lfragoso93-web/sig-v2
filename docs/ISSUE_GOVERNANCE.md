@@ -11,8 +11,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 1. #158, #269 e #227 estão fechadas;
 2. a PR #362 promoveu a baseline arquitetural para `main`;
 3. OCI/#284 é backlog futuro e não bloqueia o desenvolvimento atual;
-4. #384 governa separadamente a autorização persistente para dados reais; sua
-   fundação foi promovida pelas PRs #386 e #387, sem ativação;
+4. #384 está concluída e governa separadamente a autorização persistente para
+   dados reais; a promoção vigente certifica apenas a identidade runtime exata;
 5. #345 foi concluída e promovida pela PR #385; a Epic #344 segue por #346/#347.
 
 ## Classificação atual
@@ -25,8 +25,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #158 — reconciliação final de promoção, fechada;
 - #269 — security gate, fechada;
 - #227 — decisão formal GO/NO-GO, fechada;
-- #384 — readiness persistente e auditável, implementação concluída e execução
-  operacional real pendente;
+- #384 — readiness persistente e auditável, concluída com promoção operacional
+  real e validação DB-first;
 - #284 — OCI, backlog futuro.
 
 ### Hardening arquitetural
