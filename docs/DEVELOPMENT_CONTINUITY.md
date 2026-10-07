@@ -10,15 +10,16 @@ Estado de governança pós-promoção:
 
 - núcleo financeiro DB-first consolidado;
 - baseline funcional promovida pela PR #362;
-- `ready_for_real_data=false`;
+- `ready_for_real_data=true` para a identidade runtime certificada;
 - `/health=200`;
-- `/ready=503` enquanto o gate amplo permanecer fechado;
+- `/ready=200` enquanto a identidade runtime continuar correspondendo ao
+  evento persistido válido;
 - documentação raiz rebaselined para o estado atual;
 - #158, #269 e #227 fechadas;
 - OCI/#284 fora do caminho crítico atual e preservada como backlog futuro;
 - #345 concluída e promovida pela PR #385;
-- a fundação persistente da #384 foi promovida pelas PRs #386 e #387, sem
-  ativação de `/ready` nem execução real.
+- a #384 foi concluída com promoção append-only para a identidade exata do
+  runtime no SHA `3ab054f61e34f440dddf93c170259958243d58af`.
 
 ## Ordem obrigatória de trabalho
 
@@ -37,10 +38,12 @@ Estado de governança pós-promoção:
 schema_version=user-test-readiness.v1
 status=GO_ASSISTED
 go_for_assisted_user_tests=true
-ready_for_real_data=false
+ready_for_real_data=true
 ```
 
-`GO_ASSISTED` permite usuários convidados e massa sintética/controlada. Não autoriza abertura ampla com dados reais.
+`GO_ASSISTED` continua autorizando apenas o fluxo assistido que governa. A
+autorização real atual é separada e vem exclusivamente do evento persistido da
+#384; não é consequência do gate assistido.
 
 ## Mapa vigente pós-promoção
 
@@ -54,11 +57,12 @@ governança pós-#362
   -> #364
 ```
 
-Prosseguir pela #346/#347 com baseline verde. Em paralelo, a #384 governa
-qualquer futura mudança de `ready_for_real_data`; a prova PostgreSQL isolada de
-restart/concorrência já está verde. #284 não bloqueia essa sequência local.
+Prosseguir pelos hardenings arquiteturais com baseline verde. A #384 governa
+qualquer futura mudança de identidade ou de `ready_for_real_data`; a promoção
+vigente continua limitada ao runtime certificado. #284 não bloqueia essa
+sequência local.
 
-### #384 — certificação para dados reais (em andamento)
+### #384 — certificação para dados reais (concluída)
 
 - persistence append-only, leitor DB-first, relatório, contrato, executor e CLI
   estão publicados;
@@ -66,8 +70,10 @@ restart/concorrência já está verde. #284 não bloqueia essa sequência local.
   operacional explícita;
 - provas PostgreSQL de restart/concorrência/stale-plan concluídas em banco
   efêmero;
+- evento `PROMOTE` persistido para a identidade runtime certificada;
 - `/ready` integrado ao resolvedor independente de identidade e ao leitor
-  persistido, permanecendo 503 sem promoção válida;
+  persistido, retornando 200 para a identidade vigente e 503 em qualquer
+  ausência, revogação ou divergência;
 - runbook canônico: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## Pendências de curto prazo
@@ -78,7 +84,8 @@ restart/concorrência já está verde. #284 não bloqueia essa sequência local.
 - #352 foi fechada/validada no modal de lancamento;
 - #354 permanece fechada;
 - #363 permanece fechada;
-- nao altera `ready_for_real_data=false`.
+- não foi, isoladamente, a origem de `ready_for_real_data=true`; a abertura
+  posterior decorreu exclusivamente da promoção persistida da #384.
 
 ### #226
 

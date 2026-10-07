@@ -7,13 +7,15 @@ Atualizado em 06/10/2026.
 O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas
 assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza
 dados reais irrestritos. #158, #269 e #227 foram fechadas e a PR #362 foi
-promovida, mas `ready_for_real_data=false` permanece ate decisao explicita,
-persistente e auditavel sob a #384.
+promovida. A decisão explícita, persistente e auditável da #384 foi executada
+posteriormente e mantém `ready_for_real_data=true` somente para a identidade
+runtime certificada.
 
 A implementacao da #384 ja existe (evento append-only, leitor DB-first,
-identidade runtime, relatorio, executor, CLI e integracao com `/ready`), mas
-nenhuma promocao real foi executada. `GO_ASSISTED` nao pode ser reutilizado como
-`status=GO` no contrato de dados reais.
+identidade runtime, relatorio, executor, CLI e integracao com `/ready`) e uma
+promocao real foi persistida em 06/10/2026. `GO_ASSISTED` nao foi reutilizado
+como `status=GO`: a promoção usou evidência própria
+`real-data-promotion-evidence.v1`.
 
 ## Execucao
 
@@ -22,7 +24,7 @@ nenhuma promocao real foi executada. `GO_ASSISTED` nao pode ser reutilizado como
 
 ## Evidencia registrada
 
-Em 10/09/2026:
+Em 10/09/2026, antes da promoção persistente da #384:
 
 ```text
 schema_version=user-test-readiness.v1
@@ -48,7 +50,8 @@ A validacao assistida ja produziu evidencia reutilizavel de CSV/rebuild, mercado
 
 Nao executar desenvolvimento, testes ou homologacao OCI na fase atual.
 
-Durante a fase assistida, esta combinacao e valida:
+Durante a fase assistida anterior à promoção da #384, esta combinação era
+válida e permanece como evidência histórica:
 
 ```text
 /health = 200
@@ -59,6 +62,11 @@ ready_for_real_data = false
 
 `/ready=503` nao deve ser contornado. Promocao para `main` nao equivale a
 autorizacao para dados reais.
+
+No estado operacional certificado em 06/10/2026, `/ready=200` decorre
+exclusivamente do evento DB-first válido e da correspondência exata entre
+environment, branch, SHA, dataset e revision Alembic. O resultado
+`GO_ASSISTED` continua separado e não promove nem revoga esse estado.
 
 Ver `docs/deployment/oci-execution-index.md`.
 

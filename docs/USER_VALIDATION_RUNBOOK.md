@@ -6,23 +6,26 @@ Branch obrigatoria: `stable-15jun`
 
 > Rebaseline em 06/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
 > promovida. As evidencias datadas permanecem validas como historico, mas
-> OCI/#284 nao integra o caminho atual. `ready_for_real_data=false` continua
-> governado separadamente pela #384.
+> OCI/#284 nao integra o caminho atual. `ready_for_real_data=true` está
+> governado separadamente pela promoção persistida da #384 e limitado à
+> identidade runtime certificada.
 
 ## Bloco #384 - certificacao persistente guardada - 06/10/2026
 
 - PR #386: evento append-only, migration, leitor DB-first e relatorio;
 - PR #387: contrato versionado, plano deterministico, confirmacao forte,
   executor transacional sob advisory lock PostgreSQL e CLI dry-run por padrao;
-- nenhuma execucao real de promocao/revogacao ocorreu;
-- `/ready=503` e `ready_for_real_data=false` permanecem;
+- a promoção real foi executada para a identidade runtime no SHA
+  `3ab054f61e34f440dddf93c170259958243d58af`;
+- `/ready=200` e `ready_for_real_data=true` são derivados do evento persistido
+  válido;
 - provas de restart/concorrencia/stale-plan passaram em PostgreSQL 16 efemero;
-- `/ready` agora consome a identidade runtime e a decisao persistida de forma
-  fail-closed; nenhuma promocao real foi executada.
+- `/ready` consome a identidade runtime e a decisao persistida de forma
+  fail-closed; qualquer divergencia exige novo ciclo de certificacao.
 
 Runbook: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
-## Status atual - 10/09/2026
+## Evidencia historica - 10/09/2026
 
 GO para usuarios convidados testarem jornadas assistidas com contas, carteiras,
 dados ficticios/descartaveis e carteira real-controlada de homologacao quando
@@ -61,7 +64,7 @@ Evidencia runtime local:
 O relatorio e read-only, nao chama providers, nao executa bootstrap, nao escreve
 no banco e nao promove `/ready`.
 
-## Status atual - 08/09/2026
+## Evidencia historica - 08/09/2026
 
 GO para usuarios convidados testarem jornadas assistidas com contas, carteiras e
 dados ficticios/descartaveis.

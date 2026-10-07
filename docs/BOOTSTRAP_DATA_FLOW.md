@@ -155,8 +155,9 @@ ou qualquer escrita no ledger.
 
 O fluxo é dry-run primeiro. Uma escrita exige `--execute`, confirmação exata,
 advisory lock PostgreSQL, plano ainda atual e transação do chamador. Revogação é
-um novo evento append-only. No estado atual, nenhuma execução real foi feita e
-`ready_for_real_data=false` permanece.
+um novo evento append-only. A promoção operacional de 06/10/2026 certificou a
+identidade exata do runtime; o estado atual é derivado exclusivamente desse
+evento persistido válido.
 
 ## 5. Sincronização incremental
 
@@ -243,13 +244,14 @@ Estado de readiness:
 
 ```text
 /health = 200
-/ready = 503
+/ready = 200
 GO_ASSISTED = true
-ready_for_real_data = false
+ready_for_real_data = true
 ```
 
 Os gates #303, #226, #216, #158, #269 e #227 foram concluídos e consumidos pela
 promoção da PR #362. A fundação da #384 foi promovida pelas PRs #386 e #387.
 As provas PostgreSQL isoladas de restart/concorrência/stale-plan estão verdes.
-A integração DB-first com `/ready` também está concluída. Resta uma decisão
-operacional explícita; nenhuma promoção real foi executada.
+A integração DB-first com `/ready` e a promoção operacional real também estão
+concluídas. `GO_ASSISTED` permanece um diagnóstico separado e não é a origem da
+autorização para dados reais.

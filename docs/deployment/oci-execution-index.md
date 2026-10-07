@@ -22,9 +22,10 @@ Fluxo vigente:
 7. nunca editar codigo na VM OCI como forma de correcao permanente.
 
 `GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. Os gates
-#158, #269 e #227 foram concluídos; `ready_for_real_data=false` permanece
-obrigatório até uma decisão persistente própria da #384. OCI/#284 não é
-pré-requisito atual dessa decisão.
+#158, #269 e #227 foram concluídos; a decisão persistente da #384 também foi
+executada e mantém `ready_for_real_data=true` somente para a identidade runtime
+certificada. OCI/#284 não foi pré-requisito dessa decisão e permanece backlog
+futuro.
 
 ## Phase 0. Freeze Candidate SHA
 
