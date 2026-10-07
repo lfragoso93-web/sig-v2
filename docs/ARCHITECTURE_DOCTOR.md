@@ -8,7 +8,7 @@ verdade e aparecem como evidência no catálogo.
 ## Escopo atual
 
 O catálogo inicial vive em `backend/app/doctor/catalog.py` e registra os IDs
-`SGI001` a `SGI014`, título, severidade, tipo de check e arquivos que hoje
+`SGI001` a `SGI015`, título, severidade, tipo de check e arquivos que hoje
 protegem cada regra. Os contratos em `backend/app/doctor/contracts.py` definem o
 envelope de resultado e os códigos de saída. A CLI canônica é exposta por
 `python -m app.doctor`.
@@ -84,6 +84,7 @@ bloqueante nunca é promovida a sucesso.
 | SGI012 | Agent Skills | static | pacotes versionados, metadados e roteamento no README |
 | SGI013 | runtime determinístico | behavioral | Clock, config crítica e query budgets |
 | SGI014 | access context | behavioral | ownership, permissão e contexto sistêmico explícitos |
+| SGI015 | reliable async | behavioral | lease Redis, TTL e recuperação após crash |
 
 Adicionar um ID não autoriza executar o respectivo gate. Qualquer runner deve
 declarar quais tipos de check suporta, preservar o comportamento fail-closed e

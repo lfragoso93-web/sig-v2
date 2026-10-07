@@ -32,6 +32,13 @@ controller/service/repository boundary. Client-provided IDs are not authority.
 User contexts require ownership and explicit permission; system jobs require a
 non-empty purpose and must never rely on an implicit bypass.
 
+Recurring global jobs that can run in multiple backend replicas require a
+distributed lease with explicit TTL, owner-safe release and fail-closed
+contention behavior. Keep database idempotency underneath the lease. Do not add
+a transactional outbox until a concrete domain write and durable external work
+must be committed atomically; document a no-outbox decision when that case is
+absent.
+
 Use the project `.venv` or Docker. Choose focused tests first, then gates
 proportional to risk. Run `git diff --check`; use Flake8 with `--jobs=1` on
 Windows when needed. A pytest `WinError 5` during temporary-directory setup is

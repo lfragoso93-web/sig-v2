@@ -1,8 +1,11 @@
+from contextlib import asynccontextmanager
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from apscheduler.triggers.cron import CronTrigger
 
+import app.core.scheduler as scheduler_module
 from app.core.scheduler import scheduler, start_scheduler
 
 
@@ -34,5 +37,40 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
         assert next_run.weekday() == 0
         assert next_run.hour == 9
         assert next_run.minute == 0
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_daily_close_skips_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "persist_daily_close_prices",
+            "period": "daily",
+            "ttl_seconds": 7200,
+        }
+        yield False
+
+    backfill = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.asset_price_global_backfill_service."
+        "run_global_asset_price_backfill",
+        backfill,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("persist_daily_close_prices")
+        assert job is not None
+        await job.func()
+        backfill.assert_not_awaited()
     finally:
         scheduler.shutdown(wait=False)

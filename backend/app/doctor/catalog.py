@@ -134,6 +134,13 @@ ARCHITECTURE_CHECKS = (
         kind=DoctorCheckKind.BEHAVIORAL,
         evidence=("backend/tests/test_portfolio_access_context.py",),
     ),
+    DoctorCatalogEntry(
+        finding_id="SGI015",
+        title="Jobs concorrentes usam lease distribuida fail-closed",
+        severity=DoctorSeverity.ERROR,
+        kind=DoctorCheckKind.BEHAVIORAL,
+        evidence=("backend/tests/test_distributed_job_lock.py",),
+    ),
 )
 
 architecture_check_by_id = MappingProxyType(

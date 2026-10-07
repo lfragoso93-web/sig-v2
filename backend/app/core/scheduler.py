@@ -4,6 +4,8 @@ from datetime import date
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.distributed_job_lock import distributed_job_lock
+
 logger = logging.getLogger(__name__)
 
 SCHEDULER_TIMEZONE = "America/Sao_Paulo"
@@ -98,18 +100,29 @@ def start_scheduler() -> None:
             run_global_asset_price_backfill,
         )
 
-        today = date.today()
-        try:
-            result = await run_global_asset_price_backfill(
-                required_to=today,
-                history_start=today,
-            )
-            logger.info("[scheduler] Fechamento diário de preços atualizado: %s", result)
-        except Exception as exc:
-            logger.error(
-                "[scheduler] Erro ao persistir fechamento diário de preços: %s",
-                exc,
-            )
+        async with distributed_job_lock(
+            job_name="persist_daily_close_prices",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+
+            today = date.today()
+            try:
+                result = await run_global_asset_price_backfill(
+                    required_to=today,
+                    history_start=today,
+                )
+                logger.info(
+                    "[scheduler] Fechamento diário de preços atualizado: %s",
+                    result,
+                )
+            except Exception as exc:
+                logger.error(
+                    "[scheduler] Erro ao persistir fechamento diário de preços: %s",
+                    exc,
+                )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=50),

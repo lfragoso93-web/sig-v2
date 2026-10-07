@@ -71,6 +71,15 @@ vertical completa. Jobs e CLIs devem usar identidade de usuário comprovada ou
 contexto sistêmico com finalidade explícita; bypass implícito é proibido. O
 contrato e o inventário de migração estão em `docs/ACCESS_CONTEXT.md`.
 
+### Processamento assíncrono confiável
+
+Jobs globais de escrita não podem depender apenas de `max_instances=1`, que é
+local ao processo. O fechamento diário de preços é a primeira vertical com
+lease Redis fail-closed, TTL e liberação por token. A decisão arquitetural atual
+não adota transactional outbox: os efeitos assíncronos examinados são derivados
+e reconstruíveis, sem publicação externa que justifique nova tabela e worker.
+Inventário, riscos e gatilhos de reavaliação estão em `docs/RELIABLE_ASYNC.md`.
+
 ## Proventos
 
 Eventos monetários pertencem ao ativo e são persistidos em `asset_dividends`.
