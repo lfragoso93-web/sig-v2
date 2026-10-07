@@ -37,6 +37,27 @@ def test_runner_executes_only_requested_static_evidence() -> None:
     )
 
 
+def test_runner_executes_packaged_backend_layout(tmp_path: Path) -> None:
+    evidence = tmp_path / "tests" / "test_portfolio_snapshot_single_writer_policy.py"
+    evidence.parent.mkdir()
+    evidence.write_text("# packaged static evidence\n", encoding="utf-8")
+    calls: list[tuple[tuple[str, ...], Path]] = []
+
+    def executor(command: tuple[str, ...], cwd: Path) -> StaticCheckExecution:
+        calls.append((command, cwd))
+        return StaticCheckExecution(0)
+
+    report = run_static_checks(
+        ["SGI004"], repository_root=tmp_path, executor=executor
+    )
+
+    assert report.exit_code is DoctorExitCode.OK
+    assert calls[0][1] == tmp_path
+    assert Path(calls[0][0][6]).as_posix() == (
+        "tests/test_portfolio_snapshot_single_writer_policy.py"
+    )
+
+
 @pytest.mark.parametrize("finding_id", ["SGI001", "SGI003", "SGI006", "SGI011"])
 def test_runner_rejects_non_static_checks_without_execution(finding_id: str) -> None:
     called = False

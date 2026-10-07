@@ -38,6 +38,11 @@ class StaticDoctorReport:
     exit_code: DoctorExitCode
 
 
+def _backend_root(repository_root: Path) -> Path:
+    nested_backend = repository_root / "backend"
+    return nested_backend if nested_backend.is_dir() else repository_root
+
+
 def _execute_pytest(
     command: tuple[str, ...], backend_root: Path
 ) -> StaticCheckExecution:
@@ -56,11 +61,14 @@ def _execute_pytest(
 
 def _test_paths(finding_id: str, repository_root: Path) -> tuple[Path, ...]:
     entry = architecture_check_by_id[finding_id]
-    tests_root = (repository_root / "backend" / "tests").resolve()
+    backend_root = _backend_root(repository_root)
+    tests_root = (backend_root / "tests").resolve()
     paths: list[Path] = []
 
     for evidence in entry.evidence:
         path = (repository_root / evidence).resolve()
+        if backend_root == repository_root:
+            path = (backend_root / Path(evidence).relative_to("backend")).resolve()
         if path.parent != tests_root or not path.name.startswith("test_"):
             raise ValueError(
                 f"{finding_id} possui evidência não executável no runner estático: "
@@ -112,7 +120,7 @@ def run_static_checks(
     if len(set(finding_ids)) != len(finding_ids):
         raise ValueError("finding_ids não pode conter IDs duplicados")
 
-    backend_root = (repository_root / "backend").resolve()
+    backend_root = _backend_root(repository_root).resolve()
     results: list[DoctorFindingResult] = []
     batch_failure: StaticCheckExecution | None = None
 

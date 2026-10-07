@@ -44,8 +44,8 @@ services:
   # ── Backend FastAPI ──────────────────────────────────────
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
     restart: unless-stopped

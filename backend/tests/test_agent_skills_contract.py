@@ -4,7 +4,13 @@ import re
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_SOURCE_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_PACKAGED_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = (
+    _SOURCE_REPOSITORY_ROOT
+    if (_SOURCE_REPOSITORY_ROOT / ".agents").is_dir()
+    else _PACKAGED_BACKEND_ROOT
+)
 SKILLS_ROOT = REPOSITORY_ROOT / ".agents" / "skills"
 README = REPOSITORY_ROOT / "README.md"
 EXPECTED_SKILLS = {

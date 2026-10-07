@@ -25,5 +25,7 @@ def test_backend_commit_identity_does_not_invalidate_filesystem_layers() -> None
     identity_position = text.index("ARG APP_COMMIT_SHA=unknown")
 
     assert text.index("apt-get upgrade -y") < identity_position
-    assert text.index("COPY --chown=app:app . .") < identity_position
+    assert text.index("COPY --chown=app:app backend/ /app/") < identity_position
+    assert text.index("COPY --chown=app:app .agents/ /app/.agents/") < identity_position
+    assert text.index("COPY --chown=app:app README.md /app/README.md") < identity_position
     assert text.index("LABEL org.opencontainers.image.revision") > identity_position

@@ -1,5 +1,11 @@
 # Certification Proof do SGI v2
 
+## Empacotamento do Doctor
+
+A imagem do backend inclui as evidências estáticas, o `README.md` e as Agent
+Skills versionadas requeridas pelo Doctor. O contexto de build é uma allowlist:
+configurações locais, `.env`, artefatos e caches não entram na imagem.
+
 O contrato `sgi-certification.v1` resume, em JSON validável e associado ao SHA,
 o estado observado de uma certificação. Ele é somente leitura: não promove,
 revoga, executa migrations nem altera o banco.

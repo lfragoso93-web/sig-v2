@@ -13,7 +13,17 @@ from app.doctor.static_runner import StaticDoctorReport, run_static_checks
 
 
 REPORT_SCHEMA_VERSION = "architecture-doctor.v1"
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+_SOURCE_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+_PACKAGED_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+# A checkout stores the backend below its repository root. The certification
+# image intentionally packages only the backend plus the versioned contracts
+# required by the static Doctor, so there the backend itself is the root.
+REPOSITORY_ROOT = (
+    _SOURCE_REPOSITORY_ROOT
+    if (_SOURCE_REPOSITORY_ROOT / "backend").is_dir()
+    else _PACKAGED_BACKEND_ROOT
+)
 STATIC_FINDING_IDS = tuple(
     finding_id
     for finding_id, entry in architecture_check_by_id.items()
