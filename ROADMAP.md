@@ -198,7 +198,7 @@ para eventual `MATCHED`.
 | Metas operacional | 🟢 básico funcional |
 | Análise/IA | ⚪ planejado |
 | Usuários assistidos | 🟢 GO_ASSISTED |
-| Dados reais amplos | 🔴 NO-GO atual |
+| Dados reais amplos | 🟢 GO somente para a identidade runtime certificada pela #384; fail-closed em qualquer divergência |
 
 ## Governança
 
