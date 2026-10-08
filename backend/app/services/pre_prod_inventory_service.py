@@ -109,6 +109,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "rebuildable",
         "Catálogo canônico é reconstruído pelas fontes oficiais e reconciliado com as transações exportadas.",
     ),
+    "treasury_instruments": (
+        "rebuildable",
+        "Metadados tipados do Tesouro são reconstruídos pelo backfill idempotente a partir do catálogo canônico de ativos.",
+    ),
     "dividends": (
         "rebuildable",
         "Direitos legados serão descartados e reconstruídos sob demanda a partir de eventos e transações.",
