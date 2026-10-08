@@ -2,13 +2,11 @@
 Treasury service — lê posições diretamente da tabela transactions.
 
 Cada linha de transação com asset_type = 'tesouro_direto' representa um lote de
-compra de Tesouro Direto. Para cotação atual, o ticker informado pelo usuário é
-resolvido para o `symbol` canônico da BRAPI usando o catálogo persistido em
-assets, populado via /api/v2/treasury/list.
+compra de Tesouro Direto. O ticker informado pelo usuário é resolvido pelo
+catálogo persistido e a cotação atual vem exclusivamente de ``assets.last_price``.
 """
 from datetime import date
 from typing import Optional
-import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,10 +14,10 @@ from fastapi import HTTPException
 
 from app.models.transaction import Transaction, OperationType
 from app.models.portfolio import Portfolio
-from app.integrations.brapi_treasury import fetch_treasury_prices
+from app.services.persisted_current_price_query_service import (
+    get_persisted_current_prices,
+)
 from app.services.treasury_catalog_service import resolve_treasury_symbol
-
-logger = logging.getLogger(__name__)
 
 TREASURY_ASSET_TYPES = {"tesouro_direto", "tesouro direto", "treasury", "TESOURO_DIRETO"}
 
@@ -80,34 +78,15 @@ async def get_treasury_by_portfolio(
     return [tx for tx in all_txs if _is_treasury(tx.asset_type)]
 
 
-async def _resolve_symbol_safe(db: AsyncSession | None, raw_ticker: str) -> str:
-    if not db:
-        return raw_ticker
-    try:
-        return await resolve_treasury_symbol(db, raw_ticker) or raw_ticker
-    except Exception as exc:
-        # Mantém compatibilidade com testes/mocks antigos e evita quebrar a tela
-        # se o catálogo ainda não estiver populado.
-        logger.debug("[treasury_service] fallback para ticker bruto %s: %s", raw_ticker, exc)
-        return raw_ticker
+async def _resolve_symbol(db: AsyncSession, raw_ticker: str) -> str:
+    return await resolve_treasury_symbol(db, raw_ticker) or raw_ticker
 
 
 async def enrich_with_current_prices(
-    db_or_transactions,
-    transactions: list[Transaction] | None = None,
+    db: AsyncSession,
+    transactions: list[Transaction],
 ) -> list[dict]:
-    """
-    Enriquece lotes de Tesouro com preço atual via BRAPI indicators.
-
-    Aceita as duas assinaturas para compatibilidade:
-      - enrich_with_current_prices(db, transactions)  # fluxo novo
-      - enrich_with_current_prices(transactions)      # testes/uso legado
-    """
-    if transactions is None:
-        db: AsyncSession | None = None
-        transactions = db_or_transactions
-    else:
-        db = db_or_transactions
+    """Enriquece lotes de Tesouro somente com preços persistidos."""
 
     if not transactions:
         return []
@@ -116,15 +95,14 @@ async def enrich_with_current_prices(
     for tx in transactions:
         raw = str(tx.ticker or "")
         if raw not in symbol_by_raw:
-            symbol_by_raw[raw] = await _resolve_symbol_safe(db, raw)
+            symbol_by_raw[raw] = await _resolve_symbol(db, raw)
 
     symbols = sorted({s for s in symbol_by_raw.values() if s})
-    price_map: dict[str, float] = {}
-    if symbols:
-        try:
-            price_map = await fetch_treasury_prices(symbols)
-        except Exception as exc:
-            logger.warning("[treasury_service] erro ao buscar preços BRAPI: %s", exc)
+    persisted_prices = await get_persisted_current_prices(db, symbols)
+    price_map = {
+        str(symbol).strip().lower(): price
+        for symbol, price in persisted_prices.items()
+    }
 
     result = []
     for tx in transactions:
@@ -134,7 +112,7 @@ async def enrich_with_current_prices(
 
         raw_ticker = str(tx.ticker or "")
         brapi_symbol = symbol_by_raw.get(raw_ticker, raw_ticker)
-        current_price = price_map.get(brapi_symbol)
+        current_price = price_map.get(brapi_symbol.strip().lower())
         valor_atual = None
         lucro_prejuizo = None
         rentabilidade_pct = None

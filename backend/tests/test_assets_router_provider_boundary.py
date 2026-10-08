@@ -47,3 +47,14 @@ def test_treasury_maturity_is_extracted_from_official_names_and_slugs() -> None:
     assert _treasury_maturity_from_ticker("tesouro-selic-01032031") == "2031-03-01"
     assert _treasury_maturity_from_ticker("Tesouro Selic 01/03/2031") == "2031-03-01"
     assert _treasury_maturity_from_ticker("Tesouro IPCA+ 2035-05-15") == "2035-05-15"
+
+
+def test_treasury_positions_service_is_db_first() -> None:
+    service_path = (
+        Path(__file__).resolve().parents[1] / "app" / "services" / "treasury_service.py"
+    )
+    source = service_path.read_text(encoding="utf-8")
+
+    assert "app.integrations" not in source
+    assert "fetch_treasury_prices" not in source
+    assert "get_persisted_current_prices" in source
