@@ -1,6 +1,8 @@
 """Backfill guardado de metadados tipados do Tesouro Direto."""
 from __future__ import annotations
 
+from collections import defaultdict
+
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +32,8 @@ async def backfill_treasury_instruments(
             "schema_ready": False,
             "candidate_count": 0,
             "candidate_asset_ids": [],
+            "conflict_count": 0,
+            "conflicts": [],
             "database_writes_executed": 0,
         }
 
@@ -50,15 +54,30 @@ async def backfill_treasury_instruments(
     )
     assets = list(result.scalars().all())
     candidate_ids = [int(asset.id) for asset in assets]
+    assets_by_normalized_ticker: dict[str, list[int]] = defaultdict(list)
+    for asset in assets:
+        normalized_ticker = str(asset.ticker or "").strip().lower()
+        if normalized_ticker:
+            assets_by_normalized_ticker[normalized_ticker].append(int(asset.id))
+    conflicts = [
+        {
+            "normalized_ticker": ticker,
+            "asset_ids": asset_ids,
+        }
+        for ticker, asset_ids in sorted(assets_by_normalized_ticker.items())
+        if len(asset_ids) > 1
+    ]
     report: dict[str, object] = {
         "schema_version": "treasury-instrument-backfill.v1",
         "dry_run": dry_run,
         "schema_ready": True,
         "candidate_count": len(assets),
         "candidate_asset_ids": candidate_ids,
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
         "database_writes_executed": 0,
     }
-    if dry_run or not assets:
+    if dry_run or not assets or conflicts:
         return report
 
     instruments = [
