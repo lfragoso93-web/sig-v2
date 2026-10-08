@@ -7,6 +7,7 @@ import pytest
 from app.models.transaction import OperationType, Transaction
 from app.services.fixed_income_valuation_service import (
     IncompleteBenchmarkCoverageError,
+    fixed_income_coverage_from_transactions,
     get_fixed_income_totals_with_coverage_fallback,
     get_fixed_income_totals_from_transactions,
 )
@@ -242,3 +243,89 @@ async def test_fixed_income_partial_coverage_does_not_zero_whole_group(monkeypat
     assert totals["invested_amount"] == Decimal("1200.00")
     assert totals["current_value"] == Decimal("1210.00")
     assert totals["income_amount"] == Decimal("10.00")
+
+
+@pytest.mark.asyncio
+async def test_open_applications_expose_worst_benchmark_coverage(monkeypatch):
+    transactions = [
+        Transaction(
+            id=6,
+            portfolio_id=7,
+            ticker="CDB-CDI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 2),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=7,
+            portfolio_id=7,
+            ticker="CDB-PRE",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("500"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 2),
+            currency="BRL",
+            notes="Indexador: PREFIXADO | Taxa: 12%",
+        ),
+    ]
+    coverage = AsyncMock(return_value=BenchmarkCoverageStatus.PARTIAL)
+    monkeypatch.setattr(service, "benchmark_coverage_status", coverage)
+
+    result = await fixed_income_coverage_from_transactions(
+        object(),
+        transactions,
+        date(2026, 1, 10),
+    )
+
+    assert result is BenchmarkCoverageStatus.PARTIAL
+    coverage.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_fully_redeemed_application_does_not_block_coverage(monkeypatch):
+    transactions = [
+        Transaction(
+            id=8,
+            portfolio_id=7,
+            ticker="CDB-CDI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 2),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=9,
+            portfolio_id=7,
+            ticker="CDB-CDI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.sell,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 5),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+    ]
+    coverage = AsyncMock(return_value=BenchmarkCoverageStatus.ABSENT)
+    monkeypatch.setattr(service, "benchmark_coverage_status", coverage)
+
+    result = await fixed_income_coverage_from_transactions(
+        object(),
+        transactions,
+        date(2026, 1, 10),
+    )
+
+    assert result is BenchmarkCoverageStatus.COMPLETE
+    coverage.assert_not_awaited()

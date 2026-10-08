@@ -22,6 +22,7 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import OperationType, Transaction
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
 from app.services.canonical_dividend_aggregation_service import (
     group_received_entitlements_by_day,
 )
@@ -37,6 +38,7 @@ from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
 from app.services.fixed_income_valuation_service import (
+    fixed_income_coverage_from_transactions,
     get_fixed_income_totals_from_transactions,
 )
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
@@ -509,6 +511,11 @@ async def rebuild_class_snapshots(
 
             if AssetType.RENDA_FIXA in portfolio_types:
                 class_state = return_states[AssetType.RENDA_FIXA]
+                coverage = await fixed_income_coverage_from_transactions(
+                    db,
+                    fixed_income_transactions,
+                    cursor,
+                )
                 totals = await get_fixed_income_totals_from_transactions(
                     db,
                     fixed_income_transactions,
@@ -520,16 +527,19 @@ async def rebuild_class_snapshots(
                     fixed_income_transactions,
                     cursor,
                 ).quantize(_MONEY)
-                daily_return = calculate_daily_twr_pct(
-                    class_state.previous_value,
-                    market_value,
-                    net_external_flow=external_flow,
-                    dividends_day=_ZERO,
-                )
-                class_state.accumulated_return_pct = append_compounded_return_pct(
-                    class_state.accumulated_return_pct,
-                    daily_return,
-                )
+                coverage_complete = coverage is BenchmarkCoverageStatus.COMPLETE
+                daily_return = _ZERO
+                if coverage_complete:
+                    daily_return = calculate_daily_twr_pct(
+                        class_state.previous_value,
+                        market_value,
+                        net_external_flow=external_flow,
+                        dividends_day=_ZERO,
+                    )
+                    class_state.accumulated_return_pct = append_compounded_return_pct(
+                        class_state.accumulated_return_pct,
+                        daily_return,
+                    )
                 unrealized_pnl = market_value - cost_basis
 
                 await _upsert_class_snapshot(
@@ -548,11 +558,15 @@ async def rebuild_class_snapshots(
                         "daily_return_pct": daily_return,
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": False,
-                        "return_is_estimated": False,
-                        "valuation_status": "complete",
+                        "return_is_estimated": not coverage_complete,
+                        "valuation_status": (
+                            "complete"
+                            if coverage_complete
+                            else f"{coverage.value}_benchmark"
+                        ),
                     },
                 )
-                class_state.previous_value = market_value
+                class_state.previous_value = market_value if coverage_complete else None
                 count += 1
 
             if count and count % 100 == 0:

@@ -98,3 +98,28 @@ async def test_class_availability_requires_supported_engine_and_materialized_dat
     assert by_type["TESOURO_DIRETO"]["engine_supported"] is True
     assert by_type["TESOURO_DIRETO"]["data_available"] is False
     assert by_type["TESOURO_DIRETO"]["status"] == "awaiting_backfill"
+
+
+@pytest.mark.asyncio
+async def test_class_availability_rejects_incomplete_benchmark_snapshot(db, portfolio):
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id, ticker="CDB CDI", asset_type="RENDA_FIXA",
+            operation=OperationType.buy, quantity=1, price=1000, date=date(2026, 1, 2),
+        )
+    )
+    snapshot = class_snapshot(portfolio.id, date(2026, 1, 31))
+    snapshot.asset_type = "RENDA_FIXA"
+    snapshot.return_is_estimated = True
+    snapshot.valuation_status = "partial_benchmark"
+    db.add(snapshot)
+    await db.flush()
+
+    rows = await get_class_twr_availability(db, portfolio.id)
+    fixed_income = next(row for row in rows if row["asset_type"] == "RENDA_FIXA")
+
+    assert fixed_income["engine_supported"] is True
+    assert fixed_income["data_available"] is True
+    assert fixed_income["available"] is False
+    assert fixed_income["status"] == "partial_benchmark"
+    assert "benchmark" in fixed_income["reason"]

@@ -390,6 +390,23 @@ def _apply_redemption(applications: list[FixedIncomeApplication], tx: Transactio
         redeem_amount -= consumed
 
 
+def _open_applications_from_transactions(
+    transactions: list[Transaction],
+    target_date: date,
+) -> list[FixedIncomeApplication]:
+    applications: list[FixedIncomeApplication] = []
+    for tx in transactions:
+        if tx.date > target_date or str(tx.asset_type or "").upper() != RENDA_FIXA_TYPE:
+            continue
+        if _is_buy(tx.operation):
+            app = _application_from_buy(tx)
+            if app.invested_amount > 0:
+                applications.append(app)
+        elif _is_sell(tx.operation):
+            _apply_redemption(applications, tx)
+    return [app for app in applications if app.remaining_principal > 0]
+
+
 async def _aggregate_applications(
     db: AsyncSession,
     applications: list[FixedIncomeApplication],
@@ -445,22 +462,49 @@ async def get_fixed_income_valuations_from_transactions(
     transactions: list[Transaction],
     target_date: date,
 ) -> list[FixedIncomeValuation]:
-    txs = [
-        tx
-        for tx in transactions
-        if tx.date <= target_date and str(tx.asset_type or "").upper() == RENDA_FIXA_TYPE
-    ]
-
-    applications: list[FixedIncomeApplication] = []
-    for tx in txs:
-        if _is_buy(tx.operation):
-            app = _application_from_buy(tx)
-            if app.invested_amount > 0:
-                applications.append(app)
-        elif _is_sell(tx.operation):
-            _apply_redemption(applications, tx)
-
+    applications = _open_applications_from_transactions(transactions, target_date)
     return await _aggregate_applications(db, applications, target_date)
+
+
+async def fixed_income_coverage_from_transactions(
+    db: AsyncSession,
+    transactions: list[Transaction],
+    target_date: date,
+) -> BenchmarkCoverageStatus:
+    """Return the worst persisted benchmark coverage among open applications."""
+    applications = _open_applications_from_transactions(transactions, target_date)
+
+    worst = BenchmarkCoverageStatus.COMPLETE
+    rank = {
+        BenchmarkCoverageStatus.COMPLETE: 0,
+        BenchmarkCoverageStatus.PARTIAL: 1,
+        BenchmarkCoverageStatus.ABSENT: 2,
+    }
+    for app in applications:
+        if target_date <= app.date_start:
+            continue
+        indexer = _normalize_indexer(app.key.indexer)
+        if indexer == "PREFIXADO":
+            continue
+        indicator = {
+            "CDI": "CDI",
+            "SELIC": "SELIC",
+            "IPCA_PLUS": "IPCA",
+            "IGPM_PLUS": "IGPM",
+        }.get(indexer)
+        if indicator is None:
+            coverage = BenchmarkCoverageStatus.ABSENT
+        else:
+            coverage = await benchmark_coverage_status(
+                db,
+                indicator,
+                app.date_start,
+                target_date,
+                source=app.key.benchmark_source,
+            )
+        if rank[coverage] > rank[worst]:
+            worst = coverage
+    return worst
 
 
 async def get_fixed_income_totals_from_transactions(

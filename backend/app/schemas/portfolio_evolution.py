@@ -55,7 +55,12 @@ class PortfolioClassDailyEvolutionResponse(BaseModel):
     accumulated_return_pct: float
     has_partial_prices: bool
     return_is_estimated: bool
-    valuation_status: Literal["complete", "partial_prices"]
+    valuation_status: Literal[
+        "complete",
+        "partial_prices",
+        "partial_benchmark",
+        "absent_benchmark",
+    ]
     history_source: Literal["portfolio_class_snapshot"]
 
 
@@ -80,6 +85,8 @@ class PortfolioClassAvailabilityResponse(BaseModel):
         "available",
         "awaiting_backfill",
         "dedicated_history_not_available",
+        "partial_benchmark",
+        "absent_benchmark",
     ]
     reason: str | None
 

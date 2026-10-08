@@ -21,6 +21,7 @@ from app.services.portfolio_class_snapshot_service import (
     _next_business_date,
     class_twr_availability,
 )
+from app.schemas.portfolio_evolution import PortfolioClassDailyEvolutionResponse
 
 
 def test_availability_exposes_dedicated_fixed_income_history() -> None:
@@ -180,3 +181,27 @@ def test_reconciliation_check_preserves_sign_and_tolerance() -> None:
     assert reconciled["difference"] == 0.01
     assert failed["is_reconciled"] is False
     assert failed["difference"] == -0.02
+
+
+def test_class_evolution_accepts_explicit_partial_benchmark_quality() -> None:
+    payload = PortfolioClassDailyEvolutionResponse(
+        asset_type="RENDA_FIXA",
+        date="2026-09-11",
+        market_value=1000,
+        cost_basis=1000,
+        realized_pnl=0,
+        unrealized_pnl=0,
+        net_external_flow=0,
+        dividends_day=0,
+        dividends_accumulated=0,
+        daily_return_pct=0,
+        accumulated_return_pct=1.25,
+        has_partial_prices=False,
+        return_is_estimated=True,
+        valuation_status="partial_benchmark",
+        history_source="portfolio_class_snapshot",
+    )
+
+    assert payload.valuation_status == "partial_benchmark"
+    assert payload.return_is_estimated is True
+    assert payload.has_partial_prices is False
