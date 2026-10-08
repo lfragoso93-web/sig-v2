@@ -78,7 +78,7 @@ export default function TesouroDiretoPage() {
               {items.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-white max-w-[200px] truncate">
-                    {item.brapi_name}
+                    {item.commercial_name || item.brapi_name}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
                     {fmtBRL(item.invested_value)}

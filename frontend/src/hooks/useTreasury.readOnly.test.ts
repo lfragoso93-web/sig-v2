@@ -21,4 +21,13 @@ describe('Treasury read-only boundary', () => {
     expect(source).not.toContain('handleDelete')
     expect(source).not.toContain('setDeleteItem')
   })
+
+  it('prefers the persisted commercial name without replacing the ticker identity', () => {
+    const hook = read('src/hooks/useTreasury.ts')
+    const page = read('src/pages/patrimonio/TesouroDiretoPage.tsx')
+
+    expect(hook).toContain('commercial_name?: string | null')
+    expect(page).toContain('item.commercial_name || item.brapi_name')
+    expect(page).toContain('item.brapi_symbol || item.ticker || item.brapi_name')
+  })
 })

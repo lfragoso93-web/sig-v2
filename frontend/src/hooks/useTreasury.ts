@@ -7,6 +7,7 @@ export interface TreasuryItem {
   id: number
   portfolio_id: number
   brapi_name: string
+  commercial_name?: string | null
   brapi_symbol?: string | null
   ticker?: string | null
   purchase_price?: number | null

@@ -58,3 +58,13 @@ def test_treasury_positions_service_is_db_first() -> None:
     assert "app.integrations" not in source
     assert "fetch_treasury_prices" not in source
     assert "get_persisted_current_prices" in source
+    assert "get_persisted_treasury_commercial_names" in source
+
+    catalog_query_path = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "services"
+        / "treasury_catalog_query_service.py"
+    )
+    catalog_query_source = catalog_query_path.read_text(encoding="utf-8")
+    assert "app.integrations" not in catalog_query_source

@@ -12,6 +12,20 @@ from app.services.treasury_service import (
 from app.models.transaction import OperationType
 
 
+@pytest.fixture(autouse=True)
+def persisted_treasury_names():
+    with patch(
+        "app.services.treasury_service.get_persisted_treasury_commercial_names",
+        new=AsyncMock(
+            return_value={
+                "tesouro-ipca-15052029": "Tesouro IPCA+ 15/05/2029",
+                "tesouro-selic-01032025": "Tesouro Selic 01/03/2025",
+            }
+        ),
+    ):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_list_treasury_unauthorized():
     db = AsyncMock(spec=AsyncSession)
@@ -77,6 +91,7 @@ async def test_list_treasury_with_treasury():
 
     assert len(result) == 1
     assert result[0]["ticker"] == "Tesouro IPCA+ 2029"
+    assert result[0]["commercial_name"] == "Tesouro IPCA+ 15/05/2029"
     assert result[0]["valor_atual"] == 3100.0
 
 
@@ -185,6 +200,7 @@ async def test_enrich_with_current_prices_single():
     assert result[0]["valor_atual"] == 3100.0
     assert result[0]["lucro_prejuizo"] == 100.0
     assert result[0]["rentabilidade_pct"] == pytest.approx(3.3333, rel=1e-3)
+    assert result[0]["commercial_name"] == "Tesouro IPCA+ 15/05/2029"
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,9 @@ from app.models.portfolio import Portfolio
 from app.services.persisted_current_price_query_service import (
     get_persisted_current_prices,
 )
+from app.services.treasury_catalog_query_service import (
+    get_persisted_treasury_commercial_names,
+)
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 TREASURY_ASSET_TYPES = {"tesouro_direto", "tesouro direto", "treasury", "TESOURO_DIRETO"}
@@ -99,6 +102,7 @@ async def enrich_with_current_prices(
 
     symbols = sorted({s for s in symbol_by_raw.values() if s})
     persisted_prices = await get_persisted_current_prices(db, symbols)
+    commercial_names = await get_persisted_treasury_commercial_names(db, symbols)
     price_map = {
         str(symbol).strip().lower(): price
         for symbol, price in persisted_prices.items()
@@ -112,6 +116,10 @@ async def enrich_with_current_prices(
 
         raw_ticker = str(tx.ticker or "")
         brapi_symbol = symbol_by_raw.get(raw_ticker, raw_ticker)
+        commercial_name = commercial_names.get(
+            brapi_symbol.strip().lower(),
+            brapi_symbol or raw_ticker,
+        )
         current_price = price_map.get(brapi_symbol.strip().lower())
         valor_atual = None
         lucro_prejuizo = None
@@ -128,6 +136,7 @@ async def enrich_with_current_prices(
             "portfolio_id": tx.portfolio_id,
             "brapi_name": brapi_symbol or raw_ticker,
             "brapi_symbol": brapi_symbol,
+            "commercial_name": commercial_name,
             "ticker": raw_ticker,
             "purchase_price": purchase_price,
             "quantity": quantity,

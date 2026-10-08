@@ -16,6 +16,7 @@ class TreasuryPositionResponse(BaseModel):
     id: int
     portfolio_id: int
     brapi_name: str
+    commercial_name: Optional[str] = None
     ticker: str
     purchase_price: float
     quantity: float
