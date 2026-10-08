@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
+from app.models.treasury_instrument import TreasuryInstrument
 
 
 async def get_persisted_treasury_commercial_names(
@@ -21,13 +22,23 @@ async def get_persisted_treasury_commercial_names(
         return {}
 
     result = await db.execute(
-        select(Asset.ticker, Asset.name).where(
+        select(
+            Asset.ticker,
+            TreasuryInstrument.commercial_name,
+            Asset.name.label("legacy_name"),
+        )
+        .outerjoin(
+            TreasuryInstrument,
+            TreasuryInstrument.asset_id == Asset.id,
+        )
+        .where(
             Asset.asset_type == AssetType.TESOURO_DIRETO.value,
             func.lower(Asset.ticker).in_(normalized),
         )
     )
-    return {
-        str(row.ticker).strip().lower(): str(row.name).strip()
-        for row in result.all()
-        if row.ticker and row.name and str(row.name).strip()
-    }
+    names: dict[str, str] = {}
+    for row in result.all():
+        name = row.commercial_name or row.legacy_name
+        if row.ticker and name and str(name).strip():
+            names[str(row.ticker).strip().lower()] = str(name).strip()
+    return names

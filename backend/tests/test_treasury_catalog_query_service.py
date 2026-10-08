@@ -16,7 +16,8 @@ async def test_commercial_names_are_loaded_in_one_db_query() -> None:
     result.all.return_value = [
         SimpleNamespace(
             ticker="tesouro-renda-mais-15122079",
-            name="Tesouro RendA+ Aposentadoria Extra 15/12/2079",
+            commercial_name="Tesouro RendA+ Aposentadoria Extra 15/12/2079",
+            legacy_name="Nome legado",
         )
     ]
     db.execute.return_value = result
@@ -32,6 +33,27 @@ async def test_commercial_names_are_loaded_in_one_db_query() -> None:
         )
     }
     db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_commercial_names_fall_back_to_legacy_asset_name() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.all.return_value = [
+        SimpleNamespace(
+            ticker="tesouro-selic-01032031",
+            commercial_name=None,
+            legacy_name="Tesouro Selic 2031",
+        )
+    ]
+    db.execute.return_value = result
+
+    names = await get_persisted_treasury_commercial_names(
+        db,
+        ["tesouro-selic-01032031"],
+    )
+
+    assert names == {"tesouro-selic-01032031": "Tesouro Selic 2031"}
 
 
 @pytest.mark.asyncio
