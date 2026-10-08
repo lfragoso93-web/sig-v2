@@ -35,6 +35,7 @@ def test_runner_executes_only_requested_static_evidence() -> None:
     assert Path(calls[0][0][6]).as_posix() == (
         "tests/test_portfolio_snapshot_single_writer_policy.py"
     )
+    assert calls[0][0][-1] == "--ignore=artifacts"
 
 
 def test_runner_executes_packaged_backend_layout(tmp_path: Path) -> None:

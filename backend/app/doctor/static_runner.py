@@ -91,6 +91,7 @@ def _command(paths: Sequence[Path], backend_root: Path) -> tuple[str, ...]:
         "-p",
         "no:cacheprovider",
         *relative_paths,
+        "--ignore=artifacts",
     )
 
 
