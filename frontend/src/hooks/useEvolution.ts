@@ -47,7 +47,7 @@ export interface ClassEvolutionPoint {
 
 export interface MonthlyClassEvolutionPoint extends ClassEvolutionPoint {
   period: string
-  monthly_return_pct: number
+  monthly_return_pct: number | null
 }
 
 export interface ClassTwrAvailability {

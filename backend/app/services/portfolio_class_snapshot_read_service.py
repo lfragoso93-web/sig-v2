@@ -151,11 +151,33 @@ async def get_monthly_class_evolution(
         last = period_rows[-1]
         payload = class_snapshot_payload(last)
         payload["period"] = period
-        payload["monthly_return_pct"] = float(
-            compound_return_pcts(
-                Decimal(str(row.daily_return_pct))
-                for row in period_rows
-            )
+        incomplete_statuses = {
+            str(row.valuation_status)
+            for row in period_rows
+            if str(row.valuation_status) != "complete"
+        }
+        payload["has_partial_prices"] = any(
+            bool(row.has_partial_prices) for row in period_rows
         )
+        payload["return_is_estimated"] = any(
+            bool(row.return_is_estimated) for row in period_rows
+        )
+        if incomplete_statuses:
+            payload["monthly_return_pct"] = None
+            payload["return_is_estimated"] = True
+            payload["valuation_status"] = (
+                "absent_benchmark"
+                if "absent_benchmark" in incomplete_statuses
+                else "partial_benchmark"
+                if "partial_benchmark" in incomplete_statuses
+                else "partial_prices"
+            )
+        else:
+            payload["monthly_return_pct"] = float(
+                compound_return_pcts(
+                    Decimal(str(row.daily_return_pct))
+                    for row in period_rows
+                )
+            )
         payloads.append(payload)
     return payloads

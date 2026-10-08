@@ -77,6 +77,12 @@ def test_class_daily_and_monthly_contracts(class_daily_payload: dict) -> None:
     }
     assert PortfolioClassMonthlyEvolutionResponse.model_validate(monthly).period == "2026-07"
 
+    unavailable = {**monthly, "monthly_return_pct": None}
+    assert (
+        PortfolioClassMonthlyEvolutionResponse.model_validate(unavailable).monthly_return_pct
+        is None
+    )
+
 
 def test_availability_and_reconciliation_contracts() -> None:
     availability = PortfolioClassAvailabilityResponse.model_validate(

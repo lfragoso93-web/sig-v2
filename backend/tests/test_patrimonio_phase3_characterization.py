@@ -75,6 +75,38 @@ async def test_monthly_class_evolution_uses_last_close_and_compounds_daily_twr(d
 
 
 @pytest.mark.asyncio
+async def test_monthly_class_evolution_is_unavailable_after_benchmark_gap(db, portfolio):
+    complete = class_snapshot(
+        portfolio.id,
+        date(2026, 1, 29),
+        asset_type="RENDA_FIXA",
+        daily_return_pct=Decimal("1.000000"),
+    )
+    incomplete = class_snapshot(
+        portfolio.id,
+        date(2026, 1, 30),
+        asset_type="RENDA_FIXA",
+        daily_return_pct=Decimal("0.000000"),
+        return_is_estimated=True,
+        valuation_status="partial_benchmark",
+    )
+    recovered = class_snapshot(
+        portfolio.id,
+        date(2026, 1, 31),
+        asset_type="RENDA_FIXA",
+        daily_return_pct=Decimal("0.500000"),
+    )
+    db.add_all([complete, incomplete, recovered])
+    await db.flush()
+
+    rows = await get_monthly_class_evolution(db, portfolio.id, "RENDA_FIXA", months=0)
+
+    assert rows[0]["monthly_return_pct"] is None
+    assert rows[0]["return_is_estimated"] is True
+    assert rows[0]["valuation_status"] == "partial_benchmark"
+
+
+@pytest.mark.asyncio
 async def test_class_availability_requires_supported_engine_and_materialized_data(db, portfolio):
     db.add_all([
         Transaction(

@@ -68,7 +68,7 @@ class PortfolioClassMonthlyEvolutionResponse(PortfolioClassDailyEvolutionRespons
     """Contrato do último fechamento e TWR mensal por classe."""
 
     period: str
-    monthly_return_pct: float
+    monthly_return_pct: float | None
 
 
 class PortfolioClassAvailabilityResponse(BaseModel):
