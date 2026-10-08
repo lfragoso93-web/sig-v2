@@ -7,6 +7,9 @@ def test_runtime_startup_uses_explicit_validated_migration_target() -> None:
     script = ENTRYPOINT.read_text(encoding="utf-8")
 
     assert "alembic upgrade heads" not in script
-    assert 'RUNTIME_MIGRATION_TARGET="20261005_real_data_cert"' in script
+    assert (
+        'RUNTIME_MIGRATION_TARGET="20261008_treasury_instruments"'
+        in script
+    )
     assert 'alembic upgrade "${RUNTIME_MIGRATION_TARGET}"' in script
     assert "20260729_dividend_identity" not in script
