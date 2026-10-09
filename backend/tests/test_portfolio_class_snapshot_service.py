@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.models.asset import AssetType
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
+from app.models.transaction import OperationType, Transaction
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -18,6 +19,7 @@ from app.services.portfolio_class_snapshot_read_service import class_snapshot_pa
 from app.services.portfolio_class_snapshot_service import (
     _group_received_dividends,
     _load_exact_treasury_prices,
+    _net_external_flow_for_day,
     _next_business_date,
     class_twr_availability,
 )
@@ -82,6 +84,33 @@ def test_non_business_dates_move_to_next_close() -> None:
     assert _next_business_date(date(2026, 7, 17)) == date(2026, 7, 17)
     assert _next_business_date(date(2026, 7, 18)) == date(2026, 7, 20)
     assert _next_business_date(date(2026, 7, 19)) == date(2026, 7, 20)
+
+
+def test_fixed_income_contributions_and_redemptions_are_external_flows() -> None:
+    transactions = [
+        Transaction(
+            ticker="CDB-FLUXO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("10"),
+            date=date(2026, 7, 17),
+        ),
+        Transaction(
+            ticker="CDB-FLUXO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.sell,
+            quantity=Decimal("1"),
+            price=Decimal("300"),
+            fees=Decimal("5"),
+            date=date(2026, 7, 17),
+        ),
+    ]
+
+    assert _net_external_flow_for_day(transactions, date(2026, 7, 17)) == Decimal(
+        "715"
+    )
 
 
 def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:

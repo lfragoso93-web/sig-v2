@@ -10,6 +10,7 @@ from app.services.fixed_income_valuation_service import (
     fixed_income_coverage_from_transactions,
     get_fixed_income_totals_with_coverage_fallback,
     get_fixed_income_totals_from_transactions,
+    get_fixed_income_valuations_from_transactions,
 )
 from app.services import fixed_income_valuation_service as service
 from app.services.benchmark_rate_service import BenchmarkCoverageStatus
@@ -329,3 +330,125 @@ async def test_fully_redeemed_application_does_not_block_coverage(monkeypatch):
 
     assert result is BenchmarkCoverageStatus.COMPLETE
     coverage.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_partial_redemption_preserves_fifo_applications_and_start_dates(
+    monkeypatch,
+):
+    transactions = [
+        Transaction(
+            id=10,
+            portfolio_id=7,
+            ticker="CDB-FIFO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 2),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=11,
+            portfolio_id=7,
+            ticker="CDB-FIFO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("500"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 5),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=12,
+            portfolio_id=7,
+            ticker="CDB-FIFO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.sell,
+            quantity=Decimal("1"),
+            price=Decimal("600"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 8),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+    ]
+
+    async def factor(_db, _key, start, _target):
+        return Decimal("1.10") if start == date(2026, 1, 2) else Decimal("1.04")
+
+    monkeypatch.setattr(service, "_application_factor", factor)
+
+    valuations = await get_fixed_income_valuations_from_transactions(
+        object(), transactions, date(2026, 1, 10)
+    )
+
+    assert len(valuations) == 1
+    assert valuations[0].applications_count == 2
+    assert valuations[0].invested_amount == Decimal("900.00")
+    assert valuations[0].current_value == Decimal("960.00")
+    assert valuations[0].income_amount == Decimal("60.00")
+
+
+@pytest.mark.asyncio
+async def test_partial_redemption_only_consumes_matching_product_indexer(monkeypatch):
+    transactions = [
+        Transaction(
+            id=13,
+            portfolio_id=7,
+            ticker="CDB-MULTI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 2),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=14,
+            portfolio_id=7,
+            ticker="CDB-MULTI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("700"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 3),
+            currency="BRL",
+            notes="Indexador: PREFIXADO | Taxa: 12%",
+        ),
+        Transaction(
+            id=15,
+            portfolio_id=7,
+            ticker="CDB-MULTI",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.sell,
+            quantity=Decimal("1"),
+            price=Decimal("300"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 8),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+    ]
+    monkeypatch.setattr(
+        service,
+        "_application_factor",
+        AsyncMock(return_value=Decimal("1")),
+    )
+
+    valuations = await get_fixed_income_valuations_from_transactions(
+        object(), transactions, date(2026, 1, 10)
+    )
+    by_indexer = {valuation.key.indexer: valuation for valuation in valuations}
+
+    assert by_indexer["CDI"].invested_amount == Decimal("700.00")
+    assert by_indexer["PREFIXADO"].invested_amount == Decimal("700.00")
+    assert by_indexer["CDI"].applications_count == 1
+    assert by_indexer["PREFIXADO"].applications_count == 1
