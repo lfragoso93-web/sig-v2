@@ -6,6 +6,7 @@ are projected per acquisition lot because their holding periods can differ.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
@@ -13,6 +14,21 @@ from decimal import Decimal, ROUND_HALF_UP
 
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
+
+
+def conservative_treasury_custody_date(
+    transaction_date: date,
+    *,
+    is_business_day: Callable[[date], bool],
+) -> date:
+    """Return the SGI's disclosed conservative D+2-business-day custody date."""
+    cursor = transaction_date
+    found = 0
+    while found < 2:
+        cursor = date.fromordinal(cursor.toordinal() + 1)
+        if is_business_day(cursor):
+            found += 1
+    return cursor
 
 
 @dataclass(frozen=True, slots=True)

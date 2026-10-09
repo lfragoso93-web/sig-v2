@@ -7,6 +7,7 @@ from app.services.treasury_cash_flow import (
     TreasuryAcquisitionLot,
     TreasuryCashEvent,
     calculate_treasury_lot_cash_flow,
+    conservative_treasury_custody_date,
     treasury_withholding_rate,
 )
 
@@ -81,3 +82,12 @@ def test_treasury_cash_flow_rejects_lot_without_event_day_eligibility() -> None:
 def test_treasury_cash_flow_rejects_invented_taxable_income() -> None:
     with pytest.raises(ValueError, match="cannot exceed"):
         calculate_treasury_lot_cash_flow(_event(taxable_per_unit="50"), _lot())
+
+
+def test_conservative_custody_policy_uses_two_injected_business_days() -> None:
+    holiday = date(2026, 1, 1)
+    result = conservative_treasury_custody_date(
+        date(2025, 12, 31),
+        is_business_day=lambda value: value.weekday() < 5 and value != holiday,
+    )
+    assert result == date(2026, 1, 5)

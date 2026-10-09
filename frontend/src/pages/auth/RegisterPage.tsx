@@ -64,6 +64,13 @@ function EulaText() {
         O SIG v2 não se responsabiliza por perdas financeiras, decisões equivocadas ou danos decorrentes
         do uso da plataforma. O uso é feito por conta e risco do usuário.
       </p>
+      <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+        <strong>6. Convenções de Tesouro Direto</strong><br />
+        Para lançamentos de Tesouro Direto informados apenas com data, o SIG v2
+        pode projetar a custódia efetiva em D+2 dias úteis como convenção
+        conservadora. Essa projeção não substitui o extrato da corretora nem
+        declara a data factual de liquidação da operação.
+      </p>
     </div>
   )
 }

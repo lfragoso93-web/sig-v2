@@ -17,6 +17,14 @@ O IRRF não cria DARF, não é uma transação e não altera `asset_dividends` o
 `transactions`. A apresentação fiscal futura deve classificá-lo como retenção
 na fonte já ocorrida; ela não pode enviá-lo aos grupos mensais de renda variável.
 
+## Convenção para lançamentos sem horário
+
+Quando o usuário informar somente a data de uma compra ou venda de Tesouro, o
+SGI calculará uma data efetiva de custódia conservadora em D+2 dias úteis. Esta
+é uma convenção de projeção do SGI, não uma afirmação de que a corretora
+liquidou a operação nessa data. O cálculo exige calendário oficial de dias
+úteis; não pode considerar somente sábados e domingos.
+
 ## Regra fail-closed
 
 A base tributável por unidade de cada evento deve vir de uma fonte oficial ou de
