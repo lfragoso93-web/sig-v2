@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     REAL_DATASET_REFERENCE: str = ""
     ENABLE_BOOT_MARKET_SYNC: bool = False
     B3_BOOTSTRAP_START_YEAR: Optional[int] = None
+    ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT: bool = False
+    B3_MARKET_CALENDAR_SOURCE_URL: Optional[str] = None
+    B3_MARKET_CALENDAR_SOURCE_YEAR: Optional[int] = None
 
     SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
@@ -100,6 +103,17 @@ class Settings(BaseSettings):
             raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS deve ser positivo")
         if self.BRAPI_RATE_LIMIT <= 0 or self.BRAPI_RATE_BURST <= 0:
             raise ValueError("limites do provedor devem ser positivos")
+        if self.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
+            source_url = self.B3_MARKET_CALENDAR_SOURCE_URL or ""
+            if not re.fullmatch(r"https://www\\.b3\\.com\\.br/.+", source_url):
+                raise ValueError(
+                    "fonte mensal do calendario B3 deve ser HTTPS oficial"
+                )
+            source_year = self.B3_MARKET_CALENDAR_SOURCE_YEAR
+            if source_year is None or not 2000 <= source_year <= 2100:
+                raise ValueError(
+                    "ano da fonte mensal do calendario B3 deve ser valido"
+                )
 
         if self.ENVIRONMENT.strip().lower() == "production":
             if self.APP_BRANCH != "stable-15jun":

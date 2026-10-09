@@ -130,6 +130,13 @@ O scheduler recorrente deve conter somente:
 
 Tesouro pode usar pipeline dedicado de **preço** no fechamento. Isso não autoriza atualização recorrente de catálogo ou outros metadados.
 
+Exceção limitada: a auditoria mensal do calendário B3 pode ser ativada por
+`ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT=true`, com URL e ano oficiais
+explicitamente configurados. Ela usa lease distribuída, faz download somente da
+fonte B3 configurada e produz o relatório dry-run; não escreve
+`market_calendar_days` nem altera projeções financeiras. A promoção de fatos
+do calendário permanece manual e certificada.
+
 ## Requests HTTP
 
 Requests financeiros são DB-first.

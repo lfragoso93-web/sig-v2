@@ -4,6 +4,7 @@ from datetime import date
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.config import settings
 from app.core.distributed_job_lock import distributed_job_lock
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,50 @@ def start_scheduler() -> None:
                 except Exception as exc:
                     logger.error(
                         "[scheduler] Erro na manutenção de snapshots TWR: %s",
+                        exc,
+                    )
+
+    if settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
+
+        @scheduler.scheduled_job(
+            _cron_trigger(day=1, hour=8, minute=15),
+            id="audit_b3_market_calendar_monthly",
+            name="Auditar mensalmente a fonte oficial do calendario B3",
+            max_instances=1,
+            coalesce=True,
+        )
+        async def audit_b3_market_calendar_monthly():
+            """Audit the source only; calendar promotion remains manual."""
+            from app.services.b3_market_calendar_audit_service import (
+                run_b3_market_calendar_monthly_audit,
+            )
+
+            async with distributed_job_lock(
+                job_name="audit_b3_market_calendar",
+                period="monthly",
+                ttl_seconds=300,
+            ) as acquired:
+                if not acquired:
+                    return
+                try:
+                    result = await run_b3_market_calendar_monthly_audit(
+                        source_url=settings.B3_MARKET_CALENDAR_SOURCE_URL or "",
+                        source_year=(
+                            settings.B3_MARKET_CALENDAR_SOURCE_YEAR or 0
+                        ),
+                    )
+                    logger.info(
+                        "[scheduler] Auditoria mensal B3 concluida: "
+                        "sha256=%s closed_dates=%s special_dates=%s writes=%s",
+                        result.source_sha256,
+                        len(result.report.explicitly_closed_dates),
+                        len(result.report.special_operation_dates),
+                        result.report.database_writes_executed,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro na auditoria mensal do calendario B3: "
+                        "%s",
                         exc,
                     )
 

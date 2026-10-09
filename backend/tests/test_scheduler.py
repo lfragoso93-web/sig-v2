@@ -42,6 +42,76 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
 
 
 @pytest.mark.asyncio
+async def test_scheduler_registers_opt_in_monthly_b3_calendar_audit(
+    monkeypatch,
+):
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+    monkeypatch.setattr(
+        scheduler_module.settings,
+        "ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT",
+        True,
+    )
+
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("audit_b3_market_calendar_monthly")
+        assert job is not None
+        assert isinstance(job.trigger, CronTrigger)
+        next_run = job.trigger.get_next_fire_time(
+            None,
+            datetime(2026, 7, 2, tzinfo=scheduler.timezone),
+        )
+        assert next_run.day == 1
+        assert next_run.hour == 8
+        assert next_run.minute == 15
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_monthly_b3_audit_skips_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+    monkeypatch.setattr(
+        scheduler_module.settings,
+        "ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT",
+        True,
+    )
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "audit_b3_market_calendar",
+            "period": "monthly",
+            "ttl_seconds": 300,
+        }
+        yield False
+
+    audit = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.b3_market_calendar_audit_service."
+        "run_b3_market_calendar_monthly_audit",
+        audit,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("audit_b3_market_calendar_monthly")
+        assert job is not None
+        await job.func()
+        audit.assert_not_awaited()
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
 async def test_daily_close_skips_work_when_distributed_lock_is_refused(
     monkeypatch,
 ) -> None:
