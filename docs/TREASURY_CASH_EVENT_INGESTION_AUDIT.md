@@ -43,6 +43,17 @@ carteira é elegível. O adaptador canônico de direitos exige `record_date` e
 rejeita eventos monetários sem esse marco; não é permitido substituí-lo por
 `Data Resgate`, data anterior estimada ou nome do título.
 
+## BRAPI verificada como complemento, não como fonte de evento
+
+A documentação da [API de Tesouro da BRAPI](https://brapi.dev/docs/tesouro-direto)
+declara somente catálogo, indicadores atuais e histórico diário de taxas/preços.
+Em 09/10/2026, uma leitura pública de um título com juros semestrais retornou
+`couponType`, `maturityDate`, `baseDate`, taxas e preços, mas não retornou
+valor de pagamento, data de pagamento, amortização, `record_date` nem regra de
+elegibilidade. Portanto, a BRAPI pode enriquecer metadados de catálogo, mas não
+supre o fato financeiro ausente e não é fallback para persistir eventos em
+`asset_dividends`.
+
 ## Contrato já existente
 
 Quando todos os campos forem documentados, a persistência permanece no contrato
