@@ -1,7 +1,9 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import pytest
 from app.models.asset import AssetType
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
@@ -25,6 +27,7 @@ from app.services.portfolio_class_snapshot_service import (
     _next_business_date,
     class_twr_availability,
 )
+from app.services import portfolio_class_snapshot_service as class_snapshot_service
 from app.services.benchmark_rate_service import BenchmarkCoverageStatus
 from app.schemas.portfolio_evolution import PortfolioClassDailyEvolutionResponse
 
@@ -145,6 +148,111 @@ def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:
     assert grouped[(AssetType.FII, date(2026, 7, 20))] == Decimal("5.00")
 
 
+@pytest.mark.asyncio
+async def test_treasury_amortization_from_canonical_events_enters_twr_once(
+    monkeypatch,
+) -> None:
+    transaction = SimpleNamespace(
+        ticker="TESOURO-PREFIXADO-01012031",
+        asset_type=AssetType.TESOURO_DIRETO.value,
+        operation=OperationType.buy,
+        quantity=Decimal("10"),
+        price=Decimal("100"),
+        fees=Decimal("0"),
+        fx_rate=None,
+        date=date(2026, 8, 3),
+        id=1,
+    )
+    event = _entitlement(
+        "TESOURO-PREFIXADO-01012031",
+        AssetType.TESOURO_DIRETO.value,
+        date(2026, 8, 4),
+        "50.00",
+        event_type="AMORTIZACAO",
+    )
+    positions = {
+        AssetType.TESOURO_DIRETO: [
+            SimpleNamespace(
+                ticker="TESOURO-PREFIXADO-01012031",
+                quantity=Decimal("10"),
+                cost=Decimal("1000"),
+            )
+        ]
+    }
+    persisted: dict[date, dict] = {}
+
+    class _TransactionResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [transaction]
+
+    async def capture_snapshot(
+        _db,
+        _portfolio_id,
+        _asset_type,
+        snapshot_date,
+        values,
+    ):
+        persisted[snapshot_date] = dict(values)
+
+    class _FixedDateTime:
+        @classmethod
+        def now(cls, _timezone):
+            return SimpleNamespace(date=lambda: date(2026, 8, 4))
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_TransactionResult())
+    db.commit = AsyncMock()
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[event]),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "load_global_corporate_actions_by_ticker",
+        AsyncMock(return_value={}),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "project_class_positions_at",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "aggregate_class_positions",
+        lambda _positions: (positions, {AssetType.TESOURO_DIRETO: Decimal("0")}),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "_load_exact_treasury_prices",
+        AsyncMock(
+            side_effect=[
+                {"TESOURO-PREFIXADO-01012031": Decimal("100")},
+                {"TESOURO-PREFIXADO-01012031": Decimal("95")},
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "_upsert_class_snapshot",
+        capture_snapshot,
+    )
+    monkeypatch.setattr(class_snapshot_service, "datetime", _FixedDateTime)
+
+    count = await class_snapshot_service.rebuild_class_snapshots(
+        db,
+        portfolio_id=7,
+    )
+
+    assert count == 2
+    assert persisted[date(2026, 8, 4)]["dividends_day"] == Decimal("50.00")
+    assert persisted[date(2026, 8, 4)]["dividends_accumulated"] == Decimal("50.00")
+    assert persisted[date(2026, 8, 4)]["daily_return_pct"] == Decimal("0.000000")
+
+
 def _entitlement(
     ticker: str,
     asset_type: str,
@@ -152,13 +260,14 @@ def _entitlement(
     amount: str,
     *,
     reason: EntitlementReason = EntitlementReason.ELIGIBLE,
+    event_type: str = "DIVIDENDO",
 ) -> PortfolioDividendEntitlement:
     event = DividendEvent(
         event_id=1,
         record_date=date(2026, 7, 1),
         ex_date=date(2026, 7, 2),
         payment_date=payment_date,
-        event_type="DIVIDENDO",
+        event_type=event_type,
         value_per_unit=Decimal("1"),
         currency="BRL",
     )

@@ -103,6 +103,9 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
 - valuation DB-first por preço persistido;
 - resolução case-insensitive validada;
 - snapshots dedicados;
+- cupons e amortizações monetários usam eventos globais em `asset_dividends`,
+  com direito por carteira derivado de `transactions`, e entram uma única vez
+  no TWR do snapshot;
 - ausência de PU necessário permanece explícita/fail-closed.
 
 ### Renda Fixa

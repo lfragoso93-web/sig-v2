@@ -452,6 +452,7 @@ async def rebuild_class_snapshots(
                 count += 1
 
             if AssetType.TESOURO_DIRETO in portfolio_types:
+                treasury_state = return_states[AssetType.TESOURO_DIRETO]
                 treasury_flow = _ZERO
                 for transaction in treasury_transactions_by_day.get(cursor, []):
                     quantity, price_brl, fees_brl = _operation_brl(transaction)
@@ -490,12 +491,18 @@ async def rebuild_class_snapshots(
                         market_value += position.quantity * close
                     cost_basis += position.cost
 
+                treasury_income_day = dividends_by_class_day.get(
+                    (AssetType.TESOURO_DIRETO, cursor),
+                    _ZERO,
+                )
+                treasury_state.dividends_accumulated += treasury_income_day
+
                 treasury_inputs.append(
                     DailyTwrInput(
                         reference_date=cursor,
                         market_value=market_value,
                         net_external_flow=treasury_flow,
-                        income_day=_ZERO,
+                        income_day=treasury_income_day,
                         has_coverage=has_coverage,
                     )
                 )
@@ -513,8 +520,12 @@ async def rebuild_class_snapshots(
                             "realized_pnl": treasury_realized_pnl.quantize(_MONEY),
                             "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
                             "net_external_flow": treasury_flow.quantize(_MONEY),
-                            "dividends_day": _ZERO,
-                            "dividends_accumulated": _ZERO.quantize(_MONEY),
+                            "dividends_day": treasury_income_day.quantize(
+                                _MONEY
+                            ),
+                            "dividends_accumulated": treasury_state.dividends_accumulated.quantize(
+                                _MONEY
+                            ),
                             "daily_return_pct": treasury_point.daily_return_pct,
                             "accumulated_return_pct": treasury_point.accumulated_return_pct,
                             "has_partial_prices": False,
