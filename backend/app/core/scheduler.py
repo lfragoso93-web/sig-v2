@@ -162,18 +162,25 @@ def start_scheduler() -> None:
             maintain_twr_snapshots_for_active_portfolios,
         )
 
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await maintain_twr_snapshots_for_active_portfolios(db)
-                logger.info(
-                    "[scheduler] Snapshots patrimoniais/TWR atualizados: %s",
-                    result,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro na manutenção de snapshots TWR: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="portfolio_snapshot_auto_maintenance",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    result = await maintain_twr_snapshots_for_active_portfolios(db)
+                    logger.info(
+                        "[scheduler] Snapshots patrimoniais/TWR atualizados: %s",
+                        result,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro na manutenção de snapshots TWR: %s",
+                        exc,
+                    )
 
     scheduler.start()
     logger.info(

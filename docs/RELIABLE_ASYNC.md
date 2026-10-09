@@ -16,7 +16,7 @@ necessária uma dependência de mensageria adicional.
 | cotações intraday, dois triggers | ativo | alto: provider, preços e cache globais | candidato seguinte a lock |
 | fechamento diário global de preços | ativo | alto: backfill e writes globais | lock Redis implementado |
 | fechamento diário do Tesouro | ativo | alto: import e latest prices compartilhados | migrar em bloco próprio |
-| manutenção de snapshots/TWR | ativo | médio: rebuild derivado e idempotente | avaliar lock por carteira/global |
+| manutenção de snapshots/TWR | ativo | médio: rebuild derivado e idempotente | lock Redis global implementado |
 | rate history BCB | módulo registrável, fora do scheduler canônico | alto se ativado | exigir lock antes de ativar |
 | startup bootstrap | assíncrono, não recorrente | mitigado por reserva e locks DB por estágio | manter contrato atual |
 | backfills após transação/CSV | BackgroundTasks locais | médio, derivados reconstruíveis | sem outbox neste momento |
@@ -28,6 +28,10 @@ O job `persist_daily_close_prices` usa uma lease Redis:
 ```text
 SET sgi:job:persist_daily_close_prices:daily <owner-token> NX EX 7200
 ```
+
+O job `portfolio_snapshot_auto_maintenance` usa a mesma semântica, com a key
+`sgi:job:portfolio_snapshot_auto_maintenance:daily`, antes de abrir a sessão
+que reconstrói snapshots derivados.
 
 - aquisição é fail-closed: Redis indisponível ou lock ocupado pula a execução;
 - TTL de duas horas limita o bloqueio após crash/restart;

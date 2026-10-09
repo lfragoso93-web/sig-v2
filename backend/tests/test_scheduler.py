@@ -74,3 +74,38 @@ async def test_daily_close_skips_work_when_distributed_lock_is_refused(
         backfill.assert_not_awaited()
     finally:
         scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_maintenance_skips_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "portfolio_snapshot_auto_maintenance",
+            "period": "daily",
+            "ttl_seconds": 7200,
+        }
+        yield False
+
+    maintenance = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.portfolio_snapshot_twr_maintenance_service."
+        "maintain_twr_snapshots_for_active_portfolios",
+        maintenance,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("portfolio_snapshot_auto_maintenance")
+        assert job is not None
+        await job.func()
+        maintenance.assert_not_awaited()
+    finally:
+        scheduler.shutdown(wait=False)
