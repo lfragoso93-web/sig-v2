@@ -35,6 +35,13 @@ _DATE_PATTERN = re.compile(
     + r")\b",
     re.IGNORECASE,
 )
+_SHARED_MONTH_DATE_RANGE_PATTERN = re.compile(
+    r"(?P<first_day>\d{1,2})\s+e\s+(?P<second_day>\d{1,2})\s+de\s+"
+    + r"(?P<month>"
+    + "|".join(_PORTUGUESE_MONTHS)
+    + r")\b",
+    re.IGNORECASE,
+)
 _NORMAL_OPERATION_MARKERS = ("funcionamento normal", "opera normalmente")
 _SPECIAL_OPERATION_MARKERS = ("horário especial", "horario especial")
 
@@ -81,29 +88,41 @@ def extract_b3_annual_calendar_dry_run(
     found: set[date] = set()
     closed: set[date] = set()
     special: set[date] = set()
+
+    def classify(calendar_date: date, normalized_line: str) -> None:
+        found.add(calendar_date)
+        normal_operation = any(
+            marker in normalized_line
+            for marker in _NORMAL_OPERATION_MARKERS
+        )
+        if normal_operation:
+            return
+        special_operation = any(
+            marker in normalized_line
+            for marker in _SPECIAL_OPERATION_MARKERS
+        )
+        if special_operation:
+            special.add(calendar_date)
+            return
+        closed.add(calendar_date)
+
     for line in source_text.splitlines():
         normalized_line = line.casefold()
+        range_matches = _SHARED_MONTH_DATE_RANGE_PATTERN.finditer(
+            normalized_line
+        )
+        for match in range_matches:
+            month = _PORTUGUESE_MONTHS[match.group("month")]
+            for group in ("first_day", "second_day"):
+                calendar_date = date(year, month, int(match.group(group)))
+                classify(calendar_date, normalized_line)
         for match in _DATE_PATTERN.finditer(normalized_line):
             calendar_date = date(
                 year,
                 _PORTUGUESE_MONTHS[match.group("month")],
                 int(match.group("day")),
             )
-            found.add(calendar_date)
-            normal_operation = any(
-                marker in normalized_line
-                for marker in _NORMAL_OPERATION_MARKERS
-            )
-            if normal_operation:
-                continue
-            special_operation = any(
-                marker in normalized_line
-                for marker in _SPECIAL_OPERATION_MARKERS
-            )
-            if special_operation:
-                special.add(calendar_date)
-                continue
-            closed.add(calendar_date)
+            classify(calendar_date, normalized_line)
 
     if not found:
         raise ValueError(

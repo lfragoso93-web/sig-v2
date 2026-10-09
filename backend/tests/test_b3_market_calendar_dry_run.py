@@ -40,3 +40,13 @@ def test_rejects_source_without_dates():
             year=2026,
             source_reference=SOURCE_REFERENCE,
         )
+
+
+def test_extracts_both_dates_when_a_month_is_shared():
+    report = extract_b3_annual_calendar_dry_run(
+        "16 e 17 de fevereiro - Carnaval",
+        year=2026,
+        source_reference=SOURCE_REFERENCE,
+    )
+
+    assert report.explicitly_closed_dates == ("2026-02-16", "2026-02-17")
