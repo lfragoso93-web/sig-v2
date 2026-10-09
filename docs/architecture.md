@@ -110,6 +110,9 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
 - lifecycle derivado de `transactions`;
 - valuation corrente usa motor dedicado de accrual/indexador;
 - benchmark parcial/ausente não vira preço de mercado;
+- após uma lacuna de benchmark, a cadeia TWR materializada permanece
+  `incomplete_history` mesmo se a cobertura voltar; patrimônio segue auditável,
+  mas retornos mensal e acumulado não são promovidos como oficiais;
 - TWR diário dedicado ainda pertence à #149.
 
 A ausência de TWR dedicado não deve ser mascarada por retorno simples ou fallback anual rotulado como TWR.

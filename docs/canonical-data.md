@@ -103,6 +103,9 @@ Campos que devem chegar à UI:
 
 - `has_partial_prices`
 - `return_is_estimated`
+- `valuation_status` nos snapshots por classe, incluindo
+  `partial_benchmark`, `absent_benchmark` e `incomplete_history`
+  para impedir que uma lacuna de benchmark seja exibida como TWR oficial.
 
 A UI deve evitar apresentar esses avisos como erro fatal. Eles indicam que o valor foi calculado, mas depende de cobertura parcial ou inferência.
 

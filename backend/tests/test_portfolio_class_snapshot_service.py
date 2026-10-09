@@ -17,12 +17,15 @@ from app.services.canonical_dividend_entitlement_reader import (
 from app.services.portfolio_class_reconciliation_service import _check
 from app.services.portfolio_class_snapshot_read_service import class_snapshot_payload
 from app.services.portfolio_class_snapshot_service import (
+    ClassReturnState,
     _group_received_dividends,
+    _fixed_income_snapshot_quality,
     _load_exact_treasury_prices,
     _net_external_flow_for_day,
     _next_business_date,
     class_twr_availability,
 )
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
 from app.schemas.portfolio_evolution import PortfolioClassDailyEvolutionResponse
 
 
@@ -111,6 +114,16 @@ def test_fixed_income_contributions_and_redemptions_are_external_flows() -> None
     assert _net_external_flow_for_day(transactions, date(2026, 7, 17)) == Decimal(
         "715"
     )
+
+
+def test_fixed_income_coverage_gap_keeps_later_chain_explicitly_incomplete() -> None:
+    state = ClassReturnState()
+
+    first = _fixed_income_snapshot_quality(BenchmarkCoverageStatus.PARTIAL, state)
+    recovered = _fixed_income_snapshot_quality(BenchmarkCoverageStatus.COMPLETE, state)
+
+    assert first == (False, True, "partial_benchmark")
+    assert recovered == (True, True, "incomplete_history")
 
 
 def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:

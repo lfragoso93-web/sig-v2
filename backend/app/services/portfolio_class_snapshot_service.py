@@ -129,6 +129,21 @@ class ClassReturnState:
     previous_value: Decimal = _ZERO
     accumulated_return_pct: Decimal = _ZERO
     dividends_accumulated: Decimal = _ZERO
+    has_incomplete_history: bool = False
+
+
+def _fixed_income_snapshot_quality(
+    coverage: BenchmarkCoverageStatus,
+    state: ClassReturnState,
+) -> tuple[bool, bool, str]:
+    """Return coverage, estimate and status without relabelling a broken chain."""
+    coverage_complete = coverage is BenchmarkCoverageStatus.COMPLETE
+    if not coverage_complete:
+        state.has_incomplete_history = True
+        return False, True, f"{coverage.value}_benchmark"
+    if state.has_incomplete_history:
+        return True, True, "incomplete_history"
+    return True, False, "complete"
 
 
 def class_twr_availability(asset_types: Iterable[AssetType]) -> list[dict]:
@@ -527,7 +542,9 @@ async def rebuild_class_snapshots(
                     fixed_income_transactions,
                     cursor,
                 ).quantize(_MONEY)
-                coverage_complete = coverage is BenchmarkCoverageStatus.COMPLETE
+                coverage_complete, return_is_estimated, valuation_status = (
+                    _fixed_income_snapshot_quality(coverage, class_state)
+                )
                 daily_return = _ZERO
                 if coverage_complete:
                     daily_return = calculate_daily_twr_pct(
@@ -558,12 +575,8 @@ async def rebuild_class_snapshots(
                         "daily_return_pct": daily_return,
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": False,
-                        "return_is_estimated": not coverage_complete,
-                        "valuation_status": (
-                            "complete"
-                            if coverage_complete
-                            else f"{coverage.value}_benchmark"
-                        ),
+                        "return_is_estimated": return_is_estimated,
+                        "valuation_status": valuation_status,
                     },
                 )
                 class_state.previous_value = market_value if coverage_complete else None

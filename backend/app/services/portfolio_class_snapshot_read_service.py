@@ -92,6 +92,7 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
         elif latest is not None and latest.valuation_status in {
             "partial_benchmark",
             "absent_benchmark",
+            "incomplete_history",
         }:
             row["available"] = False
             row["status"] = latest.valuation_status
@@ -101,6 +102,9 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
                 if latest.valuation_status == "partial_benchmark"
                 else "O TWR da classe está indisponível porque não há cobertura "
                 "persistida do benchmark."
+                if latest.valuation_status == "absent_benchmark"
+                else "O TWR da classe está indisponível porque houve uma lacuna "
+                "histórica de cobertura de benchmark."
             )
     return rows
 
@@ -170,6 +174,8 @@ async def get_monthly_class_evolution(
                 if "absent_benchmark" in incomplete_statuses
                 else "partial_benchmark"
                 if "partial_benchmark" in incomplete_statuses
+                else "incomplete_history"
+                if "incomplete_history" in incomplete_statuses
                 else "partial_prices"
             )
         else:

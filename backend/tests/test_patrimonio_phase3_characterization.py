@@ -107,6 +107,26 @@ async def test_monthly_class_evolution_is_unavailable_after_benchmark_gap(db, po
 
 
 @pytest.mark.asyncio
+async def test_monthly_class_evolution_does_not_promote_recovered_chain(db, portfolio):
+    snapshot = class_snapshot(
+        portfolio.id,
+        date(2026, 2, 27),
+        asset_type="RENDA_FIXA",
+        daily_return_pct=Decimal("0.500000"),
+        return_is_estimated=True,
+        valuation_status="incomplete_history",
+    )
+    db.add(snapshot)
+    await db.flush()
+
+    rows = await get_monthly_class_evolution(db, portfolio.id, "RENDA_FIXA", months=0)
+
+    assert rows[0]["monthly_return_pct"] is None
+    assert rows[0]["return_is_estimated"] is True
+    assert rows[0]["valuation_status"] == "incomplete_history"
+
+
+@pytest.mark.asyncio
 async def test_class_availability_requires_supported_engine_and_materialized_data(db, portfolio):
     db.add_all([
         Transaction(
@@ -155,3 +175,26 @@ async def test_class_availability_rejects_incomplete_benchmark_snapshot(db, port
     assert fixed_income["available"] is False
     assert fixed_income["status"] == "partial_benchmark"
     assert "benchmark" in fixed_income["reason"]
+
+
+@pytest.mark.asyncio
+async def test_class_availability_rejects_recovered_benchmark_history(db, portfolio):
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id, ticker="CDB CDI", asset_type="RENDA_FIXA",
+            operation=OperationType.buy, quantity=1, price=1000, date=date(2026, 1, 2),
+        )
+    )
+    snapshot = class_snapshot(portfolio.id, date(2026, 2, 27))
+    snapshot.asset_type = "RENDA_FIXA"
+    snapshot.return_is_estimated = True
+    snapshot.valuation_status = "incomplete_history"
+    db.add(snapshot)
+    await db.flush()
+
+    rows = await get_class_twr_availability(db, portfolio.id)
+    fixed_income = next(row for row in rows if row["asset_type"] == "RENDA_FIXA")
+
+    assert fixed_income["available"] is False
+    assert fixed_income["status"] == "incomplete_history"
+    assert "histórica" in fixed_income["reason"]

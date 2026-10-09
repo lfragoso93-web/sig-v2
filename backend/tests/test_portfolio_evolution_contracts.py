@@ -83,6 +83,12 @@ def test_class_daily_and_monthly_contracts(class_daily_payload: dict) -> None:
         is None
     )
 
+    history_gap = {**monthly, "valuation_status": "incomplete_history"}
+    assert (
+        PortfolioClassMonthlyEvolutionResponse.model_validate(history_gap).valuation_status
+        == "incomplete_history"
+    )
+
 
 def test_availability_and_reconciliation_contracts() -> None:
     availability = PortfolioClassAvailabilityResponse.model_validate(

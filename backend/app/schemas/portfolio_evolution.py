@@ -60,6 +60,7 @@ class PortfolioClassDailyEvolutionResponse(BaseModel):
         "partial_prices",
         "partial_benchmark",
         "absent_benchmark",
+        "incomplete_history",
     ]
     history_source: Literal["portfolio_class_snapshot"]
 
@@ -87,6 +88,7 @@ class PortfolioClassAvailabilityResponse(BaseModel):
         "dedicated_history_not_available",
         "partial_benchmark",
         "absent_benchmark",
+        "incomplete_history",
     ]
     reason: str | None
 
