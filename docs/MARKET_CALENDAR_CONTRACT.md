@@ -27,6 +27,13 @@ deve fornecer `B3_MARKET_CALENDAR_SOURCE_URL` (HTTPS em `www.b3.com.br`) e
 e registra hash e contagens do relatório; não escreve no banco. A URL/ano devem
 ser renovados quando a B3 publicar o calendário anual seguinte.
 
+Os campos `market_calendar.b3_source_url` e
+`market_calendar.b3_source_year` já aparecem em **Configurações > Avançado >
+Painel Admin > Config. do sistema** para o SuperAdmin. Em instalação nova,
+iniciam com a publicação oficial de 2026; valores não vazios têm precedência
+sobre o `.env`. URL ou ano inválidos interrompem a auditoria sem alterar fatos
+do calendário.
+
 `TESOURO_DIRETO_STANDARD` também não representa produtos com liquidação
 instantânea ou disponibilidade 24x7, como modalidades especiais do Tesouro
 Reserva. Esses produtos exigem mercado/regra próprios antes de usar o mesmo

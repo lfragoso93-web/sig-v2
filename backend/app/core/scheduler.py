@@ -194,8 +194,12 @@ def start_scheduler() -> None:
         )
         async def audit_b3_market_calendar_monthly():
             """Audit the source only; calendar promotion remains manual."""
+            from app.core.database import AsyncSessionLocal
             from app.services.b3_market_calendar_audit_service import (
                 run_b3_market_calendar_monthly_audit,
+            )
+            from app.services.b3_market_calendar_configuration_service import (
+                resolve_b3_market_calendar_audit_configuration,
             )
 
             async with distributed_job_lock(
@@ -206,11 +210,16 @@ def start_scheduler() -> None:
                 if not acquired:
                     return
                 try:
+                    async with AsyncSessionLocal() as db:
+                        configuration = (
+                            await resolve_b3_market_calendar_audit_configuration(
+                                db,
+                                runtime_settings=settings,
+                            )
+                        )
                     result = await run_b3_market_calendar_monthly_audit(
-                        source_url=settings.B3_MARKET_CALENDAR_SOURCE_URL or "",
-                        source_year=(
-                            settings.B3_MARKET_CALENDAR_SOURCE_YEAR or 0
-                        ),
+                        source_url=configuration.source_url,
+                        source_year=configuration.source_year,
                     )
                     logger.info(
                         "[scheduler] Auditoria mensal B3 concluida: "
