@@ -25,6 +25,16 @@ SGI calculará uma data efetiva de custódia conservadora em D+2 dias úteis. Es
 liquidou a operação nessa data. O cálculo exige calendário oficial de dias
 úteis; não pode considerar somente sábados e domingos.
 
+## Resolução canônica de custódia
+
+`resolve_conservative_treasury_custody_date` resolve a data em D+2 somente
+pelos fatos diários certificados do mercado `TESOURO_DIRETO_STANDARD`, por
+meio de `add_certified_business_days`.
+
+Se faltar um dia intermediário no calendário, a projeção falha com cobertura
+indisponível. Ela não consulta provedores externos, não usa calendário estimado
+e não grava dados.
+
 ## Regra fail-closed
 
 A base tributável por unidade de cada evento deve vir de uma fonte oficial ou de
