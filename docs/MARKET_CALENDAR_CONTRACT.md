@@ -18,6 +18,19 @@ Antes de persistir fatos, a carga deve revisar a fonte anual, comunicações B3
 posteriores que a alterem e a aplicabilidade ao Tesouro. Avisos específicos
 têm precedência sobre a publicação anual.
 
+## Plano de promoção sem escrita
+
+`python -m app.cli.plan_market_calendar_promotion <candidate.json>` aceita
+somente um candidato completo no schema `market-calendar-candidate.v1`. Cada
+dia do ano deve ter `date`, `is_business_day` e referência a um documento-fonte
+com SHA-256. A CLI não acessa o banco, não busca a internet e retorna
+`database_writes_executed=0`.
+
+O plano falha fechado para cobertura incompleta, data duplicada, dia fora do
+ano ou referência de fonte desconhecida. Um plano promovível apenas comprova
+que o candidato revisado tem cobertura e proveniência suficientes; ele não
+executa inserção, upsert nem autoriza uma carga futura.
+
 ## Auditoria mensal da fonte
 
 O scheduler pode executar a auditoria mensal no dia 1 às 08:15 de São Paulo,
