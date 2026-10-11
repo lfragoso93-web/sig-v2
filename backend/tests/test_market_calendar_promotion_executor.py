@@ -2,6 +2,7 @@ import json
 from argparse import Namespace
 from datetime import date
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import func, select
@@ -11,6 +12,7 @@ from app.models.market_calendar_day import MarketCalendarDay
 from app.cli import promote_market_calendar as cli
 from app.services.market_calendar_promotion_executor import (
     MarketCalendarPromotionExecutionError,
+    _calendar_schema_ready,
     execute_market_calendar_promotion,
     prepare_market_calendar_promotion,
 )
@@ -131,3 +133,15 @@ async def test_cli_rejects_execute_without_confirmation_before_database_access()
                 candidate_file=Path("not-read.json"),
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_postgresql_schema_probe_fails_closed_when_table_is_absent() -> None:
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    session.execute = AsyncMock(return_value=result)
+
+    assert await _calendar_schema_ready(session) is False
+    session.execute.assert_awaited_once()

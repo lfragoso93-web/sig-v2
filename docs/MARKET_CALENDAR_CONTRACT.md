@@ -79,6 +79,11 @@ preflight contra o banco e sempre faz rollback. O relatório expõe o hash do
 candidato, quantidades de fatos ausentes/inalterados e conflitos, com
 `database_writes_executed=0`.
 
+Em PostgreSQL, o preflight verifica explicitamente a existência de
+`market_calendar_days`. Sem a migration, retorna
+`schema_ready=false` e `market_calendar_schema_not_ready`, sem tentar consultar
+ou criar a tabela.
+
 Somente `--execute --confirmation <candidate_sha256>` pode inserir fatos
 ausentes. A confirmação deve ser o hash retornado pelo preflight do mesmo
 candidato, e o executor repete a verificação dentro de lock transacional antes

@@ -31,6 +31,8 @@ class MarketCalendarPromotionPreflight:
     dry_run: bool
     database_writes_executed: int
     plan: MarketCalendarPromotionPlan
+    schema_ready: bool
+    schema_blockers: tuple[str, ...]
     existing_count: int
     insert_count: int
     unchanged_count: int
@@ -38,7 +40,12 @@ class MarketCalendarPromotionPreflight:
 
     @property
     def promotable(self) -> bool:
-        return self.plan.promotable and not self.conflicts
+        return (
+            self.plan.promotable
+            and self.schema_ready
+            and not self.schema_blockers
+            and not self.conflicts
+        )
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -88,6 +95,16 @@ def _candidate_days(candidate: dict[str, object]) -> dict[date, dict[str, object
     }
 
 
+async def _calendar_schema_ready(session: AsyncSession) -> bool:
+    """Check the target table without relying on exception text from a query."""
+    if session.get_bind().dialect.name != "postgresql":
+        return True
+    result = await session.execute(
+        text("SELECT to_regclass('public.market_calendar_days')")
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def _prepare_market_calendar_promotion(
     session: AsyncSession,
     *,
@@ -101,6 +118,23 @@ async def _prepare_market_calendar_promotion(
             dry_run=True,
             database_writes_executed=0,
             plan=plan,
+            schema_ready=True,
+            schema_blockers=(),
+            existing_count=0,
+            insert_count=0,
+            unchanged_count=0,
+            conflicts=(),
+        )
+
+    schema_ready = await _calendar_schema_ready(session)
+    if not schema_ready:
+        return MarketCalendarPromotionPreflight(
+            schema_version="market-calendar-promotion-preflight.v1",
+            dry_run=True,
+            database_writes_executed=0,
+            plan=plan,
+            schema_ready=False,
+            schema_blockers=("market_calendar_schema_not_ready",),
             existing_count=0,
             insert_count=0,
             unchanged_count=0,
@@ -148,6 +182,8 @@ async def _prepare_market_calendar_promotion(
         dry_run=True,
         database_writes_executed=0,
         plan=plan,
+        schema_ready=True,
+        schema_blockers=(),
         existing_count=len(existing),
         insert_count=len(candidate_days) - unchanged_count - len(conflicts),
         unchanged_count=unchanged_count,
