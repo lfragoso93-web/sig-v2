@@ -1,6 +1,6 @@
 # Provedores e fontes de dados
 
-> Última atualização: 14/07/2026
+> Última atualização: 11/10/2026
 
 Este documento descreve a política de uso de fontes externas sem transformar provedores em dependência direta das telas.
 
@@ -48,6 +48,15 @@ Snapshots e KPIs
 | Cripto | Roteamento definitivo em revisão |
 | Tesouro Direto | Serviço dedicado, fora do pipeline genérico |
 | Renda Fixa | Motor interno, sem cotação externa genérica |
+
+### Eventos monetários do Tesouro
+
+O conjunto oficial `resgates-do-tesouro-direto` fornece pagamentos agregados de
+cupons com título, vencimento, data de pagamento, PU, quantidade e valor. Ele
+não fornece `record_date`, elegibilidade por carteira ou componente tributável
+por unidade. A auditoria `treasury-cash-event-source-audit.v1` é somente leitura
+e mantém `promotable_events=0` até existir essa evidência. O contrato detalhado
+está em `docs/TREASURY_CASH_EVENT_SOURCE_AUDIT.md`.
 
 ---
 

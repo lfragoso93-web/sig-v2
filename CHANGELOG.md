@@ -4,6 +4,16 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 11/10/2026 - #149 auditoria oficial de cupons do Tesouro
+
+- o dataset oficial `resgates-do-tesouro-direto` foi identificado como fonte
+  factual de título, vencimento, pagamento e valor bruto unitário de cupons;
+- uma CLI estritamente read-only passou a validar schema, consistência agregada
+  e capacidade factual sob `treasury-cash-event-source-audit.v1`;
+- ausência de `record_date`, elegibilidade por carteira e componente tributável
+  mantém todos os eventos não promovíveis e `database_writes_executed=0`;
+- nenhum seed, migration, rebuild ou acesso ao banco foi introduzido.
+
 ### 11/10/2026 - #149 contratos de TWR dedicados consolidados
 
 - Renda Fixa passou a ter oracles explícitos para aportes, resgates parciais,
