@@ -22,7 +22,7 @@ alembic heads
 # O runtime não usa `upgrade heads`: migrations destrutivas/operacionais podem
 # existir no grafo e não devem ser aplicadas apenas por estarem versionadas.
 # O alvo abaixo espelha o head canônico efetivamente validado no ambiente.
-RUNTIME_MIGRATION_TARGET="20261008_treasury_instruments"
+RUNTIME_MIGRATION_TARGET="20261010_b3_calendar_config"
 echo "[entrypoint] Executando migrations runtime-safe ate ${RUNTIME_MIGRATION_TARGET}..."
 alembic upgrade "${RUNTIME_MIGRATION_TARGET}"
 

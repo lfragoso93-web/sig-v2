@@ -97,7 +97,7 @@ def test_upgrade_creates_nullable_one_to_one_metadata_contract(
     assert foreign_keys[0].ondelete == "CASCADE"
 
 
-def test_migration_extends_head_and_is_runtime_target() -> None:
+def test_migration_extends_head_before_the_runtime_target() -> None:
     migration = _load_migration()
     entrypoint = (
         Path(__file__).resolve().parents[1] / "entrypoint.sh"
@@ -106,7 +106,7 @@ def test_migration_extends_head_and_is_runtime_target() -> None:
     assert migration.revision == "20261008_treasury_instruments"
     assert migration.down_revision == "20261005_real_data_cert"
     assert (
-        'RUNTIME_MIGRATION_TARGET="20261008_treasury_instruments"'
+        'RUNTIME_MIGRATION_TARGET="20261010_b3_calendar_config"'
         in entrypoint
     )
 

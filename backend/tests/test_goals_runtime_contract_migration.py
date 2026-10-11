@@ -10,7 +10,7 @@ def test_goals_runtime_contract_precedes_current_runtime_target() -> None:
     ).read_text(encoding="utf-8")
 
     assert (
-        'RUNTIME_MIGRATION_TARGET="20261008_treasury_instruments"'
+        'RUNTIME_MIGRATION_TARGET="20261010_b3_calendar_config"'
         in entrypoint
     )
     assert 'down_revision: str = "20260820_dividend_occurrence"' in migration
@@ -27,7 +27,7 @@ def test_real_data_certification_migration_precedes_runtime_target() -> None:
     ).read_text(encoding="utf-8")
 
     assert (
-        'RUNTIME_MIGRATION_TARGET="20261008_treasury_instruments"'
+        'RUNTIME_MIGRATION_TARGET="20261010_b3_calendar_config"'
         in entrypoint
     )
     assert 'revision: str = "20261005_real_data_cert"' in migration
