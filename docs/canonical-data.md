@@ -1,6 +1,6 @@
 # Dados canônicos e KPIs
 
-> Última atualização: 31/07/2026
+> Última atualização: 11/10/2026
 
 Este documento define a camada canônica usada para alimentar Resumo, Patrimônio, Rentabilidade e Dashboard.
 
@@ -61,6 +61,12 @@ Períodos principais:
 - desde o início.
 
 O retorno acumulado desde o início deve usar `accumulated_return_pct` do snapshot mais recente.
+
+Tesouro Direto e Renda Fixa usam TWR dedicado por classe. Compras e resgates
+são fluxos externos; cupons e amortizações do Tesouro entram uma única vez
+quando existem como fatos monetários canônicos em `asset_dividends`. Lacunas de
+PU, benchmark ou calendário mantêm a qualidade indisponível ou incompleta, sem
+fabricar retorno.
 
 ---
 
@@ -128,4 +134,7 @@ retorno_total_pct → TWR desde o início
 - Ajustar visualmente os cards da página Rentabilidade.
 - Revalidar todos os cards da página Resumo com os contratos canônicos.
 - Expor avisos visuais de cobertura parcial e retorno estimado.
-- Finalizar consumo dedicado de Tesouro nos snapshots.
+- Obter evidência factual de pagamento e elegibilidade antes de ingerir
+  cupons/amortizações do Tesouro; não inferir `record_date` ausente.
+- Certificar qualquer nova identidade runtime antes de substituir a promoção
+  persistente vigente.

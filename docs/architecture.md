@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 06/10/2026.
+> Última atualização: 11/10/2026.
 
 ## Objetivo
 
@@ -116,9 +116,14 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
 - após uma lacuna de benchmark, a cadeia TWR materializada permanece
   `incomplete_history` mesmo se a cobertura voltar; patrimônio segue auditável,
   mas retornos mensal e acumulado não são promovidos como oficiais;
-- TWR diário dedicado ainda pertence à #149.
+- TWR diário dedicado integra `PortfolioClassSnapshot`, com aportes e resgates
+  tratados como fluxos externos e oracles para resgate parcial e múltiplas
+  aplicações por produto/indexador.
 
-A ausência de TWR dedicado não deve ser mascarada por retorno simples ou fallback anual rotulado como TWR.
+A #149 permanece aberta somente para evidência factual de cupons/amortizações
+do Tesouro e para certificar operacionalmente uma nova identidade runtime. A
+ausência de PU, benchmark ou calendário não deve ser mascarada por retorno
+simples, evento inferido ou fallback rotulado como TWR.
 
 ## IRPF
 
@@ -251,7 +256,7 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
 ## Backlog pós-GO por padrão
 
-- #149 — TWR diário dedicado restante;
+- #149 — evidência factual de cupons/amortizações e certificação da nova identidade;
 - #351/#90/#58 — UX/detalhe de ativo;
 - #355–#359 — features auxiliares;
 - #246/#360 — Metas + Analysis Engine;

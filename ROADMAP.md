@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 06/10/2026.
+> Última atualização: 11/10/2026.
 
 ## Estado do projeto
 
@@ -150,10 +150,19 @@ permanece fail-closed em qualquer ausência, revogação ou divergência.
 
 ### #149 — TWR diário Tesouro/Renda Fixa
 
-- Tesouro: valuation DB-first/snapshots dedicados avançados;
-- Renda Fixa: valuation atual funcional, TWR diário dedicado ainda pendente.
+- Tesouro: valuation DB-first, snapshots dedicados, calendário canônico e
+  eventos monetários persistidos consumidos uma única vez no TWR;
+- Renda Fixa: lifecycle, valuation e TWR dedicados, com oracles para aportes,
+  resgates parciais, múltiplas aplicações e fronteiras de cobertura;
+- cadeia temporal: lacunas de PU, benchmark ou calendário permanecem explícitas
+  e não promovem retorno parcial como oficial;
+- pendência factual: cupons/amortizações só podem ser ingeridos quando fonte
+  oficial comprovar pagamento e elegibilidade sem inferir `record_date`;
+- pendência operacional: qualquer nova identidade de runtime exige ciclo
+  próprio de evidência e certificação antes de substituir a vigente.
 
-Não fabricar retorno. Se TWR não existir, UI deve declarar indisponibilidade. Só vira blocker se o escopo aprovado do primeiro release exigir essa métrica.
+Não fabricar retorno nem evento monetário. Indisponibilidade e cobertura
+incompleta devem continuar explícitas.
 
 ### Eventos corporativos
 
@@ -193,9 +202,9 @@ para eventual `MATCHED`.
 | CSV | 🟢 certificado |
 | Patrimônio/Resumo | 🟢 reconciliado |
 | Snapshots/rebuild | 🟢 avançado/certificado |
-| Tesouro | 🟢 valuation DB-first |
-| Renda Fixa atual | 🟢 valuation dedicado |
-| RF TWR diário | 🟠 #149 |
+| Tesouro | 🟢 valuation/TWR dedicados; ingestão factual de cupons/amortizações pendente na #149 |
+| Renda Fixa atual | 🟢 lifecycle, valuation e TWR dedicados |
+| RF TWR diário | 🟢 oracles canônicos; nova identidade runtime ainda exige certificação |
 | Proventos `pre-prod-dividends-seed.v2` | 🟢 asset-based; direitos sob demanda; portfolio-scoped comprovado |
 | Proventos gate amplo | 🟢 #226 portfolio-scoped suficiente |
 | Eventos corporativos | 🟠 sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |

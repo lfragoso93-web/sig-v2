@@ -4,6 +4,19 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 11/10/2026 - #149 contratos de TWR dedicados consolidados
+
+- Renda Fixa passou a ter oracles explícitos para aportes, resgates parciais,
+  múltiplas aplicações, composição temporal e fronteiras de benchmark;
+- Tesouro passou a consumir cupons e amortizações canônicos uma única vez no
+  TWR, preservando PU e calendário ausentes como estados fail-closed;
+- README, ROADMAP, arquitetura e mapa de dados canônicos foram alinhados ao
+  código comprovado;
+- a #149 permanece aberta apenas para evidência factual de elegibilidade de
+  cupons/amortizações e para a certificação operacional de uma nova identidade;
+- este bloco não executa seed, rebuild, escrita financeira nem promoção de
+  certificação.
+
 ### 06/10/2026 - #344 Architecture Enforcement concluída
 
 - #345–#350 foram fechadas após implementação e validação dos seis blocos da

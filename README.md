@@ -10,7 +10,7 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 06/10/2026
+## Status atual — 11/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362 e a certificação persistente para dados reais
@@ -131,16 +131,16 @@ Princípios obrigatórios:
 
 ## Estado funcional resumido
 
-| Domínio | Estado em 10/09/2026 |
+| Domínio | Estado em 11/10/2026 |
 |---|---|
 | Autenticação/Core | funcional em validação assistida |
 | Carteiras/Transações | canônico e certificado sinteticamente |
 | CSV | certificado |
 | Patrimônio/Resumo | reconciliado em carteira assistida |
 | Snapshots | rebuild/replay certificados |
-| Rentabilidade | funcional; TWR RF permanece #149 |
-| Tesouro | valuation DB-first e snapshots dedicados |
-| Renda Fixa | lifecycle transaction-derived e valuation dedicado |
+| Rentabilidade | TWR dedicado de Tesouro e Renda Fixa disponível; lacunas permanecem explícitas |
+| Tesouro | valuation DB-first, snapshots dedicados e eventos monetários consumidos uma vez |
+| Renda Fixa | lifecycle transaction-derived, valuation e TWR dedicados |
 | Proventos | `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda; prova portfolio-scoped idempotente |
 | Eventos corporativos | sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF | funcional para classes suportadas |
@@ -157,7 +157,11 @@ Princípios obrigatórios:
 - #384 foi concluída e mantém a liberação para dados reais explícita,
   persistente e separada da promoção para `main`.
 
-#149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
+#149 permanece aberta para a evidência factual de elegibilidade de cupons e
+amortizações do Tesouro e para a certificação operacional de uma nova identidade
+runtime. Os contratos de TWR dedicado de Tesouro e Renda Fixa já estão cobertos
+por oracles; lacunas de PU, benchmark ou calendário continuam fail-closed e não
+são apresentadas como retorno oficial.
 
 ## Evolução pós-GO
 
