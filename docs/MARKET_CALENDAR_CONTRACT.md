@@ -72,6 +72,24 @@ ano ou referência de fonte desconhecida. Um plano promovível apenas comprova
 que o candidato revisado tem cobertura e proveniência suficientes; ele não
 executa inserção, upsert nem autoriza uma carga futura.
 
+## Promoção protegida de fatos revisados
+
+`python -m app.cli.promote_market_calendar <candidate.json>` executa o
+preflight contra o banco e sempre faz rollback. O relatório expõe o hash do
+candidato, quantidades de fatos ausentes/inalterados e conflitos, com
+`database_writes_executed=0`.
+
+Somente `--execute --confirmation <candidate_sha256>` pode inserir fatos
+ausentes. A confirmação deve ser o hash retornado pelo preflight do mesmo
+candidato, e o executor repete a verificação dentro de lock transacional antes
+de inserir. Fatos já certificados não recebem update: se o valor ou a
+referência da fonte divergir, a operação falha fechada para uma correção
+auditável posterior. Reexecutar exatamente o mesmo candidato é idempotente.
+
+O comando não deve ser executado em runtime cuja migration
+`20261009_market_calendar` ainda não esteja aplicada, nem substitui o ciclo de
+certificação de runtime exigido por uma nova identidade de deploy.
+
 ## Auditoria mensal da fonte
 
 O scheduler pode executar a auditoria mensal no dia 1 às 08:15 de São Paulo,
