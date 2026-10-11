@@ -18,6 +18,24 @@ Antes de persistir fatos, a carga deve revisar a fonte anual, comunicações B3
 posteriores que a alterem e a aplicabilidade ao Tesouro. Avisos específicos
 têm precedência sobre a publicação anual.
 
+### Hierarquia certificada para 2026
+
+O artefato anual a revisar é o [Ofício Circular B3 041/2026-VNC — errata do
+calendário de feriados](https://www.b3.com.br/data/files/20/57/01/AA/06A1F910ADC36BE9AC094EA8/OC%20041-2026-VNC%20ERRATA%20-%20CALENDARIO%20DE%20FERIADOS%20EM%202026_PT.pdf).
+Ele relaciona os feriados nacionais e pontos facultativos de 2026, estabelece
+que não há negociação e confirmação de investimentos do Tesouro Direto nessas
+datas e explicita funcionamento normal em 09/07.
+
+O portal de [avisos do Tesouro Direto](https://tesourodireto.com.br/como-investir/avisos)
+é a fonte complementar para interrupções operacionais posteriores. Um aviso
+intradiário, atraso de precificação ou indisponibilidade temporária não altera
+sozinho `is_business_day`: somente um documento que estabeleça suspensão do dia
+ou mudança de liquidação permite alterar um fato diário já revisado.
+
+Assim, a fonte anual e os avisos não autorizam inferir uma cobertura diária
+completa sem um artefato revisado que declare a regra dos dias ordinários. O
+planejador de promoção continua bloqueando essa lacuna.
+
 ## Plano de promoção sem escrita
 
 `python -m app.cli.plan_market_calendar_promotion <candidate.json>` aceita
