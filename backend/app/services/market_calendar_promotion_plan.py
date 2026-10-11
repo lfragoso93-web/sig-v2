@@ -11,6 +11,7 @@ from typing import Any
 
 
 _CANDIDATE_SCHEMA_VERSION = "market-calendar-candidate.v1"
+_ORDINARY_RULE_SCHEMA_VERSION = "market-calendar-ordinary-rule.v1"
 _PLAN_SCHEMA_VERSION = "market-calendar-promotion-plan.v1"
 _SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
@@ -99,6 +100,118 @@ def _days_in_year(year: int) -> tuple[date, ...]:
         days.append(current)
         current += timedelta(days=1)
     return tuple(days)
+
+
+def _parse_exception_days(
+    raw_days: object,
+    *,
+    field_name: str,
+    year_dates: set[date],
+    source_references: set[str],
+) -> dict[date, str]:
+    if not isinstance(raw_days, list):
+        raise ValueError(f"{field_name} must be a list")
+    parsed: dict[date, str] = {}
+    for raw_day in raw_days:
+        if not isinstance(raw_day, dict):
+            raise ValueError(f"{field_name} entry must be an object")
+        try:
+            calendar_date = date.fromisoformat(str(raw_day["date"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{field_name} entry requires ISO date") from exc
+        source_reference = str(raw_day.get("source_reference") or "").strip()
+        if calendar_date not in year_dates:
+            raise ValueError(
+                f"{field_name} date must belong to candidate year"
+            )
+        if source_reference not in source_references:
+            raise ValueError(f"{field_name} requires known source_reference")
+        if calendar_date in parsed:
+            raise ValueError(f"{field_name} cannot repeat a calendar date")
+        parsed[calendar_date] = source_reference
+    return parsed
+
+
+def build_treasury_standard_calendar_candidate(
+    ordinary_rule: dict[str, object],
+) -> dict[str, object]:
+    """Expand a reviewed annual rule into a complete non-persistent candidate.
+
+    This applies only the documented `TESOURO_DIRETO_STANDARD` weekday rule;
+    callers remain responsible for reviewing the supplied annual exceptions.
+    """
+    if ordinary_rule.get("schema_version") != _ORDINARY_RULE_SCHEMA_VERSION:
+        raise ValueError("unsupported market calendar ordinary-rule schema")
+    if ordinary_rule.get("market") != "TESOURO_DIRETO_STANDARD":
+        raise ValueError("ordinary rule supports TESOURO_DIRETO_STANDARD only")
+    try:
+        year = int(ordinary_rule["year"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("ordinary rule requires year") from exc
+    all_days = _days_in_year(year)
+    year_dates = set(all_days)
+
+    raw_documents = ordinary_rule.get("source_documents")
+    if not isinstance(raw_documents, list) or not raw_documents:
+        raise ValueError("ordinary rule requires source_documents")
+    documents = tuple(_parse_source_document(raw) for raw in raw_documents)
+    source_references = {document.reference for document in documents}
+    if len(source_references) != len(documents):
+        raise ValueError("ordinary rule cannot repeat source reference")
+
+    ordinary_source = str(
+        ordinary_rule.get("ordinary_day_source_reference") or ""
+    ).strip()
+    if ordinary_source not in source_references:
+        raise ValueError(
+            "ordinary rule requires known ordinary_day_source_reference"
+        )
+
+    closed_days = _parse_exception_days(
+        ordinary_rule.get("closed_dates", []),
+        field_name="closed_dates",
+        year_dates=year_dates,
+        source_references=source_references,
+    )
+    special_days = _parse_exception_days(
+        ordinary_rule.get("special_operation_dates", []),
+        field_name="special_operation_dates",
+        year_dates=year_dates,
+        source_references=source_references,
+    )
+    overlap = set(closed_days) & set(special_days)
+    if overlap:
+        raise ValueError(
+            "closed_dates and special_operation_dates cannot overlap"
+        )
+    if any(day.weekday() >= 5 for day in special_days):
+        raise ValueError("special_operation_dates must be weekdays")
+
+    days: list[dict[str, object]] = []
+    for calendar_date in all_days:
+        if calendar_date in closed_days:
+            is_business_day = False
+            source_reference = closed_days[calendar_date]
+        elif calendar_date in special_days:
+            is_business_day = True
+            source_reference = special_days[calendar_date]
+        else:
+            is_business_day = calendar_date.weekday() < 5
+            source_reference = ordinary_source
+        days.append(
+            {
+                "date": calendar_date.isoformat(),
+                "is_business_day": is_business_day,
+                "source_reference": source_reference,
+            }
+        )
+    return {
+        "schema_version": _CANDIDATE_SCHEMA_VERSION,
+        "market": "TESOURO_DIRETO_STANDARD",
+        "year": year,
+        "source_documents": [asdict(document) for document in documents],
+        "days": days,
+    }
 
 
 def build_market_calendar_promotion_plan(

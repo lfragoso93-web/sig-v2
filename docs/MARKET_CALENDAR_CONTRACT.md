@@ -51,6 +51,14 @@ calendário B3 que enumera as exceções de 2026. Dias de horário especial segu
 aplica ao Tesouro Reserva, não projeta feriados para outros anos e não substitui
 um aviso oficial de suspensão integral.
 
+`python -m app.cli.build_treasury_standard_calendar_candidate <rule.json>`
+converte uma regra revisada `market-calendar-ordinary-rule.v1` em candidato
+completo. A regra deve trazer documentos-fonte com SHA-256, uma referência para
+os dias ordinários e listas revisadas de `closed_dates` e
+`special_operation_dates`; a CLI não lê banco, não consulta rede e não escreve.
+O candidato resultante deve passar pelo planejador de promoção antes de qualquer
+executor futuro ser considerado.
+
 ## Plano de promoção sem escrita
 
 `python -m app.cli.plan_market_calendar_promotion <candidate.json>` aceita

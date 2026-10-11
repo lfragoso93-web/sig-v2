@@ -5,10 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from app.services.market_calendar_promotion_plan import (
-    build_market_calendar_promotion_plan,
+from app.cli.build_treasury_standard_calendar_candidate import (
+    main as build_candidate_main,
 )
 from app.cli.plan_market_calendar_promotion import main
+from app.services.market_calendar_promotion_plan import (
+    build_market_calendar_promotion_plan,
+    build_treasury_standard_calendar_candidate,
+)
 
 
 _SOURCE = {
@@ -39,6 +43,30 @@ def _candidate(*, omit: date | None = None, duplicate: bool = False):
         "year": 2026,
         "source_documents": [_SOURCE],
         "days": days,
+    }
+
+
+def _ordinary_rule():
+    b3_source = {
+        "reference": "https://www.b3.com.br/calendar-2026",
+        "sha256": "b" * 64,
+    }
+    treasury_source = {
+        "reference": "https://tesourodireto.com.br/regras",
+        "sha256": "c" * 64,
+    }
+    return {
+        "schema_version": "market-calendar-ordinary-rule.v1",
+        "market": "TESOURO_DIRETO_STANDARD",
+        "year": 2026,
+        "source_documents": [b3_source, treasury_source],
+        "ordinary_day_source_reference": treasury_source["reference"],
+        "closed_dates": [
+            {"date": "2026-01-01", "source_reference": b3_source["reference"]}
+        ],
+        "special_operation_dates": [
+            {"date": "2026-02-18", "source_reference": b3_source["reference"]}
+        ],
     }
 
 
@@ -99,3 +127,46 @@ def test_cli_returns_nonzero_plan_without_database_writes(
     assert payload["dry_run"] is True
     assert payload["database_writes_executed"] == 0
     assert payload["promotable"] is False
+
+
+def test_builds_complete_candidate_from_reviewed_ordinary_rule() -> None:
+    candidate = build_treasury_standard_calendar_candidate(_ordinary_rule())
+    days = {day["date"]: day for day in candidate["days"]}
+
+    assert len(days) == 365
+    assert days["2026-01-01"]["is_business_day"] is False
+    assert days["2026-01-02"]["is_business_day"] is True
+    assert days["2026-01-03"]["is_business_day"] is False
+    assert days["2026-02-18"]["is_business_day"] is True
+    assert build_market_calendar_promotion_plan(candidate).promotable is True
+
+
+def test_rejects_ordinary_rule_with_conflicting_exception_types() -> None:
+    ordinary_rule = _ordinary_rule()
+    ordinary_rule["special_operation_dates"].append(
+        {
+            "date": "2026-01-01",
+            "source_reference": "https://www.b3.com.br/calendar-2026",
+        }
+    )
+
+    with pytest.raises(ValueError, match="cannot overlap"):
+        build_treasury_standard_calendar_candidate(ordinary_rule)
+
+
+def test_candidate_builder_cli_does_not_access_database(
+    monkeypatch,
+    capsys,
+) -> None:
+    payload = json.dumps(_ordinary_rule())
+
+    def open_rule(*_, **__) -> io.StringIO:
+        return io.StringIO(payload)
+
+    monkeypatch.setattr(Path, "open", open_rule)
+    monkeypatch.setattr("sys.argv", ["build", "reviewed-rule.json"])
+
+    assert build_candidate_main() == 0
+    candidate = json.loads(capsys.readouterr().out)
+    assert candidate["schema_version"] == "market-calendar-candidate.v1"
+    assert len(candidate["days"]) == 365
