@@ -36,6 +36,21 @@ Assim, a fonte anual e os avisos não autorizam inferir uma cobertura diária
 completa sem um artefato revisado que declare a regra dos dias ordinários. O
 planejador de promoção continua bloqueando essa lacuna.
 
+### Regra certificada de dias ordinários
+
+Para um candidato anual de `TESOURO_DIRETO_STANDARD`, um dia ordinário pode ser
+classificado como útil apenas quando for de segunda a sexta-feira e não estiver
+nas datas sem negociação/confirmação do artefato anual B3 nem em comunicado
+posterior que suspenda o dia integralmente. A regra é limitada ao ano que o
+artefato anual cobre.
+
+Essa classificação decorre das [regras oficiais do Tesouro Direto](https://tesourodireto.com.br/sobre-o-tesouro/regras-e-regulamento),
+que distinguem operações em dias úteis de finais de semana e feriados, e do
+calendário B3 que enumera as exceções de 2026. Dias de horário especial seguem
+úteis; o candidato deve conservar a fonte que os identifica. A regra não se
+aplica ao Tesouro Reserva, não projeta feriados para outros anos e não substitui
+um aviso oficial de suspensão integral.
+
 ## Plano de promoção sem escrita
 
 `python -m app.cli.plan_market_calendar_promotion <candidate.json>` aceita
