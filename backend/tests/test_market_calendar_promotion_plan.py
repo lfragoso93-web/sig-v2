@@ -170,3 +170,24 @@ def test_candidate_builder_cli_does_not_access_database(
     candidate = json.loads(capsys.readouterr().out)
     assert candidate["schema_version"] == "market-calendar-candidate.v1"
     assert len(candidate["days"]) == 365
+
+
+def test_reviewed_treasury_2026_rule_remains_promotable() -> None:
+    rule_path = (
+        Path(__file__).resolve().parents[2]
+        / "docs"
+        / "market-calendar-tesouro-2026-rule.json"
+    )
+    ordinary_rule = json.loads(rule_path.read_text(encoding="utf-8"))
+
+    candidate = build_treasury_standard_calendar_candidate(ordinary_rule)
+    plan = build_market_calendar_promotion_plan(candidate)
+    days = {day["date"]: day for day in candidate["days"]}
+
+    assert len(days) == 365
+    assert sum(day["is_business_day"] for day in candidate["days"]) == 247
+    assert days["2026-02-16"]["is_business_day"] is False
+    assert days["2026-02-18"]["is_business_day"] is True
+    assert plan.promotable is True
+    assert plan.dry_run is True
+    assert plan.database_writes_executed == 0
