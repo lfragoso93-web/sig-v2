@@ -125,6 +125,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "rebuildable",
         "Cache de cotações PTAX é idempotente e regenerável pela fonte oficial.",
     ),
+    "market_calendar_days": (
+        "rebuildable",
+        "Fatos oficiais de calendário são regeneráveis por candidatos revisados e promoção controlada.",
+    ),
     "portfolio_class_snapshots": (
         "rebuildable",
         "Snapshots por classe são derivados de transações, posições e preços persistidos.",

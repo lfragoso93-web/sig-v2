@@ -144,6 +144,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
         ("asset_universe_memberships", "rebuildable"),
         ("treasury_instruments", "rebuildable"),
         ("fx_rates", "rebuildable"),
+        ("market_calendar_days", "rebuildable"),
         ("future_table", "unclassified"),
     ],
 )
