@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str = "postgresql://sgi:sgi@db:5432/sgi"
+    DATABASE_URL: str = "postgresql+psycopg2://sgi:sgi@db:5432/sgi"
     ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
     APP_DEBUG: bool = False
     ENVIRONMENT: str = "development"
