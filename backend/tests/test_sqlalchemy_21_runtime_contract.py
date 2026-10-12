@@ -31,3 +31,11 @@ def test_sync_postgresql_urls_select_installed_psycopg2_driver() -> None:
     assert 'DATABASE_URL: str = "postgresql+psycopg2://' in settings_source
     assert "DATABASE_URL:       postgresql+psycopg2://" in compose_source
     assert "DATABASE_URL=postgresql+psycopg2://" in environment_example
+
+
+def test_entrypoint_postgres_probe_accepts_explicit_sqlalchemy_drivers() -> None:
+    entrypoint = (BACKEND_ROOT / "entrypoint.sh").read_text(encoding="utf-8")
+
+    assert "os.environ.get('ASYNC_DATABASE_URL')" in entrypoint
+    assert "replace('postgresql+asyncpg', 'postgresql')" in entrypoint
+    assert "replace('postgresql+psycopg2', 'postgresql')" in entrypoint

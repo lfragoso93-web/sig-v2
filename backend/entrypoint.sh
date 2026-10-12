@@ -4,8 +4,13 @@ set -e
 echo "[entrypoint] Aguardando PostgreSQL..."
 until python -c "
 import os, asyncio, asyncpg
-url = os.environ.get('DATABASE_URL', 'postgresql://sgi:sgi@db:5432/sgi')
-asyncio.run(asyncpg.connect(url.replace('postgresql+asyncpg', 'postgresql')))
+url = (
+    os.environ.get('ASYNC_DATABASE_URL')
+    or os.environ.get('DATABASE_URL', 'postgresql://sgi:sgi@db:5432/sgi')
+)
+url = url.replace('postgresql+asyncpg', 'postgresql')
+url = url.replace('postgresql+psycopg2', 'postgresql')
+asyncio.run(asyncpg.connect(url))
 " 2>/dev/null; do
   sleep 1
 done
