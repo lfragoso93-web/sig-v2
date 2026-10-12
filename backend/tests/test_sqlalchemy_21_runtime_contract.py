@@ -39,3 +39,13 @@ def test_entrypoint_postgres_probe_accepts_explicit_sqlalchemy_drivers() -> None
     assert "os.environ.get('ASYNC_DATABASE_URL')" in entrypoint
     assert "replace('postgresql+asyncpg', 'postgresql')" in entrypoint
     assert "replace('postgresql+psycopg2', 'postgresql')" in entrypoint
+
+
+def test_treasury_migration_accepts_explicit_sqlalchemy_drivers() -> None:
+    migration = (BACKEND_ROOT / "scripts/migrate_treasury.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'os.environ.get("ASYNC_DATABASE_URL")' in migration
+    assert '"postgresql+asyncpg", "postgresql"' in migration
+    assert '"postgresql+psycopg2", "postgresql"' in migration

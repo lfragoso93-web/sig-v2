@@ -24,8 +24,12 @@ import asyncpg
 logging.basicConfig(level=logging.INFO, format="[migrate_treasury] %(message)s")
 log = logging.getLogger(__name__)
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://sgi:sgi@db:5432/sgi")
-DB_URL = DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
+DATABASE_URL = os.environ.get("ASYNC_DATABASE_URL") or os.environ.get(
+    "DATABASE_URL", "postgresql://sgi:sgi@db:5432/sgi"
+)
+DB_URL = DATABASE_URL.replace("postgresql+asyncpg", "postgresql").replace(
+    "postgresql+psycopg2", "postgresql"
+)
 
 CHECK_TABLE_SQL = """
     SELECT EXISTS (
