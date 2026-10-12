@@ -10,6 +10,8 @@ import re
 import subprocess
 from typing import Callable, Sequence
 
+from sqlalchemy.engine import make_url
+
 
 BACKUP_REPORT_SCHEMA_VERSION = "pre-prod-backup.v3"
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/pre-prod-rebuild")
@@ -49,6 +51,25 @@ class BackupReport:
 
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+
+
+def _postgres_cli_url(database_url: str) -> str:
+    """Return a libpq URL for supported synchronous PostgreSQL URLs."""
+    try:
+        url = make_url(database_url)
+    except Exception as exc:
+        raise BackupError(
+            "pre_prod_backup aceita somente uma DATABASE_URL PostgreSQL sincrona"
+        ) from exc
+    if url.drivername not in {
+        "postgres",
+        "postgresql",
+        "postgresql+psycopg2",
+    }:
+        raise BackupError(
+            "pre_prod_backup aceita somente uma DATABASE_URL PostgreSQL sincrona"
+        )
+    return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
 def create_run_directory(root: Path, run_id: str | None = None) -> Path:
@@ -153,8 +174,7 @@ def create_postgres_backup(
     runner: Runner = subprocess.run,
 ) -> BackupReport:
     """Cria dump custom, listagem, checksum e manifesto sem escrever na origem."""
-    if not database_url.startswith(("postgresql://", "postgres://")):
-        raise BackupError("pre_prod_backup aceita somente uma DATABASE_URL PostgreSQL síncrona")
+    cli_database_url = _postgres_cli_url(database_url)
     if not snapshot_id.strip():
         raise BackupError("snapshot PostgreSQL exportado é obrigatório")
 
@@ -184,7 +204,7 @@ def create_postgres_backup(
                 "--set",
                 "ON_ERROR_STOP=1",
                 "--dbname",
-                database_url,
+                cli_database_url,
                 "--command",
                 "SHOW server_version_num",
             ],
@@ -217,7 +237,7 @@ def create_postgres_backup(
                 "--file",
                 str(dump_path),
                 "--dbname",
-                database_url,
+                cli_database_url,
             ],
             runner=runner,
         )
