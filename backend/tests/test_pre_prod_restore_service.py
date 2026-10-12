@@ -60,7 +60,7 @@ def test_restore_accepts_only_different_empty_database(tmp_path: Path) -> None:
 
     execution = restore_postgres_backup(
         artifact_directory=tmp_path,
-        source_database_url="postgresql://user:secret@db:5432/sgi",
+        source_database_url="postgresql+psycopg2://user:secret@db:5432/sgi",
         target_database_url="postgresql://user:secret@db:5432/sgi_restore_test",
         runner=_runner,
     )
@@ -68,6 +68,40 @@ def test_restore_accepts_only_different_empty_database(tmp_path: Path) -> None:
     assert execution.target.database == "sgi_restore_test"
     assert execution.sha256
     assert all("secret" not in command.command for command in execution.commands)
+
+
+def test_restore_normalizes_explicit_sync_driver_for_postgres_cli(
+    tmp_path: Path,
+) -> None:
+    _artifacts(tmp_path)
+    observed_commands: list[list[str]] = []
+
+    def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed_commands.append(command)
+        return _runner(command, **kwargs)
+
+    restore_postgres_backup(
+        artifact_directory=tmp_path,
+        source_database_url="postgresql+psycopg2://user:secret@db:5432/sgi",
+        target_database_url=(
+            "postgresql+psycopg2://user:secret@db:5432/sgi_restore_test"
+        ),
+        runner=runner,
+    )
+
+    database_urls = [
+        command[command.index("--dbname") + 1]
+        for command in observed_commands
+        if "--dbname" in command
+    ]
+    assert database_urls
+    assert all(url.startswith("postgresql://") for url in database_urls)
+    assert all("+psycopg2" not in url for url in database_urls)
+
+
+def test_restore_rejects_async_postgresql_url() -> None:
+    with pytest.raises(BackupError, match="PostgreSQL"):
+        database_identity("postgresql+asyncpg://user:secret@db:5432/sgi")
 
 
 def test_restore_rejects_original_database(tmp_path: Path) -> None:
