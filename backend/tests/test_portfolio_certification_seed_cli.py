@@ -83,7 +83,7 @@ def test_cli_output_does_not_expose_password(
 
     assert password not in output
     assert cli.PASSWORD_ENV not in output
-    assert "credential_rotated=true" in output
+    assert "password" not in output.lower()
     provision.assert_awaited_once_with(
         ANY,
         password=password,
