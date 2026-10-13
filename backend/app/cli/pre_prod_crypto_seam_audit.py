@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import timedelta
+from typing import Any
 
 from sqlalchemy import func, select
 
@@ -21,7 +22,7 @@ async def _run(*, tickers: set[str] | None = None) -> dict:
         if tickers is not None
         else None
     )
-    stmt = (
+    stmt: Any = (
         select(
             Asset.id.label("asset_id"),
             Asset.ticker,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from typing import Any
 
 from sqlalchemy import func, select, update
 
@@ -57,7 +58,7 @@ async def _run(*, apply: bool) -> dict:
 
     async with AsyncSessionLocal() as db:
         if tickers:
-            rows = (
+            rows: Any = (
                 await db.execute(
                     select(
                         Asset.id,

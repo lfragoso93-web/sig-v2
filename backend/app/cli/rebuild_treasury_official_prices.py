@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from typing import Any
 
 from sqlalchemy import delete, func, select
 
@@ -17,7 +18,7 @@ _OFFICIAL_SOURCES = ("tesouro_transparente", "brapi_treasury")
 
 async def _main() -> None:
     async with AsyncSessionLocal() as db:
-        rows = await db.execute(
+        rows: Any = await db.execute(
             select(Asset.id).where(
                 Asset.asset_type == AssetType.TESOURO_DIRETO.value,
                 func.coalesce(Asset.provider_status, "") != "NOT_APPLICABLE",

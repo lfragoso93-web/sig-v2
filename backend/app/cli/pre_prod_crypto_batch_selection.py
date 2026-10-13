@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from typing import Any
 
 from sqlalchemy import func, select
 
@@ -37,7 +38,7 @@ def _normalize_after_ticker(value: str | None) -> str | None:
 
 async def _run(limit: int, after_ticker: str | None) -> dict:
     price_count = func.count(AssetPrice.id)
-    stmt = (
+    stmt: Any = (
         select(
             Asset.id,
             Asset.ticker,
