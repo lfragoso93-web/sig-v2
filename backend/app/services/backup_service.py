@@ -69,6 +69,12 @@ def _find_existing_backup_path(backup_filename: str) -> Path | None:
     return None
 
 
+def get_backup_download_path(backup_filename: str) -> Path | None:
+    """Resolve um backup existente sem expor paths fora do diretório confiável."""
+    _ensure_backups_dir()
+    return _find_existing_backup_path(backup_filename)
+
+
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
     """Descompacta o backup fora do event loop."""
 

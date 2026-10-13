@@ -86,13 +86,22 @@ export default function BackupPanel() {
     },
   })
 
-  const downloadBackup = (filename: string) => {
-    const link = document.createElement('a')
-    link.href = `${api.defaults.baseURL}/admin/database/backups/${filename}`
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const downloadBackup = async (filename: string) => {
+    try {
+      const response = await api.get(`/admin/database/backups/${filename}`, {
+        responseType: 'blob',
+      })
+      const objectUrl = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch {
+      setFeedback({ msg: 'Erro ao baixar backup.', isError: true })
+    }
   }
 
   return (

@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
-
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
@@ -12,9 +11,26 @@ from app.services.backup_service import (
     _parse_db_url,
     create_database_backup,
     delete_backup,
+    get_backup_download_path,
     list_backups,
     restore_database_backup,
 )
+
+
+def test_get_backup_download_path_reuses_safe_resolution(tmp_path: Path):
+    backup = tmp_path / "backup_20261013_120000.sql.gz"
+    backup.write_bytes(b"backup")
+
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        assert get_backup_download_path(backup.name) == backup.resolve()
+
+
+def test_get_backup_download_path_rejects_traversal(tmp_path: Path):
+    with (
+        patch("app.services.backup_service.BACKUPS_DIR", tmp_path),
+        pytest.raises(ValueError, match="Invalid backup filename"),
+    ):
+        get_backup_download_path("../backup_20261013_120000.sql.gz")
 
 
 class TestParseDBUrl:

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -428,6 +429,37 @@ async def admin_list_database_backups(
     """
     result = await backup_service.list_backups()
     return result
+
+
+@router.get(
+    "/database/backups/{backup_filename}",
+    response_class=FileResponse,
+    summary="Baixar um backup",
+)
+async def admin_download_database_backup(
+    backup_filename: str,
+    _: User = Depends(require_superadmin),
+):
+    """Baixa um backup existente; restrito a SuperAdmins."""
+    try:
+        backup_path = backup_service.get_backup_download_path(backup_filename)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nome de backup inválido",
+        ) from exc
+
+    if backup_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Backup não encontrado",
+        )
+
+    return FileResponse(
+        path=backup_path,
+        media_type="application/gzip",
+        filename=backup_filename,
+    )
 
 
 @router.post(
