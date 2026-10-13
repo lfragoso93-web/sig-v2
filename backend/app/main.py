@@ -255,13 +255,13 @@ async def ready():
             identity = await resolve_real_data_runtime_identity(session)
             readiness = await build_real_data_readiness_report(session, identity)
             payload = readiness.to_dict()
-        except RealDataRuntimeIdentityError as exc:
+        except RealDataRuntimeIdentityError:
             payload = {
                 "bootstrap_complete": False,
                 "certification": {
                     "status": "runtime_identity_error",
                     "ready_for_real_data": False,
-                    "detail": str(exc),
+                    "detail": "runtime identity validation failed",
                 },
                 "eligible_for_activation": False,
                 "activation_required": False,
