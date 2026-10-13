@@ -27,10 +27,14 @@ def test_sync_postgresql_urls_select_installed_psycopg2_driver() -> None:
     environment_example = (REPOSITORY_ROOT / ".env.example").read_text(
         encoding="utf-8"
     )
+    ci_workflow = (REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert 'DATABASE_URL: str = "postgresql+psycopg2://' in settings_source
     assert "DATABASE_URL:       postgresql+psycopg2://" in compose_source
     assert "DATABASE_URL=postgresql+psycopg2://" in environment_example
+    assert "DATABASE_URL: postgresql+psycopg2://" in ci_workflow
 
 
 def test_entrypoint_postgres_probe_accepts_explicit_sqlalchemy_drivers() -> None:
