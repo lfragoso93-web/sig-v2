@@ -243,13 +243,18 @@ async def test_cash_settlement_reaches_position_state_without_ledger_mutation(
     states = await build_positions_at(db, portfolio.id, date(2026, 1, 3))
 
     state = states["FRAC3"]
+    fractional_cost = Decimal("185.30") * (
+        Decimal("0.10") / Decimal("10.10")
+    )
     assert state.qty == Decimal("10")
-    assert state.cost.quantize(Decimal("0.01")) == Decimal("185.30")
-    assert state.realized_pnl == Decimal("0")
+    assert state.cost == Decimal("185.30") - fractional_cost
+    assert state.realized_pnl == Decimal("0.4000") - fractional_cost
     assert len(state.corporate_action_cash_flows) == 1
     cash_flow = state.corporate_action_cash_flows[0]
     assert cash_flow.source_event_id == "brapi:fraction-e2e"
     assert cash_flow.gross_amount_brl == Decimal("0.4000")
+    assert cash_flow.cost_basis_brl == fractional_cost
+    assert cash_flow.realized_pnl_brl == Decimal("0.4000") - fractional_cost
 
 
 @pytest.mark.asyncio

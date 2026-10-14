@@ -355,7 +355,9 @@ def test_nike34_grouping_cash_settlement_is_realized_and_reduces_cost_basis():
         actions=[action],
     )
 
-    expected_fractional_cost = Decimal("176.45") / Decimal("6")
+    expected_fractional_cost = (
+        Decimal("176.45") * (Decimal("0.2") / Decimal("1.2"))
+    )
     assert result.quantity == Decimal("1")
     assert result.total_cost == Decimal("176.45") - expected_fractional_cost
     assert result.realized_pnl == Decimal("16.0") - expected_fractional_cost

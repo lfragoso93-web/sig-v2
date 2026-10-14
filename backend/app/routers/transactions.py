@@ -12,10 +12,14 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.schemas.transaction import (
+    CorporateLifecycleEventOut,
     PagedTransactions,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
+)
+from app.services.portfolio_asset_corporate_lifecycle_service import (
+    load_portfolio_asset_corporate_lifecycle,
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
@@ -161,6 +165,24 @@ async def list_transactions(
         operation=operation,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+@router.get(
+    "/{portfolio_id}/assets/{ticker}/corporate-events",
+    response_model=list[CorporateLifecycleEventOut],
+)
+async def list_asset_corporate_lifecycle(
+    portfolio_id: int,
+    ticker: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_portfolio(portfolio_id, current_user, db)
+    return await load_portfolio_asset_corporate_lifecycle(
+        db,
+        portfolio_id=portfolio_id,
+        ticker=ticker,
     )
 
 

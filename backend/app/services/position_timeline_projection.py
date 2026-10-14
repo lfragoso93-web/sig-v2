@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from typing import cast
 
 from app.services.corporate_action_engine import (
     CorporateActionKind,
@@ -178,7 +179,7 @@ def project_position_timeline(
                     total_cost_original_currency = Decimal(0)
                 continue
 
-        action = item
+        action = cast(NormalizedCorporateAction, item)
         if action.kind == CorporateActionKind.SUBSCRIPTION:
             if quantity > 0:
                 subscriptions.append(action.source_event_id)

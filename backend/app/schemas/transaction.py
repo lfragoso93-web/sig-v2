@@ -1,4 +1,5 @@
 from pydantic import BaseModel, field_validator
+from decimal import Decimal
 from typing import Optional, List
 from datetime import date as DateType
 
@@ -111,3 +112,18 @@ class PagedTransactions(BaseModel):
     page:      int
     page_size: int
     pages:     int
+
+
+class CorporateLifecycleEventOut(BaseModel):
+    source_event_id: str
+    ticker: str
+    event_date: DateType
+    event_type: str
+    quantity_factor: Decimal
+    fractional_quantity: Optional[Decimal] = None
+    unit_settlement_price_brl: Optional[Decimal] = None
+    gross_amount_brl: Optional[Decimal] = None
+    cost_basis_brl: Optional[Decimal] = None
+    realized_pnl_brl: Optional[Decimal] = None
+    cash_treatment: Optional[str] = None
+    message: Optional[str] = None
