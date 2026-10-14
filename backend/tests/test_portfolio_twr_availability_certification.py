@@ -24,7 +24,8 @@ def test_twr_availability_gate_does_not_materialize_or_call_provider() -> None:
     assert "class_twr_availability" in source
     assert "load_portfolio_synthetic_certification_fixture" in source
     assert "rf_daily_twr=true" in source
-    assert "issue149=closed" in source
+    assert "issue149=open_blocked_missing_eligibility" in source
+    assert "issue149=closed" not in source
     for forbidden in (
         "AsyncSession",
         "db.",

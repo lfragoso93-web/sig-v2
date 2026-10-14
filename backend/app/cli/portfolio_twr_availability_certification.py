@@ -43,7 +43,7 @@ def main() -> None:
         ),
         "scope=availability-only",
         "rf_daily_twr=true",
-        "issue149=closed",
+        "issue149=open_blocked_missing_eligibility",
         f"status={'PASS' if not failures else 'FAIL'}",
     )
     if failures:
