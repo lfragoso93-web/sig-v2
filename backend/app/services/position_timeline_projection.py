@@ -67,6 +67,8 @@ class CanonicalCorporateActionCashFlow:
     unit_settlement_price_brl: Decimal
     gross_amount_brl: Decimal
     cash_treatment: str
+    cost_basis_brl: Decimal = Decimal(0)
+    realized_pnl_brl: Decimal = Decimal(0)
 
 
 @dataclass(frozen=True)
@@ -224,6 +226,19 @@ def project_position_timeline(
                     )
 
                 quantity_after_settlement = whole_quantity
+                fractional_cost_ratio = (
+                    fractional_quantity / projected_quantity
+                )
+                fractional_cost_basis = total_cost * fractional_cost_ratio
+                fractional_cost_basis_original = (
+                    total_cost_original_currency * fractional_cost_ratio
+                )
+                gross_amount = fractional_quantity * settlement_price
+                fractional_realized_pnl = gross_amount - fractional_cost_basis
+
+                total_cost -= fractional_cost_basis
+                total_cost_original_currency -= fractional_cost_basis_original
+                realized_pnl += fractional_realized_pnl
 
                 corporate_action_cash_flows.append(
                     CanonicalCorporateActionCashFlow(
@@ -231,10 +246,10 @@ def project_position_timeline(
                         event_date=action.event_date,
                         fractional_quantity=fractional_quantity,
                         unit_settlement_price_brl=settlement_price,
-                        gross_amount_brl=(
-                            fractional_quantity * settlement_price
-                        ),
+                        gross_amount_brl=gross_amount,
                         cash_treatment=cash_treatment,
+                        cost_basis_brl=fractional_cost_basis,
+                        realized_pnl_brl=fractional_realized_pnl,
                     )
                 )
 

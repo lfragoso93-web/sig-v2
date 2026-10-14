@@ -116,6 +116,40 @@ async def test_realized_reader_preserves_closed_position_result():
 
 
 @pytest.mark.asyncio
+async def test_realized_reader_includes_corporate_action_fraction_result():
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars().all.return_value = [
+        _tx(
+            ticker="NIKE34",
+            operation=OperationType.buy,
+            day=1,
+            quantity="6",
+            price="29.40833333333333333333333333",
+            asset_type="BDR",
+        )
+    ]
+    db.execute.return_value = result
+    projection = SimpleNamespace(realized_pnl=Decimal("-13.40833333333333333333333333"))
+
+    with (
+        patch(
+            "app.services.realized_pnl_projection_reader."
+            "load_global_corporate_actions_by_ticker",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "app.services.realized_pnl_projection_reader."
+            "project_transaction_timelines",
+            return_value={"NIKE34": (projection, "BDR", False)},
+        ),
+    ):
+        realized = await load_realized_pnl_by_ticker(db, 7)
+
+    assert realized == {"NIKE34": float(projection.realized_pnl)}
+
+
+@pytest.mark.asyncio
 async def test_realized_reader_ignores_fixed_income_transactions():
     db = AsyncMock()
     result = MagicMock()

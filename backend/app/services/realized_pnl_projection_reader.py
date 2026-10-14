@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,12 +47,7 @@ async def load_realized_pnl_by_ticker(
         target_date=datetime.now(UTC).date(),
     )
     return {
-        ticker: float(
-            sum(
-                (item.realized_pnl_brl for item in projection.realized_disposals),
-                start=Decimal(0),
-            )
-        )
+        ticker: float(projection.realized_pnl)
         for ticker, (projection, _, _) in timelines.items()
     }
 

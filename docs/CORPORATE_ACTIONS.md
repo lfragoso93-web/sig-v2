@@ -47,6 +47,21 @@ Exemplos:
 O custo total é preservado e o preço médio é derivado novamente. Subscrições
 criam direitos, mas nunca aumentam quantidade automaticamente.
 
+### Liquidação de frações
+
+Quando um evento elegível produz quantidade fracionária e a evidência de
+reconciliação declara `CASH_SETTLEMENT`, o motor:
+
+- mantém somente a quantidade inteira na posição;
+- aloca à fração a parcela proporcional do custo da posição projetada;
+- registra separadamente o caixa bruto recebido e o custo alocado;
+- reconhece `caixa bruto - custo alocado` no resultado realizado financeiro;
+- não cria uma `Transaction` artificial nem classifica automaticamente o fluxo
+  como alienação fiscal.
+
+Quantidade fracionária, preço efetivo de liquidação e tratamento de caixa devem
+vir de evidência operacional. Ausência desses dados mantém o evento fail-closed.
+
 ## Idempotência e auditoria
 
 A identidade do evento inclui fonte, ticker, tipo, data, fator e identificadores
