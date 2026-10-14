@@ -34,7 +34,6 @@ from app.services.twr_service import (
 
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
-_MONEY = Decimal("0.01")
 _DIAGNOSTIC_PREFIXES = (
     "corporate_action_",
     "fixed_income_",
@@ -82,6 +81,7 @@ async def backfill_canonical_snapshots_with_returns(
     start = transactions[0].date
 
     previous_value = _ZERO
+    previous_corporate_action_cash_flow_total = _ZERO
     accumulated_return = _ZERO
     count = 0
     cursor = start
@@ -118,14 +118,24 @@ async def backfill_canonical_snapshots_with_returns(
                 )
                 cursor += timedelta(days=1)
                 continue
-            realized_pnl, net_external_flow = calculate_transaction_components(
+            _, net_external_flow = calculate_transaction_components(
                 transactions,
                 cursor,
             )
-            totals["realized_pnl"] = realized_pnl
-            totals["total_pnl"] = (
-                realized_pnl + decimal_value(totals["unrealized_pnl"])
-            ).quantize(_MONEY)
+            corporate_action_cash_flow_total = decimal_value(
+                totals.get("corporate_action_cash_flow_total", _ZERO)
+            )
+            corporate_action_cash_flow_day = (
+                corporate_action_cash_flow_total
+                - previous_corporate_action_cash_flow_total
+            )
+            if corporate_action_cash_flow_day < _ZERO:
+                raise RuntimeError(
+                    "fluxo acumulado de evento corporativo regrediu: "
+                    f"portfolio={portfolio_id} date={cursor} "
+                    f"previous={previous_corporate_action_cash_flow_total} "
+                    f"current={corporate_action_cash_flow_total}"
+                )
 
             dividends_day = dividends_day_map.get(cursor, _ZERO)
             dividends_accumulated = accumulated_dividends_at(
@@ -137,7 +147,9 @@ async def backfill_canonical_snapshots_with_returns(
                 previous_value,
                 current_value,
                 net_external_flow=net_external_flow,
-                dividends_day=dividends_day,
+                dividends_day=(
+                    dividends_day + corporate_action_cash_flow_day
+                ),
             )
             accumulated_return = append_compounded_return_pct(
                 accumulated_return,
@@ -167,6 +179,9 @@ async def backfill_canonical_snapshots_with_returns(
             }
             await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
             previous_value = current_value
+            previous_corporate_action_cash_flow_total = (
+                corporate_action_cash_flow_total
+            )
             count += 1
             if commit and count % 30 == 0:
                 await db.commit()

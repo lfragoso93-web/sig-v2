@@ -56,6 +56,8 @@ reconciliação declara `CASH_SETTLEMENT`, o motor:
 - aloca à fração a parcela proporcional do custo da posição projetada;
 - registra separadamente o caixa bruto recebido e o custo alocado;
 - reconhece `caixa bruto - custo alocado` no resultado realizado financeiro;
+- preserva esse realizado nos snapshots e trata o crédito de caixa como
+  distribuição no TWR, sem convertê-lo em aporte ou retirada;
 - não cria uma `Transaction` artificial nem classifica automaticamente o fluxo
   como alienação fiscal.
 
