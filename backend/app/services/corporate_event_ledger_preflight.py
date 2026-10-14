@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import func, select
@@ -45,6 +45,14 @@ class CorporateEventLedgerPreflight:
     def projected_net_quantity(self) -> Decimal:
         return self.ledger.net_quantity * self.quantity_factor
 
+    @property
+    def projected_whole_quantity(self) -> Decimal:
+        return self.projected_net_quantity.to_integral_value(rounding=ROUND_FLOOR)
+
+    @property
+    def projected_fractional_quantity(self) -> Decimal:
+        return self.projected_net_quantity - self.projected_whole_quantity
+
 
 @dataclass(frozen=True)
 class CorporateEventLedgerPreflightReport:
@@ -84,6 +92,12 @@ class CorporateEventLedgerPreflightReport:
             "net_quantity": str(ledger.net_quantity),
             "projected_net_quantity": str(
                 self.preflight.projected_net_quantity
+            ),
+            "projected_whole_quantity": str(
+                self.preflight.projected_whole_quantity
+            ),
+            "projected_fractional_quantity": str(
+                self.preflight.projected_fractional_quantity
             ),
         }
 
@@ -191,7 +205,7 @@ async def build_corporate_event_ledger_preflight_report(
         portfolio_id=portfolio_id,
     )
     return CorporateEventLedgerPreflightReport(
-        schema_version="corporate-event-ledger-preflight.v1",
+        schema_version="corporate-event-ledger-preflight.v2",
         dry_run=True,
         database_writes_executed=0,
         ready_for_execution=False,
