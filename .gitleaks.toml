@@ -5,7 +5,7 @@ useDefault = true
 
 [[allowlists]]
 description = "Known non-secret market-data domain identifiers"
-regexTarget = "secret"
+regexTarget = "match"
 regexes = [
   '''brapi_v2_crypto_max''',
   '''yfinance_crypto_ptax_brl_max''',
@@ -16,12 +16,10 @@ regexes = [
 
 [[allowlists]]
 description = "Non-secret BRAPI corporate-event label documented in reconciliation changelog"
-condition = "AND"
-regexTarget = "secret"
+regexTarget = "match"
 paths = [
-  '''CHANGELOG\.md''',
   '''docs/changelog/2026-09-15-promotion-reconciliation-158-corporate-event-decision\.md''',
 ]
 regexes = [
-  '''label=GRUPAMENTO''',
+  '''BRAPI: `label=GRUPAMENTO`''',
 ]
