@@ -7,8 +7,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.core.clock import SYSTEM_CLOCK, Clock
 from app.models.transaction import Transaction
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
@@ -16,16 +18,24 @@ from app.services.snapshot_position_projection import (
     project_transaction_timelines,
 )
 
+READ_PORTFOLIO_CORPORATE_LIFECYCLE = "portfolio:corporate-lifecycle:read"
+
 
 async def load_portfolio_asset_corporate_lifecycle(
     db: AsyncSession,
     *,
-    portfolio_id: int,
+    access: PortfolioAccessContext,
     ticker: str,
     clock: Clock = SYSTEM_CLOCK,
 ) -> list[dict[str, Any]]:
     """Retorna apenas eventos reconciliados que afetaram a posição."""
 
+    await get_accessible_portfolio(
+        db,
+        access,
+        required_permission=READ_PORTFOLIO_CORPORATE_LIFECYCLE,
+    )
+    portfolio_id = access.portfolio_id
     normalized_ticker = ticker.strip().upper()
     if not normalized_ticker:
         raise ValueError("ticker e obrigatorio")

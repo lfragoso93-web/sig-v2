@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
@@ -19,6 +20,7 @@ from app.schemas.transaction import (
     TransactionUpdate,
 )
 from app.services.portfolio_asset_corporate_lifecycle_service import (
+    READ_PORTFOLIO_CORPORATE_LIFECYCLE,
     load_portfolio_asset_corporate_lifecycle,
 )
 from app.services.crypto_transaction_eligibility_service import (
@@ -178,12 +180,19 @@ async def list_asset_corporate_lifecycle(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
-    return await load_portfolio_asset_corporate_lifecycle(
-        db,
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
         portfolio_id=portfolio_id,
-        ticker=ticker,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
     )
+    try:
+        return await load_portfolio_asset_corporate_lifecycle(
+            db,
+            access=access,
+            ticker=ticker,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post(
