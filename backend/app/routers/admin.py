@@ -1,4 +1,12 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -43,6 +51,32 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
             detail="Acesso restrito a SuperAdmins",
         )
     return current_user
+
+
+async def _record_database_backup_action(
+    db: AsyncSession,
+    current_user: User,
+    request: Request,
+    *,
+    action: str,
+    audit_status: str,
+    new_values: dict | None = None,
+    error_message: str | None = None,
+):
+    user_agent = request.headers.get("user-agent")
+    audit_log = await AuditLogService.log_action(
+        db=db,
+        user_id=current_user.id,
+        action=action,
+        resource_type="DatabaseBackup",
+        new_values=new_values,
+        ip_address=request.client.host if request.client else None,
+        user_agent=sanitize_log_value(user_agent) if user_agent else None,
+        status=audit_status,
+        error_message=error_message,
+    )
+    await db.commit()
+    return audit_log
 
 
 # ── Gestão de Usuários ────────────────────────────────────────────────────────────────────────────────
@@ -391,7 +425,9 @@ async def _run_database_backup_bg(db_url: str) -> None:
 )
 async def admin_create_database_backup(
     background_tasks: BackgroundTasks,
-    _: User = Depends(require_superadmin),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Cria um backup completo do banco de dados em background usando pg_dump.
@@ -407,6 +443,14 @@ async def admin_create_database_backup(
         )
 
     logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
+    await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="BACKUP",
+        audit_status="SUCCESS",
+        new_values={"request_status": "accepted"},
+    )
     background_tasks.add_task(_run_database_backup_bg, db_url)
 
     return {
@@ -470,7 +514,9 @@ async def admin_download_database_backup(
 )
 async def admin_restore_database(
     data: AdminRestoreRequest,
+    request: Request,
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
     """
@@ -506,6 +552,17 @@ async def admin_restore_database(
             detail=f"Backup não encontrado. Backups disponíveis: {valid_files}"
         )
 
+    await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="RESTORE",
+        audit_status="SUCCESS",
+        new_values={
+            "backup_filename": sanitize_log_value(backup_filename),
+            "request_status": "accepted",
+        },
+    )
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
         sanitize_log_value(backup_filename)
@@ -526,7 +583,9 @@ async def admin_restore_database(
 )
 async def admin_delete_database_backup(
     backup_filename: str,
-    _: User = Depends(require_superadmin),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Deleta um arquivo de backup.
@@ -536,13 +595,34 @@ async def admin_delete_database_backup(
 
     Restrito a SuperAdmins.
     """
+    audit_log = await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="DELETE",
+        audit_status="REQUESTED",
+        new_values={
+            "backup_filename": sanitize_log_value(backup_filename),
+            "operation_status": "requested",
+        },
+    )
     result = await backup_service.delete_backup(backup_filename)
 
     if not result["success"]:
+        audit_log.status = "FAILURE"
+        audit_log.error_message = "Backup deletion failed"
+        await db.commit()
         raise HTTPException(
             status_code=404,
-            detail=result["error"]
+            detail="Não foi possível remover o backup",
         )
+
+    audit_log.status = "SUCCESS"
+    audit_log.new_values = {
+        "backup_filename": sanitize_log_value(backup_filename),
+        "operation_status": "completed",
+    }
+    await db.commit()
 
     return {
         "message": f"Backup {backup_filename} deletado com sucesso",
