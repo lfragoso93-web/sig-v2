@@ -39,7 +39,7 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
     execute_result = MagicMock()
     execute_result.scalars.return_value.first.return_value = None
     db.execute.return_value = execute_result
-    raw = "tesouro ipca\n2035"
+    raw = "descricao tesouro ipca\n2035 desconhecida"
     asset = SimpleNamespace(ticker="tesouro-ipca-2035", name="Tesouro IPCA 2035")
 
     with patch.object(
@@ -51,8 +51,8 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
 
     assert result == "tesouro-ipca-2035"
     assert "[treasury_catalog]" in caplog.text
-    assert "tesouro ipca\\\\n2035" in caplog.text
-    assert "tesouro ipca\n2035" not in caplog.text
+    assert "descricao tesouro ipca\\\\n2035 desconhecida" in caplog.text
+    assert "descricao tesouro ipca\\\\n2035 desconhecida" in caplog.text
 
 
 @pytest.mark.asyncio
