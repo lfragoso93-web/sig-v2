@@ -147,6 +147,80 @@ async def test_daily_close_skips_work_when_distributed_lock_is_refused(
 
 
 @pytest.mark.asyncio
+async def test_intraday_quotes_skip_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "update_quotes_intraday",
+            "period": "intraday",
+            "ttl_seconds": 7200,
+        }
+        yield False
+
+    refresh = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.quote_cache_invalidation_service.refresh_quotes_and_invalidate",
+        refresh,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("update_quotes_intraday_full_hour")
+        assert job is not None
+        await job.func()
+        refresh.assert_not_awaited()
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_treasury_daily_close_skips_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "persist_treasury_daily_close",
+            "period": "daily",
+            "ttl_seconds": 7200,
+        }
+        yield False
+
+    history = AsyncMock()
+    latest = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.treasury_price_history_service.import_treasury_price_history",
+        history,
+    )
+    monkeypatch.setattr(
+        "app.services.treasury_price_history_service.update_treasury_latest_prices",
+        latest,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("persist_treasury_daily_close")
+        assert job is not None
+        await job.func()
+        history.assert_not_awaited()
+        latest.assert_not_awaited()
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
 async def test_snapshot_maintenance_skips_work_when_distributed_lock_is_refused(
     monkeypatch,
 ) -> None:
