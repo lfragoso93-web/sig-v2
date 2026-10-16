@@ -100,7 +100,10 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
     try:
         items = await fetch_treasury_catalog()
     except Exception as exc:
-        logger.error("[treasury_seed] falha ao buscar catálogo Tesouro: %s", exc)
+        logger.error(
+            "[treasury_seed] falha ao buscar catálogo Tesouro: %s",
+            sanitize_log_value(exc),
+        )
         result.errors += 1
         return result
 
@@ -147,7 +150,11 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
             else:
                 result.skipped += 1
         except Exception as exc:
-            logger.error("[treasury_seed] erro ao salvar %s: %s", symbol, exc)
+            logger.error(
+                "[treasury_seed] erro ao salvar %s: %s",
+                sanitize_log_value(symbol),
+                sanitize_log_value(exc),
+            )
             result.errors += 1
 
     await db.flush()
