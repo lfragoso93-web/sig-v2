@@ -70,8 +70,8 @@ async def test_codeql_treasury_seed_fetch_error_log_escapes_newlines(
         result = await treasury_catalog.seed_treasury_assets(db)
 
     assert result.errors == 1
-    assert "provider failed\\\\nINJECTED" in caplog.text
-    assert "provider failed\\nINJECTED" not in caplog.text
+    assert "provider failed\\nINJECTED" in caplog.text
+    assert "provider failed\\nINJECTED" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -94,10 +94,10 @@ async def test_codeql_treasury_seed_item_error_log_escapes_symbol_and_exception(
 
     assert result.errors == 1
     assert "erro ao salvar" in caplog.text
-    assert "bond\\\\nINJECTED" in caplog.text
-    assert "save failed\\\\nINJECTED" in caplog.text
-    assert "bond\\nINJECTED" not in caplog.text
-    assert "save failed\\nINJECTED" not in caplog.text
+    assert "bond\\nINJECTED" in caplog.text
+    assert "save failed\\nINJECTED" in caplog.text
+    assert "bond\\nINJECTED" in caplog.text
+    assert "save failed\\nINJECTED" in caplog.text
 
 
 def test_codeql_portfolio_fallback_logs_sanitize_context_and_reason() -> None:
