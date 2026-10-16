@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -14,7 +14,9 @@ async def test_codeql_treasury_catalog_no_match_log_escapes_newlines(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     db = AsyncMock()
-    db.execute.return_value.scalars.return_value.first.return_value = None
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.first.return_value = None
+    db.execute.return_value = execute_result
     raw = "titulo inexistente\\nINJECTED"
 
     with patch.object(
@@ -34,7 +36,9 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
 ) -> None:
     caplog.set_level("INFO")
     db = AsyncMock()
-    db.execute.return_value.scalars.return_value.first.return_value = None
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.first.return_value = None
+    db.execute.return_value = execute_result
     raw = "tesouro ipca\\n2035"
     asset = SimpleNamespace(ticker="tesouro-ipca-2035", name="Tesouro IPCA 2035")
 
