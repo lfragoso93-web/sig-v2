@@ -1,6 +1,15 @@
 # Gate de readiness para testes assistidos
 
-Atualizado em 06/10/2026.
+Atualizado em 16/10/2026.
+
+## Rebaseline do checkout — 16/10/2026
+
+O evento de promoção registrado abaixo pertence à identidade runtime
+`3ab054f61e34f440dddf93c170259958243d58af`. O código atual de
+`stable-15jun` está no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`; a
+identidade e a prontidão do runtime atualmente implantado não foram verificadas
+nesta atualização. Não inferir `/ready=200` para o SHA atual nem implantar uma
+identidade diferente sem um ciclo novo da #384.
 
 ## Objetivo
 
@@ -21,6 +30,15 @@ como `status=GO`: a promoção usou evidência própria
 
 - Docker: `docker compose run --rm backend python -m app.cli.user_test_readiness`
 - SuperAdmin: `GET /api/v1/admin/bootstrap/user-test-readiness`
+
+### Imagem Docker usada nos testes
+
+Validacoes de runtime e testes acompanhados devem usar a imagem que ja esta
+ativa no Docker, identificando tag/digest, `APP_BRANCH`, `APP_COMMIT_SHA`,
+revision Alembic e resultado de `/health` e `/ready` antes/depois. Nao reconstruir
+nem substituir a imagem ativa apenas para executar validacoes. Testes unitarios
+locais podem verificar mudancas de codigo, mas nao substituem evidencias do
+runtime ativo; um SHA ou schema diferente exige novo ciclo de deploy e validacao.
 
 ## Evidencia registrada
 

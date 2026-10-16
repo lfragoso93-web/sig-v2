@@ -1,6 +1,17 @@
 # Governança de Issues — SGI v2
 
-Atualizado em 06/10/2026.
+Atualizado em 16/10/2026.
+
+## Delta de política de provedores — B3
+
+Por decisão do usuário em 16/10/2026, B3 é a fonte oficial prioritária para
+proventos e eventos corporativos de ativos listados quando houver cobertura
+estruturada. BRAPI pode complementar apenas fatos não publicados pela B3; Yahoo
+é fallback explícito somente quando não houver cobertura B3 do emissor. A
+mudança gera nova lacuna operacional NIKE34: carregar dividendos B3 recentes no
+escopo do ativo e manter o grupamento de 2026 pendente até evidência da data
+efetiva e resolução da fração. Issues #226/#216/#158 registram a estratégia
+anterior e não autorizam uma carga global sob esta nova política.
 
 ## Objetivo
 
@@ -15,6 +26,10 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
    dados reais; a promoção vigente certifica apenas a identidade runtime exata;
 5. #344 foi concluída com todas as filhas #345–#350 fechadas e seus contratos
    promovidos para `main`.
+6. PR #425 sincronizou `main` para `stable-15jun`; as árvores estão iguais no
+   SHA `8e4e243416014024964031793dbb7b15bcd3c39d`.
+7. #365 e #364 foram fechadas em 08/10; as atualizações de dependências
+   priorizadas também foram integradas.
 
 ## Classificação atual
 
@@ -34,7 +49,7 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 - #344 — Epic de enforcement concluída;
 - #345–#350 — filhas concluídas, com gates e documentação integrados;
-- #365 deve preceder migration estrutural ampla de #364.
+- #365 e #364 — fechadas em 08/10/2026; não são pendências correntes.
 
 ### Bugs acompanhados no primeiro GO
 
@@ -46,8 +61,16 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ### Dívidas financeiras/estruturais
 
 - #149 — TWR diário dedicado restante de Tesouro/RF; não blocker automático se indisponibilidade permanecer explícita;
-- #83 — Backup/Restore administrativo;
+- #83 — Backup/Restore administrativo; reautenticação, auditoria, status dos
+  jobs, download autenticado e retenção já estão no código. Falta validar o
+  ciclo de backup e restore em banco isolado.
 - #272 — contração física residual de `corporate_events` e aliases relacionados.
+
+### Segurança
+
+- #408 — sanitização integrada pela PR #413 e testes complementares pela
+  #419; CI aprovada. A última execução do deep scan precede essas correções,
+  então a confirmação CodeQL permanece pendente e a Issue segue aberta.
 
 ### Evolução de produto
 
@@ -82,11 +105,13 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ## Estado da sanitização
 
 O rebaseline pós-#362 retirou OCI do caminho crítico e preservou #284 como
-backlog futuro. GOV-07 não deve ser executado.
+backlog futuro. GOV-07 continua pendente: terminar a revisão das Issues abertas
+e correlacionar o estado atual com código, testes e documentação antes de fechar
+#293.
 
 Qualquer saneamento futuro deve localizar Issues com dependências superadas e
 fechar somente com evidência ou Issue canônica substituta.
 
-#293 permanece aberta até essa segunda passada terminar.
+#293 permanece aberta até essa correlação terminar.
 
 Baseline documental para iniciar GOV-06: `959d3edf051b37f18089936f8f142fd4d2958d43`.

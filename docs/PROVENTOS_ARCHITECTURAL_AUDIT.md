@@ -25,6 +25,16 @@ A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS
 
 A implementação usa uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas da persistência global e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
 
+## Autoridade oficial B3 (16/10/2026)
+
+Para acoes, BDRs, ETFs nacionais e FIIs, a B3 eh a fonte oficial prioritaria de
+proventos e eventos corporativos. BRAPI/Yahoo nao podem substituir ou sobrescrever
+fatos oficiais; qualquer contingencia deve permanecer identificada e separada.
+O adapter estruturado da B3 foi integrado localmente ao coletor do seed e possui
+testes de contrato. A execucao contra o banco permanece condicionada ao SHA
+validado, backup, dry-run escopado e janela registrada; esta integracao nao
+autoriza carga global.
+
 ## Arquitetura vigente
 
 | Camada | Responsabilidade | Componentes principais |

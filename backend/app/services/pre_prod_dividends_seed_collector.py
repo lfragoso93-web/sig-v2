@@ -98,17 +98,27 @@ def _has_authoritative_brapi_coverage(
     return not str(empty_reason or "").startswith("provider_no_coverage")
 
 
+def _has_authoritative_b3_coverage(
+    source: str,
+    normalized_rows: tuple[ParsedDividendEvent, ...],
+    empty_reason: str | None,
+) -> bool:
+    if source != "b3":
+        return False
+    if normalized_rows:
+        return True
+    return not str(empty_reason or "").startswith("provider_no_coverage")
+
+
 async def collect_dividends_strict(
     *,
     assets: Iterable[StrictDividendAsset],
     providers: tuple[StrictDividendProvider, ...],
 ) -> tuple[StrictDividendAssetCollection, ...]:
-    """Coleta ativos e fontes em ordem, sem sessão ou concorrência.
+    """Collect assets and sources sequentially without database access.
 
-    Qualquer falha de provedor ou linha inválida interrompe o estágio. Uma fonte
-    sem eventos só é aceita quando declara ``empty_reason``. BRAPI é
-    autoritativa quando possui cobertura; Yahoo/yfinance só pode atuar como
-    fallback de ausência real de cobertura.
+    B3 is authoritative for listed assets; BRAPI applies to asset classes
+    without a B3 source. Yahoo is allowed only after explicit source absence.
     """
 
     if not providers:
@@ -118,7 +128,7 @@ async def collect_dividends_strict(
     for asset in assets:
         source_collections: list[StrictDividendSourceCollection] = []
         seen_sources: set[str] = set()
-        brapi_declared_no_coverage = False
+        b3_declared_no_coverage = False
 
         for provider in providers:
             try:
@@ -136,7 +146,26 @@ async def collect_dividends_strict(
                 raise StrictDividendCollectionError(
                     f"{asset.ticker}: fonte duplicada {source!r}"
                 )
-            if source == "yfinance_history" and not brapi_declared_no_coverage:
+            b3_listed = asset.asset_type in {"ACAO", "BDR", "ETF_NACIONAL", "FII"}
+            if source == "brapi" and b3_listed:
+                source_collections.append(
+                    StrictDividendSourceCollection(
+                        source=source,
+                        raw_rows=0,
+                        normalized_rows=(),
+                        rejected_rows=0,
+                        empty_reason="b3_authoritative_source_required",
+                    )
+                )
+                seen_sources.add(source)
+                continue
+            if source == "yfinance_history" and b3_listed:
+                raise StrictDividendCollectionError(
+                    f"{asset.ticker}: Yahoo nao pode substituir a fonte oficial B3"
+                )
+            if source == "yfinance_history" and not (
+                b3_declared_no_coverage
+            ):
                 raise StrictDividendCollectionError(
                     f"{asset.ticker}: Yahoo só pode atuar como fallback de ausência BRAPI"
                 )
@@ -165,14 +194,18 @@ async def collect_dividends_strict(
                     empty_reason=response.empty_reason,
                 )
             )
-            if _has_authoritative_brapi_coverage(
+            if _has_authoritative_b3_coverage(
                 source,
                 tuple(normalized),
                 response.empty_reason,
             ):
                 break
-            if source == "brapi":
-                brapi_declared_no_coverage = True
+            if source == "b3":
+                b3_declared_no_coverage = True
+                if b3_listed:
+                    # Absence of issuer coverage is not permission to substitute
+                    # a secondary provider for a listed B3 instrument.
+                    break
 
         collections.append(
             StrictDividendAssetCollection(

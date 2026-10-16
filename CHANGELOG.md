@@ -4,6 +4,33 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 16/10/2026 - B3 como fonte prioritária para proventos e eventos
+
+- alinhada a política local para usar B3 como autoridade de ativos listados,
+  com BRAPI complementar e Yahoo como fallback explícito;
+- adapter Listed Companies cobre proventos e eventos B3 para ações/BDRs;
+- `effective_date` passa a aceitar nulo para eventos sem sessão efetiva
+  comprovada; `lastDatePrior` permanece evidência de direito, não data efetiva;
+- a lacuna NIKE34 fica delimitada a carga de dividendos B3 por ativo e análise
+  fail-closed do grupamento/fração antes de qualquer projeção.
+
+### 16/10/2026 - rebaseline de segurança, backup administrativo e continuidade
+
+- PR #425 sincronizou `main` com `stable-15jun`; a árvore atual comum está no
+  SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
+- PR #413 integrou a sanitização dos logs e #419 acrescentou regressões; CI
+  passou, mas a confirmação CodeQL pós-correção permanece pendente;
+- PR #418 completou o hardening administrativo da #83: reautenticação,
+  AuditLog, status persistido, download autenticado e retenção configurável;
+- PR #412 publicou a resolução explícita de frações pendentes de eventos
+  corporativos; caixa só é projetado quando a evidência de liquidação está
+  presente, mantendo a #370 fail-closed para KLBN11;
+- Issues #408, #83 e #293 foram rebaselined com os resíduos e gates atuais;
+- README, ROADMAP, arquitetura, readiness, continuidade, governança e status
+  de eventos corporativos foram atualizados;
+- a identidade certificada em 06/10/2026 continua histórica; runtime do SHA
+  atual não foi consultado nem recertificado nesta atualização.
+
 ### 11/10/2026 - #149 auditoria oficial de cupons do Tesouro
 
 - o dataset oficial `resgates-do-tesouro-direto` foi identificado como fonte

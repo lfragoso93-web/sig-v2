@@ -89,8 +89,8 @@ Tabela canônica: `asset_dividends`.
 
 - direitos pertencem ao ativo e são projetados para carteira sob demanda;
 - nenhuma materialização por carteira;
-- BRAPI é authoritative quando possui cobertura válida;
-- Yahoo é fallback de cobertura, não concorrente do mesmo evento;
+- B3 eh a fonte oficial prioritaria para proventos de ativos listados na B3;
+- BRAPI/Yahoo ficam limitadas a fallback expl?cito, sem misturar fatos de fontes;
 - valores usam normalização canônica/`Decimal` compatível com `Numeric(18, 8)`.
 
 A certificação assistida já comprovou seed `portfolio-scoped` e idempotência. O gate #226 aceitou essa estratégia como suficiente para a promoção controlada; global controlado só deve ocorrer se #216/#158 identificarem necessidade material nova.
@@ -193,8 +193,9 @@ Não deve:
 | Tesouro | fonte oficial | contrato dedicado | catálogo/preços |
 | Benchmarks | fontes oficiais | fallback governado | séries/taxas |
 | Câmbio | fonte canônica vigente | fallback governado | FX |
-| Proventos | BRAPI | Yahoo fallback-only | `asset_dividends` |
-| Eventos corporativos | provider canônico | fallback explícito | `corporate_events` |
+| Proventos B3 | B3 | BRAPI/Yahoo como fallback explicito e separado | `asset_dividends` |
+| Proventos internacionais | fonte configurada por classe | fallback governado | `asset_dividends` |
+| Eventos corporativos B3 | B3 | fallback expl?cito e separado | `corporate_events` |
 | Transações | entrada do usuário | resolução por catálogo | `transactions` |
 | Posições | cálculo interno | — | derivados |
 | Snapshots/TWR | cálculo interno | — | snapshots |

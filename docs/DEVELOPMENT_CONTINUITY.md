@@ -1,6 +1,24 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 06/10/2026.
+> Documento obrigatório para retomar desenvolvimento. Atualizado em 16/10/2026.
+
+## Rebaseline de 16/10/2026
+
+- `stable-15jun` está no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
+  `main` e `stable-15jun` têm a mesma árvore após a PR #425.
+- A correção de log injection está publicada em stable (#413); a
+  cobertura complementar foi integrada pela #419 com CI aprovada. Falta uma
+  execução CodeQL posterior às correções para confirmar os findings da #408.
+- A #83 já recebeu download autenticado, reautenticação, trilha de auditoria,
+  status de operações e retenção. Falta comprovar backup → restore isolado →
+  integridade; nenhum restore real deve ser executado.
+- #365 e #364 foram fechadas em 08/10; a hygiene de dependências prioritizada
+  foi integrada. O próximo mapa é #408 → #83 → GOV-07/#293 → uma entrega de
+  produto por vez.
+- A promoção #384 citada abaixo pertence ao SHA histórico
+  `3ab054f61e34f440dddf93c170259958243d58af`. O runtime atual não foi
+  verificado; qualquer mudança de identidade exige recertificação antes de
+  novo deploy.
 
 ## Baseline atual
 
@@ -48,17 +66,14 @@ autorização real atual é separada e vem exclusivamente do evento persistido d
 ## Mapa vigente pós-promoção
 
 ```text
-governança pós-#362
-  -> baseline local do HEAD
-  -> #344 Architecture Enforcement (concluída)
-  -> hygiene/upgrades Dependabot priorizados
-  -> nova baseline técnica
-  -> #365
-  -> #364
+confirmar CodeQL da #408
+  -> validar ciclo isolado residual da #83
+  -> concluir GOV-07 da #293 e alinhar documentação
+  -> selecionar uma entrega de produto
 ```
 
-Prosseguir pela hygiene e pelos upgrades Dependabot priorizados, cada um em
-bloco isolado, antes de congelar nova baseline e iniciar #365. A #384 governa
+Os upgrades Dependabot prioritizados já foram integrados; #365 e #364 foram
+fechadas. A #384 governa
 qualquer futura mudança de identidade ou de `ready_for_real_data`; a promoção
 vigente continua limitada ao runtime certificado. #284 não bloqueia essa
 sequência local.
@@ -197,7 +212,7 @@ homologação OCI na fase atual e não forçar readiness.
 - `docs/USER_VALIDATION_RUNBOOK.md`;
 - `docs/BOOTSTRAP_DATA_FLOW.md`;
 - `docs/deployment/oci-execution-index.md` (referência futura OCI);
-- Issues #344, #345, #365, #364, #370, #384 e #284 (backlog futuro).
+- Issues #408, #83, #293, #149, #370 e #284 (com estados atualizados acima).
 
 ## Regra para histórico
 

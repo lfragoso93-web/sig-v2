@@ -1,13 +1,16 @@
 # Roadmap — SGI v2
 
-> Última atualização: 11/10/2026.
+> Última atualização: 16/10/2026.
 
 ## Estado do projeto
 
 O SGI v2 está em fase de **pós-GO e hardening arquitetural**, com a baseline
 funcional promovida para `main` pela PR #362 e o núcleo DB-first consolidado.
+Na sequência, a PR #425 sincronizou `main` em `stable-15jun`; ambas têm a mesma
+árvore no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`.
 
-Estado registrado:
+Estado registrado para a identidade runtime certificada em 06/10/2026; não
+revalidado para o SHA atual nem para o runtime atualmente implantado:
 
 ```text
 GO_ASSISTED=true
@@ -110,8 +113,11 @@ Blocos concluídos e promovidos para `main`:
 6. #350 Reliable Async — concluída pela PR #396, com lease distribuído e
    decisão documentada de não introduzir outbox sem caso concreto.
 
-Próxima fronteira: hygiene e upgrades Dependabot priorizados, nova baseline
-técnica e somente então #365 antes de qualquer migration ampla da #364.
+As Issues #365 e #364 foram fechadas em 08/10/2026. Os upgrades de dependências
+priorizados também foram integrados. A próxima fronteira é confirmar a correção
+de segurança #408 com CodeQL, fechar o escopo residual da #83 em banco isolado,
+concluir a correlação GOV-07 da #293 e então escolher uma única entrega de
+produto.
 
 ## Fase 8 — certificação persistente para dados reais (#384) — CONCLUÍDA
 
@@ -145,6 +151,23 @@ memória permanece apenas diagnóstico.
 Qualquer mudança posterior de environment, branch, SHA, dataset ou revision
 Alembic invalida essa correspondência e exige novo ciclo completo. O contrato
 permanece fail-closed em qualquer ausência, revogação ou divergência.
+
+O SHA `3ab054f61e34f440dddf93c170259958243d58af` acima é a identidade histórica
+promovida em 06/10/2026. O checkout estável atual é `8e4e243416014024964031793dbb7b15bcd3c39d`; a prontidão do runtime atual não foi
+verificada nesta atualização. Não implantar ou inferir `/ready=200` para um
+SHA diferente sem novo ciclo de certificação.
+
+## Rebaseline de segurança e continuidade — 16/10/2026
+
+- #408: sanitização em `stable-15jun` pela PR #413; regressões
+  complementares integradas pela #419 com CI aprovada. A última execução do
+  deep scan é anterior às correções; confirmação CodeQL continua pendente.
+- #83: código estável já inclui download autenticado, reautenticação de restore,
+  auditoria, status persistido e retenção. Falta um ciclo de integração em banco
+  descartável; nenhum restore real foi executado.
+- #293: GOV-07 continua pendente até concluir a revisão de Issues abertas e
+  sincronizar os documentos vivos.
+- Não há PRs abertas no inventário consultado. OCI/#284 permanece backlog.
 
 ## Dívidas financeiras não bloqueantes por padrão
 

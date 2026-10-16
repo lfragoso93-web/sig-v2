@@ -54,8 +54,9 @@ O fluxo executa, sequencialmente:
 1. valida identidade e janela antes de abrir banco ou rede;
 2. adquire o advisory lock transacional dedicado;
 3. captura a inspeção inicial;
-4. coleta BRAPI como fonte principal e usa Yahoo apenas como fallback quando
-   BRAPI declara ausência real de cobertura;
+4. coleta B3 como fonte oficial prioritária para ativos listados com cobertura
+   estruturada; BRAPI só complementa fatos que a B3 não publica e Yahoo é
+   fallback explícito somente quando não há cobertura do emissor;
 5. filtra e normaliza os eventos dentro da janela;
 6. persiste o catálogo global;
 7. executa `flush` e a inspeção final;
@@ -73,7 +74,8 @@ financeiro.
 2. `HEAD` exatamente igual ao SHA aprovado na Issue #226.
 3. Imagem do backend reconstruída a partir desse mesmo checkout.
 4. Backend, PostgreSQL e Redis saudáveis.
-5. Acesso aos provedores BRAPI e Yahoo validado sem registrar tokens.
+5. Acesso ao endpoint oficial B3 validado sem registrar credenciais; outras
+   fontes somente se o contrato do ativo permitir.
 6. Nenhum scheduler, endpoint, backfill ou pipeline de proventos concorrente.
 7. Janela temporal curta e explicitamente aprovada.
 8. Diretório de artefatos relativo e localizado sob `artifacts`.

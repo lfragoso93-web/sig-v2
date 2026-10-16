@@ -103,7 +103,7 @@ class CorporateEvent(Base):
     approved_on = Column(Date, nullable=True)
     record_date = Column(Date, nullable=True)
     ex_date = Column(Date, nullable=True)
-    effective_date = Column(Date, nullable=False)
+    effective_date = Column(Date, nullable=True)
     payment_date = Column(Date, nullable=True)
     quantity_factor = Column(Numeric(24, 12), nullable=False)
     cash_component = Column(Numeric(24, 8), nullable=True)

@@ -60,9 +60,12 @@ def _is_projection_eligible(event: CorporateEvent) -> bool:
 
 
 def _effective_date(event: CorporateEvent) -> date:
-    """Resolve a data canônica com fallback temporário para a coluna legada."""
+    """Require the canonical effective date; legacy mirrors are not evidence."""
 
-    value = event.effective_date or event.event_date
+    value = event.effective_date
+    source_provider = _normalized_text(event.source_provider).lower()
+    if value is None and source_provider in {"", _LEGACY_SOURCE_PROVIDER}:
+        value = event.event_date
     if value is None:
         raise ValueError(f"evento corporativo {event.id!r} sem data efetiva")
     return value

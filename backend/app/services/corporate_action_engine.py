@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Iterable
+from typing import Any
 
+from app.integrations.b3_listed_companies import parse_b3_date
 from app.services.corporate_event_fractional_resolution import FractionalResolution
 
 
@@ -231,6 +233,63 @@ def normalize_yahoo_splits(
             quantity_factor=factor,
             raw_payload=raw_payload,
         ))
+    return tuple(sorted(actions, key=lambda item: (item.event_date, item.source_event_id)))
+
+
+def normalize_b3_corporate_actions(
+    ticker: str,
+    payload: dict[str, Any],
+) -> tuple[NormalizedCorporateAction, ...]:
+    """Normalize official B3 stock dividends and subscriptions."""
+    ticker = ticker.strip().upper()
+    if not ticker:
+        raise CorporateActionNormalizationError("ticker ausente")
+    actions: list[NormalizedCorporateAction] = []
+    for field, default_kind in (
+        ("stockDividends", CorporateActionKind.STOCK_BONUS),
+        ("subscriptions", CorporateActionKind.SUBSCRIPTION),
+    ):
+        rows = payload.get(field)
+        if not isinstance(rows, list):
+            raise CorporateActionNormalizationError(f"B3 {field} deve ser lista")
+        for raw in rows:
+            if not isinstance(raw, dict):
+                raise CorporateActionNormalizationError(f"B3 {field} item invalido")
+            label = str(raw.get("label") or "").strip().upper()
+            kind = default_kind
+            if field == "stockDividends":
+                if "GRUPAMENTO" in label:
+                    kind = CorporateActionKind.REVERSE_SPLIT
+                elif "DESDOBRAMENTO" in label or "SPLIT" in label:
+                    kind = CorporateActionKind.SPLIT
+            try:
+                event_date = parse_b3_date(raw.get("lastDatePrior") or raw.get("exDate"))
+            except Exception as exc:
+                raise CorporateActionNormalizationError(
+                    f"B3 {field}.lastDatePrior invalido"
+                ) from exc
+            factor = (
+                _positive_decimal(raw.get("factor"), field=f"B3 {field}.factor")
+                if kind != CorporateActionKind.SUBSCRIPTION
+                else Decimal(1)
+            )
+            raw_payload = {
+                **raw,
+                "sourcePage": "B3 Listed Companies",
+                "sourceIssuer": payload.get("code"),
+                "sourceIsin": raw.get("isinCode"),
+                "sourceOfficialRecordDate": str(raw.get("lastDatePrior") or ""),
+                "effectiveDateResolution": "unresolved_until_b3_trading_calendar",
+            }
+            source_event_id = _event_id(
+                source="b3", ticker=ticker, kind=kind,
+                event_date=event_date, quantity_factor=factor, payload=raw_payload
+            )
+            actions.append(NormalizedCorporateAction(
+                source="b3", source_event_id=source_event_id, ticker=ticker,
+                event_date=event_date, kind=kind, quantity_factor=factor,
+                raw_payload=raw_payload,
+            ))
     return tuple(sorted(actions, key=lambda item: (item.event_date, item.source_event_id)))
 
 

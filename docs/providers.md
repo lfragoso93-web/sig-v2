@@ -33,6 +33,22 @@ Snapshots e KPIs
 | Fonte pública complementar | Fallback para alguns títulos ou indicadores quando a fonte dedicada não cobre |
 | Fontes macroeconômicas | CDI, Selic, IPCA, IGP-M e câmbio |
 
+### B3 Listed Companies
+
+O adaptador `app.integrations.b3_listed_companies` consulta os endpoints
+estruturados usados pelo portal público da B3. Para BDRs, `GetListedSupplementBDR`
+fornece proventos e eventos do emissor; para ações nacionais,
+`GetListedSupplementCompany` identifica o emissor e `GetListedCashDividends`
+fornece as linhas paginadas. O adaptador valida emissor, paginação e datas,
+decodifica a resposta JSON encapsulada observada no portal e mantém a proveniência
+dos campos originais.
+
+Para ações ON/PN, `typeStock` precisa corresponder à classe do ticker antes de
+aceitar o evento. BRAPI e Yahoo não são misturados nem substituem uma resposta
+oficial B3 válida para ativos listados. Estas rotas são um detalhe operacional
+do portal e podem mudar sem contrato B2B estável; falhas devem permanecer
+explícitas.
+
 ---
 
 ## Estratégia por classe

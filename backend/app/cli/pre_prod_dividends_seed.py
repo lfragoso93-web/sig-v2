@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.integrations.b3_listed_companies import B3ListedCompaniesClient
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAsset,
     StrictDividendCollectionError,
@@ -25,6 +26,7 @@ from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedPersistenceError,
 )
 from app.services.pre_prod_dividends_seed_providers import (
+    StrictB3DividendProvider,
     StrictBrapiDividendProvider,
     StrictYahooDividendProvider,
     fetch_yahoo_dividend_history,
@@ -107,6 +109,7 @@ async def _main() -> int:
         ):
             providers = (
                 StrictBrapiDividendProvider(client=client),
+                StrictB3DividendProvider(client=B3ListedCompaniesClient(client=client)),
                 StrictYahooDividendProvider(
                     history_fetcher=fetch_yahoo_dividend_history
                 ),

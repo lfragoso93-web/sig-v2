@@ -20,22 +20,30 @@ nesses registros. Direitos e efeitos por carteira são calculados sob demanda.
 
 ## Fontes
 
-- BRAPI v2 `/stocks/dividends`: bonificações (`stockDividends`) e direitos de
-  subscrição (`subscriptions`);
-- Yahoo `actions`: fonte complementar/fallback para fatores de splits e
-  grupamentos quando a BRAPI estiver indisponível ou retornar resultado válido
-  vazio; cada provedor mantém identidade e payload próprios;
-- B3: evidência oficial independente para fator/data de eventos listados; não
-  substituir silenciosamente payloads Yahoo/BRAPI nem sintetizar um fato entre
-  fontes;
-- classes cobertas pela coleta: ações, BDRs, FIIs e ETFs nacionais e
+- B3: fonte oficial prioritaria para eventos corporativos e fatores de ativos
+  listados; preservar o documento/payload oficial e sua identidade;
+- BRAPI v2 `/stocks/dividends`: fonte complementar somente para campos/eventos
+  que a B3 nao publicar para o ativo; nao substitui resposta B3 valida;
+- Yahoo `actions`: fallback explicitamente identificado para fatores de split e
+  grupamento somente quando a fonte oficial nao tiver cobertura; nunca mesclar
+  valores/datas de provedores distintos em um evento sintatico;
+- classes cobertas pela coleta: aaaes, BDRs, FIIs e ETFs nacionais e
   internacionais; cripto, Tesouro Direto e renda fixa ficam fora deste fluxo;
-- resolução de ticker existente: renomes simples 1:1, mantidos em fluxo
-  separado enquanto a identidade global de ativos é consolidada.
+- resoluaao de ticker existente: renomes simples 1:1, mantidos em fluxo
+  separado enquanto a identidade global de ativos a consolidada.
 
-A rota BRAPI de dividendos não declara splits/grupamentos no contrato OpenAPI
-atual. Esses eventos não são inferidos a partir de preços ou proventos; entram
-por uma fonte que publique explicitamente o fator.
+O adaptador B3 usa os dados estruturados do portal Listed Companies para ações
+nacionais e BDRs, preservando o payload oficial, ISIN e identidade da fonte.
+`lastDatePrior` representa o último dia com direito; não determina sozinho o
+pregão efetivo. Enquanto a data efetiva não estiver resolvida por evidência
+oficial aplicável, `effective_date` permanece nulo e o registro fica `PENDENTE`,
+`UNRECONCILED` e fora da projeção. `event_date`/`record_date` podem preservar a
+data informada pela B3 para busca e auditoria, mas nunca substituem a data
+canônica efetiva.
+
+A rota BRAPI de dividendos nao declara splits/grupamentos no contrato OpenAPI
+atual. Esses eventos nao sao inferidos a partir de preaos ou proventos; entram
+por fonte que publique explicitamente o fator.
 
 ## Convenção de fator
 

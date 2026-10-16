@@ -1,9 +1,31 @@
 # Estado de implementação — Eventos Corporativos
 
-> Atualizado em 01/08/2026  
-> Branch: `stable-15jun`  
-> Issue principal: #129  
+> Atualizado em 16/10/2026
+> Branch: `stable-15jun`
+> Issue principal: #129
 > Integrações relacionadas: #127, #130 e #226
+
+## Rebaseline — 16/10/2026
+
+As seções abaixo preservam o inventário histórico de agosto. O código atual
+também inclui o contrato de resolução fracionária de eventos corporativos,
+liquidação explícita com valor confirmado e exposição de frações pendentes sem
+inventar caixa. Esses contratos foram integrados pela PR #412, em
+`2e1edf6ac44d9a5007598282af336828ddd78fac`.
+
+- frações em `PENDING_SETTLEMENT` permanecem fora da quantidade canônica e são
+  expostas como `PENDING_VALUE` no lifecycle;
+- caixa, custo-base e resultado realizado só aparecem quando preço e tratamento
+  de liquidação foram resolvidos explicitamente;
+- snapshots preservam a indicação de fração pendente sem converter valor
+  desconhecido em zero;
+- #370 segue aberta apenas para evidência externa de KLBN11. O conflito
+  permanece fora da projeção até haver comprovação de quantidade, preço e
+  tratamento de caixa; não alterar ledger ou fabricar liquidação.
+
+A PR #412 foi integrada ao código; ela não representa implantação nem
+certificação do SHA atual. Qualquer mudança de identidade runtime continua
+sujeita ao gate #384.
 
 ## Decisão arquitetural vigente
 

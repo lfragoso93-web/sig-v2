@@ -123,6 +123,25 @@ def test_reader_helpers_keep_explicit_legacy_fallback() -> None:
     assert _raw_payload(event) == {"factor": "3"}
 
 
+def test_reader_does_not_use_b3_record_date_as_effective_date() -> None:
+    event = CorporateEvent(
+        id=43,
+        asset_id=1,
+        ticker="NIKE34",
+        event_type="GRUPAMENTO",
+        status=CorporateEventStatus.PENDENTE.value,
+        effective_date=None,
+        quantity_factor=Decimal("0.2"),
+        source_provider="b3",
+        source_event_id="b3:nike-reverse-split",
+        event_date=date(2026, 10, 9),
+        portfolio_id=None,
+    )
+
+    with pytest.raises(ValueError, match="sem data efetiva"):
+        _effective_date(event)
+
+
 @pytest.mark.asyncio
 async def test_reader_transports_cash_settlement_evidence(
     db: AsyncSession,

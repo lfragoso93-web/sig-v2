@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 11/10/2026.
+> Última atualização: 16/10/2026.
 
 ## Objetivo
 
@@ -197,9 +197,15 @@ ready_for_real_data=true
 /ready=200
 ```
 
+Esse registro é histórico e vinculado à identidade certificada em 06/10/2026.
+O SHA atual de `stable-15jun` é `8e4e243416014024964031793dbb7b15bcd3c39d`;
+nenhum estado de runtime foi verificado nesta atualização. Não considerar o
+checkout atual certificado nem implantar uma identidade diferente sem novo
+ciclo da #384.
+
 `GO_ASSISTED` não implica `/ready=200` e não satisfaz o contrato de promoção da
-#384. O `/ready=200` atual existe porque houve evidência própria com `status=GO`
-e um evento `PROMOTE` persistido para a identidade exata.
+#384. `/ready=200` só é válido quando há evidência própria com `status=GO` e um
+evento `PROMOTE` persistido para a identidade runtime exata.
 
 A decisão histórica da #227 e a promoção arquitetural da PR #362 já foram
 concluídas. A fronteira corrente é persistente e append-only:
@@ -244,15 +250,16 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
 ## Ordem arquitetural corrente
 
-1. preservar a certificação vigente enquanto sua identidade continuar exata;
-2. preservar os contratos concluídos da Epic #344: Doctor, Agent Skills,
-   Certification Proof, runtime determinístico, Access Context e Reliable
-   Async;
-3. executar hygiene e upgrades Dependabot priorizados em blocos independentes;
-4. congelar nova baseline técnica sem promover automaticamente uma nova
-   identidade de runtime;
-5. tratar #365 antes de qualquer migration ampla de #364;
-6. manter OCI/#284 como backlog futuro até retomada explícita.
+1. confirmar os findings da #408 com uma execução CodeQL posterior à correção
+   integrada pela #413 e aos testes da #419;
+2. validar o ciclo de backup e restore apenas em banco isolado para fechar o
+   escopo residual da #83;
+3. concluir GOV-07 da #293 e alinhar Issues/documentação com o código atual;
+4. depois, selecionar uma única entrega de produto pós-GO;
+5. manter OCI/#284 como backlog futuro até retomada explícita.
+
+As Issues #365 e #364 foram fechadas em 08/10/2026; não fazem mais parte da
+sequência corrente. A higiene de dependências priorizada também foi integrada.
 
 ## Backlog pós-GO por padrão
 

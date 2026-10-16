@@ -10,13 +10,16 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 11/10/2026
+## Status atual — 16/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362 e a certificação persistente para dados reais
-foi concluída pela #384 para a identidade runtime atualmente implantada.
+foi concluída pela #384 para uma identidade runtime específica. Este status
+histórico não certifica o checkout atual nem confirma a identidade atualmente
+implantada.
 
-Estado operacional registrado:
+Estado operacional registrado para a identidade certificada em 06/10/2026
+(não revalidado contra o SHA atual):
 
 ```text
 test_ready=true
@@ -28,6 +31,16 @@ ready_for_real_data=true
 ```
 
 ### Rebaseline pós-promoção
+
+- PR #425 sincronizou `main` para `stable-15jun`; as duas branches têm a mesma
+  árvore no SHA estável `8e4e243416014024964031793dbb7b15bcd3c39d`.
+- #408: a sanitização dos logs está em `stable-15jun` pela PR #413 e
+  as regressões chegaram pela #419; a CI da #419 passou. A Issue segue aberta
+  até uma análise CodeQL posterior à correção confirmar os findings.
+- #83: download, reautenticação de restore, auditoria, status persistido de
+  operações e retenção já têm implementação no código estável. Falta comprovar
+  o ciclo integrado de backup e restore isolado antes de tratar a interface
+  como disaster recovery certificado.
 
 - #363 fechado apos recuperacao dos gates tecnicos locais.
 - #354 permanece fechada.
@@ -51,21 +64,19 @@ ready_for_real_data=true
   executor transacional e CLI guardada; a promoção operacional real foi
   executada para o dataset/SHA registrados e `/ready` consome essa autoridade.
 
-`GO_ASSISTED` continua descrevendo apenas testes acompanhados. A abertura atual
-para dados reais vem exclusivamente do evento persistido da #384; a CLI
-assistida não altera `/ready` manualmente.
+`GO_ASSISTED` continua descrevendo apenas testes acompanhados. A autorização
+para dados reais depende exclusivamente do evento persistido da #384 e da
+correspondência exata da identidade; a CLI assistida não altera `/ready`.
 
-A cadeia histórica de promoção foi concluída. O mapa vigente é:
+A cadeia histórica de promoção foi concluída. O mapa de trabalho vigente é:
 
 ```text
-governança pós-#362
-        -> baseline local do HEAD
-        -> #344 Architecture Enforcement (concluída)
-        -> hygiene e upgrades Dependabot priorizados
-        -> nova baseline técnica
-        -> #365 antes de qualquer migration ampla de #364
+rebaseline de segurança #408 após CodeQL
+        -> fechar escopo residual #83 em banco isolado
+        -> concluir correlação GOV-07 da #293 e alinhar documentação
+        -> escolher uma única entrega de produto
 
-#384 foi concluída; promoções futuras continuam vinculadas à identidade exata.
+#384 foi concluída para a identidade registrada; promoções futuras continuam vinculadas à identidade exata.
 #284 permanece backlog futuro e não bloqueia desenvolvimento local.
 ```
 
@@ -210,4 +221,4 @@ docker compose run --rm backend python -m app.cli.user_test_readiness
 - `docs/BOOTSTRAP_DATA_FLOW.md`;
 - `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`;
 - `docs/deployment/oci-execution-index.md` (referência futura OCI);
-- Issues #344, #345, #365, #364, #370, #384 e #284 (backlog futuro).
+- Issues #408, #83, #293, #149, #370 e #284 (estados atuais e backlog).

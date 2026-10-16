@@ -17,10 +17,11 @@ Apply the current source policy precisely:
 
 - use B3/COTAHIST as the baseline authority for B3 catalog/history fields
   assigned to it; BRAPI may enrich without silently overwriting official facts;
-- for dividends and corporate-event collection, BRAPI is primary;
-- call Yahoo for split/reverse-split factors when BRAPI is unavailable or when
-  BRAPI returns a valid empty event result; preserve `provider_fallback` or
-  `provider_supplement` provenance accordingly;
+- for Brazilian listed assets, B3 is the official primary source for
+  dividends and corporate events when its structured endpoint covers the
+  asset; BRAPI may supplement only fields/events B3 does not publish;
+- use Yahoo only as an explicitly identified fallback when B3 has no issuer
+  coverage, never to replace a valid B3 response; preserve provenance;
 - never compare or merge providers into a synthetic fact; retain distinct
   source identities so official B3 evidence can corroborate without replacing
   the underlying payload;
