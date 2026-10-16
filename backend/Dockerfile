@@ -62,6 +62,7 @@ COPY --chown=app:app backend/ /app/
 # excludes local configuration, generated artifacts, caches, and other apps.
 COPY --chown=app:app .agents/ /app/.agents/
 COPY --chown=app:app README.md /app/README.md
+COPY --chown=app:app docs/snapshots.md /docs/snapshots.md
 
 # Normaliza line endings e garante permissao de execucao antes de cair privilegio.
 RUN sed -i 's/\r//' /app/entrypoint.sh \
