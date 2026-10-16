@@ -161,6 +161,10 @@ async def backfill_canonical_snapshots_with_returns(
                 transactions,
                 cursor,
             )
+            treasury_unresolved = decimal_value(
+                totals.get("treasury_unresolved", 0)
+            ) > _ZERO
+            has_partial_prices = has_partial_prices or treasury_unresolved
             snapshot_fields = {
                 key: value
                 for key, value in totals.items()

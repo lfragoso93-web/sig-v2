@@ -202,6 +202,53 @@ async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_unresolved_treasury_marks_aggregate_snapshot_as_partial(monkeypatch):
+    persisted_values = []
+
+    async def _capture_upsert(_db, _portfolio_id, _snapshot_date, values):
+        persisted_values.append(dict(values))
+
+    totals = {
+        "market_value": Decimal("10.00"),
+        "cost_basis": Decimal("10.00"),
+        "invested_total": Decimal("10.00"),
+        "realized_pnl": Decimal("0.00"),
+        "unrealized_pnl": Decimal("0.00"),
+        "total_pnl": Decimal("0.00"),
+        "return_pct": Decimal("0.0000"),
+        "treasury_unresolved": 1,
+    }
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        service,
+        "calculate_canonical_portfolio_totals",
+        AsyncMock(return_value=totals),
+    )
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "date", _FixedToday)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(db, 13)
+
+    assert count == 3
+    assert persisted_values
+    assert all(values["has_partial_prices"] is True for values in persisted_values)
+    assert all(values["return_is_estimated"] is True for values in persisted_values)
+
+
+@pytest.mark.asyncio
 async def test_canonical_twr_preserves_realized_fraction_and_counts_cash_as_return(
     monkeypatch,
 ):
