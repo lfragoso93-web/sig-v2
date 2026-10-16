@@ -1,6 +1,6 @@
 """allow unresolved provider events to keep effective date unknown
 
-Revision ID: 20261016_nullable_corp_event_date
+Revision ID: 20261016_corp_eff_null
 Revises: 20261016_admin_backup_operations
 """
 from collections.abc import Sequence
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "20261016_nullable_corp_event_date"
+revision: str = "20261016_corp_eff_null"
 down_revision: str | None = "20261016_admin_backup_operations"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
