@@ -106,7 +106,7 @@ def test_migration_extends_head_before_the_runtime_target() -> None:
     assert migration.revision == "20261008_treasury_instruments"
     assert migration.down_revision == "20261005_real_data_cert"
     assert (
-        'RUNTIME_MIGRATION_TARGET="20261010_b3_calendar_config"'
+        'RUNTIME_MIGRATION_TARGET="20261016_admin_backup_operations"'
         in entrypoint
     )
 
