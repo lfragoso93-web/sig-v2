@@ -21,6 +21,7 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import PortfolioEvolutionSection from '@/components/charts/PortfolioEvolutionSection'
 import PortfolioReconciliationPanel from '@/components/portfolio/PortfolioReconciliationPanel'
+import PendingCorporateFractionsPanel from '@/components/portfolio/PendingCorporateFractionsPanel'
 
 function safeNum(value: unknown): number {
   const parsed = Number(value)
@@ -261,6 +262,7 @@ export default function PatrimonioPage() {
       )}
 
       <PortfolioReconciliationPanel portfolioId={portfolioId} />
+      <PendingCorporateFractionsPanel portfolioId={portfolioId} />
       <PortfolioEvolutionSection portfolioId={portfolioId} />
       <ConsolidationSection portfolioId={portfolioId} />
       <ConcentrationSection groups={groups} />

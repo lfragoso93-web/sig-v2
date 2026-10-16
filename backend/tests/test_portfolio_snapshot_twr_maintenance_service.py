@@ -21,6 +21,7 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
     db.execute.return_value = portfolio_result
 
     needs = AsyncMock(side_effect=[True, False, True])
+    class_needs = AsyncMock(return_value=False)
     backfill = AsyncMock(side_effect=[250, RuntimeError("falha controlada")])
 
     with (
@@ -31,6 +32,10 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
         patch(
             "app.services.portfolio_snapshot_twr_maintenance_service.backfill_canonical_snapshots_with_returns",
             backfill,
+        ),
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service._portfolio_needs_class_twr_rebuild",
+            class_needs,
         ),
     ):
         result = await maintain_twr_snapshots_for_active_portfolios(db)
@@ -45,6 +50,44 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
     }
     assert backfill.await_count == 2
     db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_maintenance_rebuilds_class_snapshots_once_then_skips_when_current():
+    db = AsyncMock()
+    portfolio_result = MagicMock()
+    portfolio_result.all.return_value = [SimpleRow(1), SimpleRow(2)]
+    db.execute.return_value = portfolio_result
+
+    consolidated_needs = AsyncMock(side_effect=[False, False])
+    class_needs = AsyncMock(side_effect=[True, False])
+    class_backfill = AsyncMock(return_value=42)
+
+    with (
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service._portfolio_needs_twr_rebuild",
+            consolidated_needs,
+        ),
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service._portfolio_needs_class_twr_rebuild",
+            class_needs,
+        ),
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service.rebuild_class_snapshots",
+            class_backfill,
+        ),
+    ):
+        result = await maintain_twr_snapshots_for_active_portfolios(db)
+
+    assert result == {
+        "portfolios": 2,
+        "processed": 1,
+        "skipped": 1,
+        "errors": 0,
+        "snapshots": 0,
+        "class_snapshots": 42,
+    }
+    class_backfill.assert_awaited_once_with(db, 1)
 
 
 def test_detects_latest_snapshot_overwritten_with_zero_twr():

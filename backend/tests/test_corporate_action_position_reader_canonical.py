@@ -243,13 +243,80 @@ async def test_cash_settlement_reaches_position_state_without_ledger_mutation(
     states = await build_positions_at(db, portfolio.id, date(2026, 1, 3))
 
     state = states["FRAC3"]
+    fractional_cost = Decimal("185.30") * (
+        Decimal("0.10") / Decimal("10.10")
+    )
     assert state.qty == Decimal("10")
-    assert state.cost.quantize(Decimal("0.01")) == Decimal("185.30")
-    assert state.realized_pnl == Decimal("0")
+    assert state.cost == Decimal("185.30") - fractional_cost
+    assert state.realized_pnl == Decimal("0.4000") - fractional_cost
     assert len(state.corporate_action_cash_flows) == 1
     cash_flow = state.corporate_action_cash_flows[0]
     assert cash_flow.source_event_id == "brapi:fraction-e2e"
     assert cash_flow.gross_amount_brl == Decimal("0.4000")
+    assert cash_flow.cost_basis_brl == fractional_cost
+    assert cash_flow.realized_pnl_brl == Decimal("0.4000") - fractional_cost
+
+
+@pytest.mark.asyncio
+async def test_pending_fraction_is_excluded_from_canonical_position_state(
+    db: AsyncSession,
+    portfolio,
+) -> None:
+    asset = Asset(
+        ticker="PEND3",
+        name="Ativo com fração pendente",
+        asset_type=AssetType.ACAO.value,
+    )
+    db.add(asset)
+    await db.flush()
+
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="PEND3",
+            asset_type=AssetType.ACAO.value,
+            operation=OperationType.buy,
+            quantity=Decimal("6"),
+            price=Decimal("100"),
+            fees=Decimal("0"),
+            date=date(2026, 1, 1),
+            currency="BRL",
+        )
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="PEND3",
+        event_type="GRUPAMENTO",
+        status=CorporateEventStatus.PENDENTE.value,
+        effective_date=date(2026, 1, 2),
+        ratio=Decimal("0.2"),
+        quantity_factor=Decimal("0.2"),
+        source_provider="brapi",
+        source_event_id="brapi:pending-fraction",
+        event_date=date(2026, 1, 2),
+        is_canonical=True,
+        reconciliation_status="MATCHED",
+        requires_review=False,
+        portfolio_id=None,
+    )
+    db.add(event)
+    await db.flush()
+    db.add(
+        CorporateEventReconciliationEvidence(
+            corporate_event_id=event.id,
+            decision="MATCHED",
+            evidence_type="BROKER_STATEMENT",
+            evidence_reference="broker-note:PEND3:2026-01",
+            fractional_policy="PENDING_SETTLEMENT",
+            fractional_quantity=Decimal("0.2"),
+        )
+    )
+    await db.flush()
+
+    states = await build_positions_at(db, portfolio.id, date(2026, 1, 3))
+
+    assert states["PEND3"].qty == Decimal("1")
+    assert states["PEND3"].cost == Decimal("500")
 
 
 @pytest.mark.asyncio

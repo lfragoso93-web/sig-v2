@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 from sqlalchemy import func, select
 
@@ -57,7 +58,7 @@ async def _run() -> dict:
             or 0
         )
 
-        blocking_rows = (
+        blocking_rows: Any = (
             await db.execute(
                 select(Asset.provider_status, func.count(Asset.id))
                 .where(*crypto_scope)

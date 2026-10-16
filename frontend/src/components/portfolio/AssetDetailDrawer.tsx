@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { X, TrendingUp, DollarSign, Zap, CalendarDays } from 'lucide-react'
+import { X, TrendingUp, DollarSign, Zap, CalendarDays, RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useAssetDetail } from '@/hooks/useAssetDetail'
+import { useAssetCorporateLifecycle, useAssetDetail } from '@/hooks/useAssetDetail'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useDividends } from '@/hooks/useDividends'
 import { formatBRL } from '@/utils/format'
@@ -54,6 +54,10 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
   const { data: assetDetail, isLoading: loadingDetail } = useAssetDetail(asset.ticker, historyDays)
   const { data: variationDetail } = useAssetDetail(asset.ticker, 365)
   const { data: txData } = useTransactions(portfolioId, { ticker: asset.ticker })
+  const { data: corporateLifecycle = [] } = useAssetCorporateLifecycle(
+    portfolioId,
+    asset.ticker,
+  )
   const { data: dividends } = useDividends(portfolioId)
 
   const transactions = txData?.items ?? []
@@ -310,6 +314,56 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
                     <div style={{ fontWeight: 600, color: 'var(--color-text)', textAlign: 'right' }}>
                       {formatBRL(tx.quantity * tx.price)}
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {corporateLifecycle.length > 0 && (
+            <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
+                <RefreshCw size={14} style={{ color: 'var(--color-primary)' }} />
+                <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                  Eventos corporativos ({corporateLifecycle.length})
+                </h3>
+              </div>
+              <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                {corporateLifecycle.map((event, index) => (
+                  <div
+                    key={event.source_event_id}
+                    style={{
+                      padding: '0.65rem 0',
+                      borderBottom: index < corporateLifecycle.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+                        {event.event_type} · fator {Number(event.quantity_factor).toLocaleString('pt-BR')}
+                      </div>
+                      <div style={{ color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                        {event.event_date.split('-').reverse().join('/')}
+                      </div>
+                    </div>
+                    {event.message && (
+                      <div style={{ color: 'var(--color-text-muted)', marginTop: 4 }}>
+                        {event.message}
+                      </div>
+                    )}
+                    {event.fractional_quantity != null && (
+                      <div style={{ color: 'var(--color-text)', marginTop: 4 }}>
+                        {event.settlement_status === 'PENDING_VALUE'
+                          ? `Fração pendente: ${Number(event.fractional_quantity).toLocaleString('pt-BR')}`
+                          : `Fração vendida: ${Number(event.fractional_quantity).toLocaleString('pt-BR')}`}
+                        {event.gross_amount_brl != null && ` · Valor creditado: ${formatBRL(Number(event.gross_amount_brl))}`}
+                      </div>
+                    )}
+                    {event.realized_pnl_brl != null && (
+                      <div style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        Resultado realizado: {formatBRL(Number(event.realized_pnl_brl))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

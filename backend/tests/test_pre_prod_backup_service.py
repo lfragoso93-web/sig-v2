@@ -90,6 +90,49 @@ def test_backup_rejects_non_postgresql_source(tmp_path: Path) -> None:
         )
 
 
+def test_backup_normalizes_explicit_psycopg2_url_for_postgres_cli(
+    tmp_path: Path,
+) -> None:
+    observed_commands: list[list[str]] = []
+
+    def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed_commands.append(command)
+        return _successful_runner(command, **kwargs)
+
+    create_postgres_backup(
+        database_url="postgresql+psycopg2://user:secret@db:5432/sgi",
+        inventory={"schema_version": "pre-prod-inventory.v2"},
+        branch="stable-15jun",
+        commit_sha="abc123",
+        snapshot_id="00000003-0000001B-1",
+        artifact_root=tmp_path,
+        run_id="explicit-sync-driver",
+        runner=runner,
+    )
+
+    database_urls = [
+        command[command.index("--dbname") + 1]
+        for command in observed_commands
+        if "--dbname" in command
+    ]
+    assert database_urls
+    assert all(url.startswith("postgresql://") for url in database_urls)
+    assert all("+psycopg2" not in url for url in database_urls)
+
+
+def test_backup_rejects_async_postgresql_source(tmp_path: Path) -> None:
+    with pytest.raises(BackupError, match="PostgreSQL"):
+        create_postgres_backup(
+            database_url="postgresql+asyncpg://user:secret@db:5432/sgi",
+            inventory={},
+            branch="stable-15jun",
+            commit_sha="abc123",
+            snapshot_id="00000003-0000001B-1",
+            artifact_root=tmp_path,
+            runner=_successful_runner,
+        )
+
+
 def test_backup_aborts_when_pg_dump_does_not_create_file(tmp_path: Path) -> None:
     def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         if command == ["pg_dump", "--version"]:

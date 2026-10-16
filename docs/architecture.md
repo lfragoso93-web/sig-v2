@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 06/10/2026.
+> Última atualização: 11/10/2026.
 
 ## Objetivo
 
@@ -103,6 +103,9 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
 - valuation DB-first por preço persistido;
 - resolução case-insensitive validada;
 - snapshots dedicados;
+- cupons e amortizações monetários usam eventos globais em `asset_dividends`,
+  com direito por carteira derivado de `transactions`, e entram uma única vez
+  no TWR do snapshot;
 - ausência de PU necessário permanece explícita/fail-closed.
 
 ### Renda Fixa
@@ -110,9 +113,17 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
 - lifecycle derivado de `transactions`;
 - valuation corrente usa motor dedicado de accrual/indexador;
 - benchmark parcial/ausente não vira preço de mercado;
-- TWR diário dedicado ainda pertence à #149.
+- após uma lacuna de benchmark, a cadeia TWR materializada permanece
+  `incomplete_history` mesmo se a cobertura voltar; patrimônio segue auditável,
+  mas retornos mensal e acumulado não são promovidos como oficiais;
+- TWR diário dedicado integra `PortfolioClassSnapshot`, com aportes e resgates
+  tratados como fluxos externos e oracles para resgate parcial e múltiplas
+  aplicações por produto/indexador.
 
-A ausência de TWR dedicado não deve ser mascarada por retorno simples ou fallback anual rotulado como TWR.
+A #149 permanece aberta somente para evidência factual de cupons/amortizações
+do Tesouro e para certificar operacionalmente uma nova identidade runtime. A
+ausência de PU, benchmark ou calendário não deve ser mascarada por retorno
+simples, evento inferido ou fallback rotulado como TWR.
 
 ## IRPF
 
@@ -234,15 +245,18 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 ## Ordem arquitetural corrente
 
 1. preservar a certificação vigente enquanto sua identidade continuar exata;
-2. concluir #346 com Agent Skills versionadas;
-3. gerar Certification Proof reproduzível em #347;
-4. avançar #349, #348 e #350 em microblocos independentes;
+2. preservar os contratos concluídos da Epic #344: Doctor, Agent Skills,
+   Certification Proof, runtime determinístico, Access Context e Reliable
+   Async;
+3. executar hygiene e upgrades Dependabot priorizados em blocos independentes;
+4. congelar nova baseline técnica sem promover automaticamente uma nova
+   identidade de runtime;
 5. tratar #365 antes de qualquer migration ampla de #364;
 6. manter OCI/#284 como backlog futuro até retomada explícita.
 
 ## Backlog pós-GO por padrão
 
-- #149 — TWR diário dedicado restante;
+- #149 — evidência factual de cupons/amortizações e certificação da nova identidade;
 - #351/#90/#58 — UX/detalhe de ativo;
 - #355–#359 — features auxiliares;
 - #246/#360 — Metas + Analysis Engine;

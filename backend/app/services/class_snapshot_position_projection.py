@@ -21,6 +21,7 @@ class ClassProjectedPosition:
     quantity: Decimal
     cost: Decimal
     realized_pnl: Decimal
+    has_pending_fraction: bool = False
 
 
 def project_class_positions_at(
@@ -41,6 +42,7 @@ def project_class_positions_at(
             for ticker, actions in actions_by_ticker.items()
         },
         target_date=target_date,
+        include_pending_fractions=True,
     )
 
     positions: dict[str, ClassProjectedPosition] = {}
@@ -49,18 +51,24 @@ def project_class_positions_at(
             asset_type = AssetType(str(raw_asset_type).upper())
         except (TypeError, ValueError):
             continue
+        valued_quantity = position.quantity
+        valued_cost = position.total_cost
         if (
-            position.quantity <= _ZERO
-            and position.total_cost <= _ZERO
+            valued_quantity <= _ZERO
+            and valued_cost <= _ZERO
             and position.realized_pnl == _ZERO
+            and not position.pending_corporate_action_fractions
         ):
             continue
         positions[ticker] = ClassProjectedPosition(
             ticker=ticker,
             asset_type=asset_type,
-            quantity=position.quantity,
-            cost=position.total_cost,
+            quantity=valued_quantity,
+            cost=valued_cost,
             realized_pnl=position.realized_pnl,
+            has_pending_fraction=bool(
+                position.pending_corporate_action_fractions
+            ),
         )
     return positions
 

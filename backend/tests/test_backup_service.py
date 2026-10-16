@@ -1,20 +1,38 @@
 """Testes para backup_service — backup e restore de banco de dados."""
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
-
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 from app.services.backup_service import (
+    cleanup_expired_backups,
     _find_existing_backup_path,
     _new_backup_path,
     _parse_db_url,
     create_database_backup,
     delete_backup,
+    get_backup_download_path,
     list_backups,
     restore_database_backup,
 )
+
+
+def test_get_backup_download_path_reuses_safe_resolution(tmp_path: Path):
+    backup = tmp_path / "backup_20261013_120000.sql.gz"
+    backup.write_bytes(b"backup")
+
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        assert get_backup_download_path(backup.name) == backup.resolve()
+
+
+def test_get_backup_download_path_rejects_traversal(tmp_path: Path):
+    with (
+        patch("app.services.backup_service.BACKUPS_DIR", tmp_path),
+        pytest.raises(ValueError, match="Invalid backup filename"),
+    ):
+        get_backup_download_path("../backup_20261013_120000.sql.gz")
 
 
 class TestParseDBUrl:
@@ -73,13 +91,18 @@ class TestCreateDatabaseBackup:
             mock_stat.return_value = mock_stat_obj
 
             with patch("app.services.backup_service.gzip.open", mock_open()):
-                result = await create_database_backup(db_url)
+                with patch(
+                    "app.services.backup_service.cleanup_expired_backups",
+                    return_value=0,
+                ) as mock_cleanup:
+                    result = await create_database_backup(db_url)
 
         assert result["success"] is True
         assert result["backup_id"] is not None
         assert result["filename"] is not None
         assert "size_mb" in result
         assert result["error"] is None
+        mock_cleanup.assert_called_once()
 
     @patch("app.services.backup_service.Path.mkdir")
     @patch("app.services.backup_service.asyncio.create_subprocess_exec")
@@ -282,6 +305,48 @@ def test_new_backup_path_uses_server_generated_canonical_name(tmp_path):
 
     with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
         assert _new_backup_path(now) == tmp_path / "backup_20240101_120000.sql.gz"
+
+
+def test_cleanup_expired_backups_removes_only_expired_canonical_files(
+    tmp_path: Path,
+):
+    now = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+    expired = tmp_path / "backup_20261014_120000.sql.gz"
+    recent = tmp_path / "backup_20261016_110000.sql.gz"
+    noncanonical = tmp_path / "backup_old.sql.gz"
+    for path in (expired, recent, noncanonical):
+        path.write_bytes(b"backup")
+    expired_time = now.timestamp() - 25 * 60 * 60
+    recent_time = now.timestamp() - 23 * 60 * 60
+    os.utime(expired, (expired_time, expired_time))
+    os.utime(recent, (recent_time, recent_time))
+    outside = tmp_path.parent / "outside.sql.gz"
+    outside.write_bytes(b"outside")
+    symlink = tmp_path / "backup_20261013_120000.sql.gz"
+    try:
+        symlink.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is not available in this environment: {exc}")
+
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        removed = cleanup_expired_backups(now=now)
+
+    assert removed == 1
+    assert not expired.exists()
+    assert recent.exists()
+    assert noncanonical.exists()
+    assert symlink.is_symlink()
+    assert outside.read_bytes() == b"outside"
+
+
+def test_cleanup_expired_backups_rejects_nonpositive_retention(
+    tmp_path: Path,
+):
+    with (
+        patch("app.services.backup_service.BACKUPS_DIR", tmp_path),
+        pytest.raises(ValueError, match="retention must be positive"),
+    ):
+        cleanup_expired_backups(retention_hours=0)
 
 
 def test_find_existing_backup_path_returns_enumerated_file(tmp_path):

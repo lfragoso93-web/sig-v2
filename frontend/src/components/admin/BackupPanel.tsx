@@ -21,12 +21,29 @@ interface BackupsResponse {
   error?: string
 }
 
+interface BackupOperation {
+  id: string
+  operation_type: 'BACKUP' | 'RESTORE'
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  backup_filename: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+interface BackupOperationsResponse {
+  operations: BackupOperation[]
+  count: number
+}
+
 const fetchBackups = () => api.get<BackupsResponse>('/admin/database/backups').then(r => r.data)
 
 export default function BackupPanel() {
   const [expandedSection, setExpandedSection] = useState<string | null>('backups')
   const [selectedBackup, setSelectedBackup] = useState<string | null>(null)
   const [showRestoreWarning, setShowRestoreWarning] = useState(false)
+  const [restorePassword, setRestorePassword] = useState('')
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
   const isOpen = expandedSection === 'backups'
 
@@ -36,12 +53,20 @@ export default function BackupPanel() {
     enabled: isOpen,
     refetchInterval: isOpen ? 5000 : false,
   })
+  const { data: operationsData, refetch: refetchOperations } = useQuery({
+    queryKey: ['admin_backup_operations'],
+    queryFn: () => api.get<BackupOperationsResponse>(
+      '/admin/database/operations?limit=30',
+    ).then(r => r.data),
+    enabled: isOpen,
+    refetchInterval: isOpen ? 5000 : false,
+  })
 
   const createBackup = useMutation({
     mutationFn: () => api.post('/admin/database/backup', {}),
     onSuccess: () => {
-      setFeedback({ msg: 'Backup iniciado em background. Acompanhe pelo log do servidor.', isError: false })
-      setTimeout(() => refetch(), 2000)
+      setFeedback({ msg: 'Solicitação de backup registrada.', isError: false })
+      refetchOperations()
     },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail
@@ -69,16 +94,24 @@ export default function BackupPanel() {
   })
 
   const restoreBackup = useMutation({
-    mutationFn: (filename: string) =>
-      api.post('/admin/database/restore', {}, { params: { backup_filename: filename } }),
+    mutationFn: ({ filename, currentPassword }: {
+      filename: string
+      currentPassword: string
+    }) =>
+      api.post('/admin/database/restore', {
+        backup_filename: filename,
+        current_password: currentPassword,
+      }),
     onSuccess: () => {
-      setFeedback({ msg: 'Restauração iniciada em background. TODOS os dados serão sobrescritos!', isError: false })
+      setFeedback({ msg: 'Solicitação de restauração registrada. O status pode não persistir após a substituição do banco.', isError: false })
       setSelectedBackup(null)
       setShowRestoreWarning(false)
-      setTimeout(() => refetch(), 2000)
+      setRestorePassword('')
+      refetchOperations()
     },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail
+      setRestorePassword('')
       setFeedback({
         msg: typeof detail === 'string' ? detail : 'Erro ao restaurar backup.',
         isError: true,
@@ -86,13 +119,22 @@ export default function BackupPanel() {
     },
   })
 
-  const downloadBackup = (filename: string) => {
-    const link = document.createElement('a')
-    link.href = `${api.defaults.baseURL}/admin/database/backups/${filename}`
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const downloadBackup = async (filename: string) => {
+    try {
+      const response = await api.get(`/admin/database/backups/${filename}`, {
+        responseType: 'blob',
+      })
+      const objectUrl = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+    } catch {
+      setFeedback({ msg: 'Erro ao baixar backup.', isError: true })
+    }
   }
 
   return (
@@ -324,6 +366,44 @@ export default function BackupPanel() {
         </div>
       )}
 
+      {operationsData && operationsData.operations.length > 0 && (
+        <section aria-label="Status das operações de banco de dados" style={{ marginBottom: '1rem' }}>
+          <h4 style={{ margin: '0 0 0.5rem', color: 'var(--color-text)' }}>
+            Operações recentes
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {operationsData.operations.map(operation => (
+              <div key={operation.id} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                padding: '0.625rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'oklch(from var(--color-text) l c h / 0.04)',
+                color: 'var(--color-text)',
+                fontSize: 'var(--text-xs)',
+              }}>
+                <span>
+                  {operation.operation_type === 'BACKUP' ? 'Backup' : 'Restauração'}
+                  {operation.backup_filename ? ` · ${operation.backup_filename}` : ''}
+                </span>
+                <strong>
+                  {{
+                    queued: 'Na fila',
+                    running: 'Em execução',
+                    succeeded: 'Concluída',
+                    failed: operation.error_message || 'Falhou',
+                  }[operation.status]}
+                </strong>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '0.5rem 0 0', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+            O restore pode substituir estes registros; um status ausente não confirma o resultado.
+          </p>
+        </section>
+      )}
+
       {/* Restore Warning Modal */}
       {showRestoreWarning && selectedBackup && (
         <div
@@ -341,6 +421,7 @@ export default function BackupPanel() {
           onClick={() => {
             setShowRestoreWarning(false)
             setSelectedBackup(null)
+            setRestorePassword('')
           }}
         >
           <div
@@ -378,6 +459,31 @@ export default function BackupPanel() {
                 Você está prestes a restaurar o banco de dados a partir de um backup.
               </p>
 
+              <label style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.375rem',
+              }}>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                  Confirme sua senha de SuperAdmin para continuar
+                </span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={restorePassword}
+                  onChange={event => setRestorePassword(event.target.value)}
+                  disabled={restoreBackup.isPending}
+                  style={{
+                    padding: '0.625rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid oklch(from var(--color-text) l c h / 0.16)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+              </label>
+
               <div style={{
                 padding: '0.75rem 1rem',
                 borderRadius: 'var(--radius-md)',
@@ -407,6 +513,7 @@ export default function BackupPanel() {
                   onClick={() => {
                     setShowRestoreWarning(false)
                     setSelectedBackup(null)
+                    setRestorePassword('')
                   }}
                   style={{
                     padding: '0.5rem 1rem',
@@ -421,17 +528,24 @@ export default function BackupPanel() {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => restoreBackup.mutate(selectedBackup)}
-                  disabled={restoreBackup.isPending}
+                  onClick={() => restoreBackup.mutate({
+                    filename: selectedBackup,
+                    currentPassword: restorePassword,
+                  })}
+                  disabled={restoreBackup.isPending || !restorePassword}
                   style={{
                     padding: '0.5rem 1rem',
                     borderRadius: 'var(--radius-md)',
                     border: 'none',
-                    background: restoreBackup.isPending ? 'oklch(from var(--color-error) l c h / 0.6)' : 'var(--color-error)',
+                    background: restoreBackup.isPending || !restorePassword
+                      ? 'oklch(from var(--color-error) l c h / 0.6)'
+                      : 'var(--color-error)',
                     color: 'var(--color-text-inverse)',
                     fontSize: 'var(--text-sm)',
                     fontWeight: 600,
-                    cursor: restoreBackup.isPending ? 'not-allowed' : 'pointer',
+                    cursor: restoreBackup.isPending || !restorePassword
+                      ? 'not-allowed'
+                      : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.375rem',

@@ -1,13 +1,28 @@
 import logging
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_safety import sanitize_log_value
+from app.integrations.b3_market_calendar import validate_b3_source_url
 from app.models.system_config import SystemConfig
 
 logger = logging.getLogger(__name__)
+
+_B3_CALENDAR_SOURCE_URL_KEY = "market_calendar.b3_source_url"
+_B3_CALENDAR_SOURCE_YEAR_KEY = "market_calendar.b3_source_year"
+
+
+def validate_system_config_value(key: str, value: str) -> None:
+    """Validate narrowly scoped SuperAdmin calendar settings before persistence."""
+    normalized = value.strip()
+    if key == _B3_CALENDAR_SOURCE_URL_KEY and normalized:
+        validate_b3_source_url(normalized)
+    if key == _B3_CALENDAR_SOURCE_YEAR_KEY and normalized:
+        if not re.fullmatch(r"20\d{2}", normalized):
+            raise ValueError("B3 calendar source year must be a four-digit year")
 
 
 async def get_config(db: AsyncSession, key: str) -> str | None:
@@ -24,6 +39,7 @@ async def get_bool_config(db: AsyncSession, key: str, default: bool = False) -> 
 
 
 async def set_config(db: AsyncSession, key: str, value: str) -> None:
+    validate_system_config_value(key, value)
     result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg:
@@ -54,6 +70,7 @@ async def update_config(
     value: str,
 ) -> SystemConfig:
     """Faz upsert de uma configuração por chave e retorna o registro atualizado."""
+    validate_system_config_value(key, value)
     result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg:
@@ -77,6 +94,8 @@ async def bulk_update_configs(
     configs: dict[str, str],
 ) -> list[SystemConfig]:
     """Atualiza múltiplas configurações em um único commit."""
+    for key, value in configs.items():
+        validate_system_config_value(key, value)
     updated: list[SystemConfig] = []
     for key, value in configs.items():
         result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_delete, cache_get, cache_set
+from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
@@ -522,8 +523,8 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
             "[legacy_summary_fixed_income_unavailable] portfolio=%s reason=%s",
-            portfolio_id,
-            exc,
+            sanitize_log_value(portfolio_id),
+            sanitize_log_value(exc),
         )
         rf_totals = await get_fixed_income_principal_totals(db, portfolio_id)
 
@@ -601,8 +602,8 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
             "[positions_fixed_income_unavailable] portfolio=%s reason=%s",
-            portfolio_id,
-            exc,
+            sanitize_log_value(portfolio_id),
+            sanitize_log_value(exc),
         )
         valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
     rf_positions = [valuation_to_position_payload(v, idx + 1) for idx, v in enumerate(valuations)]

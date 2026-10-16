@@ -188,6 +188,25 @@ def validate_match_resolution_evidence(
             raise ValueError("CASH_SETTLEMENT exige tratamento de caixa")
         return
 
+    if evidence.fractional_policy == FractionalResolutionPolicy.PENDING_SETTLEMENT:
+        if not has_fraction:
+            raise ValueError("PENDING_SETTLEMENT exige quantidade fracionaria")
+        try:
+            fractional_quantity = Decimal(str(evidence.fractional_quantity))
+        except (InvalidOperation, ValueError):
+            raise ValueError(
+                "PENDING_SETTLEMENT exige quantidade fracionaria decimal"
+            ) from None
+        if not fractional_quantity.is_finite() or fractional_quantity <= 0:
+            raise ValueError(
+                "PENDING_SETTLEMENT exige quantidade fracionaria positiva"
+            )
+        if evidence.fractional_settlement_price or evidence.cash_treatment:
+            raise ValueError(
+                "PENDING_SETTLEMENT nao aceita preco ou tratamento de caixa"
+            )
+        return
+
     if evidence.fractional_policy == FractionalResolutionPolicy.MANUAL_REVIEW:
         raise ValueError("MANUAL_REVIEW nao autoriza MATCHED")
 
@@ -219,7 +238,10 @@ def _reject_unsupported_adjusted_ledger_reapplication(
     evidences: tuple[CorporateEventEvidence, ...],
     evidence: CorporateEventMatchResolutionEvidence,
 ) -> None:
-    if evidence.fractional_policy != FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:
+    if evidence.fractional_policy not in {
+        FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        FractionalResolutionPolicy.PENDING_SETTLEMENT,
+    }:
         return
 
     has_amob3 = any(item.ticker.strip().upper() == "AMOB3" for item in evidences)

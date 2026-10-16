@@ -94,7 +94,33 @@ def test_ready_fails_closed_when_runtime_identity_is_missing(
     assert response.status_code == 503
     assert payload["ready_for_real_data"] is False
     assert payload["certification"]["status"] == "runtime_identity_error"
+    assert payload["certification"]["detail"] == (
+        "runtime identity validation failed"
+    )
     report.assert_not_awaited()
+
+
+def test_ready_does_not_expose_runtime_exception_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sensitive_detail = (
+        "Traceback: SELECT secret FROM users; "
+        "postgresql://admin:do-not-expose@database/sgi"
+    )
+    monkeypatch.setattr(main, "AsyncSessionLocal", _SessionContext)
+    monkeypatch.setattr(
+        real_data_runtime_identity,
+        "resolve_real_data_runtime_identity",
+        AsyncMock(side_effect=RealDataRuntimeIdentityError(sensitive_detail)),
+    )
+
+    response = asyncio.run(main.ready())
+    serialized_response = response.body.decode("utf-8")
+
+    assert response.status_code == 503
+    assert sensitive_detail not in serialized_response
+    assert "do-not-expose" not in serialized_response
+    assert "Traceback" not in serialized_response
 
 
 def test_ready_uses_persisted_report_as_authority(

@@ -132,7 +132,8 @@ def test_cadeia_diaria_dedicada_segrega_aporte_como_fluxo_externo() -> None:
     assert points[1].accumulated_return_pct == Decimal("0.000000")
 
 
-def test_cadeia_diaria_dedicada_segrega_venda_parcial_como_fluxo_externo() -> None:
+def test_cadeia_diaria_dedicada_segrega_venda_parcial_como_fluxo_externo(
+) -> None:
     points = build_daily_twr_chain(
         [
             DailyTwrInput(date(2026, 8, 3), Decimal("1000.00")),
@@ -164,6 +165,40 @@ def test_cadeia_diaria_dedicada_trata_rendimento_como_retorno() -> None:
     assert points[1].accumulated_return_pct == Decimal("2.500000")
 
 
+def test_cadeia_diaria_dedicada_segrega_cupom_do_pu_sem_dupla_contagem(
+) -> None:
+    points = build_daily_twr_chain(
+        [
+            DailyTwrInput(date(2026, 8, 3), Decimal("1000.00")),
+            DailyTwrInput(
+                date(2026, 8, 4),
+                Decimal("950.00"),
+                income_day=Decimal("50.00"),
+            ),
+        ]
+    )
+
+    assert points[1].daily_return_pct == Decimal("0.000000")
+    assert points[1].accumulated_return_pct == Decimal("0.000000")
+
+
+def test_cadeia_diaria_dedicada_segrega_amortizacao_do_pu_sem_dupla_contagem(
+) -> None:
+    points = build_daily_twr_chain(
+        [
+            DailyTwrInput(date(2026, 8, 3), Decimal("1000.00")),
+            DailyTwrInput(
+                date(2026, 8, 4),
+                Decimal("800.00"),
+                income_day=Decimal("200.00"),
+            ),
+        ]
+    )
+
+    assert points[1].daily_return_pct == Decimal("0.000000")
+    assert points[1].accumulated_return_pct == Decimal("0.000000")
+
+
 def test_cadeia_diaria_dedicada_vencimento_nao_cria_queda_artificial() -> None:
     points = build_daily_twr_chain(
         [
@@ -187,7 +222,11 @@ def test_cadeia_diaria_dedicada_falha_fechada_sem_cobertura() -> None:
     points = build_daily_twr_chain(
         [
             DailyTwrInput(date(2026, 8, 3), Decimal("1000.00")),
-            DailyTwrInput(date(2026, 8, 4), Decimal("1010.00"), has_coverage=False),
+            DailyTwrInput(
+                date(2026, 8, 4),
+                Decimal("1010.00"),
+                has_coverage=False,
+            ),
             DailyTwrInput(date(2026, 8, 5), Decimal("1020.00")),
         ]
     )

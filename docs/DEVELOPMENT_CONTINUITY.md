@@ -17,7 +17,7 @@ Estado de governança pós-promoção:
 - documentação raiz rebaselined para o estado atual;
 - #158, #269 e #227 fechadas;
 - OCI/#284 fora do caminho crítico atual e preservada como backlog futuro;
-- #345 concluída e promovida pela PR #385;
+- #344 concluída com todas as filhas #345–#350 fechadas e promovidas;
 - a #384 foi concluída com promoção append-only para a identidade exata do
   runtime no SHA `3ab054f61e34f440dddf93c170259958243d58af`.
 
@@ -50,14 +50,15 @@ autorização real atual é separada e vem exclusivamente do evento persistido d
 ```text
 governança pós-#362
   -> baseline local do HEAD
-  -> #345 (concluída)
-  -> #346
-  -> #347
+  -> #344 Architecture Enforcement (concluída)
+  -> hygiene/upgrades Dependabot priorizados
+  -> nova baseline técnica
   -> #365
   -> #364
 ```
 
-Prosseguir pelos hardenings arquiteturais com baseline verde. A #384 governa
+Prosseguir pela hygiene e pelos upgrades Dependabot priorizados, cada um em
+bloco isolado, antes de congelar nova baseline e iniciar #365. A #384 governa
 qualquer futura mudança de identidade ou de `ready_for_real_data`; a promoção
 vigente continua limitada ao runtime certificado. #284 não bloqueia essa
 sequência local.

@@ -12,6 +12,7 @@ from urllib.parse import unquote, urlsplit
 from app.services.pre_prod_backup_service import (
     BackupError,
     CommandResult,
+    _postgres_cli_url,
     run_checked,
     sha256_file,
     write_json,
@@ -59,9 +60,7 @@ class ReconciliationReport:
 
 
 def database_identity(database_url: str) -> DatabaseIdentity:
-    parsed = urlsplit(database_url)
-    if parsed.scheme not in {"postgres", "postgresql"}:
-        raise BackupError("pre_prod_restore aceita somente URLs PostgreSQL síncronas")
+    parsed = urlsplit(_postgres_cli_url(database_url))
     database = unquote(parsed.path.lstrip("/"))
     if not parsed.hostname or not database:
         raise BackupError("URL PostgreSQL deve informar host e banco")
@@ -98,7 +97,7 @@ def _query_to_file(
             "--set",
             "ON_ERROR_STOP=1",
             "--dbname",
-            database_url,
+            _postgres_cli_url(database_url),
             "--command",
             sql,
         ],
@@ -170,7 +169,7 @@ def restore_postgres_backup(
                 "--no-owner",
                 "--no-privileges",
                 "--dbname",
-                target_database_url,
+                _postgres_cli_url(target_database_url),
                 str(dump_path),
             ],
             runner=runner,

@@ -4,6 +4,7 @@ from datetime import date
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.config import settings
 from app.core.distributed_job_lock import distributed_job_lock
 
 logger = logging.getLogger(__name__)
@@ -71,21 +72,28 @@ def start_scheduler() -> None:
             AssetType.CRIPTO,
             AssetType.TESOURO_DIRETO,
         ]
-        async with AsyncSessionLocal() as db:
-            try:
-                updated, invalidated = await refresh_quotes_and_invalidate(
-                    db, asset_types
-                )
-                logger.info(
-                    "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
-                    updated,
-                    invalidated,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro ao atualizar cotações intradiárias: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="update_quotes_intraday",
+            period="intraday",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    updated, invalidated = await refresh_quotes_and_invalidate(
+                        db, asset_types
+                    )
+                    logger.info(
+                        "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
+                        updated,
+                        invalidated,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro ao atualizar cotações intradiárias: %s",
+                        exc,
+                    )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
@@ -139,15 +147,22 @@ def start_scheduler() -> None:
             update_treasury_latest_prices,
         )
 
-        async with AsyncSessionLocal() as db:
-            try:
-                await import_treasury_price_history(db, only_missing=True)
-                await update_treasury_latest_prices(db)
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro no fechamento diário do Tesouro: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="persist_treasury_daily_close",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    await import_treasury_price_history(db, only_missing=True)
+                    await update_treasury_latest_prices(db)
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro no fechamento diário do Tesouro: %s",
+                        exc,
+                    )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
@@ -162,18 +177,78 @@ def start_scheduler() -> None:
             maintain_twr_snapshots_for_active_portfolios,
         )
 
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await maintain_twr_snapshots_for_active_portfolios(db)
-                logger.info(
-                    "[scheduler] Snapshots patrimoniais/TWR atualizados: %s",
-                    result,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro na manutenção de snapshots TWR: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="portfolio_snapshot_auto_maintenance",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    result = await maintain_twr_snapshots_for_active_portfolios(db)
+                    logger.info(
+                        "[scheduler] Snapshots patrimoniais/TWR atualizados: %s",
+                        result,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro na manutenção de snapshots TWR: %s",
+                        exc,
+                    )
+
+    if settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
+
+        @scheduler.scheduled_job(
+            _cron_trigger(day=1, hour=8, minute=15),
+            id="audit_b3_market_calendar_monthly",
+            name="Auditar mensalmente a fonte oficial do calendario B3",
+            max_instances=1,
+            coalesce=True,
+        )
+        async def audit_b3_market_calendar_monthly():
+            """Audit the source only; calendar promotion remains manual."""
+            from app.core.database import AsyncSessionLocal
+            from app.services.b3_market_calendar_audit_service import (
+                run_b3_market_calendar_monthly_audit,
+            )
+            from app.services.b3_market_calendar_configuration_service import (
+                resolve_b3_market_calendar_audit_configuration,
+            )
+
+            async with distributed_job_lock(
+                job_name="audit_b3_market_calendar",
+                period="monthly",
+                ttl_seconds=300,
+            ) as acquired:
+                if not acquired:
+                    return
+                try:
+                    async with AsyncSessionLocal() as db:
+                        configuration = (
+                            await resolve_b3_market_calendar_audit_configuration(
+                                db,
+                                runtime_settings=settings,
+                            )
+                        )
+                    result = await run_b3_market_calendar_monthly_audit(
+                        source_url=configuration.source_url,
+                        source_year=configuration.source_year,
+                    )
+                    logger.info(
+                        "[scheduler] Auditoria mensal B3 concluida: "
+                        "sha256=%s closed_dates=%s special_dates=%s writes=%s",
+                        result.source_sha256,
+                        len(result.report.explicitly_closed_dates),
+                        len(result.report.special_operation_dates),
+                        result.report.database_writes_executed,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro na auditoria mensal do calendario B3: "
+                        "%s",
+                        exc,
+                    )
 
     scheduler.start()
     logger.info(

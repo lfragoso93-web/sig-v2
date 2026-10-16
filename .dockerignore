@@ -1,0 +1,24 @@
+# The backend certification runtime needs only the Python backend, its
+# versioned Agent Skills contracts, and the README referenced by SGI012.
+*
+!backend/
+!backend/**
+!.agents/
+!.agents/**
+!README.md
+
+# Keep local configuration, generated data, and caches out even when backend/
+# is included above.
+.env
+backend/.env
+backend/.env.local
+backend/__pycache__/
+backend/**/*.pyc
+backend/.mypy_cache/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.codex-runtime-temp/
+backend/test-tmp/
+backend/pytest-cache-files-*/
+backend/review-temp/
+artifacts/

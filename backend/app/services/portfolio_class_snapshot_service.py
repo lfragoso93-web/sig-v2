@@ -22,6 +22,7 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import OperationType, Transaction
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
 from app.services.canonical_dividend_aggregation_service import (
     group_received_entitlements_by_day,
 )
@@ -37,6 +38,7 @@ from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
 from app.services.fixed_income_valuation_service import (
+    fixed_income_coverage_from_transactions,
     get_fixed_income_totals_from_transactions,
 )
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
@@ -127,6 +129,21 @@ class ClassReturnState:
     previous_value: Decimal = _ZERO
     accumulated_return_pct: Decimal = _ZERO
     dividends_accumulated: Decimal = _ZERO
+    has_incomplete_history: bool = False
+
+
+def _fixed_income_snapshot_quality(
+    coverage: BenchmarkCoverageStatus,
+    state: ClassReturnState,
+) -> tuple[bool, bool, str]:
+    """Return coverage, estimate and status without relabelling a broken chain."""
+    coverage_complete = coverage is BenchmarkCoverageStatus.COMPLETE
+    if not coverage_complete:
+        state.has_incomplete_history = True
+        return False, True, f"{coverage.value}_benchmark"
+    if state.has_incomplete_history:
+        return True, True, "incomplete_history"
+    return True, False, "complete"
 
 
 def class_twr_availability(asset_types: Iterable[AssetType]) -> list[dict]:
@@ -381,7 +398,12 @@ async def rebuild_class_snapshots(
 
                 market_value = _ZERO
                 cost_basis = _ZERO
-                has_partial_prices = False
+                has_pending_fraction = any(
+                    position.asset_type == asset_type
+                    and position.has_pending_fraction
+                    for position in projected_positions.values()
+                )
+                has_partial_prices = has_pending_fraction
                 for position in open_positions:
                     close = prices.get(position.ticker)
                     if close is None:
@@ -428,13 +450,22 @@ async def rebuild_class_snapshots(
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": has_partial_prices,
                         "return_is_estimated": True,
-                        "valuation_status": "partial_prices" if has_partial_prices else "complete",
+                        "valuation_status": (
+                            "pending_corporate_action_fraction"
+                            if has_pending_fraction
+                            else (
+                                "partial_prices"
+                                if has_partial_prices
+                                else "complete"
+                            )
+                        ),
                     },
                 )
                 class_state.previous_value = market_value
                 count += 1
 
             if AssetType.TESOURO_DIRETO in portfolio_types:
+                treasury_state = return_states[AssetType.TESOURO_DIRETO]
                 treasury_flow = _ZERO
                 for transaction in treasury_transactions_by_day.get(cursor, []):
                     quantity, price_brl, fees_brl = _operation_brl(transaction)
@@ -473,12 +504,18 @@ async def rebuild_class_snapshots(
                         market_value += position.quantity * close
                     cost_basis += position.cost
 
+                treasury_income_day = dividends_by_class_day.get(
+                    (AssetType.TESOURO_DIRETO, cursor),
+                    _ZERO,
+                )
+                treasury_state.dividends_accumulated += treasury_income_day
+
                 treasury_inputs.append(
                     DailyTwrInput(
                         reference_date=cursor,
                         market_value=market_value,
                         net_external_flow=treasury_flow,
-                        income_day=_ZERO,
+                        income_day=treasury_income_day,
                         has_coverage=has_coverage,
                     )
                 )
@@ -496,8 +533,12 @@ async def rebuild_class_snapshots(
                             "realized_pnl": treasury_realized_pnl.quantize(_MONEY),
                             "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
                             "net_external_flow": treasury_flow.quantize(_MONEY),
-                            "dividends_day": _ZERO,
-                            "dividends_accumulated": _ZERO.quantize(_MONEY),
+                            "dividends_day": treasury_income_day.quantize(
+                                _MONEY
+                            ),
+                            "dividends_accumulated": treasury_state.dividends_accumulated.quantize(
+                                _MONEY
+                            ),
                             "daily_return_pct": treasury_point.daily_return_pct,
                             "accumulated_return_pct": treasury_point.accumulated_return_pct,
                             "has_partial_prices": False,
@@ -509,6 +550,11 @@ async def rebuild_class_snapshots(
 
             if AssetType.RENDA_FIXA in portfolio_types:
                 class_state = return_states[AssetType.RENDA_FIXA]
+                coverage = await fixed_income_coverage_from_transactions(
+                    db,
+                    fixed_income_transactions,
+                    cursor,
+                )
                 totals = await get_fixed_income_totals_from_transactions(
                     db,
                     fixed_income_transactions,
@@ -520,16 +566,21 @@ async def rebuild_class_snapshots(
                     fixed_income_transactions,
                     cursor,
                 ).quantize(_MONEY)
-                daily_return = calculate_daily_twr_pct(
-                    class_state.previous_value,
-                    market_value,
-                    net_external_flow=external_flow,
-                    dividends_day=_ZERO,
+                coverage_complete, return_is_estimated, valuation_status = (
+                    _fixed_income_snapshot_quality(coverage, class_state)
                 )
-                class_state.accumulated_return_pct = append_compounded_return_pct(
-                    class_state.accumulated_return_pct,
-                    daily_return,
-                )
+                daily_return = _ZERO
+                if coverage_complete:
+                    daily_return = calculate_daily_twr_pct(
+                        class_state.previous_value,
+                        market_value,
+                        net_external_flow=external_flow,
+                        dividends_day=_ZERO,
+                    )
+                    class_state.accumulated_return_pct = append_compounded_return_pct(
+                        class_state.accumulated_return_pct,
+                        daily_return,
+                    )
                 unrealized_pnl = market_value - cost_basis
 
                 await _upsert_class_snapshot(
@@ -548,11 +599,11 @@ async def rebuild_class_snapshots(
                         "daily_return_pct": daily_return,
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": False,
-                        "return_is_estimated": False,
-                        "valuation_status": "complete",
+                        "return_is_estimated": return_is_estimated,
+                        "valuation_status": valuation_status,
                     },
                 )
-                class_state.previous_value = market_value
+                class_state.previous_value = market_value if coverage_complete else None
                 count += 1
 
             if count and count % 100 == 0:

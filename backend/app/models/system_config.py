@@ -30,4 +30,19 @@ DEFAULT_CONFIGS = [
     {"key": "brapi_rate_limit", "value": "300", "description": "Requisições por hora na BRAPI", "is_public": False},
     {"key": "ai_analysis_enabled", "value": "true", "description": "Habilita análise com IA (Gemini)", "is_public": False},
     {"key": "maintenance_mode", "value": "false", "description": "Modo manutenção — bloqueia acesso de usuários", "is_public": True},
+    {
+        "key": "market_calendar.b3_source_url",
+        "value": (
+            "https://www.b3.com.br/pt_br/noticias/"
+            "calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm"
+        ),
+        "description": "Fonte oficial B3 do calendario de mercado para auditoria.",
+        "is_public": False,
+    },
+    {
+        "key": "market_calendar.b3_source_year",
+        "value": "2026",
+        "description": "Ano da fonte B3 usada pela auditoria de calendario.",
+        "is_public": False,
+    },
 ]

@@ -191,7 +191,7 @@ async def test_sync_uses_yahoo_only_when_brapi_is_unavailable(
 
 
 @pytest.mark.asyncio
-async def test_sync_does_not_call_yahoo_when_brapi_returns_valid_empty_payload(
+async def test_sync_uses_yahoo_as_separate_source_when_brapi_returns_valid_empty_payload(
     db: AsyncSession,
 ) -> None:
     asset = Asset(
@@ -207,17 +207,67 @@ async def test_sync_does_not_call_yahoo_when_brapi_returns_valid_empty_payload(
         assert ticker == "TEST3"
         return {"results": []}
 
-    async def unexpected_yahoo(symbol: str) -> list[tuple[date, float]]:
-        raise AssertionError("Yahoo nao deve ser consultado apos resposta BRAPI valida")
+    async def yahoo_supplement(symbol: str) -> list[tuple[date, float]]:
+        assert symbol == "TEST3.SA"
+        return [(date(2026, 2, 1), 0.5)]
 
     created = await sync_corporate_events_for_asset(
         db,
         asset,
         brapi_fetcher=empty_brapi,
-        yahoo_fetcher=unexpected_yahoo,
+        yahoo_fetcher=yahoo_supplement,
     )
 
-    assert created == []
+    assert len(created) == 1
+    assert created[0].source_provider == "yahoo"
+    assert created[0].effective_date == date(2026, 2, 1)
+    assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
+    assert created[0].raw_metadata["provider_supplement"] == "brapi_valid_empty"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("asset_type", "ticker", "expected_yahoo_symbol"),
+    [
+        (AssetType.FII.value, "TEST11", "TEST11.SA"),
+        (AssetType.STOCK.value, "AAPL", "AAPL"),
+        (AssetType.ETF_INTERNACIONAL.value, "VOO", "VOO"),
+    ],
+)
+async def test_sync_supports_fii_and_international_securities(
+    db: AsyncSession,
+    asset_type: str,
+    ticker: str,
+    expected_yahoo_symbol: str,
+) -> None:
+    asset = Asset(
+        ticker=ticker,
+        brapi_ticker=ticker,
+        name="Ativo de teste",
+        asset_type=asset_type,
+    )
+    db.add(asset)
+    await db.flush()
+
+    async def empty_brapi(requested_ticker: str) -> dict[str, object]:
+        assert requested_ticker == ticker
+        return {"results": []}
+
+    async def yahoo_supplement(symbol: str) -> list[tuple[date, float]]:
+        assert symbol == expected_yahoo_symbol
+        return [(date(2026, 2, 1), 0.5)]
+
+    created = await sync_corporate_events_for_asset(
+        db,
+        asset,
+        brapi_fetcher=empty_brapi,
+        yahoo_fetcher=yahoo_supplement,
+    )
+
+    assert len(created) == 1
+    assert created[0].ticker == ticker
+    assert created[0].source_provider == "yahoo"
+    assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
 
 
 @pytest.mark.asyncio

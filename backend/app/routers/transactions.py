@@ -6,16 +6,23 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.schemas.transaction import (
+    CorporateLifecycleEventOut,
     PagedTransactions,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
+)
+from app.services.portfolio_asset_corporate_lifecycle_service import (
+    READ_PORTFOLIO_CORPORATE_LIFECYCLE,
+    load_portfolio_asset_corporate_lifecycle,
+    load_portfolio_pending_corporate_fractions,
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
@@ -162,6 +169,54 @@ async def list_transactions(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/pending-fractions",
+    response_model=list[CorporateLifecycleEventOut],
+)
+async def list_portfolio_pending_corporate_fractions(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_portfolio_pending_corporate_fractions(
+            db,
+            access=access,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/assets/{ticker}/corporate-events",
+    response_model=list[CorporateLifecycleEventOut],
+)
+async def list_asset_corporate_lifecycle(
+    portfolio_id: int,
+    ticker: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_portfolio_asset_corporate_lifecycle(
+            db,
+            access=access,
+            ticker=ticker,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post(

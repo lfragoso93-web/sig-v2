@@ -12,7 +12,14 @@ from app.models.asset import Asset
 from app.models.transaction import Transaction
 from app.services.corporate_event_service import sync_corporate_events_for_asset
 
-_SUPPORTED_TYPES = {"ACAO", "BDR", "ETF_NACIONAL"}
+_SUPPORTED_TYPES = {
+    "ACAO",
+    "BDR",
+    "ETF_NACIONAL",
+    "FII",
+    "STOCK",
+    "ETF_INTERNACIONAL",
+}
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -16,7 +16,7 @@ def _scheduler_source() -> str:
     return SCHEDULER_PATH.read_text(encoding="utf-8")
 
 
-def test_scheduler_only_runs_recurring_price_provider_jobs() -> None:
+def test_scheduler_only_runs_price_jobs_and_b3_audit_exception() -> None:
     source = _scheduler_source()
 
     forbidden = {
@@ -34,6 +34,9 @@ def test_scheduler_only_runs_recurring_price_provider_jobs() -> None:
 
     findings = sorted(token for token in forbidden if token in source)
     assert findings == []
+    assert "ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT" in source
+    assert "audit_b3_market_calendar_monthly" in source
+    assert "market_calendar_days" not in source
 
 
 def test_scheduler_keeps_price_and_local_snapshot_jobs() -> None:

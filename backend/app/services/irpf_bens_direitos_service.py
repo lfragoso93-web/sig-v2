@@ -13,8 +13,12 @@ from app.services.historical_position_projection_reader import (
     load_open_positions_as_of,
 )
 from app.services.portfolio_service import normalize_type
+from app.services.treasury_catalog_query_service import (
+    get_persisted_treasury_commercial_names,
+)
 
 _RENDA_FIXA_TYPE = "RENDA_FIXA"
+_TREASURY_TYPE = "TESOURO_DIRETO"
 
 _CODIGO_IRPF: dict[str, tuple[str, str]] = {
     "ACAO": ("31", "03 - Participacoes Societarias"),
@@ -102,13 +106,23 @@ async def calc_bens_direitos(
 
     cutoff = date(year, 12, 31)
     projected = await load_open_positions_as_of(db, portfolio_id, cutoff)
+    treasury_symbols = [
+        ticker
+        for ticker, (_, asset_type, _) in projected.items()
+        if normalize_type(asset_type) == _TREASURY_TYPE
+    ]
+    treasury_names = await get_persisted_treasury_commercial_names(
+        db,
+        treasury_symbols,
+    )
     bens: list[BemDireito] = []
     for ticker, (position, asset_type, is_usd) in projected.items():
         codigo, grupo = _codigo_irpf(asset_type)
+        display_name = treasury_names.get(ticker.strip().lower(), ticker)
         bens.append(
             BemDireito(
                 ticker=ticker,
-                nome=ticker,
+                nome=display_name,
                 asset_type=asset_type,
                 codigo_irpf=codigo,
                 grupo_irpf=grupo,

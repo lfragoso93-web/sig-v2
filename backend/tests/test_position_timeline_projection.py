@@ -223,8 +223,11 @@ def test_cash_settlement_projects_whole_quantity_and_separate_event_cash_flow():
     )
 
     assert result.quantity == Decimal("10")
-    assert result.total_cost == Decimal("185.30")
-    assert result.realized_pnl == Decimal("0")
+    expected_fractional_cost = (
+        Decimal("185.30") * Decimal("0.10") / Decimal("10.10")
+    )
+    assert result.total_cost == Decimal("185.30") - expected_fractional_cost
+    assert result.realized_pnl == Decimal("0.4000") - expected_fractional_cost
 
     assert len(result.corporate_action_cash_flows) == 1
     cash_flow = result.corporate_action_cash_flows[0]
@@ -235,6 +238,47 @@ def test_cash_settlement_projects_whole_quantity_and_separate_event_cash_flow():
     assert cash_flow.unit_settlement_price_brl == Decimal("4.00")
     assert cash_flow.gross_amount_brl == Decimal("0.4000")
     assert cash_flow.cash_treatment == "AUCTION_SETTLEMENT"
+    assert cash_flow.cost_basis_brl == expected_fractional_cost
+    assert cash_flow.realized_pnl_brl == (
+        Decimal("0.4000") - expected_fractional_cost
+    )
+
+
+def test_pending_settlement_keeps_fraction_out_of_cash_or_realized_projection():
+    action = _action(
+        "reverse-split-pending",
+        date(2026, 1, 2),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[_buy(1, "6", "100")],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("500")
+    assert result.realized_pnl == Decimal("0")
+    assert result.corporate_action_cash_flows == ()
+    assert len(result.pending_corporate_action_fractions) == 1
+    pending = result.pending_corporate_action_fractions[0]
+    assert pending.source_event_id == "reverse-split-pending"
+    assert pending.fractional_quantity == Decimal("0.2")
+    assert pending.cost_basis_brl == Decimal("100")
 
 
 def test_cash_settlement_rejects_fraction_that_differs_from_projected_residue():
@@ -304,12 +348,63 @@ def test_cash_settlement_projection_is_deterministic_on_replay():
 
     assert second == first
     assert second.quantity == Decimal("10")
-    assert second.total_cost == Decimal("185.30")
-    assert second.realized_pnl == Decimal("0")
+    expected_fractional_cost = (
+        Decimal("185.30") * Decimal("0.10") / Decimal("10.10")
+    )
+    assert second.total_cost == Decimal("185.30") - expected_fractional_cost
+    assert second.realized_pnl == Decimal("0.4000") - expected_fractional_cost
     assert len(second.corporate_action_cash_flows) == 1
     assert (
         second.corporate_action_cash_flows[0].gross_amount_brl
         == Decimal("0.4000")
+    )
+
+
+def test_nike34_grouping_cash_settlement_is_realized_and_reduces_cost_basis():
+    action = _action(
+        "nike34-grouping",
+        date(2026, 10, 13),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker="NIKE34",
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+            settlement_price=Decimal("80"),
+            cash_treatment="AUCTION_SETTLEMENT",
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[
+            _buy(1, "1", "44.50"),
+            _buy(2, "2", "32.75"),
+            _buy(3, "3", "22.15"),
+        ],
+        actions=[action],
+    )
+
+    expected_fractional_cost = (
+        Decimal("176.45") * (Decimal("0.2") / Decimal("1.2"))
+    )
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("176.45") - expected_fractional_cost
+    assert result.realized_pnl == Decimal("16.0") - expected_fractional_cost
+    assert len(result.corporate_action_cash_flows) == 1
+    cash_flow = result.corporate_action_cash_flows[0]
+    assert cash_flow.fractional_quantity == Decimal("0.2")
+    assert cash_flow.gross_amount_brl == Decimal("16.0")
+    assert cash_flow.cost_basis_brl == expected_fractional_cost
+    assert cash_flow.realized_pnl_brl == (
+        Decimal("16.0") - expected_fractional_cost
     )
 
 

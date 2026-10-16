@@ -6,6 +6,7 @@ import asyncio
 import json
 from argparse import Namespace
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 
@@ -59,7 +60,7 @@ def _chunks(values: list[str], size: int) -> list[list[str]]:
 async def _statuses(tickers: list[str]) -> dict[str, str | None]:
     if not tickers:
         return {}
-    stmt = (
+    stmt: Any = (
         select(Asset.ticker, Asset.provider_status)
         .where(Asset.asset_type == AssetType.CRIPTO.value)
         .where(Asset.ticker.in_(tickers))

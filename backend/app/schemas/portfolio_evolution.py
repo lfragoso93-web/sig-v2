@@ -55,7 +55,13 @@ class PortfolioClassDailyEvolutionResponse(BaseModel):
     accumulated_return_pct: float
     has_partial_prices: bool
     return_is_estimated: bool
-    valuation_status: Literal["complete", "partial_prices"]
+    valuation_status: Literal[
+        "complete",
+        "partial_prices",
+        "partial_benchmark",
+        "absent_benchmark",
+        "incomplete_history",
+    ]
     history_source: Literal["portfolio_class_snapshot"]
 
 
@@ -63,7 +69,7 @@ class PortfolioClassMonthlyEvolutionResponse(PortfolioClassDailyEvolutionRespons
     """Contrato do último fechamento e TWR mensal por classe."""
 
     period: str
-    monthly_return_pct: float
+    monthly_return_pct: float | None
 
 
 class PortfolioClassAvailabilityResponse(BaseModel):
@@ -80,6 +86,9 @@ class PortfolioClassAvailabilityResponse(BaseModel):
         "available",
         "awaiting_backfill",
         "dedicated_history_not_available",
+        "partial_benchmark",
+        "absent_benchmark",
+        "incomplete_history",
     ]
     reason: str | None
 

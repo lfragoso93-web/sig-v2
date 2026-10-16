@@ -65,7 +65,7 @@ function BensDireitosTable({ data }: { data: BemDireito[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-            {['Código', 'Ticker', 'Tipo', 'Qtd', 'Custo Médio', 'Custo Total', 'Moeda'].map(h => (
+            {['Código', 'Ativo', 'Tipo', 'Qtd', 'Custo Médio', 'Custo Total', 'Moeda'].map(h => (
               <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
             ))}
           </tr>
@@ -81,7 +81,14 @@ function BensDireitosTable({ data }: { data: BemDireito[] }) {
               }}
             >
               <td className="px-3 py-2 tabular-nums text-xs" style={{ color: 'var(--color-text-muted)' }}>{b.codigo_irpf}</td>
-              <td className="px-3 py-2 font-medium">{b.ticker}</td>
+              <td className="px-3 py-2">
+                <div className="font-medium">{b.nome || b.ticker}</div>
+                {b.nome && b.nome !== b.ticker && (
+                  <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {b.ticker}
+                  </div>
+                )}
+              </td>
               <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{b.asset_type}</td>
               <td className="px-3 py-2 tabular-nums text-right">{b.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</td>
               <td className="px-3 py-2 tabular-nums text-right">{formatBRL(b.custo_medio)}</td>

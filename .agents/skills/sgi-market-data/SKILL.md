@@ -18,10 +18,12 @@ Apply the current source policy precisely:
 - use B3/COTAHIST as the baseline authority for B3 catalog/history fields
   assigned to it; BRAPI may enrich without silently overwriting official facts;
 - for dividends and corporate-event collection, BRAPI is primary;
-- call Yahoo only when BRAPI is unavailable or collection fails, record
-  `provider_fallback=brapi_unavailable`, and never compare or merge providers
-  into a synthetic fact;
-- a valid BRAPI response, including an empty result, does not trigger Yahoo;
+- call Yahoo for split/reverse-split factors when BRAPI is unavailable or when
+  BRAPI returns a valid empty event result; preserve `provider_fallback` or
+  `provider_supplement` provenance accordingly;
+- never compare or merge providers into a synthetic fact; retain distinct
+  source identities so official B3 evidence can corroborate without replacing
+  the underlying payload;
 - invalid BRAPI payloads fail closed rather than falling back silently.
 
 Do not invent prices or turn provider absence into coverage. Preserve

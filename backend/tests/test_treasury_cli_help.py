@@ -14,6 +14,7 @@ import pytest
         "app.cli.rebuild_treasury_official_prices",
         "app.cli.audit_treasury_catalog_v2",
         "app.cli.audit_treasury_canonical_assets",
+        "app.cli.backfill_treasury_instruments",
     ),
 )
 def test_help_exits_before_database_access(

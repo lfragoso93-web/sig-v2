@@ -160,6 +160,62 @@ async def test_corporate_event_preflight_projects_quantity_without_writing(
 
 
 @pytest.mark.asyncio
+async def test_nike34_grouping_preflight_exposes_fractional_residue(
+    db, portfolio
+) -> None:
+    asset = Asset(ticker="NIKE34", name="Nike", asset_type="BDR", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    db.add_all(
+        [
+            Transaction(
+                portfolio_id=portfolio.id,
+                ticker="NIKE34",
+                asset_type="BDR",
+                operation=OperationType.buy,
+                quantity=quantity,
+                price=price,
+                date=transaction_date,
+                currency="BRL",
+            )
+            for quantity, price, transaction_date in (
+                (Decimal("1"), Decimal("44.50"), date(2025, 2, 3)),
+                (Decimal("2"), Decimal("32.75"), date(2025, 5, 5)),
+                (Decimal("3"), Decimal("22.15"), date(2026, 4, 30)),
+            )
+        ]
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="NIKE34",
+        event_type="GRUPAMENTO",
+        event_date=date(2026, 10, 13),
+        ratio=Decimal("0.2"),
+        effective_date=date(2026, 10, 13),
+        quantity_factor=Decimal("0.2"),
+        source_provider="test",
+    )
+    db.add(event)
+    await db.flush()
+
+    report = await build_corporate_event_ledger_preflight_report(
+        db,
+        event,
+        portfolio_id=portfolio.id,
+    )
+
+    payload = report.to_dict()
+    assert payload["schema_version"] == "corporate-event-ledger-preflight.v2"
+    assert payload["dry_run"] is True
+    assert payload["database_writes_executed"] == 0
+    assert payload["ready_for_execution"] is False
+    assert payload["net_quantity"] == "6.00000000"
+    assert payload["projected_net_quantity"] == "1.200000000"
+    assert payload["projected_whole_quantity"] == "1"
+    assert payload["projected_fractional_quantity"] == "0.200000000"
+
+
+@pytest.mark.asyncio
 async def test_corporate_event_preflight_requires_explicit_portfolio(db, portfolio) -> None:
     asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
     db.add(asset)
@@ -258,7 +314,7 @@ async def test_corporate_event_preflight_report_is_versioned_and_read_only(
     report = await build_corporate_event_ledger_preflight_report(db, event)
 
     assert report.to_dict() == {
-        "schema_version": "corporate-event-ledger-preflight.v1",
+        "schema_version": "corporate-event-ledger-preflight.v2",
         "dry_run": True,
         "database_writes_executed": 0,
         "ready_for_execution": False,
@@ -276,6 +332,8 @@ async def test_corporate_event_preflight_report_is_versioned_and_read_only(
         "sell_quantity": "0",
         "net_quantity": "300.00000000",
         "projected_net_quantity": "6.0000000000",
+        "projected_whole_quantity": "6",
+        "projected_fractional_quantity": "0E-10",
     }
 
 

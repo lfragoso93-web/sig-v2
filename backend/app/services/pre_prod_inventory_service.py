@@ -109,6 +109,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "rebuildable",
         "Catálogo canônico é reconstruído pelas fontes oficiais e reconciliado com as transações exportadas.",
     ),
+    "treasury_instruments": (
+        "rebuildable",
+        "Metadados tipados do Tesouro são reconstruídos pelo backfill idempotente a partir do catálogo canônico de ativos.",
+    ),
     "dividends": (
         "rebuildable",
         "Direitos legados serão descartados e reconstruídos sob demanda a partir de eventos e transações.",
@@ -120,6 +124,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
     "fx_rates": (
         "rebuildable",
         "Cache de cotações PTAX é idempotente e regenerável pela fonte oficial.",
+    ),
+    "market_calendar_days": (
+        "rebuildable",
+        "Fatos oficiais de calendário são regeneráveis por candidatos revisados e promoção controlada.",
     ),
     "portfolio_class_snapshots": (
         "rebuildable",

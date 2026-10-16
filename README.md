@@ -10,7 +10,7 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 06/10/2026
+## Status atual — 11/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362 e a certificação persistente para dados reais
@@ -44,8 +44,9 @@ ready_for_real_data=true
   formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
   revisavel ate haver evidencia documental de liquidacao fracionaria para
   eventual `MATCHED`.
-- #345 foi concluída e promovida para `main` pela PR #385; a sequência da Epic
-  #344 continua em #346 e #347;
+- a Epic #344 foi concluída: #345–#350 estão fechadas e os blocos de Doctor,
+  Agent Skills, Certification Proof, runtime determinístico, Access Context e
+  Reliable Async foram promovidos para `main`;
 - #384 possui persistência append-only, leitura DB-first, relatório, contrato,
   executor transacional e CLI guardada; a promoção operacional real foi
   executada para o dataset/SHA registrados e `/ready` consome essa autoridade.
@@ -59,9 +60,9 @@ A cadeia histórica de promoção foi concluída. O mapa vigente é:
 ```text
 governança pós-#362
         -> baseline local do HEAD
-        -> #345 Architecture Doctor (concluída)
-        -> #346 Agent Skills
-        -> #347 Certification Proof
+        -> #344 Architecture Enforcement (concluída)
+        -> hygiene e upgrades Dependabot priorizados
+        -> nova baseline técnica
         -> #365 antes de qualquer migration ampla de #364
 
 #384 foi concluída; promoções futuras continuam vinculadas à identidade exata.
@@ -130,16 +131,16 @@ Princípios obrigatórios:
 
 ## Estado funcional resumido
 
-| Domínio | Estado em 10/09/2026 |
+| Domínio | Estado em 11/10/2026 |
 |---|---|
 | Autenticação/Core | funcional em validação assistida |
 | Carteiras/Transações | canônico e certificado sinteticamente |
 | CSV | certificado |
 | Patrimônio/Resumo | reconciliado em carteira assistida |
 | Snapshots | rebuild/replay certificados |
-| Rentabilidade | funcional; TWR RF permanece #149 |
-| Tesouro | valuation DB-first e snapshots dedicados |
-| Renda Fixa | lifecycle transaction-derived e valuation dedicado |
+| Rentabilidade | TWR dedicado de Tesouro e Renda Fixa disponível; lacunas permanecem explícitas |
+| Tesouro | valuation DB-first, snapshots dedicados e eventos monetários consumidos uma vez |
+| Renda Fixa | lifecycle transaction-derived, valuation e TWR dedicados |
 | Proventos | `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda; prova portfolio-scoped idempotente |
 | Eventos corporativos | sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF | funcional para classes suportadas |
@@ -156,7 +157,11 @@ Princípios obrigatórios:
 - #384 foi concluída e mantém a liberação para dados reais explícita,
   persistente e separada da promoção para `main`.
 
-#149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
+#149 permanece aberta para a evidência factual de elegibilidade de cupons e
+amortizações do Tesouro e para a certificação operacional de uma nova identidade
+runtime. Os contratos de TWR dedicado de Tesouro e Renda Fixa já estão cobertos
+por oracles; lacunas de PU, benchmark ou calendário continuam fail-closed e não
+são apresentadas como retorno oficial.
 
 ## Evolução pós-GO
 

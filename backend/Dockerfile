@@ -15,7 +15,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip==26.2 \
     && pip install --no-cache-dir -r requirements.txt
 
@@ -56,7 +56,12 @@ RUN rm -rf \
         /usr/local/bin/pip3 \
         /usr/local/bin/pip3.12
 
-COPY --chown=app:app . .
+COPY --chown=app:app backend/ /app/
+# The certification proof executes the authoritative static Doctor tests. Keep
+# only their versioned repository contracts available; the root .dockerignore
+# excludes local configuration, generated artifacts, caches, and other apps.
+COPY --chown=app:app .agents/ /app/.agents/
+COPY --chown=app:app README.md /app/README.md
 
 # Normaliza line endings e garante permissao de execucao antes de cair privilegio.
 RUN sed -i 's/\r//' /app/entrypoint.sh \

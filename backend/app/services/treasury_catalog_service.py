@@ -15,6 +15,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 from app.integrations.treasury_catalog_provider import fetch_treasury_catalog
 from app.models.asset import Asset, AssetType
@@ -99,7 +100,10 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
     try:
         items = await fetch_treasury_catalog()
     except Exception as exc:
-        logger.error("[treasury_seed] falha ao buscar catálogo Tesouro: %s", exc)
+        logger.error(
+            "[treasury_seed] falha ao buscar catálogo Tesouro: %s",
+            sanitize_log_value(exc),
+        )
         result.errors += 1
         return result
 
@@ -146,7 +150,11 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
             else:
                 result.skipped += 1
         except Exception as exc:
-            logger.error("[treasury_seed] erro ao salvar %s: %s", symbol, exc)
+            logger.error(
+                "[treasury_seed] erro ao salvar %s: %s",
+                sanitize_log_value(symbol),
+                sanitize_log_value(exc),
+            )
             result.errors += 1
 
     await db.flush()
@@ -279,8 +287,15 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
     if candidates:
         candidates.sort(reverse=True)
         resolved = candidates[0][1]
-        logger.info("[treasury_catalog] %r resolvido para %s", value, resolved)
+        logger.info(
+            "[treasury_catalog] %r resolvido para %s",
+            sanitize_log_value(value),
+            sanitize_log_value(resolved),
+        )
         return resolved
 
-    logger.warning("[treasury_catalog] sem match para %r no catálogo persistido", value)
+    logger.warning(
+        "[treasury_catalog] sem match para %r no catálogo persistido",
+        sanitize_log_value(value),
+    )
     return None

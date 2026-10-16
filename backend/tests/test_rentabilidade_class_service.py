@@ -119,3 +119,29 @@ async def test_class_contract_does_not_promote_simple_result_when_twr_missing(mo
     assert row["accumulated_twr_pct"] is None
     assert row["performance_source"] is None
     assert row["performance_status"] == "dedicated_history_not_available"
+
+
+@pytest.mark.asyncio
+async def test_class_contract_preserves_explicit_history_gap_reason(monkeypatch) -> None:
+    async def fake_positions(db, portfolio_id, user_id):
+        return [{"asset_type": "RENDA_FIXA", "total_value": 1000.0, "total_invested": 1000.0}]
+
+    async def fake_snapshots(db, portfolio_id):
+        return {}
+
+    async def fake_availability(db, portfolio_id):
+        return [{
+            "asset_type": "RENDA_FIXA",
+            "available": False,
+            "status": "incomplete_history",
+            "reason": "O TWR da classe está indisponível por lacuna histórica.",
+        }]
+
+    monkeypatch.setattr(service, "get_canonical_portfolio_positions", fake_positions)
+    monkeypatch.setattr(service, "_latest_snapshots_by_class", fake_snapshots)
+    monkeypatch.setattr(service, "get_class_twr_availability", fake_availability)
+
+    row = (await service.get_canonical_class_performance(object(), 1, 10))[0]
+
+    assert row["performance_status"] == "incomplete_history"
+    assert row["performance_reason"] == "O TWR da classe está indisponível por lacuna histórica."

@@ -1,10 +1,13 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import pytest
 from app.models.asset import AssetType
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
+from app.models.transaction import OperationType, Transaction
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -16,11 +19,17 @@ from app.services.canonical_dividend_entitlement_reader import (
 from app.services.portfolio_class_reconciliation_service import _check
 from app.services.portfolio_class_snapshot_read_service import class_snapshot_payload
 from app.services.portfolio_class_snapshot_service import (
+    ClassReturnState,
     _group_received_dividends,
+    _fixed_income_snapshot_quality,
     _load_exact_treasury_prices,
+    _net_external_flow_for_day,
     _next_business_date,
     class_twr_availability,
 )
+from app.services import portfolio_class_snapshot_service as class_snapshot_service
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
+from app.schemas.portfolio_evolution import PortfolioClassDailyEvolutionResponse
 
 
 def test_availability_exposes_dedicated_fixed_income_history() -> None:
@@ -83,6 +92,43 @@ def test_non_business_dates_move_to_next_close() -> None:
     assert _next_business_date(date(2026, 7, 19)) == date(2026, 7, 20)
 
 
+def test_fixed_income_contributions_and_redemptions_are_external_flows() -> None:
+    transactions = [
+        Transaction(
+            ticker="CDB-FLUXO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000"),
+            fees=Decimal("10"),
+            date=date(2026, 7, 17),
+        ),
+        Transaction(
+            ticker="CDB-FLUXO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.sell,
+            quantity=Decimal("1"),
+            price=Decimal("300"),
+            fees=Decimal("5"),
+            date=date(2026, 7, 17),
+        ),
+    ]
+
+    assert _net_external_flow_for_day(transactions, date(2026, 7, 17)) == Decimal(
+        "715"
+    )
+
+
+def test_fixed_income_coverage_gap_keeps_later_chain_explicitly_incomplete() -> None:
+    state = ClassReturnState()
+
+    first = _fixed_income_snapshot_quality(BenchmarkCoverageStatus.PARTIAL, state)
+    recovered = _fixed_income_snapshot_quality(BenchmarkCoverageStatus.COMPLETE, state)
+
+    assert first == (False, True, "partial_benchmark")
+    assert recovered == (True, True, "incomplete_history")
+
+
 def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:
     entitlements = [
         _entitlement("ABCD3", "ACAO", date(2026, 7, 18), "12.34"),
@@ -102,6 +148,111 @@ def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:
     assert grouped[(AssetType.FII, date(2026, 7, 20))] == Decimal("5.00")
 
 
+@pytest.mark.asyncio
+async def test_treasury_amortization_from_canonical_events_enters_twr_once(
+    monkeypatch,
+) -> None:
+    transaction = SimpleNamespace(
+        ticker="TESOURO-PREFIXADO-01012031",
+        asset_type=AssetType.TESOURO_DIRETO.value,
+        operation=OperationType.buy,
+        quantity=Decimal("10"),
+        price=Decimal("100"),
+        fees=Decimal("0"),
+        fx_rate=None,
+        date=date(2026, 8, 3),
+        id=1,
+    )
+    event = _entitlement(
+        "TESOURO-PREFIXADO-01012031",
+        AssetType.TESOURO_DIRETO.value,
+        date(2026, 8, 4),
+        "50.00",
+        event_type="AMORTIZACAO",
+    )
+    positions = {
+        AssetType.TESOURO_DIRETO: [
+            SimpleNamespace(
+                ticker="TESOURO-PREFIXADO-01012031",
+                quantity=Decimal("10"),
+                cost=Decimal("1000"),
+            )
+        ]
+    }
+    persisted: dict[date, dict] = {}
+
+    class _TransactionResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [transaction]
+
+    async def capture_snapshot(
+        _db,
+        _portfolio_id,
+        _asset_type,
+        snapshot_date,
+        values,
+    ):
+        persisted[snapshot_date] = dict(values)
+
+    class _FixedDateTime:
+        @classmethod
+        def now(cls, _timezone):
+            return SimpleNamespace(date=lambda: date(2026, 8, 4))
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_TransactionResult())
+    db.commit = AsyncMock()
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[event]),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "load_global_corporate_actions_by_ticker",
+        AsyncMock(return_value={}),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "project_class_positions_at",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "aggregate_class_positions",
+        lambda _positions: (positions, {AssetType.TESOURO_DIRETO: Decimal("0")}),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "_load_exact_treasury_prices",
+        AsyncMock(
+            side_effect=[
+                {"TESOURO-PREFIXADO-01012031": Decimal("100")},
+                {"TESOURO-PREFIXADO-01012031": Decimal("95")},
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        class_snapshot_service,
+        "_upsert_class_snapshot",
+        capture_snapshot,
+    )
+    monkeypatch.setattr(class_snapshot_service, "datetime", _FixedDateTime)
+
+    count = await class_snapshot_service.rebuild_class_snapshots(
+        db,
+        portfolio_id=7,
+    )
+
+    assert count == 2
+    assert persisted[date(2026, 8, 4)]["dividends_day"] == Decimal("50.00")
+    assert persisted[date(2026, 8, 4)]["dividends_accumulated"] == Decimal("50.00")
+    assert persisted[date(2026, 8, 4)]["daily_return_pct"] == Decimal("0.000000")
+
+
 def _entitlement(
     ticker: str,
     asset_type: str,
@@ -109,13 +260,14 @@ def _entitlement(
     amount: str,
     *,
     reason: EntitlementReason = EntitlementReason.ELIGIBLE,
+    event_type: str = "DIVIDENDO",
 ) -> PortfolioDividendEntitlement:
     event = DividendEvent(
         event_id=1,
         record_date=date(2026, 7, 1),
         ex_date=date(2026, 7, 2),
         payment_date=payment_date,
-        event_type="DIVIDENDO",
+        event_type=event_type,
         value_per_unit=Decimal("1"),
         currency="BRL",
     )
@@ -180,3 +332,27 @@ def test_reconciliation_check_preserves_sign_and_tolerance() -> None:
     assert reconciled["difference"] == 0.01
     assert failed["is_reconciled"] is False
     assert failed["difference"] == -0.02
+
+
+def test_class_evolution_accepts_explicit_partial_benchmark_quality() -> None:
+    payload = PortfolioClassDailyEvolutionResponse(
+        asset_type="RENDA_FIXA",
+        date="2026-09-11",
+        market_value=1000,
+        cost_basis=1000,
+        realized_pnl=0,
+        unrealized_pnl=0,
+        net_external_flow=0,
+        dividends_day=0,
+        dividends_accumulated=0,
+        daily_return_pct=0,
+        accumulated_return_pct=1.25,
+        has_partial_prices=False,
+        return_is_estimated=True,
+        valuation_status="partial_benchmark",
+        history_source="portfolio_class_snapshot",
+    )
+
+    assert payload.valuation_status == "partial_benchmark"
+    assert payload.return_is_estimated is True
+    assert payload.has_partial_prices is False

@@ -115,7 +115,11 @@ async def get_canonical_class_performance(
         invested = float(group.get("total_invested") or 0)
         twr_available = bool(snapshot is not None and status.get("available"))
         performance_reason = status.get("reason")
-        if not twr_available and semantics.get("performance_reason"):
+        if (
+            not twr_available
+            and performance_reason is None
+            and semantics.get("performance_reason")
+        ):
             performance_reason = semantics["performance_reason"]
 
         rows.append(

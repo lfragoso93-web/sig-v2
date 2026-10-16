@@ -52,7 +52,6 @@ async def _run() -> None:
         f"portfolio_id={identity.portfolio_id} "
         f"user_created={str(identity.user_created).lower()} "
         f"portfolio_created={str(identity.portfolio_created).lower()} "
-        f"password_rotated={str(identity.password_rotated).lower()} "
         f"transactions_created={transactions.created} "
         f"transactions_reused={transactions.reused} "
         f"crypto_membership_created={transactions.crypto_membership_created} "

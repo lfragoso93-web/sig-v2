@@ -13,7 +13,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 3. OCI/#284 é backlog futuro e não bloqueia o desenvolvimento atual;
 4. #384 está concluída e governa separadamente a autorização persistente para
    dados reais; a promoção vigente certifica apenas a identidade runtime exata;
-5. #345 foi concluída e promovida pela PR #385; a Epic #344 segue por #346/#347.
+5. #344 foi concluída com todas as filhas #345–#350 fechadas e seus contratos
+   promovidos para `main`.
 
 ## Classificação atual
 
@@ -31,8 +32,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 ### Hardening arquitetural
 
-- #344 — Epic de enforcement;
-- #345 concluída; #346 -> #347 — sequência recomendada;
+- #344 — Epic de enforcement concluída;
+- #345–#350 — filhas concluídas, com gates e documentação integrados;
 - #365 deve preceder migration estrutural ampla de #364.
 
 ### Bugs acompanhados no primeiro GO

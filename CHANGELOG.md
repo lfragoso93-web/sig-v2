@@ -4,6 +4,41 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 11/10/2026 - #149 auditoria oficial de cupons do Tesouro
+
+- o dataset oficial `resgates-do-tesouro-direto` foi identificado como fonte
+  factual de título, vencimento, pagamento e valor bruto unitário de cupons;
+- uma CLI estritamente read-only passou a validar schema, consistência agregada
+  e capacidade factual sob `treasury-cash-event-source-audit.v1`;
+- ausência de `record_date`, elegibilidade por carteira e componente tributável
+  mantém todos os eventos não promovíveis e `database_writes_executed=0`;
+- nenhum seed, migration, rebuild ou acesso ao banco foi introduzido.
+
+### 11/10/2026 - #149 contratos de TWR dedicados consolidados
+
+- Renda Fixa passou a ter oracles explícitos para aportes, resgates parciais,
+  múltiplas aplicações, composição temporal e fronteiras de benchmark;
+- Tesouro passou a consumir cupons e amortizações canônicos uma única vez no
+  TWR, preservando PU e calendário ausentes como estados fail-closed;
+- README, ROADMAP, arquitetura e mapa de dados canônicos foram alinhados ao
+  código comprovado;
+- a #149 permanece aberta apenas para evidência factual de elegibilidade de
+  cupons/amortizações e para a certificação operacional de uma nova identidade;
+- este bloco não executa seed, rebuild, escrita financeira nem promoção de
+  certificação.
+
+### 06/10/2026 - #344 Architecture Enforcement concluída
+
+- #345–#350 foram fechadas após implementação e validação dos seis blocos da
+  Epic;
+- o Architecture Doctor cataloga SGI001–SGI015 e preserva os gates originais;
+- Agent Skills versionadas, Certification Proof, runtime determinístico,
+  Access Context e lease distribuído do scheduler foram integrados;
+- a avaliação de Reliable Async documentou a decisão de não introduzir
+  transactional outbox sem uma escrita de domínio e trabalho durável que
+  precisem compartilhar a mesma transação;
+- os macroblocos foram promovidos para `main` pelas PRs #385 e #393–#396.
+
 ### 06/10/2026 - #384 certificação persistente guardada
 
 - as PRs #386 e #387 promoveram o modelo append-only, migration, leitor
@@ -23,11 +58,6 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   ausente, mismatch, revogação ou erro de leitura permanecem em 503;
 - a documentação operacional foi rebaselizada e ganhou um runbook canônico para
   impedir comandos e critérios divergentes.
-
-### 06/10/2026 - #345 Architecture Doctor
-
-- o enforcement arquitetural foi concluído e promovido para `main` pela PR
-  #385; a sequência da Epic #344 continua em #346 e #347.
 
 ### 23/09/2026 - rebaseline documental pós-#370
 

@@ -12,6 +12,10 @@ from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
 )
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolution,
+    FractionalResolutionPolicy,
+)
 
 
 def _transaction(
@@ -150,6 +154,96 @@ def test_projection_respects_target_date_and_portfolio_isolation() -> None:
     assert before["FUND11"].quantity == Decimal(5)
     assert after_one["FUND11"].quantity == Decimal("5.50")
     assert after_two["FUND11"].quantity == Decimal("9.90")
+
+
+def test_snapshot_projection_excludes_unsettled_fraction_from_value_and_cost() -> None:
+    transactions = [
+        _transaction(
+            transaction_id=1,
+            portfolio_id=1,
+            ticker="NIKE34",
+            asset_type=AssetType.BDR,
+            operation=OperationType.buy,
+            transaction_date=date(2026, 10, 1),
+            quantity="6",
+            price="100",
+        )
+    ]
+    action = _action(
+        source_event_id="reverse-split-pending",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor="0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    projected = project_class_positions_at(
+        transactions,
+        {"NIKE34": [action]},
+        target_date=date(2026, 10, 14),
+    )
+
+    assert projected["NIKE34"].quantity == Decimal("1.0")
+    assert projected["NIKE34"].cost == Decimal("500.0")
+    assert projected["NIKE34"].has_pending_fraction is True
+
+
+def test_snapshot_projection_retains_pending_fraction_without_open_shares() -> None:
+    transactions = [
+        _transaction(
+            transaction_id=1,
+            portfolio_id=1,
+            ticker="NIKE34",
+            asset_type=AssetType.BDR,
+            operation=OperationType.buy,
+            transaction_date=date(2026, 10, 1),
+            quantity="1",
+            price="100",
+        )
+    ]
+    action = _action(
+        source_event_id="reverse-split-pending-all",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor="0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    projected = project_class_positions_at(
+        transactions,
+        {"NIKE34": [action]},
+        target_date=date(2026, 10, 14),
+    )
+
+    assert projected["NIKE34"].quantity == Decimal("0")
+    assert projected["NIKE34"].cost == Decimal("0")
+    assert projected["NIKE34"].has_pending_fraction is True
 
 
 def test_aggregation_separates_open_positions_and_realized_by_class() -> None:
