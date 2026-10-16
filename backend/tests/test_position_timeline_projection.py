@@ -244,6 +244,43 @@ def test_cash_settlement_projects_whole_quantity_and_separate_event_cash_flow():
     )
 
 
+def test_pending_settlement_keeps_fraction_out_of_cash_or_realized_projection():
+    action = _action(
+        "reverse-split-pending",
+        date(2026, 1, 2),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[_buy(1, "6", "100")],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("500")
+    assert result.realized_pnl == Decimal("0")
+    assert result.corporate_action_cash_flows == ()
+    assert len(result.pending_corporate_action_fractions) == 1
+    pending = result.pending_corporate_action_fractions[0]
+    assert pending.source_event_id == "reverse-split-pending"
+    assert pending.fractional_quantity == Decimal("0.2")
+    assert pending.cost_basis_brl == Decimal("100")
+
+
 def test_cash_settlement_rejects_fraction_that_differs_from_projected_residue():
     action = _action(
         "bonus-invalid-fraction",

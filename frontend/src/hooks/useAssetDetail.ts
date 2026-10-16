@@ -24,6 +24,7 @@ export interface CorporateLifecycleEvent {
   event_type: string
   quantity_factor: number
   fractional_quantity: number | null
+  settlement_status: 'SETTLED' | 'PENDING_VALUE' | null
   unit_settlement_price_brl: number | null
   gross_amount_brl: number | null
   cost_basis_brl: number | null

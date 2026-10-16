@@ -22,6 +22,7 @@ from app.schemas.transaction import (
 from app.services.portfolio_asset_corporate_lifecycle_service import (
     READ_PORTFOLIO_CORPORATE_LIFECYCLE,
     load_portfolio_asset_corporate_lifecycle,
+    load_portfolio_pending_corporate_fractions,
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
@@ -168,6 +169,29 @@ async def list_transactions(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/pending-fractions",
+    response_model=list[CorporateLifecycleEventOut],
+)
+async def list_portfolio_pending_corporate_fractions(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_portfolio_pending_corporate_fractions(
+            db,
+            access=access,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get(

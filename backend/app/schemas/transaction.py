@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
 from decimal import Decimal
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import date as DateType
 
 VALID_OPERATIONS = {"buy", "sell"}
@@ -121,6 +121,7 @@ class CorporateLifecycleEventOut(BaseModel):
     event_type: str
     quantity_factor: Decimal
     fractional_quantity: Optional[Decimal] = None
+    settlement_status: Optional[Literal["SETTLED", "PENDING_VALUE"]] = None
     unit_settlement_price_brl: Optional[Decimal] = None
     gross_amount_brl: Optional[Decimal] = None
     cost_basis_brl: Optional[Decimal] = None

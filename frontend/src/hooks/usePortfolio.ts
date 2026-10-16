@@ -48,6 +48,34 @@ export interface AssetDistribution {
   color?: string
 }
 
+export interface PendingCorporateFraction {
+  source_event_id: string
+  ticker: string
+  event_date: string
+  event_type: string
+  quantity_factor: number
+  fractional_quantity: number
+  settlement_status: 'PENDING_VALUE'
+  unit_settlement_price_brl: null
+  gross_amount_brl: null
+  cost_basis_brl: null
+  realized_pnl_brl: null
+  cash_treatment: null
+  message: string
+}
+
+export function usePendingCorporateFractions(portfolioId: number) {
+  return useQuery<PendingCorporateFraction[]>({
+    queryKey: ['portfolio-pending-corporate-fractions', portfolioId],
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/corporate-events/pending-fractions`)
+      .then(response => response.data),
+    enabled: portfolioId > 0,
+    retry: false,
+    staleTime: 60 * 1000,
+  })
+}
+
 /** @deprecated use AssetDistribution */
 export type AssetTypeDistribution = AssetDistribution
 

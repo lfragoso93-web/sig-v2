@@ -33,7 +33,14 @@ logger = logging.getLogger(__name__)
 
 BrapiPayloadFetcher = Callable[[str], Awaitable[dict[str, Any]]]
 YahooSplitsFetcher = Callable[[str], Awaitable[list[tuple[date, float]]]]
-_SUPPORTED_ASSET_TYPES = {"ACAO", "BDR", "ETF_NACIONAL"}
+_SUPPORTED_ASSET_TYPES = {
+    "ACAO",
+    "BDR",
+    "ETF_NACIONAL",
+    "FII",
+    "STOCK",
+    "ETF_INTERNACIONAL",
+}
 
 
 class CorporateActionCollectionError(RuntimeError):
@@ -155,6 +162,21 @@ async def sync_corporate_events_for_asset(
         )
     else:
         actions = normalize_brapi_corporate_actions(ticker, brapi_payload)
+        if not actions:
+            # This BRAPI route does not publish a structured contract for
+            # splits/reverse splits. A valid empty result is therefore not
+            # evidence that those event types did not occur.
+            yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
+            actions = tuple(
+                replace(
+                    action,
+                    raw_payload={
+                        **action.raw_payload,
+                        "provider_supplement": "brapi_valid_empty",
+                    },
+                )
+                for action in normalize_yahoo_splits(ticker, yahoo_rows)
+            )
     if not actions:
         return []
 

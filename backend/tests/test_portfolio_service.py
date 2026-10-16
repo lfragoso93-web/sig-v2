@@ -12,6 +12,11 @@ from app.services.fixed_income_valuation_service import (
     FixedIncomeValuation,
     IncompleteBenchmarkCoverageError,
 )
+from app.services.corporate_action_engine import CorporateActionKind, NormalizedCorporateAction
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolution,
+    FractionalResolutionPolicy,
+)
 from app.services.portfolio_service import (
     build_group_performance_metrics,
     calc_raw_positions,
@@ -186,6 +191,93 @@ async def test_calc_raw_positions_single_buy():
     assert len(positions) == 1
     assert positions[0]["ticker"] == "VALE3"
     assert positions[0]["quantity"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_calc_raw_positions_excludes_unsettled_fraction_from_market_quantity():
+    mock_tx = MagicMock()
+    mock_tx.ticker = "NIKE34"
+    mock_tx.operation = OperationType.buy
+    mock_tx.asset_type = "BDR"
+    mock_tx.quantity = 6
+    mock_tx.price = 100
+    mock_tx.fees = 0
+    mock_tx.date = date(2026, 1, 1)
+    mock_tx.currency = "BRL"
+    mock_tx.fx_rate = None
+
+    result = MagicMock()
+    result.scalars().all.return_value = [mock_tx]
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.return_value = result
+    pending_action = NormalizedCorporateAction(
+        source="B3",
+        source_event_id="reverse-split-pending",
+        ticker="NIKE34",
+        event_date=date(2026, 1, 2),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    with patch(
+        "app.services.portfolio_service.load_global_corporate_actions_by_ticker",
+        new=AsyncMock(return_value={"NIKE34": [pending_action]}),
+    ):
+        positions = await calc_raw_positions(db, portfolio_id=1)
+
+    assert len(positions) == 1
+    assert positions[0]["quantity"] == pytest.approx(1.0)
+    assert positions[0]["total_invested"] == pytest.approx(500.0)
+    assert positions[0]["avg_price"] == pytest.approx(500.0)
+
+
+@pytest.mark.asyncio
+async def test_calc_raw_positions_preserves_usd_unit_cost_after_pending_fraction():
+    mock_tx = MagicMock()
+    mock_tx.ticker = "AAPL"
+    mock_tx.operation = OperationType.buy
+    mock_tx.asset_type = "STOCK"
+    mock_tx.quantity = 6
+    mock_tx.price = 100
+    mock_tx.fees = 0
+    mock_tx.date = date(2026, 1, 1)
+    mock_tx.currency = "USD"
+    mock_tx.fx_rate = 5
+
+    result = MagicMock()
+    result.scalars().all.return_value = [mock_tx]
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.return_value = result
+    pending_action = NormalizedCorporateAction(
+        source="Yahoo",
+        source_event_id="yahoo:reverse-split-pending",
+        ticker="AAPL",
+        event_date=date(2026, 1, 2),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("0.2"),
+        ),
+    )
+
+    with patch(
+        "app.services.portfolio_service.load_global_corporate_actions_by_ticker",
+        new=AsyncMock(return_value={"AAPL": [pending_action]}),
+    ):
+        positions = await calc_raw_positions(db, portfolio_id=1)
+
+    assert len(positions) == 1
+    assert positions[0]["quantity"] == pytest.approx(1.0)
+    assert positions[0]["total_invested"] == pytest.approx(2500.0)
+    assert positions[0]["avg_price"] == pytest.approx(2500.0)
+    assert positions[0]["avg_price_usd"] == pytest.approx(500.0)
 
 
 @pytest.mark.asyncio

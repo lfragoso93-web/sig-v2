@@ -21,7 +21,14 @@ from app.services.system_bootstrap_execution_context import (
 
 CORPORATE_EVENTS_BOOTSTRAP_AUTH_ENV = "SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS"
 CORPORATE_EVENTS_ADVISORY_LOCK_KEY = 254_001
-SUPPORTED_CORPORATE_EVENT_ASSET_TYPES = ("ACAO", "BDR", "ETF_NACIONAL")
+SUPPORTED_CORPORATE_EVENT_ASSET_TYPES = (
+    "ACAO",
+    "BDR",
+    "ETF_NACIONAL",
+    "FII",
+    "STOCK",
+    "ETF_INTERNACIONAL",
+)
 
 
 class SystemBootstrapCorporateEventsGateError(RuntimeError):

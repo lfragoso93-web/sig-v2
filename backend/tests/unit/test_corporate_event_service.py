@@ -117,14 +117,14 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sync_skips_unsupported_asset_class_without_provider_calls() -> None:
+async def test_sync_skips_crypto_without_provider_calls() -> None:
     brapi_fetcher = AsyncMock()
     yahoo_fetcher = AsyncMock()
     db = _db()
 
     created = await sync_corporate_events_for_asset(
         db,
-        _asset("FII"),
+        _asset("CRIPTO"),
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
     )

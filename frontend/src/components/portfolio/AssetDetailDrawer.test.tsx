@@ -60,6 +60,7 @@ describe('AssetDetailDrawer corporate lifecycle', () => {
       event_type: 'GRUPAMENTO',
       quantity_factor: 0.2,
       fractional_quantity: 0.2,
+      settlement_status: 'SETTLED',
       unit_settlement_price_brl: 80,
       gross_amount_brl: 16,
       cost_basis_brl: 29.41,
@@ -78,6 +79,31 @@ describe('AssetDetailDrawer corporate lifecycle', () => {
       /Valor creditado: R\$\s16,00/,
     )
     expect(screen.getByText(/Resultado realizado: -R\$\s13,41/)).toBeTruthy()
+  })
+
+  it('informa fração pendente sem apresentar crédito ou resultado realizado', () => {
+    mocks.corporateLifecycle = [{
+      source_event_id: 'pending-fraction',
+      ticker: 'NIKE34',
+      event_date: '2026-10-13',
+      event_type: 'GRUPAMENTO',
+      quantity_factor: 0.2,
+      fractional_quantity: 0.2,
+      settlement_status: 'PENDING_VALUE',
+      unit_settlement_price_brl: null,
+      gross_amount_brl: null,
+      cost_basis_brl: null,
+      realized_pnl_brl: null,
+      cash_treatment: null,
+      message: 'Fração pendente de liquidação; valor ainda não confirmado.',
+    }]
+
+    render(<AssetDetailDrawer asset={asset} portfolioId={15} onClose={vi.fn()} />)
+
+    expect(screen.getByText('Fração pendente de liquidação; valor ainda não confirmado.')).toBeTruthy()
+    expect(screen.getByText(/Fração pendente: 0,2/)).toBeTruthy()
+    expect(screen.queryByText(/Valor creditado/)).toBeNull()
+    expect(screen.queryByText(/Resultado realizado/)).toBeNull()
   })
 
   it('não apresenta evento não reconciliado como aplicado', () => {
