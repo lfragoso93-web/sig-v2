@@ -13,9 +13,9 @@ necessária uma dependência de mensageria adicional.
 
 | Job/efeito | Estado | Risco concorrente | Decisão |
 | --- | --- | --- | --- |
-| cotações intraday, dois triggers | ativo | alto: provider, preços e cache globais | candidato seguinte a lock |
+| cotações intraday, dois triggers | ativo | alto: provider, preços e cache globais | lock Redis compartilhado pelos triggers |
 | fechamento diário global de preços | ativo | alto: backfill e writes globais | lock Redis implementado |
-| fechamento diário do Tesouro | ativo | alto: import e latest prices compartilhados | migrar em bloco próprio |
+| fechamento diário do Tesouro | ativo | alto: import e latest prices compartilhados | lock Redis implementado |
 | manutenção de snapshots/TWR | ativo | médio: rebuild derivado e idempotente | lock Redis global implementado |
 | rate history BCB | módulo registrável, fora do scheduler canônico | alto se ativado | exigir lock antes de ativar |
 | startup bootstrap | assíncrono, não recorrente | mitigado por reserva e locks DB por estágio | manter contrato atual |
@@ -32,6 +32,12 @@ SET sgi:job:persist_daily_close_prices:daily <owner-token> NX EX 7200
 O job `portfolio_snapshot_auto_maintenance` usa a mesma semântica, com a key
 `sgi:job:portfolio_snapshot_auto_maintenance:daily`, antes de abrir a sessão
 que reconstrói snapshots derivados.
+
+Os dois triggers intraday compartilham a lease
+`sgi:job:update_quotes_intraday:intraday`, evitando chamadas concorrentes entre
+réplicas e entre os horários cheios/meia hora. O fechamento do Tesouro usa
+`sgi:job:persist_treasury_daily_close:daily` antes de abrir a sessão de banco.
+Ambos usam TTL de duas horas.
 
 - aquisição é fail-closed: Redis indisponível ou lock ocupado pula a execução;
 - TTL de duas horas limita o bloqueio após crash/restart;

@@ -72,21 +72,28 @@ def start_scheduler() -> None:
             AssetType.CRIPTO,
             AssetType.TESOURO_DIRETO,
         ]
-        async with AsyncSessionLocal() as db:
-            try:
-                updated, invalidated = await refresh_quotes_and_invalidate(
-                    db, asset_types
-                )
-                logger.info(
-                    "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
-                    updated,
-                    invalidated,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro ao atualizar cotações intradiárias: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="update_quotes_intraday",
+            period="intraday",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    updated, invalidated = await refresh_quotes_and_invalidate(
+                        db, asset_types
+                    )
+                    logger.info(
+                        "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
+                        updated,
+                        invalidated,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro ao atualizar cotações intradiárias: %s",
+                        exc,
+                    )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
@@ -140,15 +147,22 @@ def start_scheduler() -> None:
             update_treasury_latest_prices,
         )
 
-        async with AsyncSessionLocal() as db:
-            try:
-                await import_treasury_price_history(db, only_missing=True)
-                await update_treasury_latest_prices(db)
-            except Exception as exc:
-                logger.error(
-                    "[scheduler] Erro no fechamento diário do Tesouro: %s",
-                    exc,
-                )
+        async with distributed_job_lock(
+            job_name="persist_treasury_daily_close",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    await import_treasury_price_history(db, only_missing=True)
+                    await update_treasury_latest_prices(db)
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro no fechamento diário do Tesouro: %s",
+                        exc,
+                    )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
