@@ -52,7 +52,7 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
     assert result == "tesouro-ipca-2035"
     assert "[treasury_catalog]" in caplog.text
     assert "descricao tesouro ipca\\\\n2035 desconhecida" in caplog.text
-    assert "descricao tesouro ipca\\\\n2035 desconhecida" in caplog.text
+    assert "descricao tesouro ipca\n2035 desconhecida" not in caplog.text
 
 
 @pytest.mark.asyncio
