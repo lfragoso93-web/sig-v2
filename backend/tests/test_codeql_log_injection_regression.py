@@ -17,7 +17,7 @@ async def test_codeql_treasury_catalog_no_match_log_escapes_newlines(
     execute_result = MagicMock()
     execute_result.scalars.return_value.first.return_value = None
     db.execute.return_value = execute_result
-    raw = "titulo inexistente\\nINJECTED"
+    raw = "titulo inexistente\nINJECTED"
 
     with patch.object(
         treasury_catalog, "canonical_treasury_symbol_from_text", return_value=None
@@ -27,7 +27,7 @@ async def test_codeql_treasury_catalog_no_match_log_escapes_newlines(
     assert result is None
     assert "[treasury_catalog] sem match" in caplog.text
     assert "titulo inexistente\\\\nINJECTED" in caplog.text
-    assert "titulo inexistente\\nINJECTED" not in caplog.text
+    assert "titulo inexistente\nINJECTED" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -39,7 +39,7 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
     execute_result = MagicMock()
     execute_result.scalars.return_value.first.return_value = None
     db.execute.return_value = execute_result
-    raw = "tesouro ipca\\n2035"
+    raw = "tesouro ipca\n2035"
     asset = SimpleNamespace(ticker="tesouro-ipca-2035", name="Tesouro IPCA 2035")
 
     with patch.object(
@@ -52,7 +52,7 @@ async def test_codeql_treasury_catalog_resolution_log_escapes_newlines(
     assert result == "tesouro-ipca-2035"
     assert "[treasury_catalog]" in caplog.text
     assert "tesouro ipca\\\\n2035" in caplog.text
-    assert "tesouro ipca\\n2035" not in caplog.text
+    assert "tesouro ipca\n2035" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -60,7 +60,7 @@ async def test_codeql_treasury_seed_fetch_error_log_escapes_newlines(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     db = AsyncMock()
-    malicious_error = RuntimeError("provider failed\\nINJECTED")
+    malicious_error = RuntimeError("provider failed\nINJECTED")
 
     with patch.object(
         treasury_catalog,
@@ -71,7 +71,7 @@ async def test_codeql_treasury_seed_fetch_error_log_escapes_newlines(
 
     assert result.errors == 1
     assert "provider failed\\nINJECTED" in caplog.text
-    assert "provider failed\\nINJECTED" in caplog.text
+    assert "provider failed\nINJECTED" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -79,8 +79,8 @@ async def test_codeql_treasury_seed_item_error_log_escapes_symbol_and_exception(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     db = AsyncMock()
-    db.execute.side_effect = RuntimeError("save failed\\nINJECTED")
-    item = {"symbol": "bond\\nINJECTED"}
+    db.execute.side_effect = RuntimeError("save failed\nINJECTED")
+    item = {"symbol": "bond\nINJECTED"}
     consolidation = SimpleNamespace(consolidated=0, errors=0)
 
     with patch.object(
