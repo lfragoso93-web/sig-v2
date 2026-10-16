@@ -1,9 +1,10 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from app.core.deps import get_current_user
 from app.core.database import get_db
+from app.models.admin_backup_operation import BackupOperationStatus, BackupOperationType
 from app.models.user import UserRole
 from app.routers.admin import router
 from fastapi import FastAPI
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 def _client_for(role: UserRole) -> TestClient:
     app = FastAPI()
     db = AsyncMock()
+    db.add = Mock()
     app.state.db = db
     app.include_router(router, prefix="/api/v1/admin")
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
@@ -28,6 +30,7 @@ def _client_for(role: UserRole) -> TestClient:
     ("method", "path"),
     [
         ("post", "/api/v1/admin/database/backup"),
+        ("get", "/api/v1/admin/database/operations"),
         ("get", "/api/v1/admin/database/backups"),
         (
             "post",
@@ -50,7 +53,7 @@ def test_superadmin_can_request_backup(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client_for(UserRole.superadmin)
 
     with (
-        patch("app.routers.admin._run_database_backup_bg") as background,
+        patch("app.services.backup_service.run_database_backup_operation") as background,
         patch(
             "app.routers.admin.AuditLogService.log_action",
             new=AsyncMock(return_value=SimpleNamespace()),
@@ -63,7 +66,9 @@ def test_superadmin_can_request_backup(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert response.status_code == 202
     assert response.json()["status"] == "accepted"
-    background.assert_called_once_with("postgresql://database.example/sgi")
+    assert response.json()["operation_id"]
+    assert background.await_count == 1
+    assert background.await_args.args[1] == "postgresql://database.example/sgi"
     audit_kwargs = audit_action.await_args.kwargs
     assert audit_kwargs["user_id"] == 1
     assert audit_kwargs["action"] == "BACKUP"
@@ -97,6 +102,30 @@ def test_superadmin_can_list_backups() -> None:
     list_backups.assert_awaited_once_with()
 
 
+def test_superadmin_can_list_persisted_backup_operations() -> None:
+    client = _client_for(UserRole.superadmin)
+    operation = SimpleNamespace(
+        id="f69db9f0-c05c-48c5-aaca-69495a80a415",
+        operation_type=BackupOperationType.BACKUP,
+        status=BackupOperationStatus.SUCCEEDED,
+        backup_filename=None,
+        error_message=None,
+        created_at="2026-10-16T12:00:00Z",
+        started_at="2026-10-16T12:00:01Z",
+        finished_at="2026-10-16T12:00:03Z",
+    )
+    client.app.state.db.execute.return_value = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: [operation])
+    )
+
+    response = client.get("/api/v1/admin/database/operations?limit=10")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["operations"][0]["operation_type"] == "BACKUP"
+    assert response.json()["operations"][0]["status"] == "succeeded"
+
+
 def test_superadmin_can_request_restore(monkeypatch: pytest.MonkeyPatch) -> None:
     filename = "backup_20261014_120000.sql.gz"
     database_url = "postgresql://database.example/sgi"
@@ -113,8 +142,8 @@ def test_superadmin_can_request_restore(monkeypatch: pytest.MonkeyPatch) -> None
             new=AsyncMock(return_value={"backups": [{"filename": filename}]}),
         ) as list_backups,
         patch(
-            "app.services.backup_service.restore_database_backup",
-            new=AsyncMock(return_value={"success": True}),
+            "app.services.backup_service.run_database_restore_operation",
+            new=AsyncMock(),
         ) as restore_backup,
         patch(
             "app.routers.admin.AuditLogService.log_action",
@@ -134,7 +163,8 @@ def test_superadmin_can_request_restore(monkeypatch: pytest.MonkeyPatch) -> None
     assert response.json()["backup_filename"] == filename
     verify_password.assert_called_once_with("ValidPass1!", "stored-hash")
     list_backups.assert_awaited_once_with()
-    restore_backup.assert_awaited_once_with(database_url, filename)
+    assert restore_backup.await_count == 1
+    assert restore_backup.await_args.args[1:] == (database_url, filename)
     audit_kwargs = audit_action.await_args.kwargs
     assert audit_kwargs["action"] == "RESTORE"
     assert audit_kwargs["new_values"] == {

@@ -75,3 +75,22 @@ cd backend
 $env:ENVIRONMENT = "development"
 ..\.venv\Scripts\python.exe -m pytest tests/test_distributed_job_lock.py tests/test_scheduler.py tests/test_scheduler_provider_boundary.py -q -p no:cacheprovider
 ```
+
+## Administrative backup and restore operations (#83)
+
+Administrative backup and restore now keep a queryable record in
+`admin_backup_operations`, with `queued`, `running`, `succeeded`, and `failed`
+states. The endpoint is restricted to SuperAdmins and does not expose database
+URLs, stderr, or local paths. This record complements `AuditLog`, which remains
+the actor and request trail.
+
+The executor still uses process-local `BackgroundTasks`; a crash can leave an
+operation `queued` or `running`. This block adds neither a durable worker nor
+automatic reprocessing. For restore, `running` is committed before `psql`
+replaces the database. The restored backup can remove or revert its own status
+row; the application attempts to write a final result if the table remains
+available, but a missing row proves neither success nor failure. Do not treat
+this history as certified disaster-recovery evidence. Restoring a dump from
+before this migration may also remove the table; the status endpoint then
+returns `503` and new administrative operations fail closed until schema
+compatibility is restored through the approved migration process.

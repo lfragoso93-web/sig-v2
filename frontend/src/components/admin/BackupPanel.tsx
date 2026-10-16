@@ -21,6 +21,22 @@ interface BackupsResponse {
   error?: string
 }
 
+interface BackupOperation {
+  id: string
+  operation_type: 'BACKUP' | 'RESTORE'
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  backup_filename: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+interface BackupOperationsResponse {
+  operations: BackupOperation[]
+  count: number
+}
+
 const fetchBackups = () => api.get<BackupsResponse>('/admin/database/backups').then(r => r.data)
 
 export default function BackupPanel() {
@@ -37,12 +53,20 @@ export default function BackupPanel() {
     enabled: isOpen,
     refetchInterval: isOpen ? 5000 : false,
   })
+  const { data: operationsData, refetch: refetchOperations } = useQuery({
+    queryKey: ['admin_backup_operations'],
+    queryFn: () => api.get<BackupOperationsResponse>(
+      '/admin/database/operations?limit=30',
+    ).then(r => r.data),
+    enabled: isOpen,
+    refetchInterval: isOpen ? 5000 : false,
+  })
 
   const createBackup = useMutation({
     mutationFn: () => api.post('/admin/database/backup', {}),
     onSuccess: () => {
-      setFeedback({ msg: 'Backup iniciado em background. Acompanhe pelo log do servidor.', isError: false })
-      setTimeout(() => refetch(), 2000)
+      setFeedback({ msg: 'Solicitação de backup registrada.', isError: false })
+      refetchOperations()
     },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail
@@ -79,11 +103,11 @@ export default function BackupPanel() {
         current_password: currentPassword,
       }),
     onSuccess: () => {
-      setFeedback({ msg: 'Restauração iniciada em background. TODOS os dados serão sobrescritos!', isError: false })
+      setFeedback({ msg: 'Solicitação de restauração registrada. O status pode não persistir após a substituição do banco.', isError: false })
       setSelectedBackup(null)
       setShowRestoreWarning(false)
       setRestorePassword('')
-      setTimeout(() => refetch(), 2000)
+      refetchOperations()
     },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail
@@ -340,6 +364,44 @@ export default function BackupPanel() {
             )}
           </div>
         </div>
+      )}
+
+      {operationsData && operationsData.operations.length > 0 && (
+        <section aria-label="Status das operações de banco de dados" style={{ marginBottom: '1rem' }}>
+          <h4 style={{ margin: '0 0 0.5rem', color: 'var(--color-text)' }}>
+            Operações recentes
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {operationsData.operations.map(operation => (
+              <div key={operation.id} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                padding: '0.625rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'oklch(from var(--color-text) l c h / 0.04)',
+                color: 'var(--color-text)',
+                fontSize: 'var(--text-xs)',
+              }}>
+                <span>
+                  {operation.operation_type === 'BACKUP' ? 'Backup' : 'Restauração'}
+                  {operation.backup_filename ? ` · ${operation.backup_filename}` : ''}
+                </span>
+                <strong>
+                  {{
+                    queued: 'Na fila',
+                    running: 'Em execução',
+                    succeeded: 'Concluída',
+                    failed: operation.error_message || 'Falhou',
+                  }[operation.status]}
+                </strong>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '0.5rem 0 0', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+            O restore pode substituir estes registros; um status ausente não confirma o resultado.
+          </p>
+        </section>
       )}
 
       {/* Restore Warning Modal */}

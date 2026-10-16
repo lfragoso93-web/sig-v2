@@ -12,13 +12,101 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from uuid import UUID
 
 from app.core.log_safety import sanitize_log_value
+from app.core.database import AsyncSessionLocal
+from app.models.admin_backup_operation import (
+    AdminBackupOperation,
+    BackupOperationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
 BACKUPS_DIR = Path("/tmp/db_backups")
 _BACKUP_FILENAME_RE = re.compile(r"^backup_[0-9]{8}_[0-9]{6}\.sql\.gz$")
+
+
+async def _set_operation_status(
+    operation_id: UUID,
+    status: BackupOperationStatus,
+    *,
+    error_message: str | None = None,
+    finished: bool = False,
+) -> None:
+    async with AsyncSessionLocal() as db:
+        operation = await db.get(AdminBackupOperation, operation_id)
+        if operation is None:
+            logger.error("[backup_job] Operation record is unavailable")
+            return
+        operation.status = status
+        if status == BackupOperationStatus.RUNNING:
+            operation.started_at = _utc_now()
+        if finished:
+            operation.finished_at = _utc_now()
+        operation.error_message = error_message
+        await db.commit()
+
+
+async def run_database_backup_operation(
+    operation_id: UUID, db_url: str
+) -> None:
+    await _set_operation_status(operation_id, BackupOperationStatus.RUNNING)
+    try:
+        result = await create_database_backup(db_url)
+        if result["success"]:
+            await _set_operation_status(
+                operation_id,
+                BackupOperationStatus.SUCCEEDED,
+                finished=True,
+            )
+        else:
+            await _set_operation_status(
+                operation_id,
+                BackupOperationStatus.FAILED,
+                error_message="Backup failed",
+                finished=True,
+            )
+    except Exception:
+        logger.exception("[backup_job] Backup operation failed")
+        await _set_operation_status(
+            operation_id,
+            BackupOperationStatus.FAILED,
+            error_message="Backup failed",
+            finished=True,
+        )
+
+
+async def run_database_restore_operation(
+    operation_id: UUID, db_url: str, backup_filename: str
+) -> None:
+    # Persist RUNNING before psql can replace the table containing this record.
+    await _set_operation_status(operation_id, BackupOperationStatus.RUNNING)
+    try:
+        result = await restore_database_backup(db_url, backup_filename)
+    except Exception:
+        logger.exception("[restore_job] Restore operation failed")
+        result = {"success": False}
+
+    try:
+        if result["success"]:
+            await _set_operation_status(
+                operation_id,
+                BackupOperationStatus.SUCCEEDED,
+                finished=True,
+            )
+        else:
+            await _set_operation_status(
+                operation_id,
+                BackupOperationStatus.FAILED,
+                error_message="Restore failed",
+                finished=True,
+            )
+    except Exception:
+        # Restore can replace this table; RUNNING is the last guaranteed state.
+        logger.warning(
+            "[restore_job] Final operation status could not be persisted after restore"
+        )
 
 
 class BackupError(Exception):
