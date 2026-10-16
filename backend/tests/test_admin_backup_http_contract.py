@@ -12,7 +12,10 @@ from fastapi.testclient import TestClient
 def _client_for(role: UserRole) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/admin")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(role=role)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        role=role,
+        hashed_password="stored-hash",
+    )
     return TestClient(app)
 
 
@@ -23,8 +26,7 @@ def _client_for(role: UserRole) -> TestClient:
         ("get", "/api/v1/admin/database/backups"),
         (
             "post",
-            "/api/v1/admin/database/restore"
-            "?backup_filename=backup_20261014_120000.sql.gz",
+            "/api/v1/admin/database/restore",
         ),
         (
             "delete",
@@ -81,6 +83,10 @@ def test_superadmin_can_request_restore(monkeypatch: pytest.MonkeyPatch) -> None
 
     with (
         patch(
+            "app.routers.admin.verify_password",
+            return_value=True,
+        ) as verify_password,
+        patch(
             "app.services.backup_service.list_backups",
             new=AsyncMock(return_value={"backups": [{"filename": filename}]}),
         ) as list_backups,
@@ -91,14 +97,60 @@ def test_superadmin_can_request_restore(monkeypatch: pytest.MonkeyPatch) -> None
     ):
         response = _client_for(UserRole.superadmin).post(
             "/api/v1/admin/database/restore",
-            params={"backup_filename": filename},
+            json={
+                "backup_filename": filename,
+                "current_password": "ValidPass1!",
+            },
         )
 
     assert response.status_code == 202
     assert response.json()["status"] == "accepted"
     assert response.json()["backup_filename"] == filename
+    verify_password.assert_called_once_with("ValidPass1!", "stored-hash")
     list_backups.assert_awaited_once_with()
     restore_backup.assert_awaited_once_with(database_url, filename)
+
+
+def test_restore_rejects_incorrect_current_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://database.example/sgi")
+
+    with (
+        patch(
+            "app.routers.admin.verify_password",
+            return_value=False,
+        ),
+        patch(
+            "app.services.backup_service.list_backups",
+            new=AsyncMock(),
+        ) as list_backups,
+        patch(
+            "app.services.backup_service.restore_database_backup",
+            new=AsyncMock(),
+        ) as restore,
+    ):
+        response = _client_for(UserRole.superadmin).post(
+            "/api/v1/admin/database/restore",
+            json={
+                "backup_filename": "backup_20261014_120000.sql.gz",
+                "current_password": "incorrect",
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Credenciais inválidas"}
+    list_backups.assert_not_awaited()
+    restore.assert_not_awaited()
+
+
+def test_restore_requires_current_password() -> None:
+    response = _client_for(UserRole.superadmin).post(
+        "/api/v1/admin/database/restore",
+        json={"backup_filename": "backup_20261014_120000.sql.gz"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_superadmin_can_delete_backup() -> None:

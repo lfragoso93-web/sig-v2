@@ -27,6 +27,7 @@ export default function BackupPanel() {
   const [expandedSection, setExpandedSection] = useState<string | null>('backups')
   const [selectedBackup, setSelectedBackup] = useState<string | null>(null)
   const [showRestoreWarning, setShowRestoreWarning] = useState(false)
+  const [restorePassword, setRestorePassword] = useState('')
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
   const isOpen = expandedSection === 'backups'
 
@@ -69,16 +70,24 @@ export default function BackupPanel() {
   })
 
   const restoreBackup = useMutation({
-    mutationFn: (filename: string) =>
-      api.post('/admin/database/restore', {}, { params: { backup_filename: filename } }),
+    mutationFn: ({ filename, currentPassword }: {
+      filename: string
+      currentPassword: string
+    }) =>
+      api.post('/admin/database/restore', {
+        backup_filename: filename,
+        current_password: currentPassword,
+      }),
     onSuccess: () => {
       setFeedback({ msg: 'Restauração iniciada em background. TODOS os dados serão sobrescritos!', isError: false })
       setSelectedBackup(null)
       setShowRestoreWarning(false)
+      setRestorePassword('')
       setTimeout(() => refetch(), 2000)
     },
     onError: (e: any) => {
       const detail = e?.response?.data?.detail
+      setRestorePassword('')
       setFeedback({
         msg: typeof detail === 'string' ? detail : 'Erro ao restaurar backup.',
         isError: true,
@@ -350,6 +359,7 @@ export default function BackupPanel() {
           onClick={() => {
             setShowRestoreWarning(false)
             setSelectedBackup(null)
+            setRestorePassword('')
           }}
         >
           <div
@@ -387,6 +397,31 @@ export default function BackupPanel() {
                 Você está prestes a restaurar o banco de dados a partir de um backup.
               </p>
 
+              <label style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.375rem',
+              }}>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                  Confirme sua senha de SuperAdmin para continuar
+                </span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={restorePassword}
+                  onChange={event => setRestorePassword(event.target.value)}
+                  disabled={restoreBackup.isPending}
+                  style={{
+                    padding: '0.625rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid oklch(from var(--color-text) l c h / 0.16)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+              </label>
+
               <div style={{
                 padding: '0.75rem 1rem',
                 borderRadius: 'var(--radius-md)',
@@ -416,6 +451,7 @@ export default function BackupPanel() {
                   onClick={() => {
                     setShowRestoreWarning(false)
                     setSelectedBackup(null)
+                    setRestorePassword('')
                   }}
                   style={{
                     padding: '0.5rem 1rem',
@@ -430,17 +466,24 @@ export default function BackupPanel() {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => restoreBackup.mutate(selectedBackup)}
-                  disabled={restoreBackup.isPending}
+                  onClick={() => restoreBackup.mutate({
+                    filename: selectedBackup,
+                    currentPassword: restorePassword,
+                  })}
+                  disabled={restoreBackup.isPending || !restorePassword}
                   style={{
                     padding: '0.5rem 1rem',
                     borderRadius: 'var(--radius-md)',
                     border: 'none',
-                    background: restoreBackup.isPending ? 'oklch(from var(--color-error) l c h / 0.6)' : 'var(--color-error)',
+                    background: restoreBackup.isPending || !restorePassword
+                      ? 'oklch(from var(--color-error) l c h / 0.6)'
+                      : 'var(--color-error)',
                     color: 'var(--color-text-inverse)',
                     fontSize: 'var(--text-sm)',
                     fontWeight: 600,
-                    cursor: restoreBackup.isPending ? 'not-allowed' : 'pointer',
+                    cursor: restoreBackup.isPending || !restorePassword
+                      ? 'not-allowed'
+                      : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.375rem',

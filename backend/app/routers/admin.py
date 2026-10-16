@@ -3,9 +3,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.core.log_safety import sanitize_log_value
 from app.models.user import User, UserRole
+from app.schemas.admin import AdminRestoreRequest
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
     UserAdminUpdate, UserRoleUpdate, AdminResetPasswordRequest,
@@ -468,9 +469,9 @@ async def admin_download_database_backup(
     summary="Restaurar banco de dados a partir de um backup",
 )
 async def admin_restore_database(
-    backup_filename: str = Query(..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"),
+    data: AdminRestoreRequest,
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Restaura o banco de dados a partir de um backup em background.
@@ -478,10 +479,17 @@ async def admin_restore_database(
     **CUIDADO**: Esta operação sobrescreve TODOS os dados do banco com os dados do backup.
 
     Args:
-        backup_filename: Nome exato do arquivo de backup (obtido via GET /database/backups)
+        data.backup_filename: Nome exato do arquivo listado em GET /database/backups.
 
     Restrito a SuperAdmins.
     """
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Credenciais inválidas",
+        )
+
+    backup_filename = data.backup_filename
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         raise HTTPException(
