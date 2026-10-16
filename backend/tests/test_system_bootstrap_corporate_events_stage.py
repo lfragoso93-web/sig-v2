@@ -96,6 +96,9 @@ async def test_corporate_events_stage_filters_supported_types_in_db_query(monkey
         "ACAO",
         "BDR",
         "ETF_NACIONAL",
+        "FII",
+        "STOCK",
+        "ETF_INTERNACIONAL",
     )
     sync.assert_not_awaited()
 

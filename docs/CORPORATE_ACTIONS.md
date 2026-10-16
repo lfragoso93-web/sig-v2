@@ -22,7 +22,14 @@ nesses registros. Direitos e efeitos por carteira são calculados sob demanda.
 
 - BRAPI v2 `/stocks/dividends`: bonificações (`stockDividends`) e direitos de
   subscrição (`subscriptions`);
-- Yahoo `actions`: splits e grupamentos publicados como fatores de quantidade;
+- Yahoo `actions`: fonte complementar/fallback para fatores de splits e
+  grupamentos quando a BRAPI estiver indisponível ou retornar resultado válido
+  vazio; cada provedor mantém identidade e payload próprios;
+- B3: evidência oficial independente para fator/data de eventos listados; não
+  substituir silenciosamente payloads Yahoo/BRAPI nem sintetizar um fato entre
+  fontes;
+- classes cobertas pela coleta: ações, BDRs, FIIs e ETFs nacionais e
+  internacionais; cripto, Tesouro Direto e renda fixa ficam fora deste fluxo;
 - resolução de ticker existente: renomes simples 1:1, mantidos em fluxo
   separado enquanto a identidade global de ativos é consolidada.
 
@@ -48,6 +55,24 @@ O custo total é preservado e o preço médio é derivado novamente. Subscriçõ
 criam direitos, mas nunca aumentam quantidade automaticamente.
 
 ### Liquidação de frações
+
+Quando a quantidade fracionária e o fator estiverem comprovados, mas o preço
+ou crédito do leilão ainda não estiver disponível, a evidência pode usar
+`PENDING_SETTLEMENT`. Nesse estado:
+
+- o fator é aplicado; somente a quantidade inteira permanece na posição negociável,
+  enquanto quantidade fracionária e custo proporcional ficam registrados como
+  pendência do evento;
+- o read model informa a quantidade e `PENDING_VALUE`;
+- não há preço, caixa, custo de alienação ou resultado realizado inferido;
+- a parcela fracionária não entra na quantidade negociável nem na valorização
+  da carteira; apenas o custo proporcional da quantidade inteira permanece
+  investido na posição;
+- snapshots marcam a classe como incompleta com
+  `pending_corporate_action_fraction` enquanto essa parcela estiver pendente;
+- o custo proporcional da fração permanece anexado à pendência, sem baixa ou
+  realização, até que evidência de liquidação permita atualizar o evento para
+  `CASH_SETTLEMENT`.
 
 Quando um evento elegível produz quantidade fracionária e a evidência de
 reconciliação declara `CASH_SETTLEMENT`, o motor:
@@ -76,6 +101,14 @@ Cada `raw_data` preserva:
 - fonte e identificador canônico;
 - ticker, data, tipo e fator normalizados;
 - payload original do provedor.
+
+### Candidatos cross-provider
+
+A descoberta de equivalências considera somente eventos ainda `UNRECONCILED`
+com ativo, tipo, data efetiva e fator exatamente iguais entre ao menos duas
+fontes. O resultado é candidato para revisão; igualdade desses campos não prova
+identidade econômica e nunca marca linhas como `MATCHED` nem altera a projeção.
+Datas ou fatores divergentes continuam fora do grupo e exigem análise própria.
 
 ## Segurança operacional
 

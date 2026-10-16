@@ -353,7 +353,9 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
                     )}
                     {event.fractional_quantity != null && (
                       <div style={{ color: 'var(--color-text)', marginTop: 4 }}>
-                        Fração vendida: {Number(event.fractional_quantity).toLocaleString('pt-BR')}
+                        {event.settlement_status === 'PENDING_VALUE'
+                          ? `Fração pendente: ${Number(event.fractional_quantity).toLocaleString('pt-BR')}`
+                          : `Fração vendida: ${Number(event.fractional_quantity).toLocaleString('pt-BR')}`}
                         {event.gross_amount_brl != null && ` · Valor creditado: ${formatBRL(Number(event.gross_amount_brl))}`}
                       </div>
                     )}

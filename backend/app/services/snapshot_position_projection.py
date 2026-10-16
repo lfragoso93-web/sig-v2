@@ -99,8 +99,9 @@ def project_snapshot_positions(
     transactions: Iterable[Transaction],
     actions_by_ticker: Mapping[str, Sequence[NormalizedCorporateAction]],
     target_date: date,
+    include_pending_fractions: bool = False,
 ) -> dict[str, tuple[PositionTimelineProjection, str, bool]]:
-    """Projeta somente posições históricas abertas da carteira na data."""
+    """Projeta posições abertas e, opcionalmente, pendências fracionárias."""
 
     projected = project_transaction_timelines(
         transactions=transactions,
@@ -111,4 +112,8 @@ def project_snapshot_positions(
         ticker: item
         for ticker, item in projected.items()
         if item[0].quantity > 0
+        or (
+            include_pending_fractions
+            and item[0].pending_corporate_action_fractions
+        )
     }

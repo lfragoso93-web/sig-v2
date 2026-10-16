@@ -398,7 +398,12 @@ async def rebuild_class_snapshots(
 
                 market_value = _ZERO
                 cost_basis = _ZERO
-                has_partial_prices = False
+                has_pending_fraction = any(
+                    position.asset_type == asset_type
+                    and position.has_pending_fraction
+                    for position in projected_positions.values()
+                )
+                has_partial_prices = has_pending_fraction
                 for position in open_positions:
                     close = prices.get(position.ticker)
                     if close is None:
@@ -445,7 +450,15 @@ async def rebuild_class_snapshots(
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": has_partial_prices,
                         "return_is_estimated": True,
-                        "valuation_status": "partial_prices" if has_partial_prices else "complete",
+                        "valuation_status": (
+                            "pending_corporate_action_fraction"
+                            if has_pending_fraction
+                            else (
+                                "partial_prices"
+                                if has_partial_prices
+                                else "complete"
+                            )
+                        ),
                     },
                 )
                 class_state.previous_value = market_value

@@ -73,6 +73,17 @@ class CanonicalCorporateActionCashFlow:
 
 
 @dataclass(frozen=True)
+class PendingCorporateActionFraction:
+    """Known fractional quantity with settlement value not yet evidenced."""
+
+    source_event_id: str
+    event_date: date
+    fractional_quantity: Decimal
+    cost_basis_brl: Decimal = Decimal(0)
+    cost_basis_original_currency: Decimal = Decimal(0)
+
+
+@dataclass(frozen=True)
 class PositionTimelineProjection:
     quantity: Decimal
     total_cost: Decimal
@@ -83,6 +94,9 @@ class PositionTimelineProjection:
     realized_disposals: tuple[CanonicalRealizedDisposal, ...] = ()
     corporate_action_cash_flows: tuple[
         CanonicalCorporateActionCashFlow, ...
+    ] = ()
+    pending_corporate_action_fractions: tuple[
+        PendingCorporateActionFraction, ...
     ] = ()
 
     @property
@@ -120,6 +134,7 @@ def project_position_timeline(
     subscriptions: list[str] = []
     disposals: list[CanonicalRealizedDisposal] = []
     corporate_action_cash_flows: list[CanonicalCorporateActionCashFlow] = []
+    pending_corporate_action_fractions: list[PendingCorporateActionFraction] = []
 
     timeline: list[tuple[date, int, str, object]] = []
     for index, movement in enumerate(movements):
@@ -191,7 +206,45 @@ def project_position_timeline(
         resolution = action.fractional_resolution
 
         if resolution is not None:
-            if resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
+            if resolution.policy == FractionalResolutionPolicy.PENDING_SETTLEMENT:
+                fractional_quantity = resolution.fractional_quantity
+                if fractional_quantity is None or fractional_quantity <= 0:
+                    raise ValueError(
+                        "PENDING_SETTLEMENT exige fractional_quantity positiva"
+                    )
+                if (
+                    resolution.settlement_price is not None
+                    or str(resolution.cash_treatment or "").strip()
+                ):
+                    raise ValueError(
+                        "PENDING_SETTLEMENT nao aceita valor ou tratamento de caixa"
+                    )
+                whole_quantity = projected_quantity.to_integral_value(
+                    rounding="ROUND_FLOOR"
+                )
+                projected_fraction = projected_quantity - whole_quantity
+                if fractional_quantity != projected_fraction:
+                    raise ValueError(
+                        "PENDING_SETTLEMENT fractional_quantity diverge da fracao projetada"
+                    )
+                fractional_cost_ratio = fractional_quantity / projected_quantity
+                fractional_cost_brl = total_cost * fractional_cost_ratio
+                fractional_cost_original = (
+                    total_cost_original_currency * fractional_cost_ratio
+                )
+                pending_corporate_action_fractions.append(
+                    PendingCorporateActionFraction(
+                        source_event_id=action.source_event_id,
+                        event_date=action.event_date,
+                        fractional_quantity=fractional_quantity,
+                        cost_basis_brl=fractional_cost_brl,
+                        cost_basis_original_currency=fractional_cost_original,
+                    )
+                )
+                total_cost -= fractional_cost_brl
+                total_cost_original_currency -= fractional_cost_original
+                projected_quantity = whole_quantity
+            elif resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
                 fractional_quantity = resolution.fractional_quantity
                 settlement_price = resolution.settlement_price
                 cash_treatment = str(resolution.cash_treatment or "").strip()
@@ -277,4 +330,7 @@ def project_position_timeline(
         subscription_event_ids=tuple(subscriptions),
         realized_disposals=tuple(disposals),
         corporate_action_cash_flows=tuple(corporate_action_cash_flows),
+        pending_corporate_action_fractions=tuple(
+            pending_corporate_action_fractions
+        ),
     )

@@ -203,6 +203,30 @@ def test_match_resolution_requires_cash_settlement_details_for_fraction() -> Non
         )
 
 
+def test_match_resolution_allows_fraction_with_pending_settlement_value() -> None:
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+        evidence_reference="b3:corporate-action:TEST3:2026-01-02",
+        fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+        fractional_quantity="0.2",
+    )
+
+    validate_match_resolution_evidence(evidence)
+
+
+def test_pending_settlement_rejects_any_unverified_cash_details() -> None:
+    with pytest.raises(ValueError, match="nao aceita preco"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+                evidence_reference="b3:corporate-action:TEST3:2026-01-02",
+                fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+                fractional_quantity="0.2",
+                fractional_settlement_price="80",
+            )
+        )
+
+
 def test_matched_cash_settlement_accepts_klbn11_fraction_contract() -> None:
     report = build_reconciliation_dry_run_report(
         (_ticker_evidence(12, "KLBN11"), _ticker_evidence(13, "KLBN11", "yahoo")),
