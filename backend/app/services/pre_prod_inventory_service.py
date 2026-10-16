@@ -21,6 +21,10 @@ REPORT_SCHEMA_VERSION = "pre-prod-inventory.v2"
 _SAFE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 TABLE_POLICIES: dict[str, tuple[str, str]] = {
+    "admin_backup_operations": (
+        "preserved",
+        "HistÃ³rico operacional de solicitaÃ§Ãµes administrativas de backup e restore; status e responsÃ¡vel nÃ£o sÃ£o reconstruÃ­veis com seguranÃ§a.",
+    ),
     "alembic_version": (
         "preserved",
         "Controle estrutural das migrations aplicadas; nunca deve ser reconstruído pelo rebuild de dados.",

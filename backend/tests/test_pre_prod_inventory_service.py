@@ -133,6 +133,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
     ("table_name", "classification"),
     [
         ("users", "preserved"),
+        ("admin_backup_operations", "preserved"),
         ("goal_allocations", "preserved"),
         ("irpf_reports", "preserved"),
         ("corporate_event_reconciliation_evidence", "preserved"),
