@@ -65,8 +65,11 @@ O retorno acumulado desde o início deve usar `accumulated_return_pct` do snapsh
 Tesouro Direto e Renda Fixa usam TWR dedicado por classe. Compras e resgates
 são fluxos externos; cupons e amortizações do Tesouro entram uma única vez
 quando existem como fatos monetários canônicos em `asset_dividends`. Lacunas de
-PU, benchmark ou calendário mantêm a qualidade indisponível ou incompleta, sem
-fabricar retorno.
+benchmark ou calendário mantêm a qualidade indisponível ou incompleta, sem
+fabricar retorno. Se símbolo ou PU persistido do Tesouro não forem resolvidos,
+o snapshot mantém o valor-base por custo e persiste `has_partial_prices` e
+`return_is_estimated`; a flag informa cobertura incompleta, não um valuation
+resolvido. Ver [`snapshots.md`](snapshots.md#qualidade-do-tesouro).
 
 ---
 

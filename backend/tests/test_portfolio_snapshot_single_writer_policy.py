@@ -6,6 +6,7 @@ SIMPLE_SERVICE = BACKEND_ROOT / "app" / "services" / "portfolio_snapshot_service
 CANONICAL_WRITER = (
     BACKEND_ROOT / "app" / "services" / "portfolio_snapshot_canonical_twr_service.py"
 )
+SNAPSHOTS_DOC = BACKEND_ROOT.parent / "docs" / "snapshots.md"
 
 
 def test_simple_snapshot_service_is_invalidation_only() -> None:
@@ -31,3 +32,14 @@ def test_canonical_snapshot_writer_remains_the_materialization_boundary() -> Non
 
     assert "async def backfill_canonical_snapshots_with_returns(" in source
     assert "upsert_enriched_snapshot" in source
+
+
+def test_snapshots_documentation_matches_writer_and_treasury_quality_flags() -> None:
+    source = SNAPSHOTS_DOC.read_text(encoding="utf-8")
+
+    assert "backfill_canonical_snapshots_with_returns()" in source
+    assert "portfolio_snapshot_twr_service" not in source
+    assert "Qualidade do Tesouro" in source
+    assert "treasury_unresolved" in source
+    assert "has_partial_prices=true" in source
+    assert "return_is_estimated=true" in source
