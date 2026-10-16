@@ -4,6 +4,11 @@ from app.models.asset_dividend import AssetDividend
 from app.models.asset_price import AssetPrice
 from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.audit_log import AuditAction, AuditLog
+from app.models.admin_backup_operation import (
+    AdminBackupOperation,
+    BackupOperationStatus,
+    BackupOperationType,
+)
 from app.models.corporate_event import CorporateEvent
 from app.models.corporate_event_reconciliation_evidence import (
     CorporateEventReconciliationEvidence,
@@ -32,6 +37,9 @@ __all__ = [
     "AssetUniverseMembership",
     "AuditAction",
     "AuditLog",
+    "AdminBackupOperation",
+    "BackupOperationStatus",
+    "BackupOperationType",
     "CorporateEvent",
     "CorporateEventReconciliationEvidence",
     "FxRate",

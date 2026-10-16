@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     APP_COMMIT_SHA: str = ""
     REAL_DATASET_REFERENCE: str = ""
     ENABLE_BOOT_MARKET_SYNC: bool = False
+    ADMIN_BACKUP_RETENTION_HOURS: int = 24
     B3_BOOTSTRAP_START_YEAR: Optional[int] = None
     ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT: bool = False
     B3_MARKET_CALENDAR_SOURCE_URL: Optional[str] = None
@@ -101,6 +102,8 @@ class Settings(BaseSettings):
             raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES deve ser positivo")
         if self.REFRESH_TOKEN_EXPIRE_DAYS <= 0:
             raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS deve ser positivo")
+        if self.ADMIN_BACKUP_RETENTION_HOURS <= 0:
+            raise ValueError("ADMIN_BACKUP_RETENTION_HOURS deve ser positivo")
         if self.BRAPI_RATE_LIMIT <= 0 or self.BRAPI_RATE_BURST <= 0:
             raise ValueError("limites do provedor devem ser positivos")
         if self.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:

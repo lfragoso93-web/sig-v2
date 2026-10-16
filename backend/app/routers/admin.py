@@ -1,11 +1,30 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.responses import FileResponse
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.core.log_safety import sanitize_log_value
 from app.models.user import User, UserRole
+from app.models.admin_backup_operation import (
+    AdminBackupOperation,
+    BackupOperationStatus,
+    BackupOperationType,
+)
+from app.schemas.admin import (
+    AdminRestoreRequest,
+    AdminBackupOperationsResponse,
+)
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
     UserAdminUpdate, UserRoleUpdate, AdminResetPasswordRequest,
@@ -25,6 +44,7 @@ from app.schemas.audit_log import (
 )
 from app.services.audit_log_service import AuditLogService
 from datetime import datetime
+from uuid import uuid4
 import logging
 import traceback
 import os
@@ -42,6 +62,32 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
             detail="Acesso restrito a SuperAdmins",
         )
     return current_user
+
+
+async def _record_database_backup_action(
+    db: AsyncSession,
+    current_user: User,
+    request: Request,
+    *,
+    action: str,
+    audit_status: str,
+    new_values: dict | None = None,
+    error_message: str | None = None,
+):
+    user_agent = request.headers.get("user-agent")
+    audit_log = await AuditLogService.log_action(
+        db=db,
+        user_id=current_user.id,
+        action=action,
+        resource_type="DatabaseBackup",
+        new_values=new_values,
+        ip_address=request.client.host if request.client else None,
+        user_agent=sanitize_log_value(user_agent) if user_agent else None,
+        status=audit_status,
+        error_message=error_message,
+    )
+    await db.commit()
+    return audit_log
 
 
 # ── Gestão de Usuários ────────────────────────────────────────────────────────────────────────────────
@@ -361,26 +407,21 @@ async def admin_snapshot_backfill_one(
 
 # ── Backup & Restore de Banco de Dados ────────────────────────────────────────────────
 
-async def _run_database_backup_bg(db_url: str) -> None:
-    """Wrapper para criar backup do banco em BackgroundTask."""
-    logger.info("[backup_bg] ========== INICIANDO BACKUP DO BANCO ==========")
-    try:
-        result = await backup_service.create_database_backup(db_url)
-        if result["success"]:
-            logger.info(
-                "[backup_bg] ========== BACKUP CONCLUIDO: backup_id=%s size_mb=%.2f ==========",
-                result["backup_id"], result["size_mb"],
-            )
-        else:
-            logger.error(
-                "[backup_bg] ========== BACKUP FALHOU: %s ==========",
-                result["error"],
-            )
-    except Exception as e:
-        logger.error(
-            "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
-            e, traceback.format_exc(),
-        )
+async def _create_backup_operation(
+    db: AsyncSession,
+    user_id: int,
+    operation_type: BackupOperationType,
+    backup_filename: str | None = None,
+) -> AdminBackupOperation:
+    operation = AdminBackupOperation(
+        id=uuid4(),
+        operation_type=operation_type,
+        status=BackupOperationStatus.QUEUED,
+        requested_by_user_id=user_id,
+        backup_filename=backup_filename,
+    )
+    db.add(operation)
+    return operation
 
 
 @router.post(
@@ -390,7 +431,9 @@ async def _run_database_backup_bg(db_url: str) -> None:
 )
 async def admin_create_database_backup(
     background_tasks: BackgroundTasks,
-    _: User = Depends(require_superadmin),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Cria um backup completo do banco de dados em background usando pg_dump.
@@ -406,12 +449,52 @@ async def admin_create_database_backup(
         )
 
     logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
-    background_tasks.add_task(_run_database_backup_bg, db_url)
+    operation = await _create_backup_operation(
+        db, current_user.id, BackupOperationType.BACKUP
+    )
+    await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="BACKUP",
+        audit_status="SUCCESS",
+        new_values={"request_status": "accepted"},
+    )
+    background_tasks.add_task(
+        backup_service.run_database_backup_operation, operation.id, db_url
+    )
 
     return {
         "message": "Backup do banco iniciado em background. Acompanhe pelo log do servidor.",
         "status": "accepted",
+        "operation_id": str(operation.id),
     }
+
+
+@router.get(
+    "/database/operations",
+    response_model=AdminBackupOperationsResponse,
+    summary="Consultar operações de backup e restore",
+)
+async def admin_list_database_operations(
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await db.execute(
+            select(AdminBackupOperation)
+            .order_by(desc(AdminBackupOperation.created_at))
+            .limit(limit)
+        )
+    except SQLAlchemyError as exc:
+        logger.warning("[backup_ops] Operation status table is unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Status das operações indisponível",
+        ) from exc
+    operations = list(result.scalars().all())
+    return {"operations": operations, "count": len(operations)}
 
 
 @router.get(
@@ -468,9 +551,11 @@ async def admin_download_database_backup(
     summary="Restaurar banco de dados a partir de um backup",
 )
 async def admin_restore_database(
-    backup_filename: str = Query(..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"),
+    data: AdminRestoreRequest,
+    request: Request,
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    _: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Restaura o banco de dados a partir de um backup em background.
@@ -478,10 +563,17 @@ async def admin_restore_database(
     **CUIDADO**: Esta operação sobrescreve TODOS os dados do banco com os dados do backup.
 
     Args:
-        backup_filename: Nome exato do arquivo de backup (obtido via GET /database/backups)
+        data.backup_filename: Nome exato do arquivo listado em GET /database/backups.
 
     Restrito a SuperAdmins.
     """
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Credenciais inválidas",
+        )
+
+    backup_filename = data.backup_filename
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         raise HTTPException(
@@ -502,11 +594,34 @@ async def admin_restore_database(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
         sanitize_log_value(backup_filename)
     )
-    background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
+    operation = await _create_backup_operation(
+        db,
+        current_user.id,
+        BackupOperationType.RESTORE,
+        sanitize_log_value(backup_filename),
+    )
+    await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="RESTORE",
+        audit_status="SUCCESS",
+        new_values={
+            "backup_filename": sanitize_log_value(backup_filename),
+            "request_status": "accepted",
+        },
+    )
+    background_tasks.add_task(
+        backup_service.run_database_restore_operation,
+        operation.id,
+        db_url,
+        backup_filename,
+    )
 
     return {
         "message": f"Restauração iniciada em background a partir de {backup_filename}. Acompanhe pelo log do servidor.",
         "status": "accepted",
+        "operation_id": str(operation.id),
         "backup_filename": backup_filename,
         "warning": "Esta operação sobrescreve TODOS os dados do banco",
     }
@@ -518,7 +633,9 @@ async def admin_restore_database(
 )
 async def admin_delete_database_backup(
     backup_filename: str,
-    _: User = Depends(require_superadmin),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Deleta um arquivo de backup.
@@ -528,13 +645,34 @@ async def admin_delete_database_backup(
 
     Restrito a SuperAdmins.
     """
+    audit_log = await _record_database_backup_action(
+        db,
+        current_user,
+        request,
+        action="DELETE",
+        audit_status="REQUESTED",
+        new_values={
+            "backup_filename": sanitize_log_value(backup_filename),
+            "operation_status": "requested",
+        },
+    )
     result = await backup_service.delete_backup(backup_filename)
 
     if not result["success"]:
+        audit_log.status = "FAILURE"
+        audit_log.error_message = "Backup deletion failed"
+        await db.commit()
         raise HTTPException(
             status_code=404,
-            detail=result["error"]
+            detail="Não foi possível remover o backup",
         )
+
+    audit_log.status = "SUCCESS"
+    audit_log.new_values = {
+        "backup_filename": sanitize_log_value(backup_filename),
+        "operation_status": "completed",
+    }
+    await db.commit()
 
     return {
         "message": f"Backup {backup_filename} deletado com sucesso",
