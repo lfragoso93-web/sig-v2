@@ -48,7 +48,7 @@ async def list_goals_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     await _get_portfolio(portfolio_id, current_user, db)
-    return await list_goals(db, portfolio_id)
+    return await list_goals(db, portfolio_id, current_user.id)
 
 
 @router.post("/{portfolio_id}/goals", response_model=GoalResponse, status_code=201)
@@ -62,7 +62,7 @@ async def create_goal_endpoint(
     if body.target_value <= 0:
         raise HTTPException(status_code=422, detail="target_value deve ser maior que zero.")
     body.portfolio_id = portfolio_id
-    return await create_goal(db, body)
+    return await create_goal(db, body, current_user.id)
 
 
 @router.get("/{portfolio_id}/goals/{goal_id}", response_model=GoalResponse)
@@ -73,7 +73,7 @@ async def get_goal_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     await _get_portfolio(portfolio_id, current_user, db)
-    goal = await get_goal(db, goal_id, portfolio_id)
+    goal = await get_goal(db, goal_id, portfolio_id, current_user.id)
     if not goal:
         raise HTTPException(status_code=404, detail="Meta nao encontrada.")
     return goal
@@ -90,7 +90,7 @@ async def update_goal_endpoint(
     await _get_portfolio(portfolio_id, current_user, db)
     if body.target_value is not None and body.target_value <= 0:
         raise HTTPException(status_code=422, detail="target_value deve ser maior que zero.")
-    goal = await update_goal(db, goal_id, portfolio_id, body)
+    goal = await update_goal(db, goal_id, portfolio_id, body, current_user.id)
     if not goal:
         raise HTTPException(status_code=404, detail="Meta nao encontrada.")
     return goal
