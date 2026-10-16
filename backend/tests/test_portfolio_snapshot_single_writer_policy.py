@@ -34,10 +34,12 @@ def test_canonical_snapshot_writer_remains_the_materialization_boundary() -> Non
     assert "upsert_enriched_snapshot" in source
 
 
-def test_snapshots_documentation_matches_writer_and_records_treasury_gap() -> None:
+def test_snapshots_documentation_matches_writer_and_treasury_quality_flags() -> None:
     source = SNAPSHOTS_DOC.read_text(encoding="utf-8")
 
     assert "backfill_canonical_snapshots_with_returns()" in source
     assert "portfolio_snapshot_twr_service" not in source
-    assert "Lacuna de qualidade do Tesouro" in source
-    assert "não marcar essa cobertura como parcial" in source
+    assert "Qualidade do Tesouro" in source
+    assert "treasury_unresolved" in source
+    assert "has_partial_prices=true" in source
+    assert "return_is_estimated=true" in source

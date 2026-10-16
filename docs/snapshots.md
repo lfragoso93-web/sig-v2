@@ -130,18 +130,17 @@ A interface deve exibir essas flags de forma clara quando disponíveis.
 | Tesouro Direto | Aplica correção dedicada por símbolo canônico e PU persistido em `asset_prices` |
 | Cripto | Usa histórico persistido, com roteamento em revisão |
 
-### Lacuna de qualidade do Tesouro
+### Qualidade do Tesouro
 
 O valuation agregado começa com a base por custo e a substitui pela correção
 dedicada quando símbolo e PU persistido são resolvidos. Se essa resolução falha,
-o valor-base por custo permanece. Embora o valuation produza o diagnóstico
-`treasury_unresolved`, o writer não o persiste e a checagem atual de
-`has_partial_prices` exclui Tesouro Direto. Portanto, o snapshot agregado pode
-não marcar essa cobertura como parcial.
+o valor-base por custo permanece e o cálculo produz o diagnóstico
+`treasury_unresolved`. O writer canônico usa esse diagnóstico para persistir
+`has_partial_prices=true` e `return_is_estimated=true` no snapshot.
 
-Esse caminho não deve ser tratado como valuation completo nem como TWR oficial
-até que a qualidade do snapshot propague a ausência de PU. O tratamento pertence
-a uma correção técnica separada; não inferir preço ou identidade do título.
+Essas flags identificam cobertura incompleta; elas não resolvem o valuation nem
+autorizam inferir preço ou identidade do título. A lacuna de PU continua visível
+para consumidores do snapshot.
 
 ---
 
