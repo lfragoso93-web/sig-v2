@@ -94,3 +94,12 @@ this history as certified disaster-recovery evidence. Restoring a dump from
 before this migration may also remove the table; the status endpoint then
 returns `503` and new administrative operations fail closed until schema
 compatibility is restored through the approved migration process.
+
+Successful administrative backups trigger retention cleanup. The default
+window is 24 hours and can be changed with the positive integer setting
+`ADMIN_BACKUP_RETENTION_HOURS`. Cleanup removes only regular files with the
+canonical `backup_YYYYMMDD_HHMMSS.sql.gz` name whose filesystem modification
+time is older than the window. Symlinks and unrelated files are left alone.
+Cleanup failures are logged and do not change a completed backup's result.
+This short operational retention is separate from certified pre-production
+backup artifacts, which are stored and governed by their own runbook.

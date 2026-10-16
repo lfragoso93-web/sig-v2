@@ -8,14 +8,16 @@ import logging
 import os
 import re
 import shutil
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
-from app.core.log_safety import sanitize_log_value
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.log_safety import sanitize_log_value
 from app.models.admin_backup_operation import (
     AdminBackupOperation,
     BackupOperationStatus,
@@ -125,6 +127,35 @@ def _ensure_backups_dir() -> None:
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def cleanup_expired_backups(
+    *, now: datetime | None = None, retention_hours: int | None = None
+) -> int:
+    """Remove somente backups canônicos regulares além da janela de retenção."""
+    hours = (
+        settings.ADMIN_BACKUP_RETENTION_HOURS
+        if retention_hours is None
+        else retention_hours
+    )
+    if hours <= 0:
+        raise ValueError("Backup retention must be positive")
+
+    cutoff = (now or _utc_now()).timestamp() - hours * 60 * 60
+    backups_root = BACKUPS_DIR.resolve()
+    removed = 0
+    for candidate in backups_root.iterdir():
+        if not _BACKUP_FILENAME_RE.fullmatch(candidate.name) or candidate.is_symlink():
+            continue
+        try:
+            file_stat = candidate.stat(follow_symlinks=False)
+            if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_mtime >= cutoff:
+                continue
+            candidate.unlink()
+            removed += 1
+        except FileNotFoundError:
+            continue
+    return removed
+
+
 def _validate_backup_filename(backup_filename: str) -> None:
     """Valida a identidade externa sem usá-la em uma expressão de path."""
     if not isinstance(backup_filename, str) or not _BACKUP_FILENAME_RE.fullmatch(
@@ -204,6 +235,7 @@ async def create_database_backup(
         "size_mb": 0.0,
         "timestamp": None,
         "error": None,
+        "expired_backups_removed": 0,
     }
 
     try:
@@ -260,6 +292,14 @@ async def create_database_backup(
             }
         )
         logger.info("[backup] Backup completed: %s (%.2f MB)", backup_id, size_mb)
+        try:
+            removed = cleanup_expired_backups(now=_utc_now())
+            result["expired_backups_removed"] = removed
+            if removed:
+                logger.info("[backup_retention] Expired backups removed: %d", removed)
+        except Exception:
+            # Retention must not invalidate a successfully created backup.
+            logger.exception("[backup_retention] Cleanup failed")
     except Exception as exc:
         logger.exception("[backup] Backup failed")
         result["error"] = str(exc)
