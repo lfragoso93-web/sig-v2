@@ -1,5 +1,10 @@
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.services import treasury_catalog_service as treasury_catalog
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,17 +49,6 @@ def test_codeql_treasury_seed_logs_sanitize_external_values() -> None:
 
     assert source.count("sanitize_log_value(exc)") >= 2
     assert "sanitize_log_value(symbol)" in source
-
-
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
-from app.services import treasury_catalog_service as treasury_catalog
-
-BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.asyncio
