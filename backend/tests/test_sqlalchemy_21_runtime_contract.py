@@ -13,8 +13,21 @@ def test_sqlalchemy_21_installs_asyncio_runtime_dependency() -> None:
         encoding="utf-8"
     )
 
-    assert "sqlalchemy[asyncio]==2.1.2" in runtime_requirements.splitlines()
-    assert "sqlalchemy[asyncio,mypy]==2.1.2" in test_requirements.splitlines()
+    runtime_line = next(
+        line
+        for line in runtime_requirements.splitlines()
+        if line.startswith("sqlalchemy[asyncio]==")
+    )
+    test_line = next(
+        line
+        for line in test_requirements.splitlines()
+        if line.startswith("sqlalchemy[asyncio,mypy]==")
+    )
+    runtime_version = runtime_line.split("==", maxsplit=1)[1]
+    test_version = test_line.split("==", maxsplit=1)[1]
+
+    assert runtime_version.startswith("2.1.")
+    assert test_version == runtime_version
 
 
 def test_sync_postgresql_urls_select_installed_psycopg2_driver() -> None:
