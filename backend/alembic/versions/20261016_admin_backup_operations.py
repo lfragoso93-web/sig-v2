@@ -16,12 +16,12 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-operation_type = sa.Enum(
-    "BACKUP", "RESTORE", name="admin_backup_operation_type"
+operation_type = postgresql.ENUM(
+    "BACKUP", "RESTORE", name="admin_backup_operation_type", create_type=False
 )
-operation_status = sa.Enum(
+operation_status = postgresql.ENUM(
     "queued", "running", "succeeded", "failed",
-    name="admin_backup_operation_status",
+    name="admin_backup_operation_status", create_type=False,
 )
 
 
