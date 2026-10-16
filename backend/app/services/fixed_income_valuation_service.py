@@ -32,6 +32,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.models.transaction import OperationType, Transaction
 from app.services.benchmark_rate_service import (
     BenchmarkCoverageStatus,
@@ -319,9 +320,16 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
 
         if factor != Decimal("1") or target <= start:
             return factor
-        logger.warning("[fixed_income] sem histórico para %s; usando fallback anual", key)
+        logger.warning(
+            "[fixed_income] sem histórico para %s; usando fallback anual",
+            sanitize_log_value(key),
+        )
     except Exception as exc:
-        logger.warning("[fixed_income] benchmark_factor falhou para %s: %s", key, exc)
+        logger.warning(
+            "[fixed_income] benchmark_factor falhou para %s: %s",
+            sanitize_log_value(key),
+            sanitize_log_value(exc),
+        )
 
     return await _fallback_factor(db, key, start, target)
 
