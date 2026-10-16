@@ -1,6 +1,6 @@
 # Snapshots e rentabilidade TWR
 
-> Última atualização: 14/07/2026
+> Última atualização: 16/10/2026
 
 Este documento descreve como o SGI v2 reconstrói snapshots patrimoniais e calcula rentabilidade ponderada pelo tempo.
 
@@ -29,14 +29,19 @@ O snapshot diário consolida o estado da carteira em uma data:
 O motor de snapshots não chama provedores externos.
 
 ```text
-asset_prices + transactions + dividends
+transactions + asset_prices + rate_history + fx_rates + asset_dividends
         ↓
-portfolio_snapshot_twr_service
+calculate_canonical_portfolio_totals()
+        ↓
+backfill_canonical_snapshots_with_returns()
         ↓
 portfolio_snapshots
 ```
 
-Se faltar preço, o snapshot usa fallback patrimonial e marca `has_partial_prices=true`.
+O writer usa somente dados persistidos e não chama provedores. Lacuna de preço
+persistido de ativo de mercado faz a data ser ignorada; cobertura incompleta de
+benchmark interrompe a reconstrução naquela data. Nenhum desses casos deve ser
+preenchido com cotação inventada.
 
 ---
 
@@ -120,23 +125,40 @@ A interface deve exibir essas flags de forma clara quando disponíveis.
 
 | Classe | Tratamento no snapshot |
 |---|---|
-| Ativos cotados | Consulta `asset_prices` |
-| Renda Fixa | Deve usar motor interno da classe |
-| Tesouro Direto | Deve usar histórico dedicado da classe |
+| Ativos cotados | Usa `asset_prices` persistido com resolução lifecycle-aware |
+| Renda Fixa | Usa accrual dedicado derivado de `transactions` e cobertura persistida de indexadores |
+| Tesouro Direto | Aplica correção dedicada por símbolo canônico e PU persistido em `asset_prices` |
 | Cripto | Usa histórico persistido, com roteamento em revisão |
 
-Pendência conhecida: garantir que Tesouro Direto seja sempre avaliado no snapshot pela fonte dedicada, não por fallback genérico de preço médio.
+### Lacuna de qualidade do Tesouro
+
+O valuation agregado começa com a base por custo e a substitui pela correção
+dedicada quando símbolo e PU persistido são resolvidos. Se essa resolução falha,
+o valor-base por custo permanece. Embora o valuation produza o diagnóstico
+`treasury_unresolved`, o writer não o persiste e a checagem atual de
+`has_partial_prices` exclui Tesouro Direto. Portanto, o snapshot agregado pode
+não marcar essa cobertura como parcial.
+
+Esse caminho não deve ser tratado como valuation completo nem como TWR oficial
+até que a qualidade do snapshot propague a ausência de PU. O tratamento pertence
+a uma correção técnica separada; não inferir preço ou identidade do título.
 
 ---
 
 ## Reconstrução
 
-A reconstrução completa ocorre por:
+A writer canônico de snapshots é:
+
+```text
+backfill_canonical_snapshots_with_returns()
+```
+
+A reconstrução operacional pode ser iniciada por:
 
 ```bash
 python -m app.cli.full_market_rebuild
 ```
 
-Ou por manutenção específica do scheduler.
+Ou pela manutenção específica do scheduler, que chama o mesmo writer.
 
 Após mudanças em proventos, preços ou transações retroativas, os snapshots devem ser reconstruídos a partir da primeira data afetada.
