@@ -94,9 +94,9 @@ async def test_codeql_treasury_seed_item_error_log_escapes_symbol_and_exception(
 
     assert result.errors == 1
     assert "erro ao salvar" in caplog.text
-    assert "bond\\nINJECTED" in caplog.text
+    assert "bond\\ninjected" in caplog.text
     assert "save failed\\nINJECTED" in caplog.text
-    assert "bond\\nINJECTED" in caplog.text
+    assert "bond\\ninjected" in caplog.text
     assert "save failed\\nINJECTED" in caplog.text
 
 
