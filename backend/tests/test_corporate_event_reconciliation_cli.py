@@ -22,6 +22,7 @@ def _arguments(
     fractional_quantity: str | None = None,
     fractional_settlement_price: str | None = None,
     cash_treatment: str | None = None,
+    effective_date: str | None = None,
     ledger_basis: str | None = None,
     ledger_transformation_reference: str | None = None,
     ledger_quantity_factor: str | None = None,
@@ -49,6 +50,7 @@ def _arguments(
         fractional_quantity=fractional_quantity,
         fractional_settlement_price=fractional_settlement_price,
         cash_treatment=cash_treatment,
+        effective_date=effective_date,
         ledger_basis=ledger_basis,
         ledger_transformation_reference=ledger_transformation_reference,
         ledger_quantity_factor=ledger_quantity_factor,
@@ -591,6 +593,7 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
             ledger_basis="RAW_HISTORICAL",
             ledger_transformation_reference="broker-note:AMOB3:2025-05:ratio",
             ledger_quantity_factor="0.02",
+            effective_date="2026-10-13",
         )
     )
 
@@ -613,6 +616,7 @@ async def test_cli_matched_execute_dispatches_writer_and_commits(
         call["evidence"].evidence_reference
         == "b3:official-document:AMOB3:2025-05"
     )
+    assert call["evidence"].effective_date == date(2026, 10, 13)
     assert (
         call["evidence"].fractional_policy.value
         == "NO_FRACTIONAL_RESIDUE"

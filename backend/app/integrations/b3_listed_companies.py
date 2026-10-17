@@ -153,13 +153,13 @@ class B3ListedCompaniesClient:
             return None, (), "provider_no_coverage_issuer"
 
         if is_bdr:
-            rows = supplement.get("cashDividends")
-            if not isinstance(rows, list):
+            bdr_rows = supplement.get("cashDividends")
+            if not isinstance(bdr_rows, list):
                 raise B3ListedCompaniesError(
                     "suplemento B3 BDR sem lista cashDividends valida"
                 )
             return supplement, tuple(
-                row for row in rows if isinstance(row, dict)
+                row for row in bdr_rows if isinstance(row, dict)
             ), None
 
         trading_name = str(supplement.get("tradingName") or "").strip()

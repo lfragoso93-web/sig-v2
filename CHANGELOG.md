@@ -4,6 +4,29 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 17/10/2026 - recuperacao dos gates backend
+
+- a persistencia estrita rejeita colecoes com linhas BRAPI e Yahoo simultaneas, reforcando a regra de fallback explicito; fixtures de eventos corporativos foram alinhadas a prioridade B3 para ativos listados;
+- scanners AST passaram a tolerar BOM UTF-8; o adapter B3 teve anotacoes locais ajustadas para mypy e `goals_service.py` recebeu o espacamento exigido pelo flake8;
+- backend: 2.401 testes passaram e 5 foram skipped; flake8, mypy (411 arquivos), Architecture Doctor (6/6), migrations frescas em PostgreSQL 16 e drift gate passaram;
+- nenhuma imagem candidata foi implantada nem houve alteracao de backup ou certificacao.
+
+### 16/10/2026 - rebaseline documental e runtime observado
+
+- correção da baseline: `stable-15jun` está em
+  `b37661921e3a8455f45c8b676b28955d6ad3d0ea`, 7 commits à frente e 0 atrás de
+  `main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); não havia PR aberta;
+- inventário GitHub: 453 Issues, 23 abertas, 430 fechadas;
+- antes desta rebaseline, o working tree continha 15 arquivos modificados e
+  cinco itens não rastreados; esta entrada registra o estado sem incluir os
+  artefatos no candidato;
+- runtime observado: `/health=200`; `/ready=503` por `runtime_identity_error`,
+  com `ready_for_real_data=false`; APP SHA diverge do checkout e dataset está
+  sem referência;
+- a CLI de readiness assistida não concluiu e não produziu relatório;
+- `docs/DEVELOPMENT_BASELINE_2026-10-16.md` passa a concentrar a fotografia e o
+  mapa. A promoção de 06/10 permanece histórica e não certifica o runtime atual.
+
 ### 16/10/2026 - B3 como fonte prioritária para proventos e eventos
 
 - alinhada a política local para usar B3 como autoridade de ativos listados,
@@ -14,10 +37,10 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - a lacuna NIKE34 fica delimitada a carga de dividendos B3 por ativo e análise
   fail-closed do grupamento/fração antes de qualquer projeção.
 
-### 16/10/2026 - rebaseline de segurança, backup administrativo e continuidade
+### Histórico 16/10/2026 - rebaseline de segurança, backup administrativo e continuidade
 
-- PR #425 sincronizou `main` com `stable-15jun`; a árvore atual comum está no
-  SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
+- PR #425 sincronizou `main` com `stable-15jun`; a árvore comum naquele momento
+  estava no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
 - PR #413 integrou a sanitização dos logs e #419 acrescentou regressões; CI
   passou, mas a confirmação CodeQL pós-correção permanece pendente;
 - PR #418 completou o hardening administrativo da #83: reautenticação,
@@ -28,8 +51,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - Issues #408, #83 e #293 foram rebaselined com os resíduos e gates atuais;
 - README, ROADMAP, arquitetura, readiness, continuidade, governança e status
   de eventos corporativos foram atualizados;
-- a identidade certificada em 06/10/2026 continua histórica; runtime do SHA
-  atual não foi consultado nem recertificado nesta atualização.
+- a identidade certificada em 06/10/2026 continua histórica. O estado posterior
+  do runtime está registrado na entrada mais recente deste changelog e no mapa
+  de baseline.
 
 ### 11/10/2026 - #149 auditoria oficial de cupons do Tesouro
 

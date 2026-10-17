@@ -71,7 +71,7 @@ async def test_cli_prints_contract_on_success(monkeypatch, capsys):
     assert payload["ok"] is True
     assert runner.await_args.kwargs["start_date"].isoformat() == "2026-01-01"
     assert runner.await_args.kwargs["end_date"].isoformat() == "2026-12-31"
-    assert len(runner.await_args.kwargs["providers"]) == 2
+    assert len(runner.await_args.kwargs["providers"]) == 3
     assert "asset_loader" not in runner.await_args.kwargs
 
 

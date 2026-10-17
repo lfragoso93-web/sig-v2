@@ -31,8 +31,9 @@ export default function PendingCorporateFractionsPanel({
         ) : (
           <>
             <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>
-              A quantidade está confirmada, mas o valor do leilão ainda não. Por isso,
-              ela não entra na posição negociável nem recebe valor estimado.
+              A fração é calculada pela quantidade da sua carteira na data efetiva do
+              evento. Ela aparece aqui enquanto a liquidação não for confirmada; sem
+              evidência do crédito, não recebe valor estimado.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

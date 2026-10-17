@@ -1,219 +1,93 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 16/10/2026.
+> Documento de retomada do trabalho. Baseline operacional observada em
+> 16/10/2026; ver `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para evidências.
 
-## Rebaseline de 16/10/2026
+## Estado atual
 
-- `stable-15jun` está no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
-  `main` e `stable-15jun` têm a mesma árvore após a PR #425.
-- A correção de log injection está publicada em stable (#413); a
-  cobertura complementar foi integrada pela #419 com CI aprovada. Falta uma
-  execução CodeQL posterior às correções para confirmar os findings da #408.
-- A #83 já recebeu download autenticado, reautenticação, trilha de auditoria,
-  status de operações e retenção. Falta comprovar backup → restore isolado →
-  integridade; nenhum restore real deve ser executado.
-- #365 e #364 foram fechadas em 08/10; a hygiene de dependências prioritizada
-  foi integrada. O próximo mapa é #408 → #83 → GOV-07/#293 → uma entrega de
-  produto por vez.
-- A promoção #384 citada abaixo pertence ao SHA histórico
-  `3ab054f61e34f440dddf93c170259958243d58af`. O runtime atual não foi
-  verificado; qualquer mudança de identidade exige recertificação antes de
-  novo deploy.
+- Branch obrigatória: `stable-15jun`.
+- HEAD publicado: `b37661921e3a8455f45c8b676b28955d6ad3d0ea`, igual ao
+  `origin/stable-15jun` local.
+- GitHub compara `stable-15jun` como 7 commits à frente e 0 atrás de `main`
+  (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); nenhuma PR estava aberta.
+- O working tree não está limpo. A inspeção inicial identificou 15 alterações
+  preexistentes e cinco itens não rastreados, incluindo código/migration de
+  eventos corporativos, UI/testes de frações pendentes e artefatos temporários.
+  Esta rebaseline acrescentou documentação. Não descartar, substituir ou incluir
+  artefatos temporários em commit sem identificar seu uso.
+- O backend, PostgreSQL e Redis estavam saudáveis na última inspeção Docker; o
+  `/health` retornou `ok`. O `/ready` retornou HTTP 503 com
+  `runtime_identity_error` e `ready_for_real_data=false`.
+- O container declara `APP_BRANCH=stable-15jun`, `ENVIRONMENT=testing`, uma
+  `APP_COMMIT_SHA` divergente do checkout e nenhuma `REAL_DATASET_REFERENCE`.
+  O bootstrap estava `not_started`. A identidade e o dataset precisam ser
+  reconciliados antes de substituir a imagem.
+- A consulta read-only atual de `user_test_readiness` não concluiu nem produziu
+  relatório antes do timeout. Não há readiness assistida atual confirmada; uma
+  evidência histórica não substitui a nova consulta.
+- Validacao do checkout em 17/10: suite backend completa com 2.401 passed, 5 skipped e 0 failed; flake8 e mypy passaram (411 arquivos); Architecture Doctor passou (6/6); migrations completas e drift gate passaram em PostgreSQL 16 descartavel. A execucao foi isolada, sem rede, com a arvore somente leitura.
+- A suite frontend (171 testes, typecheck e lint) passou na verificacao de 16/10.
+- O gate de codigo local esta verde. A arvore permanece modificada e ainda nao representa um SHA candidato reproduzivel; imagem, backup/restore de candidato e certificacao continuam pendentes.
 
-## Baseline atual
+## Próximo caminho
 
-Branch obrigatória: `stable-15jun`.
+1. Revisar e estabilizar as alterações locais, incluindo a cadeia Alembic de
+   eventos corporativos; obter um SHA candidato limpo e reproduzível.
+2. Atualizar documentos vivos e Issue links para esse candidato, preservando
+   changelogs e relatórios históricos como registros datados.
+3. Executar gates de código, testes requeridos e Architecture Doctor aplicáveis.
+4. Gerar `pre-prod-backup.v3` novo, derivar a identidade do dataset e validar
+   restore em banco isolado.
+5. Construir e iniciar a imagem candidata preservando volumes e containers
+   necessários; validar identidade, revision Alembic, `/health` e `/ready`.
+6. Rodar `user_test_readiness`, certification proof e o dry-run #384. Revisar o
+   plano antes de considerar a confirmação exata emitida.
+7. Registrar o resultado real e o próximo SHA nos documentos e Issues.
+8. Fechar os gates residuais #408 (CodeQL), #83 (backup/restore isolado) e GOV-07
+   da #293; então escolher uma única entrega de produto.
 
-Estado de governança pós-promoção:
+## Mapa de Issues abertas
 
-- núcleo financeiro DB-first consolidado;
-- baseline funcional promovida pela PR #362;
-- `ready_for_real_data=true` para a identidade runtime certificada;
-- `/health=200`;
-- `/ready=200` enquanto a identidade runtime continuar correspondendo ao
-  evento persistido válido;
-- documentação raiz rebaselined para o estado atual;
-- #158, #269 e #227 fechadas;
-- OCI/#284 fora do caminho crítico atual e preservada como backlog futuro;
-- #344 concluída com todas as filhas #345–#350 fechadas e promovidas;
-- a #384 foi concluída com promoção append-only para a identidade exata do
-  runtime no SHA `3ab054f61e34f440dddf93c170259958243d58af`.
+- Gate financeiro/factual: #149 e #370.
+- Segurança, backup e governança: #408, #83 e #293.
+- Schema: #272.
+- OCI, backlog fora do caminho local: #284.
+- Providers/bootstrap: #127, #130 e #253.
+- UX e detalhe de ativo: #58, #90, #351 e #353.
+- Renda Fixa e ferramentas: #355–#359.
+- Metas, Analysis Engine e IA: #246, #360 e #361.
+- OAuth: #97.
 
-## Ordem obrigatória de trabalho
+O inventário de 16/10 encontrou 23 Issues abertas e nenhuma PR aberta. Consulte
+`docs/ISSUE_GOVERNANCE.md` para os estados e dependências, e o inventário
+GitHub ao vivo antes de encerrar ou reordenar trabalho.
 
-1. revisar Issue relacionada e estado real do código antes de qualquer funcionalidade;
-2. confirmar `stable-15jun`, HEAD remoto/local e working tree limpa;
-3. avaliar impacto arquitetural e consumidores;
-4. dividir implementação em microblocos;
-5. testar localmente;
-6. atualizar Issue/documentação viva;
-7. informar SHA completo e próximo bloco;
-8. abrir PR para `main` apenas ao fechar macrobloco estrutural certificado.
+## Contratos que permanecem obrigatórios
 
-## Estado de readiness
+- `transactions` é a fonte canônica do lifecycle financeiro; não reconstruir
+  ledger paralelo para Tesouro, Renda Fixa ou eventos corporativos.
+- Leituras financeiras são DB-first; ausência de preço, FX, evidência de evento
+  ou cobertura fica explícita, sem inventar valores ou datas.
+- Eventos corporativos conflitantes ou com liquidação não comprovada ficam fora
+  da projeção canônica; transações históricas não são mutadas.
+- Backups e seeds operacionais precisam ser auditáveis e vinculados ao SHA e
+  dataset exatos.
+- A promoção #384 é append-only e DB-first. `GO_ASSISTED` não promove dados
+  reais; `/ready` fica fechado quando a identidade diverge ou está incompleta.
+- Não usar `docker compose down -v`, remoção de volume, prune de volumes,
+  `git reset --hard`, `git clean`, rebase de histórico publicado ou force-push.
 
-```text
-schema_version=user-test-readiness.v1
-status=GO_ASSISTED
-go_for_assisted_user_tests=true
-ready_for_real_data=true
-```
+## Documentação canônica
 
-`GO_ASSISTED` continua autorizando apenas o fluxo assistido que governa. A
-autorização real atual é separada e vem exclusivamente do evento persistido da
-#384; não é consequência do gate assistido.
+- `docs/DEVELOPMENT_BASELINE_2026-10-16.md` — fotografia do checkout e runtime.
+- `ROADMAP.md` — sequência de desenvolvimento.
+- `docs/ISSUE_GOVERNANCE.md` — hierarquia e estados das Issues.
+- `docs/architecture.md` e `docs/CORPORATE_ACTIONS.md` — contratos vivos.
+- `docs/USER_TEST_READINESS_GATE.md` e `docs/USER_VALIDATION_RUNBOOK.md` —
+  testes assistidos.
+- `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md` e `docs/CERTIFICATION_PROOF.md` —
+  identidade e certificação persistente.
+- `docs/operations.md` e `docs/PRE_PROD_REBUILD_RUNBOOK.md` — backup e operação.
 
-## Mapa vigente pós-promoção
-
-```text
-confirmar CodeQL da #408
-  -> validar ciclo isolado residual da #83
-  -> concluir GOV-07 da #293 e alinhar documentação
-  -> selecionar uma entrega de produto
-```
-
-Os upgrades Dependabot prioritizados já foram integrados; #365 e #364 foram
-fechadas. A #384 governa
-qualquer futura mudança de identidade ou de `ready_for_real_data`; a promoção
-vigente continua limitada ao runtime certificado. #284 não bloqueia essa
-sequência local.
-
-### #384 — certificação para dados reais (concluída)
-
-- persistence append-only, leitor DB-first, relatório, contrato, executor e CLI
-  estão publicados;
-- dry-run é o padrão; `--execute` exige confirmação forte e autorização
-  operacional explícita;
-- provas PostgreSQL de restart/concorrência/stale-plan concluídas em banco
-  efêmero;
-- evento `PROMOTE` persistido para a identidade runtime certificada;
-- `/ready` integrado ao resolvedor independente de identidade e ao leitor
-  persistido, retornando 200 para a identidade vigente e 503 em qualquer
-  ausência, revogação ou divergência;
-- runbook canônico: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
-
-## Pendências de curto prazo
-
-### #303 — PORTFOLIO-TEST-READY
-
-- aprovado em 14/09/2026 no SHA registrado na Issue #303;
-- #352 foi fechada/validada no modal de lancamento;
-- #354 permanece fechada;
-- #363 permanece fechada;
-- não foi, isoladamente, a origem de `ready_for_real_data=true`; a abertura
-  posterior decorreu exclusivamente da promoção persistida da #384.
-
-### #226
-
-- fechado em 14/09/2026;
-- evidencia portfolio-scoped/idempotente aceita como suficiente para promocao controlada;
-- seed global controlado somente se #216/#158 identificarem necessidade material nova.
-
-### #216
-
-- fechado em 14/09/2026;
-- benchmarks e cambio permanecem evidencias consolidadas;
-- decisao de #226 consumida sem seed global mecanico;
-- global controlado volta ao escopo somente se #158 encontrar necessidade
-  material nova.
-
-### #158 (fechada)
-
-- checklist operacional: `docs/promotion-reconciliation-158-checklist.md`;
-- evidencia local publicada no SHA candidato;
-- nao repetir seeds/rebuilds destrutivos por checklist historico;
-- confirmar o estado de eventos corporativos materiais ao dataset: a varredura
-  de 22/09/2026 registrou zero eventos materiais em `UNRECONCILED`, com AMOB3
-  formalizada como `MATCHED`/`CONFLICT` e KLBN11 em `CONFLICT` revisável até
-  haver evidência documental de liquidação fracionária.
-
-### #269 (fechada)
-
-- Gitleaks, Hadolint, builds runtime, identidade nao-root, smoke frontend,
-  Trivy filesystem, Trivy image backend/frontend e inventario externo GitHub
-  validados no SHA candidato;
-- Code Scanning e Secret Scanning abertos: 0;
-- Dependabot aberto no default branch: 2 alertas medios de Vitest ja corrigidos
-  no SHA candidato de `stable-15jun`;
-- nao promove `ready_for_real_data`.
-
-### #284 — OCI (backlog futuro)
-
-- não executar no caminho atual;
-- quando retomada, checkout do SHA candidato exato;
-- `APP_COMMIT_SHA == git rev-parse HEAD`;
-- migrations aprovadas;
-- smoke, tunnel, restart, persistência, recursos e segurança/resiliência;
-- nenhuma correção permanente diretamente na VM.
-
-## Arquitetura a preservar
-
-- `transactions` é a fonte canônica do lifecycle financeiro;
-- Renda Fixa e Tesouro não recriam projeção paralela em `fixed_income_investments`;
-- `summary.v2`, `rentabilidade.v2`, snapshots e projetores de posição/custo são contratos canônicos;
-- provider não participa de GETs/cálculos financeiros;
-- ausência de preço/FX/benchmark não vira zero/fallback inventado;
-- Proventos pertencem ao ativo em `asset_dividends`;
-- direitos de Proventos por carteira são calculados sob demanda;
-- eventos corporativos pertencem ao ativo em `corporate_events`;
-- transações históricas não são mutadas para aplicar evento;
-- bootstrap/rebuild/sync são operações explícitas e auditáveis.
-
-## Estado funcional útil
-
-- CSV canônico certificado em dry-run/import/replay/invalid/atomicidade/rebuild;
-- carteira assistida exercitada com múltiplas classes;
-- Tesouro DB-first e snapshots dedicados;
-- Renda Fixa com lifecycle transaction-derived e valuation dedicado;
-- Proventos portfolio-scoped idempotentes;
-- IRPF funcional para classes suportadas;
-- Metas básica operacional após correção runtime-safe;
-- detalhe de ativo parcialmente implementado;
-- eventos corporativos materiais não têm `UNRECONCILED` remanescente no dataset
-  alvo; KLBN11 segue bloqueado para `MATCHED` sem evidência documental da
-  fração.
-
-## Dívidas não bloqueantes por padrão
-
-- #149 — TWR diário dedicado de RF/Tesouro permanece parcial; não fabricar TWR;
-- #351/#90/#58 — refinamentos de UX/produto;
-- #355–#359 — features futuras;
-- #246/#360 — macroprojeto Metas + Analysis Engine;
-- #361 — IA depois de #360/#246;
-- #97 — OAuth.
-
-Essas frentes só sobem de prioridade se bloquearem uma jornada crítica real do escopo aprovado.
-
-## Bugs candidatos P1
-
-- #352 — fechada apos validacao manual do seletor `Tipo de ativo` e lancamento bem-sucedido;
-- #354 — fechada após alinhamento da regra mínima de senha; reabrir apenas com regressão comprovada.
-
-#353 é P2 por padrão.
-
-## Ambiente local x OCI
-
-### Local
-
-Ambiente oficial para desenvolvimento, correção, suítes pesadas, migrations de teste e certificação financeira.
-
-### OCI
-
-Backlog futuro de infraestrutura/cloud. Não executar desenvolvimento, testes ou
-homologação OCI na fase atual e não forçar readiness.
-
-## Documentos canônicos para retomada
-
-- `README.md`;
-- `ROADMAP.md`;
-- `CHANGELOG.md`;
-- `docs/architecture.md`;
-- `docs/USER_TEST_READINESS_GATE.md`;
-- `docs/USER_VALIDATION_RUNBOOK.md`;
-- `docs/BOOTSTRAP_DATA_FLOW.md`;
-- `docs/deployment/oci-execution-index.md` (referência futura OCI);
-- Issues #408, #83, #293, #149, #370 e #284 (com estados atualizados acima).
-
-## Regra para histórico
-
-Baselines antigos, SHAs históricos e checklists já superados permanecem acessíveis pelo Git e por changelogs datados, mas não devem ser tratados como instrução vigente se contradisserem este documento, as Issues rebaselined ou o HEAD atual.
+Changelogs e documentos em `docs/changelog/` preservam evidência histórica; não
+devem ser reescritos como se descrevessem o runtime atual.

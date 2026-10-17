@@ -101,6 +101,7 @@ async def _get_patrimonio_atual(
     summary = await get_portfolio_summary(db, portfolio_id, user_id)
     return float(summary["total_patrimonio"])
 
+
 async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
     """Return average monthly net BRL entitlements paid in the last 12 months."""
     today = date.today()

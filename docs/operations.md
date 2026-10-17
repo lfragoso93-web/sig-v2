@@ -1,6 +1,16 @@
 # Operação — SGI v2
 
-> Última atualização: 06/10/2026
+> Última atualização do procedimento: 06/10/2026
+
+## Baseline operacional observada — 16/10/2026
+
+O estado dos containers, identidade runtime e readiness mudou desde a revisão
+deste procedimento. No checkpoint atual, `/health=200`, mas `/ready=503` por
+`runtime_identity_error`; não há referência de dataset no container e nenhuma
+certificação nova foi feita. Use
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md` para os fatos observados. Os comandos
+abaixo são procedimentos, não evidência de que backup/deploy/certificação já
+foram executados.
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 

@@ -1,4 +1,6 @@
 ﻿import pytest
+from datetime import date
+
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
     CorporateEventMatchEvidenceType,
@@ -156,6 +158,18 @@ def test_match_resolution_serializes_explicit_ledger_basis() -> None:
     assert evidence.to_dict()["ledger_basis"] == "ADJUSTED_POST_EVENT"
 
 
+def test_adjusted_post_event_pending_settlement_requires_fraction_quantity():
+    with pytest.raises(ValueError, match="quantidade fracionaria por carteira"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+                evidence_reference="b3:NIKE34:2026-10-13",
+                fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+                ledger_basis=CorporateEventLedgerBasis.ADJUSTED_POST_EVENT,
+            )
+        )
+
+
 def test_raw_historical_requires_auditable_transformation_contract() -> None:
     with pytest.raises(ValueError, match="referencia da transformacao"):
         validate_match_resolution_evidence(
@@ -212,6 +226,38 @@ def test_match_resolution_allows_fraction_with_pending_settlement_value() -> Non
     )
 
     validate_match_resolution_evidence(evidence)
+
+
+def test_pending_settlement_can_derive_residue_per_portfolio():
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+        evidence_reference="b3:corporate-action:TEST3:2026-01-02",
+        fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+    )
+
+    validate_match_resolution_evidence(evidence)
+
+    assert evidence.to_dict()["fractional_quantity"] is None
+
+
+def test_effective_date_is_versioned_in_matched_dry_run_v3():
+    report = build_reconciliation_dry_run_report(
+        (_evidence(12, "b3"),),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="data efetiva comprovada pelo calendario B3",
+        canonical_event_id=12,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+            evidence_reference="b3:action+calendar:2026-10-13",
+            fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            effective_date=date(2026, 10, 13),
+        ),
+    )
+
+    payload = report.to_dict()
+
+    assert payload["schema_version"] == "corporate-event-reconciliation-dry-run.v3"
+    assert payload["match_resolution_evidence"]["effective_date"] == "2026-10-13"
 
 
 def test_pending_settlement_rejects_any_unverified_cash_details() -> None:

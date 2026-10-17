@@ -36,6 +36,7 @@ describe('PendingCorporateFractionsPanel', () => {
     expect(screen.getByText('NIKE34')).toBeTruthy()
     expect(screen.getByText('0,2')).toBeTruthy()
     expect(screen.getByText('A confirmar')).toBeTruthy()
+    expect(screen.getByText(/calculada pela quantidade da sua carteira/)).toBeTruthy()
     expect(screen.queryByText(/R\$/)).toBeNull()
   })
 

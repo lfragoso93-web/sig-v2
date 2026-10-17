@@ -79,7 +79,7 @@ async def test_corporate_event_sync_second_execution_does_not_create_duplicate(m
         id=7,
         ticker="TEST3",
         brapi_ticker=None,
-        asset_type="ACAO",
+        asset_type="STOCK",
     )
     brapi_fetcher = AsyncMock(return_value={
         "results": [{

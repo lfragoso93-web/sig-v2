@@ -198,10 +198,11 @@ ready_for_real_data=true
 ```
 
 Esse registro é histórico e vinculado à identidade certificada em 06/10/2026.
-O SHA atual de `stable-15jun` é `8e4e243416014024964031793dbb7b15bcd3c39d`;
-nenhum estado de runtime foi verificado nesta atualização. Não considerar o
-checkout atual certificado nem implantar uma identidade diferente sem novo
-ciclo da #384.
+Na inspeção de 16/10/2026, o checkout publicado era
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, enquanto o runtime `testing`
+reportava uma identidade diferente e dataset vazio. `/health=200` e `/ready=503`
+com `runtime_identity_error`; não considerar o checkout atual certificado.
+Ver `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para a fotografia completa.
 
 `GO_ASSISTED` não implica `/ready=200` e não satisfaz o contrato de promoção da
 #384. `/ready=200` só é válido quando há evidência própria com `status=GO` e um

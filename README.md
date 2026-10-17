@@ -10,7 +10,7 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status atual — 16/10/2026
+## Status do projeto — 16/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362 e a certificação persistente para dados reais
@@ -18,8 +18,8 @@ foi concluída pela #384 para uma identidade runtime específica. Este status
 histórico não certifica o checkout atual nem confirma a identidade atualmente
 implantada.
 
-Estado operacional registrado para a identidade certificada em 06/10/2026
-(não revalidado contra o SHA atual):
+Registro histórico da identidade certificada em 06/10/2026, não aplicável ao
+runtime observado nesta baseline:
 
 ```text
 test_ready=true
@@ -32,8 +32,11 @@ ready_for_real_data=true
 
 ### Rebaseline pós-promoção
 
-- PR #425 sincronizou `main` para `stable-15jun`; as duas branches têm a mesma
-  árvore no SHA estável `8e4e243416014024964031793dbb7b15bcd3c39d`.
+- PR #425 sincronizou `main` para `stable-15jun`. Desde então, `stable-15jun`
+  avançou e está 7 commits à frente, 0 atrás de `main`; o checkout está no SHA
+  `b37661921e3a8455f45c8b676b28955d6ad3d0ea` e coincide com `origin/stable-15jun`.
+- O inventário GitHub de 16/10/2026 encontrou 23 Issues abertas e nenhuma PR
+  aberta. O quadro por prioridade está em `docs/ISSUE_GOVERNANCE.md`.
 - #408: a sanitização dos logs está em `stable-15jun` pela PR #413 e
   as regressões chegaram pela #419; a CI da #419 passou. A Issue segue aberta
   até uma análise CodeQL posterior à correção confirmar os findings.
@@ -68,13 +71,34 @@ ready_for_real_data=true
 para dados reais depende exclusivamente do evento persistido da #384 e da
 correspondência exata da identidade; a CLI assistida não altera `/ready`.
 
-A cadeia histórica de promoção foi concluída. O mapa de trabalho vigente é:
+### Runtime local observado — 16/10/2026
+
+- backend, PostgreSQL e Redis estão saudáveis; `/health` retornou `ok`;
+- `/ready` retornou `503` com `runtime_identity_error` e
+  `ready_for_real_data=false`;
+- o container declara `APP_BRANCH=stable-15jun` e `ENVIRONMENT=testing`, mas sua
+  `APP_COMMIT_SHA` diverge do HEAD e `REAL_DATASET_REFERENCE` está vazia;
+- o working tree contém alterações locais de código e documentação, além de
+  artefatos candidatos não rastreados; a revisão inicial identificou trabalho
+  ainda não consolidado de eventos corporativos;
+- a consulta read-only atual de `user_test_readiness` não concluiu nem produziu
+  relatório antes do timeout; não há readiness assistida atual confirmada.
+  Consulte `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
+O status do checkout e do runtime, com o mapa de desenvolvimento, está em
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`. A certificação de 06/10 é histórica;
+o runtime atual não está certificado para dados reais.
+
+A cadeia histórica de promoção foi concluída. O próximo ciclo vigente está em
+`ROADMAP.md` e `docs/DEVELOPMENT_BASELINE_2026-10-16.md`:
 
 ```text
-rebaseline de segurança #408 após CodeQL
-        -> fechar escopo residual #83 em banco isolado
-        -> concluir correlação GOV-07 da #293 e alinhar documentação
-        -> escolher uma única entrega de produto
+consolidar o candidato local e as migrations
+        -> gates de código, Doctor e CodeQL #408
+        -> backup v3 e restore isolado #83
+        -> atualizar e validar imagem / readiness assistida
+        -> dry-run e certificação guardada #384
+        -> GOV-07/#293 e uma entrega de produto
 
 #384 foi concluída para a identidade registrada; promoções futuras continuam vinculadas à identidade exata.
 #284 permanece backlog futuro e não bloqueia desenvolvimento local.

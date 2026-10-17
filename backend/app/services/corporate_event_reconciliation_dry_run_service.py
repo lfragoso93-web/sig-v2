@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -35,6 +36,33 @@ def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:
     )
 
 
+def _validate_effective_date(
+    event: CorporateEvent,
+    *,
+    effective_date: date | None,
+) -> None:
+    is_b3 = str(event.source_provider or "").lower() == "b3"
+    if effective_date is not None and not is_b3:
+        raise ValueError("effective-date manual so e aceita para evento B3")
+    if not is_b3:
+        return
+    if effective_date is None and event.effective_date is None:
+        raise ValueError(
+            "evento B3 sem data efetiva exige evidencia efetiva no MATCHED"
+        )
+    if effective_date is not None:
+        if event.record_date is not None and effective_date <= event.record_date:
+            raise ValueError(
+                "data efetiva B3 deve ser posterior ao ultimo dia com direito"
+            )
+        if event.effective_date is not None and event.effective_date != effective_date:
+            raise ValueError("data efetiva B3 diverge da data ja persistida")
+        if event.effective_date is None and event.record_date is None:
+            raise ValueError(
+                "evento B3 sem ultimo dia com direito nao permite resolucao efetiva"
+            )
+
+
 def _normalized_decimal_text(value: object | None) -> str | None:
     if value is None:
         return None
@@ -61,6 +89,17 @@ def _evidence_updates_for_missing_ledger_contract(
                 "divergente"
             )
 
+    if (
+        expected.get("effective_date") is not None
+        and actual.get("effective_date") not in {
+            None,
+            expected.get("effective_date"),
+        }
+    ):
+        raise ValueError(
+            "evento canonico ja possui evidencia de reconciliacao divergente"
+        )
+
     updates: dict[str, object] = {}
     for field in (
         "ledger_basis",
@@ -75,6 +114,11 @@ def _evidence_updates_for_missing_ledger_contract(
                 "divergente"
             )
         updates[field] = expected[field]
+    if (
+        actual.get("effective_date") is None
+        and expected.get("effective_date") is not None
+    ):
+        updates["effective_date"] = expected.get("effective_date")
     return updates
 
 
@@ -103,6 +147,36 @@ async def build_corporate_event_reconciliation_dry_run(
     if missing:
         raise ValueError(f"eventos nao encontrados: {missing}")
 
+    if (
+        decision == CorporateEventReconciliationDecision.MATCHED
+        and canonical_event_id is not None
+        and match_resolution_evidence is not None
+    ):
+        canonical_event = next(
+            event for event in events if int(event.id) == canonical_event_id
+        )
+        _validate_effective_date(
+            canonical_event,
+            effective_date=match_resolution_evidence.effective_date,
+        )
+        if match_resolution_evidence.ledger_basis is not None:
+            existing_evidence_result = await db.execute(
+                select(CorporateEventReconciliationEvidence).where(
+                    CorporateEventReconciliationEvidence.corporate_event_id
+                    == canonical_event_id
+                )
+            )
+            existing_evidence = existing_evidence_result.scalar_one_or_none()
+            if (
+                existing_evidence is not None
+                and existing_evidence.ledger_basis is not None
+                and existing_evidence.ledger_basis
+                != match_resolution_evidence.ledger_basis.value
+            ):
+                raise ValueError(
+                    "evento canonico ja possui base de ledger divergente"
+                )
+
     report = build_reconciliation_dry_run_report(
         tuple(evidence_from_event(event) for event in events),
         decision=decision,
@@ -122,6 +196,12 @@ async def build_corporate_event_reconciliation_dry_run(
         db,
         ledger_event,
         portfolio_id=ledger_preflight_portfolio_id,
+        effective_date=(
+            match_resolution_evidence.effective_date
+            if match_resolution_evidence is not None
+            and ledger_event.id == canonical_event_id
+            else None
+        ),
     )
     return CorporateEventReconciliationDryRunReport(
         schema_version=report.schema_version,
@@ -219,6 +299,27 @@ async def execute_corporate_event_matched_reconciliation(
     )
     updates = contract_report.updates
 
+    canonical_event = events_by_id[canonical_event_id]
+    effective_date = match_resolution_evidence.effective_date
+    _validate_effective_date(canonical_event, effective_date=effective_date)
+    if match_resolution_evidence.ledger_basis is not None:
+        existing_basis_result = await db.execute(
+            select(CorporateEventReconciliationEvidence).where(
+                CorporateEventReconciliationEvidence.corporate_event_id
+                == canonical_event_id
+            )
+        )
+        existing_basis_evidence = existing_basis_result.scalar_one_or_none()
+        if (
+            existing_basis_evidence is not None
+            and existing_basis_evidence.ledger_basis is not None
+            and existing_basis_evidence.ledger_basis
+            != match_resolution_evidence.ledger_basis.value
+        ):
+            raise ValueError("evento canonico ja possui base de ledger divergente")
+    if effective_date is not None:
+        canonical_event.effective_date = effective_date
+
     existing_result = await db.execute(
         select(CorporateEventReconciliationEvidence)
         .where(
@@ -250,13 +351,21 @@ async def execute_corporate_event_matched_reconciliation(
         "ledger_quantity_factor": _normalized_decimal_text(
             match_resolution_evidence.ledger_quantity_factor
         ),
+        "effective_date": (
+            match_resolution_evidence.effective_date.isoformat()
+            if match_resolution_evidence.effective_date is not None
+            else None
+        ),
     }
 
     if existing is None:
         db.add(
             CorporateEventReconciliationEvidence(
                 corporate_event_id=canonical_event_id,
-                **expected,
+                **{
+                    **expected,
+                    "effective_date": canonical_event.effective_date,
+                },
             )
         )
         evidence_write_count = 1
@@ -277,6 +386,11 @@ async def execute_corporate_event_matched_reconciliation(
             ),
             "ledger_quantity_factor": _normalized_decimal_text(
                 existing.ledger_quantity_factor
+            ),
+            "effective_date": (
+                existing.effective_date.isoformat()
+                if existing.effective_date is not None
+                else None
             ),
         }
 

@@ -159,6 +159,7 @@ async def read_corporate_event_ledger_preflight(
     event: CorporateEvent,
     *,
     portfolio_id: int | None = None,
+    effective_date: date | None = None,
 ) -> CorporateEventLedgerPreflight:
     """Lê a base do evento e calcula a quantidade projetada sem persistir."""
 
@@ -183,7 +184,7 @@ async def read_corporate_event_ledger_preflight(
         db,
         portfolio_id=int(effective_portfolio_id),
         ticker=str(event.ticker),
-        as_of=event.effective_date,
+        as_of=effective_date or event.effective_date,
     )
     return CorporateEventLedgerPreflight(
         event_id=int(event.id),
@@ -198,11 +199,13 @@ async def build_corporate_event_ledger_preflight_report(
     event: CorporateEvent,
     *,
     portfolio_id: int | None = None,
+    effective_date: date | None = None,
 ) -> CorporateEventLedgerPreflightReport:
     preflight = await read_corporate_event_ledger_preflight(
         db,
         event,
         portfolio_id=portfolio_id,
+        effective_date=effective_date,
     )
     return CorporateEventLedgerPreflightReport(
         schema_version="corporate-event-ledger-preflight.v2",

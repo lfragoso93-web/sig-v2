@@ -38,7 +38,7 @@ def test_no_production_consumer_imports_legacy_irpf_bens_reader() -> None:
         if not root.exists():
             continue
         for path in root.rglob("*.py"):
-            source = path.read_text(encoding="utf-8")
+            source = path.read_text(encoding="utf-8-sig")
             if _imports_legacy_symbol(source):
                 offenders.append(str(path.relative_to(_BACKEND_ROOT)))
 
@@ -49,7 +49,7 @@ def test_no_production_consumer_imports_legacy_irpf_bens_reader() -> None:
 
 
 def test_legacy_irpf_service_does_not_define_bens_reader() -> None:
-    source = _LEGACY_PATH.read_text(encoding="utf-8")
+    source = _LEGACY_PATH.read_text(encoding="utf-8-sig")
     assert not _defines_legacy_symbol(source), (
         "irpf_service.py não pode voltar a definir calc_bens_direitos; "
         "use irpf_bens_direitos_service.py"

@@ -4,6 +4,16 @@
 
 Atualizado em 06/10/2026 para separar bootstrap técnico, `GO_ASSISTED` e certificação persistente para dados reais.
 
+## Rebaseline de runtime — 16/10/2026
+
+O estado `GO_ASSISTED` e `/ready=200` descrito na seção "Estado atual" abaixo
+é evidência de 06/10/2026, não a situação do container atual. Na inspeção de
+16/10, o backend respondeu `/health=200`, mas `/ready=503` por
+`runtime_identity_error`; a identidade diverge do checkout e a referência do
+dataset está vazia. A revisão Alembic ativa é `20261016_corp_eff_null (head)`.
+Não executar bootstrap, seeds ou rebuilds como parte da atualização de imagem.
+Consulte `docs/DEVELOPMENT_BASELINE_2026-10-16.md` antes de operar.
+
 ## Objetivo
 
 Evitar que estágios de carga sejam executados fora de ordem, sobrescrevam dados certificados ou misturem fontes com responsabilidades diferentes.

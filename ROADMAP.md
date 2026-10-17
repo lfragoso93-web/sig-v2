@@ -6,11 +6,13 @@
 
 O SGI v2 está em fase de **pós-GO e hardening arquitetural**, com a baseline
 funcional promovida para `main` pela PR #362 e o núcleo DB-first consolidado.
-Na sequência, a PR #425 sincronizou `main` em `stable-15jun`; ambas têm a mesma
-árvore no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`.
+Na sequência, a PR #425 sincronizou `main` em `stable-15jun`. O branch estável
+avançou desde então e, na comparação GitHub de 16/10, estava 7 commits à frente
+e 0 atrás de `main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`). O HEAD publicado
+é `b37661921e3a8455f45c8b676b28955d6ad3d0ea`.
 
-Estado registrado para a identidade runtime certificada em 06/10/2026; não
-revalidado para o SHA atual nem para o runtime atualmente implantado:
+Estado histórico da identidade runtime certificada em 06/10/2026; não aplicar
+ao runtime observado em 16/10/2026:
 
 ```text
 GO_ASSISTED=true
@@ -19,7 +21,45 @@ ready_for_real_data=true
 /ready=200
 ```
 
+Na inspeção atual, os serviços de backend/PostgreSQL/Redis estavam saudáveis,
+`/health=200` e `/ready=503` (`runtime_identity_error`). O container declara
+`ENVIRONMENT=testing`, tem `APP_COMMIT_SHA` divergente do checkout e não tem
+`REAL_DATASET_REFERENCE`. A consulta read-only atual de `user_test_readiness`
+não concluiu nem produziu relatório antes do timeout; não há readiness assistida
+atual confirmada. O mapa operacional está em
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
 Branch obrigatória: `stable-15jun`.
+
+## Próximo ciclo de desenvolvimento e testes — governante
+
+1. Revisar as alterações locais de eventos corporativos e a cadeia de
+   migrations; preservar os artefatos temporários até identificar finalidade e
+   owner. Só formar identidade candidata com working tree controlada e SHA
+   reproduzível.
+2. Atualizar documentação e Issues que descrevam o candidato, executar testes
+   requeridos, Architecture Doctor e confirmar CodeQL pós-correção (#408).
+3. Gerar backup v3 atual, derivar identidade do dataset e validar restore em
+   banco isolado; completar o ciclo restante da #83.
+4. Construir e iniciar a imagem candidata, preservar volumes, confirmar a
+   identidade/migrations e rodar `/health`, `/ready` e `user_test_readiness`.
+   Cada mudança posterior que altere código, SHA, schema ou dataset exige nova
+   imagem e a validação correspondente.
+5. Rodar o dry-run #384 para a identidade final e revisar seu plano. Executar
+   somente a confirmação exata desse plano após autorização explícita para a
+   ação e identidade apresentadas.
+6. Concluir GOV-07/#293 e escolher uma entrega de produto. #284 permanece
+   backlog de OCI e não participa deste ciclo local.
+
+Baseline operacional atual: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
+### Estado dos gates de codigo - 17/10/2026
+
+- Backend: 2.401 testes passaram, 5 foram skipped e nenhum falhou na suite completa, executada em container isolado, com a arvore somente leitura e rede desativada.
+- Flake8 e mypy passaram; o mypy analisou 411 arquivos. O Architecture Doctor passou nos 6 checks estaticos.
+- O fresh migration gate aplicou todas as revisoes num PostgreSQL 16 descartavel e o drift gate passou; head local: `20261016_corp_ev_effective_date`.
+- Frontend: 171 testes, typecheck e lint passaram na validacao de 16/10.
+- O checkout continua sem SHA candidato reproduzivel por conter alteracoes locais. A imagem e a certificacao ainda nao foram atualizadas. O proximo passo exige revisar/consolidar o candidato, resolver CodeQL #408 e cumprir backup/restore isolado #83.
 
 ## Fase 1 — `PORTFOLIO-TEST-READY` (#303) — CONCLUÍDA
 
@@ -153,9 +193,10 @@ Alembic invalida essa correspondência e exige novo ciclo completo. O contrato
 permanece fail-closed em qualquer ausência, revogação ou divergência.
 
 O SHA `3ab054f61e34f440dddf93c170259958243d58af` acima é a identidade histórica
-promovida em 06/10/2026. O checkout estável atual é `8e4e243416014024964031793dbb7b15bcd3c39d`; a prontidão do runtime atual não foi
-verificada nesta atualização. Não implantar ou inferir `/ready=200` para um
-SHA diferente sem novo ciclo de certificação.
+promovida em 06/10/2026. O checkout estável atual é
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, mas o working tree está modificado.
+O runtime observado não corresponde à identidade certificada e `/ready` está
+fechado. Não inferir certificação para o checkout atual sem um ciclo novo.
 
 ## Rebaseline de segurança e continuidade — 16/10/2026
 
@@ -167,6 +208,8 @@ SHA diferente sem novo ciclo de certificação.
   descartável; nenhum restore real foi executado.
 - #293: GOV-07 continua pendente até concluir a revisão de Issues abertas e
   sincronizar os documentos vivos.
+- Inventário GitHub: 23 Issues abertas, nenhuma PR aberta; ver
+  `docs/ISSUE_GOVERNANCE.md` para agrupamento e sequência.
 - Não há PRs abertas no inventário consultado. OCI/#284 permanece backlog.
 
 ## Dívidas financeiras não bloqueantes por padrão

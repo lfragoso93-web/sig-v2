@@ -4,6 +4,20 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
+## Rebaseline operacional — 16/10/2026
+
+O runtime local estava ativo e saudável em `/health`, mas `/ready` retornou 503
+por `runtime_identity_error`; a imagem declara uma identidade divergente do
+checkout e não tem referência de dataset. A consulta read-only atual de
+`user_test_readiness` não concluiu nem produziu relatório antes do timeout.
+Não há readiness assistida atual confirmada. Uma rodada que dependa do checkout
+atualizado aguarda nova imagem e validação da identidade candidata.
+
+Não reutilizar como estado atual as respostas e contagens registradas nas
+seções históricas abaixo. Antes da próxima rodada, confirmar candidato limpo,
+imagem/SHA, readiness assistida, gates sintéticos e identidade de runtime.
+Registro vivo: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
 > Rebaseline em 06/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
 > promovida. As evidencias datadas permanecem validas como historico, mas
 > OCI/#284 nao integra o caminho atual. `ready_for_real_data=true` está

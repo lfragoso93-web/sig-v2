@@ -35,11 +35,12 @@ nesses registros. Direitos e efeitos por carteira são calculados sob demanda.
 O adaptador B3 usa os dados estruturados do portal Listed Companies para ações
 nacionais e BDRs, preservando o payload oficial, ISIN e identidade da fonte.
 `lastDatePrior` representa o último dia com direito; não determina sozinho o
-pregão efetivo. Enquanto a data efetiva não estiver resolvida por evidência
-oficial aplicável, `effective_date` permanece nulo e o registro fica `PENDENTE`,
-`UNRECONCILED` e fora da projeção. `event_date`/`record_date` podem preservar a
-data informada pela B3 para busca e auditoria, mas nunca substituem a data
-canônica efetiva.
+pregão efetivo. A data efetiva é a primeira sessão aberta da B3 após
+`lastDatePrior`, comprovada pelo calendário operacional oficial. Enquanto essa
+evidência não estiver persistida, `effective_date` permanece nulo e o registro
+fica `PENDENTE`, `UNRECONCILED` e fora da projeção. `event_date`/`record_date`
+preservam a data informada pela B3 para busca e auditoria, mas nunca substituem
+a data canônica efetiva.
 
 A rota BRAPI de dividendos nao declara splits/grupamentos no contrato OpenAPI
 atual. Esses eventos nao sao inferidos a partir de preaos ou proventos; entram
@@ -68,19 +69,21 @@ Quando a quantidade fracionária e o fator estiverem comprovados, mas o preço
 ou crédito do leilão ainda não estiver disponível, a evidência pode usar
 `PENDING_SETTLEMENT`. Nesse estado:
 
-- o fator é aplicado; somente a quantidade inteira permanece na posição negociável,
-  enquanto quantidade fracionária e custo proporcional ficam registrados como
-  pendência do evento;
+- somente a quantidade inteira permanece na posição negociável, enquanto a
+  quantidade fracionária fica registrada como pendência do evento;
 - o read model informa a quantidade e `PENDING_VALUE`;
+- a quantidade fracionária é calculada por carteira a partir do ledger e do fator
+  do evento; ela não é armazenada como quantidade global no evento;
+- o Patrimônio apresenta a fração em pendência de liquidação, com valor
+  "A confirmar", até existir evidência do crédito;
 - não há preço, caixa, custo de alienação ou resultado realizado inferido;
 - a parcela fracionária não entra na quantidade negociável nem na valorização
-  da carteira; apenas o custo proporcional da quantidade inteira permanece
-  investido na posição;
+- da carteira; o custo total permanece na posição até existir evidência do
+  crédito, evitando baixa ou realização sem liquidação;
 - snapshots marcam a classe como incompleta com
   `pending_corporate_action_fraction` enquanto essa parcela estiver pendente;
-- o custo proporcional da fração permanece anexado à pendência, sem baixa ou
-  realização, até que evidência de liquidação permita atualizar o evento para
-  `CASH_SETTLEMENT`.
+- a pendência não recebe valor de mercado nem baixa de custo até que evidência
+  de liquidação permita atualizar o evento para `CASH_SETTLEMENT`.
 
 Quando um evento elegível produz quantidade fracionária e a evidência de
 reconciliação declara `CASH_SETTLEMENT`, o motor:
@@ -131,8 +134,31 @@ demais ativos já coletados na execução.
 
 ## Próximos blocos
 
-- integrar a projeção pura aos leitores canônicos de posição e rentabilidade;
-- reconciliar eventos equivalentes publicados por mais de uma fonte;
-- incorporar fusões, conversões e incorporações com troca de ativo;
-- criar inspeção, simulação e execução controlada do catálogo global;
-- adicionar tela administrativa e revisão manual para eventos complexos.
+- concluir a revisão e validação do bloco local de evidência de data efetiva,
+  plano de reconciliação e projeção de frações pendentes; ele ainda não tem SHA
+  publicado nem certificação de runtime;
+- preservar KLBN11 em `CONFLICT` até existir evidência de custodiante/corretora
+  para quantidade, preço de liquidação e tratamento de caixa;
+- coletar os dividendos B3 faltantes de NIKE34 por ativo, com identidade e
+  proveniência, sem disparar seed global;
+- migrar o leitor paralelo de IRPF para a projeção canônica e rever compatibilidade
+  dos fallbacks históricos;
+- completar a confirmação da reconciliação cross-provider e do scheduler oficial;
+- manter fusões, conversões, revisão administrativa e ferramentas complexas
+  como evolução posterior, sem misturá-las ao candidato operacional atual.
+
+## Estado de publicação — 16/10/2026
+
+O branch publicado está em `b37661921e3a8455f45c8b676b28955d6ad3d0ea` e o
+working tree contém alterações locais adicionais para reconciliação fracionária.
+O container ativo não corresponde ao checkout: `/health=200`, `/ready=503` por
+`runtime_identity_error`, sem referência de dataset. Não tratar as alterações
+locais como implantadas. Para o retrato completo, consulte
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
+O bloco local de evidência de data efetiva, plano de reconciliação, projeção de
+frações pendentes e apresentação de pendências ainda precisa de revisão e
+validação antes de receber SHA de candidato. KLBN11 permanece em `CONFLICT` até
+evidência de custodiante/corretora para quantidade, preço de liquidação e
+tratamento de caixa. A lacuna de NIKE34 deve ser tratada por ativo sob a política
+B3, sem seed global e sem inferir data, caixa ou liquidação.

@@ -2,14 +2,23 @@
 
 Atualizado em 16/10/2026.
 
-## Rebaseline do checkout — 16/10/2026
+## Rebaseline do checkout e runtime — 16/10/2026
 
-O evento de promoção registrado abaixo pertence à identidade runtime
-`3ab054f61e34f440dddf93c170259958243d58af`. O código atual de
-`stable-15jun` está no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`; a
-identidade e a prontidão do runtime atualmente implantado não foram verificadas
-nesta atualização. Não inferir `/ready=200` para o SHA atual nem implantar uma
-identidade diferente sem um ciclo novo da #384.
+O evento de promoção histórico pertence à identidade runtime
+`3ab054f61e34f440dddf93c170259958243d58af`; não é evidência para o checkout ou
+container atual. O HEAD publicado de `stable-15jun` é
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, com alterações locais ainda não
+consolidadas.
+
+O container ativo declara ambiente `testing`, branch `stable-15jun`, SHA que não
+corresponde ao checkout e `REAL_DATASET_REFERENCE` vazio. `/health` respondeu
+200 com PostgreSQL e Redis saudáveis; `/ready` respondeu 503 com
+`runtime_identity_error`. A execução read-only de `user_test_readiness` em
+16/10 BRT retornou `GO_ASSISTED`, sem blockers/warnings e com zero writes. Esse
+resultado permite testes acompanhados com dados controlados na imagem ativa;
+não valida o checkout local nem libera dados reais.
+
+Registro detalhado: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 ## Objetivo
 

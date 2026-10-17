@@ -7,6 +7,15 @@
 > Seed isolado de proventos: #226 — concluída como portfolio-scoped suficiente
 > Última atualização: 08/09/2026
 
+## Rebaseline operacional — 16/10/2026
+
+Os artefatos e validações descritos abaixo registram a cadeia histórica e não
+comprovam o estado da base ou do backup atual. Na inspeção de 16/10, o backend
+estava saudável, mas `/ready=503` por `runtime_identity_error`; não houve novo
+backup `pre-prod-backup.v3` nem restore isolado nesta rodada. Gere uma cadeia
+com novo `run_id` e vincule-a ao SHA final antes de usá-la para certificação.
+Consulte `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para o estado observado.
+
 ## Objetivo
 
 Executar a primeira reconstrução limpa da base canônica de forma reversível, auditável e idempotente antes do go-live.

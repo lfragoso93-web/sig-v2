@@ -2,6 +2,32 @@
 
 Atualizado em 16/10/2026.
 
+## Snapshot GitHub — 16/10/2026
+
+- Foram localizadas 453 Issues no repositório: 23 abertas e 430 fechadas; não
+  havia Pull Request aberta na consulta.
+- `stable-15jun` está em `b37661921e3a8455f45c8b676b28955d6ad3d0ea`, igual ao
+  `origin/stable-15jun` local. A comparação GitHub mostra o branch 7 commits à
+  frente e 0 atrás de `main`, que está em
+  `4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`.
+- O working tree não está limpo. A inspeção inicial encontrou 15 alterações
+  preexistentes e cinco itens não rastreados; esta rebaseline acrescentou
+  documentação viva e ajustes de cobertura para a migration local e o scanner
+  do Doctor. Não promover nem certificar esse conteúdo até formar um candidato
+  reproduzível.
+
+Issues abertas, agrupadas sem alterar o estado do GitHub:
+
+- Gates/fatos: #149, #370, #408.
+- Backup/governança/schema: #83, #272, #293.
+- OCI backlog: #284.
+- Providers/bootstrap: #127, #130, #253.
+- UX/ativo/navegação: #58, #90, #351, #353.
+- Renda Fixa/ferramentas: #355–#359.
+- Metas/análise/IA/autenticação: #97, #246, #360, #361.
+
+Consulte o GitHub ao vivo antes de fechar, reabrir ou reordenar uma Issue.
+
 ## Delta de política de provedores — B3
 
 Por decisão do usuário em 16/10/2026, B3 é a fonte oficial prioritária para
@@ -26,8 +52,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
    dados reais; a promoção vigente certifica apenas a identidade runtime exata;
 5. #344 foi concluída com todas as filhas #345–#350 fechadas e seus contratos
    promovidos para `main`.
-6. PR #425 sincronizou `main` para `stable-15jun`; as árvores estão iguais no
-   SHA `8e4e243416014024964031793dbb7b15bcd3c39d`.
+6. PR #425 sincronizou `main` para `stable-15jun`; desde então o branch estável
+   avançou 7 commits e está 0 commits atrás de `main`.
 7. #365 e #364 foram fechadas em 08/10; as atualizações de dependências
    priorizadas também foram integradas.
 
@@ -76,6 +102,7 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 - #58 — detalhe global de ativo, parcialmente implementado;
 - #90 — refinamento de Patrimônio;
+- #353 — restauração de scroll ao navegar, bug UX P2;
 - #97 — OAuth;
 - #351 — UI/UX V2;
 - #355 — taxonomia RF;

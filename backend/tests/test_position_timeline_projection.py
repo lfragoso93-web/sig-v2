@@ -281,6 +281,110 @@ def test_pending_settlement_keeps_fraction_out_of_cash_or_realized_projection():
     assert pending.cost_basis_brl == Decimal("100")
 
 
+def test_pending_settlement_derives_fraction_per_portfolio_ledger():
+    action = _action(
+        "reverse-split-per-portfolio",
+        date(2026, 1, 2),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+        ),
+    )
+
+    first = project_position_timeline(movements=[_buy(1, "6", "100")], actions=[action])
+    second = project_position_timeline(movements=[_buy(1, "9", "100")], actions=[action])
+
+    assert first.quantity == Decimal("1")
+    assert first.pending_corporate_action_fractions[0].fractional_quantity == Decimal("0.2")
+    assert second.quantity == Decimal("1")
+    assert second.pending_corporate_action_fractions[0].fractional_quantity == Decimal("0.8")
+    assert first.realized_pnl == second.realized_pnl == Decimal("0")
+
+
+def test_pending_settlement_preserves_adjusted_ledger_and_fraction():
+    action = _action(
+        "reverse-split-adjusted-ledger",
+        date(2026, 10, 13),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker="NIKE34",
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            fractional_quantity=Decimal("1"),
+            ledger_basis="ADJUSTED_POST_EVENT",
+            fraction_is_post_event_quantity=True,
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[
+            PositionMovement(
+                movement_date=date(2026, 10, 1),
+                kind=PositionMovementKind.BUY,
+                quantity=Decimal("1"),
+                unit_price=Decimal("100"),
+            )
+        ],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("100")
+    assert result.realized_pnl == Decimal("0")
+    assert result.pending_corporate_action_fractions[0].fractional_quantity == Decimal("1")
+    assert result.pending_corporate_action_fractions[0].cost_basis_brl == Decimal("0")
+
+
+def test_pending_settlement_keeps_full_cost_for_original_ledger():
+    action = _action(
+        "reverse-split-cost-pending",
+        date(2026, 1, 2),
+        CorporateActionKind.REVERSE_SPLIT,
+        "0.2",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[_buy(1, "6", "100")],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("500")
+    assert result.realized_pnl == Decimal("0")
+    assert result.pending_corporate_action_fractions[0].fractional_quantity == Decimal("0.2")
+    assert result.pending_corporate_action_fractions[0].cost_basis_brl == Decimal("100")
+
+
 def test_cash_settlement_rejects_fraction_that_differs_from_projected_residue():
     action = _action(
         "bonus-invalid-fraction",

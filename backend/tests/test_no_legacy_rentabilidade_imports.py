@@ -14,7 +14,7 @@ def _iter_python_files() -> list[Path]:
 
 
 def _imports_legacy_module(path: Path) -> bool:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             if any(alias.name == LEGACY_MODULE for alias in node.names):

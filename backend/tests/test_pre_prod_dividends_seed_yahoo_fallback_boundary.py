@@ -85,7 +85,7 @@ async def test_yahoo_rows_are_rejected_when_brapi_has_normalized_coverage() -> N
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -114,7 +114,7 @@ async def test_yahoo_rows_are_rejected_even_when_brapi_identity_is_weak() -> Non
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()

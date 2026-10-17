@@ -91,6 +91,12 @@ def _reject_concurrent_authoritative_and_fallback_rows(
             for source_collection in collection.sources
             if source_collection.normalized_rows
         }
+        if {"brapi", "yfinance_history"}.issubset(row_sources):
+            raise DividendsSeedPersistenceError(
+                "Yahoo so pode atuar como fallback apos ausencia BRAPI; "
+                "nao misture linhas de cobertura BRAPI e Yahoo: "
+                f"{collection.ticker}/{collection.asset_type}"
+            )
         if "b3" in row_sources and row_sources.intersection(
             {"brapi", "yfinance_history"}
         ):

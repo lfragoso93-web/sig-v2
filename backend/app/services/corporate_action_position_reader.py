@@ -180,6 +180,11 @@ def _fractional_resolution(
             if evidence.cash_treatment is not None
             else None
         ),
+        ledger_basis=(ledger_basis or None),
+        fraction_is_post_event_quantity=bool(
+            _normalized_text(event.source_provider).lower() == "b3"
+            and ledger_basis == "ADJUSTED_POST_EVENT"
+        ),
     )
 
 

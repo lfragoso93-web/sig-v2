@@ -7,6 +7,12 @@ Atualizado em 06/10/2026.
 > Este índice permanece como referência de retomada. OCI não integra o caminho
 > atual de desenvolvimento nem a ativação da #384.
 
+> Rebaseline local de 16/10/2026: a observação atual é `/health=200` e
+> `/ready=503` por identidade divergente/incompleta; `GO_ASSISTED` ainda não foi
+> determinado para a imagem ativa. As afirmações de readiness da seção seguinte
+> registram o estado certificado em 06/10/2026, não o runtime atual. Consulte
+> `docs/DEVELOPMENT_BASELINE_2026-10-16.md` antes de homologar uma imagem.
+
 ## Fronteira operacional obrigatoria
 
 OCI nao e o ambiente de desenvolvimento nem o local primario de certificacao pesada do SGI v2.
@@ -22,10 +28,11 @@ Fluxo vigente:
 7. nunca editar codigo na VM OCI como forma de correcao permanente.
 
 `GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. Os gates
-#158, #269 e #227 foram concluídos; a decisão persistente da #384 também foi
-executada e mantém `ready_for_real_data=true` somente para a identidade runtime
-certificada. OCI/#284 não foi pré-requisito dessa decisão e permanece backlog
-futuro.
+#158, #269 e #227 foram concluídos; a decisão persistente da #384 foi executada
+em 06/10/2026 para uma identidade runtime específica. A observação de 16/10
+retornou `/ready=503`; consulte o runbook de certificação antes de inferir a
+readiness atual. OCI/#284 não foi pré-requisito dessa decisão e permanece
+backlog futuro.
 
 ## Phase 0. Freeze Candidate SHA
 
