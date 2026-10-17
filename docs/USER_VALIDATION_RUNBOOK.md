@@ -4,14 +4,13 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
-## Rebaseline operacional — 16/10/2026
+## Rebaseline operacional — 17/10/2026
 
-O runtime local estava ativo e saudável em `/health`, mas `/ready` retornou 503
-por `runtime_identity_error`; a imagem declara uma identidade divergente do
-checkout e não tem referência de dataset. A consulta read-only atual de
-`user_test_readiness` não concluiu nem produziu relatório antes do timeout.
-Não há readiness assistida atual confirmada. Uma rodada que dependa do checkout
-atualizado aguarda nova imagem e validação da identidade candidata.
+As imagens do candidato local foram implantadas; backend, PostgreSQL e Redis
+estão saudáveis. `/health=200`, `/ready=503` por divergência do evento anterior.
+`user_test_readiness` retornou `GO_ASSISTED`, sem blockers/warnings e com zero
+escritas. Backup v3 pós-migration, restore isolado e dry-run #384 passaram sem
+promoção; o plano aguarda autorização explícita.
 
 Não reutilizar como estado atual as respostas e contagens registradas nas
 seções históricas abaixo. Antes da próxima rodada, confirmar candidato limpo,

@@ -60,7 +60,7 @@ passada são `README.md`, `ROADMAP.md`, `CHANGELOG.md`,
 `docs/BRAPI_V2_INVENTORY.md`, `docs/price-history.md`,
 `docs/deployment/oci-execution-index.md` e `docs/deployment/oci.md`.
 
-## Runtime local observado
+## Runtime local observado antes do candidato — 16/10/2026
 
 Consulta read-only ao Docker Desktop em 16/10/2026:
 
@@ -88,11 +88,9 @@ Consulta read-only ao Docker Desktop em 16/10/2026:
 Portanto, o runtime está operacional para diagnóstico e seu gate de dados reais
 está fechado. `/health=200` não certifica a identidade; `/ready=503` é o
 comportamento fail-closed esperado para a identidade incompleta/divergente.
-Na consulta read-only de readiness assistida feita nesta rodada, o container
-permaneceu saudável, mas a CLI não concluiu nem produziu relatório antes do
-timeout. Uma tentativa local também não pôde resolver o hostname Docker `db`.
-Portanto, não há resultado assistido atual confirmado; a evidência histórica de
-`GO_ASSISTED` não deve ser reutilizada como estado atual.
+Na consulta feita antes do deploy candidato, a CLI não concluiu antes do
+timeout. Esse resultado histórico não descreve o runtime atual; consulte a
+observação de 17/10 abaixo.
 
 ## Validação do checkout observado
 
@@ -104,29 +102,44 @@ checks catalogados. A suite backend completa foi reexecutada em 17/10/2026: 2.40
 
 A persistencia agora rejeita linhas BRAPI/Yahoo concorrentes; as fixtures refletem B3 para ativos listados; e os scanners AST leem fontes com BOM. O contrato documental do seed foi alinhado a autoridade B3. Essa evidencia valida o checkout local, mas nao forma SHA reproduzivel nem certifica a imagem ativa.
 
-## Baseline de certificação
+## Baseline anterior de certificação
 
 A promoção persistida de 06/10/2026 é evidência histórica de outra identidade.
-Não há neste baseline novo backup `pre-prod-backup.v3`, identidade derivada do
-dataset, restore isolado, proof de certificação ou dry-run #384 para o runtime
-observado. Não promover nem converter o estado assistido em autorização para
-dados reais. Uma nova certificação exige SHA estável, dataset validado,
-migrations aplicadas, gates requeridos, dry-run e uma decisão explícita para a
-confirmação exata que ele emitir.
+Na fotografia pré-deploy não havia novo backup, restore, proof ou dry-run #384.
+Essa cadeia foi executada para o candidato em 17/10 e está registrada abaixo.
+
+## Runtime candidato implantado — 17/10/2026
+
+- SHA local implantado: `af3afe638fc320b2563ff3c599ab1f09cf95a900`, um commit
+  à frente do último SHA remoto `b37661921e3a8455f45c8b676b28955d6ad3d0ea`.
+- Environment `production`, branch `stable-15jun`; `APP_COMMIT_SHA` corresponde
+  ao checkout e `REAL_DATASET_REFERENCE` veio do backup `20261017-candidate-004433`.
+- Imagens: backend `sha256:b48e1334b2c7177efab04f2e98dc564609ef3f90e78d2af751838c93823f5014`;
+  frontend `sha256:a3e4a6eec647d1c98f328424d2622077da8c7933f9536390fde8258a36ee09e4`.
+- Alembic atual: `20261016_corp_ev_effective_date`. `/health=200`; PostgreSQL e
+  Redis saudáveis. `user_test_readiness` retornou `GO_ASSISTED`, sem blockers,
+  warnings ou escritas; totais: 8 usuários, 7 carteiras, 423 transações, 3.677
+  ativos, 4.411.758 preços, 1.031 snapshots, 435 dividendos de ativos, 125
+  eventos corporativos e 2 metas.
+- `/ready=503` por `identity_mismatch` do evento anterior (#384), divergente em
+  SHA, dataset e Alembic; permanece fail-closed até nova promoção.
+- Backup v3 pós-migration: `20261017-candidate-004433`, snapshot consistente,
+  PostgreSQL 16, zero escritas na origem. Restore em PostgreSQL descartável
+  reconciliou migrations, tabelas e contagens com `ok=true`, sem divergências.
+- Backend: 2.401 passed, 5 skipped; Flake8, mypy (411 arquivos), Doctor 6/6,
+  migration e drift gates passaram. Frontend: 171 testes, typecheck e lint
+  passaram. O proof de certificação ficou `failed` apenas por
+  `certification.not_certified`; o dry-run #384 gerou plano válido com zero
+  escritas e sem commit. A execução aguarda autorização para a confirmação
+  exata do plano atual, preservada em `artifacts/certification-proof/`.
 
 ## Mapa de trabalho
 
-1. Estabilizar e revisar as mudanças locais; resolver a cadeia de migrations e
-   produzir um SHA candidato limpo sem incluir os arquivos temporários.
-2. Atualizar esta baseline e os documentos vivos a partir do candidato final.
-3. Executar os gates de código/documentação e o Architecture Doctor aplicáveis.
-4. Criar backup v3 fresco, derivar dataset identity e validar restore isolado.
-5. Construir a imagem candidata, preservar os volumes e fazer deploy controlado.
-6. Conferir identidade, migrations, `/health`, `/ready`, readiness assistida e
-   prova de restart.
-7. Rodar o dry-run de certificação #384; só executar a confirmação exata após
-   revisar a saída do plano.
-8. Confirmar CodeQL pós-correção (#408), restore administrativo isolado (#83)
+1. Consolidar esta atualização factual em novo SHA; repetir backup v3, restore,
+   gates, Doctor, proof e dry-run #384, pois o SHA muda.
+2. Revisar a confirmação exata do novo plano e executar somente após
+   autorização explícita; então comprovar `/ready` e persistência após restart.
+3. Confirmar CodeQL pós-correção (#408), restore administrativo isolado (#83)
    e GOV-07 (#293); só então selecionar a próxima entrega de produto.
 
 Qualquer alteração que mude SHA, schema, ambiente ou dataset exige repetir a

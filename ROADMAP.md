@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 16/10/2026.
+> Última atualização: 17/10/2026.
 
 ## Estado do projeto
 
@@ -21,34 +21,24 @@ ready_for_real_data=true
 /ready=200
 ```
 
-Na inspeção atual, os serviços de backend/PostgreSQL/Redis estavam saudáveis,
-`/health=200` e `/ready=503` (`runtime_identity_error`). O container declara
-`ENVIRONMENT=testing`, tem `APP_COMMIT_SHA` divergente do checkout e não tem
-`REAL_DATASET_REFERENCE`. A consulta read-only atual de `user_test_readiness`
-não concluiu nem produziu relatório antes do timeout; não há readiness assistida
-atual confirmada. O mapa operacional está em
+Na validação de 17/10, as imagens candidatas backend/frontend estavam
+implantadas, o head Alembic era `20261016_corp_ev_effective_date`, `/health=200`
+e `user_test_readiness` retornou `GO_ASSISTED`, sem blockers/warnings e com zero
+escritas. `/ready=503` por divergência do evento persistido anterior. Backup v3
+pós-migration, restore isolado e dry-run #384 passaram; o plano aguarda
+autorização explícita de execução. O mapa operacional está em
 `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 Branch obrigatória: `stable-15jun`.
 
 ## Próximo ciclo de desenvolvimento e testes — governante
 
-1. Revisar as alterações locais de eventos corporativos e a cadeia de
-   migrations; preservar os artefatos temporários até identificar finalidade e
-   owner. Só formar identidade candidata com working tree controlada e SHA
-   reproduzível.
-2. Atualizar documentação e Issues que descrevam o candidato, executar testes
-   requeridos, Architecture Doctor e confirmar CodeQL pós-correção (#408).
-3. Gerar backup v3 atual, derivar identidade do dataset e validar restore em
-   banco isolado; completar o ciclo restante da #83.
-4. Construir e iniciar a imagem candidata, preservar volumes, confirmar a
-   identidade/migrations e rodar `/health`, `/ready` e `user_test_readiness`.
-   Cada mudança posterior que altere código, SHA, schema ou dataset exige nova
-   imagem e a validação correspondente.
-5. Rodar o dry-run #384 para a identidade final e revisar seu plano. Executar
-   somente a confirmação exata desse plano após autorização explícita para a
-   ação e identidade apresentadas.
-6. Concluir GOV-07/#293 e escolher uma entrega de produto. #284 permanece
+1. Atualizar esta documentação factual e criar o novo SHA; cada mudança de SHA
+   invalida o plano #384 atual e exige novo backup v3, restore, proof e dry-run.
+2. Confirmar CodeQL pós-correção (#408) e completar o ciclo restante da #83.
+3. Revisar a confirmação exata do novo dry-run #384 e executar somente após
+   autorização explícita para a identidade apresentada.
+4. Concluir GOV-07/#293 e escolher uma entrega de produto. #284 permanece
    backlog de OCI e não participa deste ciclo local.
 
 Baseline operacional atual: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.

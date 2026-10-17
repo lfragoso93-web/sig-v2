@@ -9,7 +9,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - a persistencia estrita rejeita colecoes com linhas BRAPI e Yahoo simultaneas, reforcando a regra de fallback explicito; fixtures de eventos corporativos foram alinhadas a prioridade B3 para ativos listados;
 - scanners AST passaram a tolerar BOM UTF-8; o adapter B3 teve anotacoes locais ajustadas para mypy e `goals_service.py` recebeu o espacamento exigido pelo flake8;
 - backend: 2.401 testes passaram e 5 foram skipped; flake8, mypy (411 arquivos), Architecture Doctor (6/6), migrations frescas em PostgreSQL 16 e drift gate passaram;
-- nenhuma imagem candidata foi implantada nem houve alteracao de backup ou certificacao.
+- o entrypoint agora aplica o head runtime seguro `20261016_corp_ev_effective_date`; testes focados do alvo/migration passaram (10/10);
+- imagens backend e frontend do candidato foram construidas e implantadas; backend, PostgreSQL e Redis estao saudaveis, readiness assistida retornou `GO_ASSISTED` e `/ready` segue 503 por divergencia do evento anterior;
+- backup v3 pos-migration teve zero escritas na origem; restore isolado reconciliou sem divergencias; proof e dry-run #384 foram gerados sem promover a identidade.
 
 ### 16/10/2026 - rebaseline documental e runtime observado
 

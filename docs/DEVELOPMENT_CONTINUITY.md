@@ -1,13 +1,14 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento de retomada do trabalho. Baseline operacional observada em
-> 16/10/2026; ver `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para evidências.
+> Documento de retomada do trabalho. Baseline atualizada em 17/10/2026; ver
+> `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para evidências e artefatos.
 
 ## Estado atual
 
 - Branch obrigatória: `stable-15jun`.
-- HEAD publicado: `b37661921e3a8455f45c8b676b28955d6ad3d0ea`, igual ao
-  `origin/stable-15jun` local.
+- Último SHA remoto: `b37661921e3a8455f45c8b676b28955d6ad3d0ea`. O candidato
+  local implantado está em `af3afe638fc320b2563ff3c599ab1f09cf95a900`, um
+  commit à frente do remoto.
 - GitHub compara `stable-15jun` como 7 commits à frente e 0 atrás de `main`
   (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); nenhuma PR estava aberta.
 - O working tree não está limpo. A inspeção inicial identificou 15 alterações
@@ -15,35 +16,27 @@
   eventos corporativos, UI/testes de frações pendentes e artefatos temporários.
   Esta rebaseline acrescentou documentação. Não descartar, substituir ou incluir
   artefatos temporários em commit sem identificar seu uso.
-- O backend, PostgreSQL e Redis estavam saudáveis na última inspeção Docker; o
-  `/health` retornou `ok`. O `/ready` retornou HTTP 503 com
-  `runtime_identity_error` e `ready_for_real_data=false`.
-- O container declara `APP_BRANCH=stable-15jun`, `ENVIRONMENT=testing`, uma
-  `APP_COMMIT_SHA` divergente do checkout e nenhuma `REAL_DATASET_REFERENCE`.
-  O bootstrap estava `not_started`. A identidade e o dataset precisam ser
-  reconciliados antes de substituir a imagem.
-- A consulta read-only atual de `user_test_readiness` não concluiu nem produziu
-  relatório antes do timeout. Não há readiness assistida atual confirmada; uma
-  evidência histórica não substitui a nova consulta.
+- Na observação anterior ao deploy, backend/PostgreSQL/Redis estavam saudáveis;
+  `/health=200` e `/ready=503` por `runtime_identity_error`.
+- O backend/frontend candidatos foram implantados em `production`; a migration
+  `20261016_corp_ev_effective_date` está aplicada. `/health=200`, readiness
+  assistida `GO_ASSISTED` sem blockers/warnings e zero escritas.
+- `/ready=503` continua fail-closed porque o evento persistido anterior diverge
+  em SHA, dataset e Alembic. Proof e dry-run #384 confirmaram a identidade; o
+  dry-run não escreveu e aguarda autorização explícita para promoção.
 - Validacao do checkout em 17/10: suite backend completa com 2.401 passed, 5 skipped e 0 failed; flake8 e mypy passaram (411 arquivos); Architecture Doctor passou (6/6); migrations completas e drift gate passaram em PostgreSQL 16 descartavel. A execucao foi isolada, sem rede, com a arvore somente leitura.
 - A suite frontend (171 testes, typecheck e lint) passou na verificacao de 16/10.
-- O gate de codigo local esta verde. A arvore permanece modificada e ainda nao representa um SHA candidato reproduzivel; imagem, backup/restore de candidato e certificacao continuam pendentes.
+- Os gates backend/frontend e Doctor passaram; backup v3 e restore isolado
+  reconciliaram. O candidato está implantado. A promoção #384 é o único passo
+  pendente desta rodada e exige autorização para o plano atual.
 
 ## Próximo caminho
 
-1. Revisar e estabilizar as alterações locais, incluindo a cadeia Alembic de
-   eventos corporativos; obter um SHA candidato limpo e reproduzível.
-2. Atualizar documentos vivos e Issue links para esse candidato, preservando
-   changelogs e relatórios históricos como registros datados.
-3. Executar gates de código, testes requeridos e Architecture Doctor aplicáveis.
-4. Gerar `pre-prod-backup.v3` novo, derivar a identidade do dataset e validar
-   restore em banco isolado.
-5. Construir e iniciar a imagem candidata preservando volumes e containers
-   necessários; validar identidade, revision Alembic, `/health` e `/ready`.
-6. Rodar `user_test_readiness`, certification proof e o dry-run #384. Revisar o
-   plano antes de considerar a confirmação exata emitida.
-7. Registrar o resultado real e o próximo SHA nos documentos e Issues.
-8. Fechar os gates residuais #408 (CodeQL), #83 (backup/restore isolado) e GOV-07
+1. Consolidar a atualização factual em novo SHA; repetir backup v3, restore,
+   gates, Doctor, proof e dry-run #384, pois o SHA muda.
+2. Revisar a confirmação exata do plano atualizado e executar somente após
+   autorização explícita; então comprovar `/ready` e persistência após restart.
+3. Fechar os gates residuais #408 (CodeQL), #83 (backup/restore isolado) e GOV-07
    da #293; então escolher uma única entrega de produto.
 
 ## Mapa de Issues abertas
