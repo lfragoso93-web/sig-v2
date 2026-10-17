@@ -6,9 +6,9 @@
 ## Estado atual
 
 - Branch obrigatória: `stable-15jun`.
-- Último SHA remoto: `b37661921e3a8455f45c8b676b28955d6ad3d0ea`. O candidato
-  local implantado está em `af3afe638fc320b2563ff3c599ab1f09cf95a900`, um
-  commit à frente do remoto.
+- O último SHA remoto observado era `b37661921e3a8455f45c8b676b28955d6ad3d0ea`.
+  A identidade exata do runtime e do checkout corrente está no proof allowlisted
+  em `artifacts/certification-proof/`.
 - GitHub compara `stable-15jun` como 7 commits à frente e 0 atrás de `main`
   (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); nenhuma PR estava aberta.
 - O working tree não está limpo. A inspeção inicial identificou 15 alterações

@@ -110,12 +110,14 @@ Essa cadeia foi executada para o candidato em 17/10 e está registrada abaixo.
 
 ## Runtime candidato implantado — 17/10/2026
 
-- SHA local implantado: `af3afe638fc320b2563ff3c599ab1f09cf95a900`, um commit
-  à frente do último SHA remoto `b37661921e3a8455f45c8b676b28955d6ad3d0ea`.
+- O SHA do runtime deve corresponder ao checkout de `stable-15jun`; o proof
+  allowlisted em `artifacts/certification-proof/` registra a identidade completa
+  do build vigente. Cada atualização desta documentação também altera o SHA e
+  exige nova cadeia de backup, restore, proof e dry-run.
 - Environment `production`, branch `stable-15jun`; `APP_COMMIT_SHA` corresponde
   ao checkout e `REAL_DATASET_REFERENCE` veio do backup `20261017-candidate-004433`.
-- Imagens: backend `sha256:b48e1334b2c7177efab04f2e98dc564609ef3f90e78d2af751838c93823f5014`;
-  frontend `sha256:a3e4a6eec647d1c98f328424d2622077da8c7933f9536390fde8258a36ee09e4`.
+- Imagens backend e frontend foram atualizadas. Os digests da imagem corrente
+  ficam registrados no inventário operacional, fora deste baseline versionado.
 - Alembic atual: `20261016_corp_ev_effective_date`. `/health=200`; PostgreSQL e
   Redis saudáveis. `user_test_readiness` retornou `GO_ASSISTED`, sem blockers,
   warnings ou escritas; totais: 8 usuários, 7 carteiras, 423 transações, 3.677
@@ -123,15 +125,17 @@ Essa cadeia foi executada para o candidato em 17/10 e está registrada abaixo.
   eventos corporativos e 2 metas.
 - `/ready=503` por `identity_mismatch` do evento anterior (#384), divergente em
   SHA, dataset e Alembic; permanece fail-closed até nova promoção.
-- Backup v3 pós-migration: `20261017-candidate-004433`, snapshot consistente,
-  PostgreSQL 16, zero escritas na origem. Restore em PostgreSQL descartável
-  reconciliou migrations, tabelas e contagens com `ok=true`, sem divergências.
+- O backup v3 pós-migration e o restore isolado reconciliaram migrations,
+  tabelas e contagens com `ok=true`, sem divergências. Os relatórios em
+  `artifacts/pre-prod-rebuild/` vinculam o run ao SHA exato que os gerou; uma
+  atualização posterior exige outro run.
 - Backend: 2.401 passed, 5 skipped; Flake8, mypy (411 arquivos), Doctor 6/6,
   migration e drift gates passaram. Frontend: 171 testes, typecheck e lint
   passaram. O proof de certificação ficou `failed` apenas por
   `certification.not_certified`; o dry-run #384 gerou plano válido com zero
-  escritas e sem commit. A execução aguarda autorização para a confirmação
-  exata do plano atual, preservada em `artifacts/certification-proof/`.
+  escritas e sem commit. Uma atualização posterior invalida seu plano; a nova
+  confirmação deve ser autorizada para a identidade atual e fica preservada em
+  `artifacts/certification-proof/`.
 
 ## Mapa de trabalho
 

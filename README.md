@@ -91,13 +91,16 @@ o runtime atual não está certificado para dados reais.
 
 ### Candidato implantado — 17/10/2026
 
-O commit local `af3afe638fc320b2563ff3c599ab1f09cf95a900` está no runtime
-production, com Alembic em `20261016_corp_ev_effective_date`. Backend, frontend,
+O candidato local foi implantado em `production`, com Alembic em
+`20261016_corp_ev_effective_date`. A identidade exata de cada build fica no
+proof gerado para o runtime corrente em `artifacts/certification-proof/`.
+Backend, frontend,
 PostgreSQL e Redis estão ativos; readiness assistida retornou `GO_ASSISTED`,
 sem blockers/warnings e sem escritas. O `/ready` permanece 503 porque o evento
 persistido anterior certifica outra identidade. Backup v3 pós-migration, restore
-isolado e dry-run #384 passaram sem promover. Os artefatos operacionais e o mapa
-atual estão em `artifacts/` e `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+isolado e dry-run #384 passaram sem promover. Qualquer novo SHA exige backup,
+restore e dry-run próprios; os relatórios e o mapa estão em `artifacts/` e
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 A cadeia histórica de promoção foi concluída. O próximo ciclo vigente está em
 `ROADMAP.md` e `docs/DEVELOPMENT_BASELINE_2026-10-16.md`:
