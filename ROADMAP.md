@@ -438,3 +438,8 @@ Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, chec
 - A Issue #370 permanece aberta ate existir evidencia externa para KLBN11. Este e um limite factual dos dados: nao alterar fator/data nem autorizar liquidacao sem documento de custodia/corretora.
 - /ready=503 por divergencia do evento persistido de certificacao em commit, dataset e revisao Alembic. Conforme decisao do usuario, esse estado nao e tratado como gate para desenvolvimento e testes assistidos; nenhum evento de certificacao foi promovido neste bloco.
 - O proximo bloco deve reconciliar as posicoes atuais com a cobertura de precos e definir plano por escopo, depois executar smoke autenticado de Proventos, IRPF e lifecycle. Nenhuma sincronizacao de provider foi executada nesta rodada.
+## Rebaseline de eventos globais - 18/10/2026
+
+UNRECONCILED descreve estado de reconciliacao; nao significa falta de asset_id ou fato falso. Dos 121 registros, 120 sao eventos globais de provedor e 1 e troca de ticker especifica de carteira. A regra atual exige MATCHED para qualquer evento nao legado, logo ainda nao aplica os 120 eventos globais; o CLI achou zero pares exatos e ha 10 pares BRAPI/Yahoo com datas divergentes de 1-3 dias. Nenhum dos 118 eventos BRAPI/Yahoo com effective_date coincidiu com quantidade positiva no ledger existente; NIKE34 segue sem data efetiva e os conflitos AMOB3/KLBN11 permanecem materiais.
+
+Proximo bloco: definir elegibilidade canonica por autoridade e cobertura do provedor, manter B3 como primaria, BRAPI como complemento limitado e Yahoo como fallback explicito. Validar que um unico fato canonico se projeta em cada carteira elegivel sem duplicar eventos nem mutar o ledger. Nao promover linhas em lote nem inferir datas.

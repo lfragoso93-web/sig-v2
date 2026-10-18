@@ -489,3 +489,15 @@ Eventos corporativos: 125 registros persistidos, 121 UNRECONCILED, 3 CONFLICT, 1
 Validacao: 80 testes backend e 6 testes frontend focados em projecao, reconciliacao, lifecycle e fracoes passaram. As rotas aparecem na OpenAPI; GETs sem sessao responderam 401, entao a chamada autenticada via jornada de usuario permanece pendente. Auditoria PostgreSQL em transacao READ ONLY; nenhum dado financeiro foi escrito e nenhum provider foi chamado.
 
 Proximo bloco: auditoria escopada das posicoes atuais versus cobertura de precos, plano de sincronizacao sem execucao implicita, e smoke autenticado das rotas de Proventos, IRPF e eventos. Para fechar eventos, obter evidencia de custodiante antes de qualquer reconciliacao e registrar a data efetiva oficial de NIKE34.
+## Classificacao de UNRECONCILED - 18/10/2026
+
+Auditoria read-only do catalogo:
+- 121 linhas UNRECONCILED: B3 2 (NIKE34), BRAPI 46 (17 tickers; 28 bonificacoes, 10 splits, 8 grupamentos), Yahoo 72 (17 tickers; 67 splits, 5 grupamentos) e ticker_resolution 1 (PETZ3 para AUAU3).
+- 120 sao eventos de provedor globais (portfolio_id nulo); todos os 121 tem asset_id. A excecao e ticker_resolution, uma troca por carteira em 05/01/2026, nao uma acao global de quantidade.
+- Os dois eventos B3 aguardam effective_date. Os 118 eventos BRAPI/Yahoo nao tem review_reason persistido; UNRECONCILED/requires_review e estado default da ingestao, nao prova de erro do fato.
+- Candidatos exatos cross-provider: zero. Existem 10 pares BRAPI/Yahoo com mesmo tipo/fator e datas a 1-3 dias de distancia. Nenhum dos 118 eventos BRAPI/Yahoo com data efetiva coincidiu com quantidade positiva no ledger existente na data; os dois B3 sem data nao podem ser avaliados assim.
+- O reader atual exclui toda linha nova sem MATCHED, embora seja global. A arquitetura precisa selecionar um fato canonico conforme autoridade/fallback do provedor e projetar esse evento globalmente, preservando origem e sem aplicar duplicatas. Nenhuma linha foi promovida ou escrita.
+
+O evento 3 de PETZ3 e uma troca especifica da carteira para AUAU3, marcada APLICADO, mas nao e um dos eventos de split/bonificacao. O subsistema nao encontrou transacoes com o marcador de ledger desse evento. As tres linhas CONFLICT AMOB3/KLBN11 continuam a pendencia material separada da Issue #370.
+
+Proximo bloco atualizado: desenhar e testar a elegibilidade canonica por autoridade de fonte e reconciliar os 10 pares de datas divergentes com a regra oficial de data efetiva. Preservar os conflitos sem evidencia; nao fazer MATCHED em lote.

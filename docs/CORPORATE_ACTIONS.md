@@ -180,3 +180,31 @@ Esta validacao posterior substitui o retrato de publicacao de 16/10 acima para o
 /ready=503 indica incompatibilidade da identidade persistida de certificacao nos campos commit, dataset e revisao Alembic. O bloqueio e do contrato de readiness para dados reais; backend e interface seguem em funcionamento para a stack atual. Nenhuma certificacao foi renovada neste bloco.
 
 A Issue #370 continua aberta pela falta de evidencia externa de liquidacao de KLBN11. Nao converter conflitos em MATCHED nem corrigir fatores/datas por suposicao. Proxima validacao funcional: executar os GETs de lifecycle com uma sessao de teste autorizada e revisar os tres conflitos junto de extrato de custodia/corretora; completar a lacuna de data efetiva de NIKE34 com calendario oficial antes de considerar esse evento elegivel.
+## Significado e inventario de UNRECONCILED - 18/10/2026
+
+UNRECONCILED e um estado de reconciliacao do fato, nao uma indicacao de que o evento nao esteja ligado ao ativo global nem de que seja falso. Os registros do catalogo sao associados por asset_id; a projecao financeira atual tambem exige portfolio_id nulo para tratar uma acao como global. Para eventos de provedores, o leitor so permite projeção quando a linha e canonical, reconciliation_status=MATCHED e requires_review=false. Portanto, hoje os 120 eventos globais UNRECONCILED estao persistidos mas nao afetam nenhuma carteira.
+
+### Composicao do catalogo
+
+| Origem | Registros | Ativos | Tipos e detalhe |
+|---|---:|---:|---|
+| B3 | 2 | NIKE34 | 1 desdobramento de 08/02/2021 e 1 grupamento de 09/10/2026; ambos sem effective_date. O adaptador preserva lastDatePrior/record_date e aguarda a sessao efetiva oficial. |
+| BRAPI | 46 | 17 | 28 bonificacoes, 10 desdobramentos e 8 grupamentos; datas de 1986 a 2026. |
+| Yahoo | 72 | 17 | 67 desdobramentos e 5 grupamentos; datas de 2000 a 2025. Fallback/ suplemento, nao autoridade para substituir B3 coberta. |
+| ticker_resolution | 1 | PETZ3 | Troca PETZ3 para AUAU3 em 05/01/2026; possui asset_id, mas tambem portfolio_id e nao e acao global de quantidade. |
+
+No catalogo inteiro, 124/125 linhas tem portfolio_id nulo e todas tem asset_id. A excecao e o registro ticker_resolution acima, que esta no escopo de uma carteira. A linha esta marcada APLICADO no subsistema de troca de ticker, mas continua UNRECONCILED/requires_review e nao entra no projetor global de splits/bonificacoes. A consulta encontrou zero transacoes com o marcador sintetico desse evento.
+
+Os dois registros B3 tem review_reason explicito pela data efetiva pendente. Os 118 registros BRAPI/Yahoo nao trazem motivo de revisao salvo; todos foram inseridos no estado default UNRECONCILED/requires_review. Isso e uma lacuna de classificacao/auditoria, nao evidencia de que cada evento seja incorreto. is_canonical=true por si so nao libera a projecao.
+
+### Comparacao entre fontes e impacto no ledger atual
+
+O CLI read-only de candidatos exatos retornou zero grupos e zero escritas. Sua regra exige mesmo ticker, tipo, effective_date e fator entre pelo menos duas fontes. A consulta de inventario encontrou 10 pares BRAPI/Yahoo com tipo e fator iguais, mas data divergente em 1 a 3 dias: BBAS3, GOAU4 (dois eventos), KLBN11, PETR4, RANI3, TAEE11, VULC3 (dois eventos) e WEGE3. Sao candidatos de investigacao; diferencas de data podem refletir record/ex-date versus sessao efetiva e nao autorizam combinar ou deslocar fatos.
+
+Usando somente transactions persistidas e effective_date disponivel, nenhum dos 118 eventos BRAPI/Yahoo UNRECONCILED coincidiu com quantidade positiva no ledger de uma carteira na data do evento. Os dois eventos B3 sem effective_date nao podem ser avaliados por esse criterio. Em contraste, os tres registros CONFLICT de AMOB3 e KLBN11 ja identificados na auditoria anterior coincidem com datas com posicao e permanecem fora da projecao.
+
+### Alinhamento necessario
+
+A arquitetura pretendida e global: um fato corporativo canonico do ativo deve ser projetado sobre cada ledger que possuia quantidade elegivel na data efetiva, sem mutar transacoes historicas. O estado de reconciliacao atual exige MATCHED inclusive para uma linha isolada de fonte autorizada, e a descoberta de candidatos depende de duas fontes com data identica. Isso deixa fatos potencialmente validos bloqueados e nao representa sozinho a autoridade por provedor.
+
+O proximo bloco deve classificar elegibilidade por fonte e tipo: B3 oficial pode fundamentar o fato quando data efetiva, fator e payload estao completos; BRAPI so complementa fatos fora da cobertura B3; Yahoo continua fallback explicitamente identificado onde nao ha cobertura oficial. Duplicatas e divergencias devem continuar sem dupla aplicacao, com proveniencia preservada. Nenhuma promocao em lote de UNRECONCILED para MATCHED e autorizada por este inventario.
