@@ -403,3 +403,12 @@ mesma stack, preservando DB, Redis, volumes e Tunnel.
 ## Registro corrente - UX tributaria de Renda Fixa - 18/10/2026
 
 A classificacao fiscal deixou de ser editavel: o tipo canonico de produto alimenta `tax_exempt` no schema e formulario. O comparador #359 usa o mesmo mapeamento. O campo separado de emissor foi removido; o nome do titulo identifica o emissor, preservando dados antigos. Liquidez diaria oculta e limpa vencimento/carencia. Testes focados: frontend 31/31, backend de contratos 20/20, typecheck aprovado. Publicacao concluida: commit `8391474917684caa4e92f30d8b7c00cdb7ac5a28`, backend `sha256:35970f9574348e8d7199354694130d9e3a8997de868ae2a2ba711f6515436cfd`, frontend `sha256:93259e4a5649d667385dd21ce359334d94c807ad02557434176ceb3f0e1ae162`. `/health=200`, rota e bundle publicos 200, Alembic head e DB/Redis saudaveis. `/ready=503` por identidade de certificacao anterior; nao foi promovido evento novo. Validacao visual permanece pendente.
+
+## Navegacao de ferramentas - 18/10/2026
+
+Calculadora de rendimentos e Simulador RF estao agrupados sob **Ferramentas**
+na barra lateral. As duas rotas existentes foram mantidas, o grupo expande ao
+entrar em uma rota filha e tambem funciona com o menu recolhido. Teste focado
+da hierarquia: 3/3; typecheck e build de producao aprovados. Nenhuma alteracao
+de backend, banco, Redis, volumes ou Tunnel foi necessaria. A imagem sera
+atualizada no servico frontend da stack existente `sig-v2`.

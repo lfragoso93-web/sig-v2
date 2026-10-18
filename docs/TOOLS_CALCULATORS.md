@@ -2,6 +2,11 @@
 
 Atualizado em 18/10/2026.
 
+As duas experiencias ficam agrupadas no menu lateral em **Ferramentas**:
+**Calculadora** (`/carteira/ferramentas/rendimentos`) e **Simulador RF**
+(`/carteira/ferramentas/renda-fixa`). O grupo expande automaticamente ao abrir
+uma dessas rotas; os enderecos e o acesso protegido permanecem iguais.
+
 ## Calculadora de rendimentos — primeira entrega da #359
 
 A rota protegida `/carteira/ferramentas/rendimentos` oferece projeção isolada

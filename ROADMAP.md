@@ -7,6 +7,7 @@
 - O ambiente unico de validacao assistida e o Compose `sig-v2`, publicado pelo Cloudflare Tunnel. Toda alteracao destinada aos usuarios deve ser publicada nessa imagem; nao usar `sgi-usertest`.
 - #355 tem contratos estruturados, associacao por termos equivalentes, prefill de Resumo/Tesouro e fluxos CSV. A rodada atual remove a escolha manual de tratamento fiscal e o campo separado de emissor; liquidez diaria oculta e limpa carencia.
 - #359 compara titulos por tipo de produto. O tratamento fiscal vem automaticamente da taxonomia; premissas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
+- A navegacao de ambas as simulacoes foi agrupada em **Ferramentas**, com **Calculadora** e **Simulador RF** como subpaginas. As rotas existentes foram preservadas; o grupo abre automaticamente nas rotas de ferramentas.
 - Testes focados da rodada: frontend 31/31, backend de contratos 20/20, typecheck e build de producao aprovados. Commit publicado e imagens aplicadas em `sig-v2`.
 - A validacao visual desktop/mobile e acessibilidade segue pendente de uma sessao de navegador disponivel. Readiness/certificacao de dados reais nao e gate para esta validacao assistida, conforme decisao do usuario.
 
