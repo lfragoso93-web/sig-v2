@@ -93,6 +93,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "export_before_cleanup",
         "Projeção financeira legada que pode existir em bancos pré-contração; deve ser preservada antes da migration controlada que remove a tabela.",
     ),
+    "fixed_income_contracts": (
+        "preserved",
+        "Metadados contratuais vinculados ao ledger de transações; não são reconstruíveis sem os termos informados pelo usuário.",
+    ),
     "asset_aliases": (
         "rebuildable",
         "Aliases canônicos podem ser recriados a partir do catálogo e dos eventos corporativos exportados.",

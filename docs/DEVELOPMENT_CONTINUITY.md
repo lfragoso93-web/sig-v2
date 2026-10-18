@@ -343,3 +343,23 @@ backend/frontend da stack `sig-v2` preservando banco/volumes e validar imagem,
 migration, API, `/health`, `/ready` e URL pública. A certificação atual pertence
 ao SHA/dataset/revision anteriores; não deve ser atribuída automaticamente à
 imagem nova.
+
+#### Resultado da primeira publicação e correção do inventário — 18/10/2026
+
+O commit `1d245ff76ecc4fcf164073c8a731809cb93d2dc9` e os três commits locais
+anteriores foram publicados em `origin/stable-15jun` por fast-forward. As imagens
+backend `sha256:8e0a516f5376ee6314db01ba72e95eceffb8c8ea5682b517b8ca406764652a53`
+e frontend `sha256:8acaec4d92bc6e4588c73b2e129efcdc131bfc24a565aa2cca70609b3d45b4fb`
+foram aplicadas ao projeto existente `sig-v2`; Cloudflare Tunnel permaneceu
+conectado, banco/Redis e volumes não foram recriados. `/health=200`, API contém
+rota de contratos e exportação CSV, URL pública `200`; Alembic chegou a
+`20261017_fixed_income_contracts`. `/ready=503` por divergência de SHA e
+revision com o evento antigo, sem reaproveitar certificação.
+
+O backup pós-migration foi bloqueado corretamente pelo inventário, que marcou
+`fixed_income_contracts` como tabela desconhecida (vazia, 0 linhas). A tabela é
+metadado de contrato informado pelo usuário, ligado ao ledger, e foi classificada
+como `preserved`; o teste da política passou (19/19). Nenhuma escrita financeira
+ocorreu nessa auditoria. A correção precisa ser publicada e aplicada à imagem
+backend `sig-v2` antes de repetir o backup pós-migration e atualizar a referência
+do dataset no `.env`.
