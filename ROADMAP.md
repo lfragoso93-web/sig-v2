@@ -11,6 +11,8 @@
 - Os campos agora associam dicas aos controles, os resultados anunciam um resumo atualizado a leitores de tela e as tabelas com rolagem horizontal receberam regiao nomeada e foco por teclado. Testes de acessibilidade focados: 6/6; typecheck aprovado.
 - Testes focados da rodada: frontend 31/31, backend de contratos 20/20, typecheck e build de producao aprovados. Commit publicado e imagens aplicadas em `sig-v2`.
 - A validacao visual desktop/mobile e acessibilidade segue pendente de uma sessao de navegador disponivel. Readiness/certificacao de dados reais nao e gate para esta validacao assistida, conforme decisao do usuario.
+- Verificacao operacional posterior encontrou no detalhe do ativo uma chamada antiga de Proventos retornando 404; a tela principal usa o contrato canonico. A correcao do detalhe esta neste bloco.
+- O runtime usa precos persistidos DB-first. Logs recentes registram ausencia de preco para 10 ativos em `2026-10-17`; a completude/frescor do universo precisa de auditoria de cobertura antes de afirmar atualizacao integral. IRPF anual respondeu nos endpoints canonicos para 2025 e 2026, limitado as classes suportadas.
 
 ## Estado publicado do ambiente — 18/10/2026
 

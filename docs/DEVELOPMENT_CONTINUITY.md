@@ -435,3 +435,13 @@ As rotas de Calculadora e Simulador RF responderam HTTP 200 e o bundle
 Cloudflare Tunnel estao ativos; backend, DB e Redis permanecem healthy. Apenas
 o container frontend foi recriado. Validacao visual desktop/mobile permanece
 pendente por indisponibilidade do navegador integrado.
+
+## Verificacao funcional de Proventos, IRPF e precos - 18/10/2026
+
+Leitura dos logs recentes do backend, sem escrita de dados:
+
+- IRPF: os endpoints canonicos para os anos 2025 e 2026 responderam HTTP 200. O modulo cobre classes suportadas; nao gera nem transmite a declaracao completa e algumas classes ficam fora do calculo.
+- Proventos: a pagina principal usa `/portfolios/{id}/proventos`; o painel de detalhe de ativo ainda chamava `/api/v1/dividends?portfolio_id=...` e recebia 404. O hook foi corrigido para a rota por carteira existente e o formato de resposta foi mapeado para o painel. Datas civis usam `formatReferenceDate` para evitar deslocamento de um dia por fuso.
+- Precos: a leitura financeira e DB-first, sem cotacao ao vivo na abertura das paginas. Logs registraram preco ausente na data `2026-10-17` para ADA, ALOS3, AREA11, BTC, DIVD11, E1CO34, ETH, NIKE34, NVDC34 e POMO4. Isso nao prova que os demais ativos estejam todos atualizados; a cobertura e o ultimo sync precisam de auditoria dedicada.
+
+Testes focados do hook/painel: 5/5; typecheck e build de producao aprovados. Publicar o frontend corrigido em `sig-v2` depois do commit. Nenhuma alteracao de backend ou escrita em dados financeiros.
