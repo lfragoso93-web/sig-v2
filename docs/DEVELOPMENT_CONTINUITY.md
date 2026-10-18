@@ -10,8 +10,8 @@
 - Ambiente unico de testes assistidos: Compose `sig-v2` pelo Cloudflare Tunnel. Nao usar `sgi-usertest`; DB, Redis, volumes e tunnel devem permanecer.
 - UX de Renda Fixa em implementacao: tratamento fiscal derivado do tipo no frontend/API; titulo inclui emissor; carencia oculta/limpa com liquidez diaria; comparador #359 usa a mesma taxonomia.
 - Testes focados: frontend 31 aprovados; backend do servico de contratos 20 aprovados; typecheck aprovado.
-- Proxima acao: atualizar imagens backend/frontend de `sig-v2`, conferir `/health`, migration, bundle/rota publica e registrar digests. Readiness de certificacao nao e gate para testes assistidos, conforme decisao do usuario; nenhum evento sera promovido.
-- A classificacao pelo produto nao transmite a declaracao IRPF nem substitui informes; isencoes dependem do enquadramento legal da emissao/titular.
+- Publicacao concluida em `sig-v2`: backend/frontend usam o commit `8391474917684caa4e92f30d8b7c00cdb7ac5a28`; `/health=200`, rota publica e bundle do simulador respondem 200; Alembic `20261017_fixed_income_contracts (head)`. IDs: backend `sha256:35970f9574348e8d7199354694130d9e3a8997de868ae2a2ba711f6515436cfd`, frontend `sha256:93259e4a5649d667385dd21ce359334d94c807ad02557434176ceb3f0e1ae162`.
+- `/ready=503` continua fail-closed porque a certificacao persistida nao corresponde a nova identidade. Conforme decisao do usuario, nenhuma certificacao/evento foi promovido e readiness nao bloqueia os testes assistidos. DB, Redis, volumes e Cloudflare Tunnel foram preservados.
 
 ## Proximo caminho
 
@@ -402,4 +402,4 @@ mesma stack, preservando DB, Redis, volumes e Tunnel.
 
 ## Registro corrente - UX tributaria de Renda Fixa - 18/10/2026
 
-A classificacao fiscal deixou de ser editavel: o tipo canonico de produto alimenta `tax_exempt` no schema e formulario. O comparador #359 usa o mesmo mapeamento. O campo separado de emissor foi removido; o nome do titulo identifica o emissor, preservando dados antigos. Liquidez diaria oculta e limpa vencimento/carencia. Testes focados: frontend 31/31, backend de contratos 20/20, typecheck aprovado. Publicacao da revisao e validacao visual permanecem pendentes neste registro.
+A classificacao fiscal deixou de ser editavel: o tipo canonico de produto alimenta `tax_exempt` no schema e formulario. O comparador #359 usa o mesmo mapeamento. O campo separado de emissor foi removido; o nome do titulo identifica o emissor, preservando dados antigos. Liquidez diaria oculta e limpa vencimento/carencia. Testes focados: frontend 31/31, backend de contratos 20/20, typecheck aprovado. Publicacao concluida: commit `8391474917684caa4e92f30d8b7c00cdb7ac5a28`, backend `sha256:35970f9574348e8d7199354694130d9e3a8997de868ae2a2ba711f6515436cfd`, frontend `sha256:93259e4a5649d667385dd21ce359334d94c807ad02557434176ceb3f0e1ae162`. `/health=200`, rota e bundle publicos 200, Alembic head e DB/Redis saudaveis. `/ready=503` por identidade de certificacao anterior; nao foi promovido evento novo. Validacao visual permanece pendente.

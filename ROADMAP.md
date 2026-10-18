@@ -7,13 +7,12 @@
 - O ambiente unico de validacao assistida e o Compose `sig-v2`, publicado pelo Cloudflare Tunnel. Toda alteracao destinada aos usuarios deve ser publicada nessa imagem; nao usar `sgi-usertest`.
 - #355 tem contratos estruturados, associacao por termos equivalentes, prefill de Resumo/Tesouro e fluxos CSV. A rodada atual remove a escolha manual de tratamento fiscal e o campo separado de emissor; liquidez diaria oculta e limpa carencia.
 - #359 compara titulos por tipo de produto. O tratamento fiscal vem automaticamente da taxonomia; premissas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
-- Testes focados da rodada: frontend 31/31, backend de contratos 20/20 e typecheck aprovado. Rebuild e publicacao das imagens estao em andamento.
+- Testes focados da rodada: frontend 31/31, backend de contratos 20/20, typecheck e build de producao aprovados. Commit publicado e imagens aplicadas em `sig-v2`.
 - A validacao visual desktop/mobile e acessibilidade segue pendente de uma sessao de navegador disponivel. Readiness/certificacao de dados reais nao e gate para esta validacao assistida, conforme decisao do usuario.
 
 ## Estado publicado do ambiente — 18/10/2026
 
-- Branch `stable-15jun`; este bloco será commitado e publicado após a validação
-  final da imagem.
+- Branch `stable-15jun`; commit de produto `8391474917684caa4e92f30d8b7c00cdb7ac5a28` publicado no remoto e aplicado na stack `sig-v2`. Digests e checagens em `docs/DEVELOPMENT_CONTINUITY.md`.
 - Backend e frontend atuais foram aplicados ao projeto Compose existente
   `sig-v2`; banco, Redis e volumes foram preservados. Evidência e digests estão
   em `docs/DEVELOPMENT_CONTINUITY.md`.
@@ -424,5 +423,5 @@ Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, chec
 - O nome do titulo passa a incluir o emissor; o campo separado foi removido. Contratos legados continuam preservados e o agrupamento considera o nome de exibicao informado.
 - Liquidez diaria limpa vencimento/carencia; carencia fica oculta e o payload envia `grace_period_end=null`.
 - O simulador #359 escolhe o tipo de cada titulo e deriva a aliquota sem perguntar ao usuario se o produto e isento.
-- Testes: frontend 31/31; backend `test_fixed_income_contract_service.py` 20/20; `npm run typecheck` aprovado. Imagens de `sig-v2` aguardam rebuild/publicacao desta revisao.
+- Testes: frontend 31/31; backend `test_fixed_income_contract_service.py` 20/20; `npm run typecheck` aprovado. Imagens atualizadas e publicadas em `sig-v2` no commit `8391474917684caa4e92f30d8b7c00cdb7ac5a28`; `/health=200`, rota/bundle publicos 200 e Alembic head. `/ready=503` continua associado a identidade de certificacao anterior; nenhum evento foi promovido. DB, Redis, volumes e Tunnel preservados.
 - Limite: classificacao por tipo nao transmite a declaracao IRPF nem substitui informe financeiro; isencoes dependem do enquadramento legal. Validacao visual depende de browser conectado.
