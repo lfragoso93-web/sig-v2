@@ -237,3 +237,17 @@ runner; validacao visual depende de browser integrado disponivel. A Issue #355
 no GitHub ainda lista seletor explicito como criterio; deve ser alinhada ao
 fluxo transparente antes de qualquer encerramento da Issue. Nenhum dado real foi
 usado neste bloco.
+
+## Verificação seguinte — 18/10/2026
+
+O teste de interface focado foi retomado e concluiu com 15/15 testes,
+incluindo reconhecimento automático de contrato único no prefill do Resumo e
+preservação de vínculo durante edição. O banco persistente principal não foi
+escrito. A validação visual segue pendente porque não havia navegador conectado
+na sessão. O trecho acima sobre a base `sgi-usertest` é histórico; o único
+runtime de testes com usuários é agora `sig-v2` pelo Cloudflare Tunnel, conforme
+`docs/USER_VALIDATION_RUNBOOK.md`.
+
+A Issue #355 ainda contém o critério antigo de seletor explícito. O fluxo
+implementado associa por equivalência de termos e não expõe esse seletor. Manter
+a Issue aberta até alinhar o critério remoto com essa decisão de produto.

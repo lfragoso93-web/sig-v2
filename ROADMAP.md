@@ -1,41 +1,42 @@
 # Roadmap — SGI v2
 
-> Última atualização: 17/10/2026.
+> Última atualização: 18/10/2026.
 
-## Proximo bloco ativo — testes assistidos isolados
+## Próximo bloco ativo — fechar experiência de Renda Fixa e priorizar ferramentas
 
-- Atualizar e manter a stack `sgi-usertest` independente do runtime real a cada
-  mudanca destinada a validacao: ver `docs/USER_TEST_STACK.md`.
-- Stack inicial ja implantada; confirmar identidade e saude antes de cada nova
-  rodada e reconstruir a cada alteracao destinada aos usuarios.
-- Avancar para uma entrega de produto a partir das Issues abertas, sem exigir
-  recertificacao real por iteracao. `/ready` continua fail-closed e a promocao
-  de dados reais e uma decisao operacional separada.
+- O ambiente único de validação com usuários é `sig-v2`, publicado pelo
+  Cloudflare Tunnel. Toda mudança de produto destinada aos usuários deve ser
+  incorporada à imagem desse projeto; não iniciar `sgi-usertest`.
+- A entrega de contratos de Renda Fixa (#355) está implementada e publicada:
+  metadados, associação automática por termos equivalentes, prefill do Resumo,
+  Tesouro, CSV e migration aditiva. `transactions` segue como ledger único.
+- O próximo passo de #355 é validação assistida visual quando o navegador
+  estiver disponível e alinhamento dos critérios remotos de aceite com a UX
+  transparente. O teste focado de `AddTransactionModal` passou (15/15).
+- A frente A de #359 (calculadora de rendimentos) está implementada. A frente B
+  (simulação de Renda Fixa com tributação) fica pendente de premissas fiscais
+  explícitas antes de qualquer fórmula de imposto.
+- `/ready` permanece fail-closed e o evento de certificação antigo não foi
+  atribuído à nova identidade. Esse gate é separado da validação assistida.
 
-## Entrega de produto em andamento — #359
+## Estado publicado do ambiente — 18/10/2026
 
-A frente A da #359 foi reconstruída na stack isolada `sgi-usertest`. Typecheck,
-build e quatro testes determinísticos passaram; rota e asset foram verificados
-por HTTP. Validação visual desktop/mobile segue pendente por indisponibilidade
-do navegador integrado. A imagem de teste contém alterações locais e não é uma
-identidade certificável para dados reais. Ver evidências e digests em
-`docs/USER_TEST_STACK.md`; fórmulas em `docs/TOOLS_CALCULATORS.md`. A frente B
-(calculadora de Renda Fixa) permanece separada até validar suas premissas
-tributárias.
+- Branch `stable-15jun`, remoto sincronizado com o commit `826c74ce`.
+- Backend e frontend atuais foram aplicados ao projeto Compose existente
+  `sig-v2`; banco, Redis e volumes foram preservados. Evidência e digests estão
+  em `docs/DEVELOPMENT_CONTINUITY.md`.
+- Alembic está em `20261017_fixed_income_contracts`; `/health=200`, endpoints
+  de contratos/CSV aparecem na API e a URL pública e seu bundle responderam 200
+  na última validação registrada.
+- `/ready=503` decorre da divergência entre o SHA/revisão/dataset atuais e o
+  evento de certificação anterior. Nenhuma nova certificação foi promovida.
+- O navegador integrado não está disponível nesta sessão; a verificação visual
+  desktop/mobile permanece pendente. Vitest focado do modal: 15 testes passaram.
 
-## Preparacao da proxima entrega — #355
+As seções abaixo descrevem fases e snapshots históricos; não são o status
+operacional vigente quando divergirem deste bloco.
 
-Concluidos o inventario estatico, a proposta preliminar e a revisao dos caminhos
-de escrita em `docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`. A FK nullable parece
-compatível com rollout desde que API valide carteira/classe e os caminhos de
-seed e eventos tecnicos mantenham o legado. Proximo passo de implementacao:
-preparar cenarios sinteticos representativos e entao validar migration aditiva,
-contratos de API e writer em banco descartavel antes de atualizar a imagem
-assistida. A auditoria atual em `sgi-usertest` encontrou zero transacoes; nao
-permite aferir cobertura nem backfill. A auditoria remota de setembro e
-historica e nao deve orientar backfill no banco atual.
-
-## Estado do projeto
+## Estado histórico do projeto
 
 O SGI v2 está em fase de **pós-GO e hardening arquitetural**, com a baseline
 funcional promovida para `main` pela PR #362 e o núcleo DB-first consolidado.
