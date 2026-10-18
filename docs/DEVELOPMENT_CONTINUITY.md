@@ -412,3 +412,14 @@ entrar em uma rota filha e tambem funciona com o menu recolhido. Teste focado
 da hierarquia: 3/3; typecheck e build de producao aprovados. Nenhuma alteracao
 de backend, banco, Redis, volumes ou Tunnel foi necessaria. A imagem sera
 atualizada no servico frontend da stack existente `sig-v2`.
+
+## Acessibilidade automatizada das ferramentas - 18/10/2026
+
+Na Calculadora e no Simulador RF, as dicas foram associadas aos campos,
+resumos dos resultados agora usam live region para leitores de tela e tabelas
+com rolagem horizontal podem receber foco e anunciam sua finalidade. Testes
+focados das duas páginas: 6/6; typecheck aprovado. O navegador integrado não
+estava disponível nesta sessão (`agent.browsers.list()` vazio); portanto a
+validação visual desktop/mobile ainda não foi feita e as Issues #355/#359
+continuam sem fechamento dessa etapa. A imagem frontend da stack `sig-v2` será
+atualizada, sem mudanças em backend ou serviços de dados.

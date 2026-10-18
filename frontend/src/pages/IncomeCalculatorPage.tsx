@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Calculator, CircleHelp, TrendingUp } from 'lucide-react'
 import {
   Area,
@@ -38,6 +38,7 @@ function Field({
   step: number
   suffix?: string
 }) {
+  const hintId = useId()
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
@@ -52,6 +53,7 @@ function Field({
           value={value}
           onChange={event => onChange(event.target.value)}
           aria-label={label}
+          aria-describedby={hintId}
         />
         {suffix && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-faint)' }}>
@@ -59,7 +61,7 @@ function Field({
           </span>
         )}
       </span>
-      <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>{hint}</span>
+      <span id={hintId} className="text-xs" style={{ color: 'var(--color-text-faint)' }}>{hint}</span>
     </label>
   )
 }
@@ -215,12 +217,18 @@ export default function IncomeCalculatorPage() {
         </div>
       </section>
 
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {projection
+          ? `Projeção atualizada. Total aportado: ${currency.format(projection.totalInvested)}. Rendimento projetado: ${currency.format(projection.projectedReturn)}. Saldo final: ${currency.format(projection.projectedBalance)}.`
+          : result.error ?? 'A projeção ainda não está disponível.'}
+      </p>
+
       {projection && (
         <section className="card overflow-hidden" aria-labelledby="projection-table-title">
           <div className="section-card-header">
             <h2 id="projection-table-title" className="section-card-title">Evolução anual</h2>
           </div>
-          <div className="table-scroll">
+          <div className="table-scroll" role="region" aria-label="Tabela de evolução anual; use as setas para rolar horizontalmente" tabIndex={0}>
             <table className="min-w-[520px]">
               <thead>
                 <tr>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Calculator, CircleHelp } from 'lucide-react'
 import { calculateFixedIncomeComparison } from '@/utils/fixedIncomeComparison'
 import { FixedIncomeProductType, isFixedIncomeProductTaxExempt } from '@/utils/fixedIncomeTaxTreatment'
@@ -36,6 +36,7 @@ function Field({
   step: number
   suffix: string
 }) {
+  const hintId = useId()
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
@@ -50,17 +51,20 @@ function Field({
           value={value}
           onChange={event => onChange(event.target.value)}
           aria-label={label}
+          aria-describedby={hintId}
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-faint)' }}>
+        <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-faint)' }}>
           {suffix}
         </span>
       </span>
-      <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>{hint}</span>
+      <span id={hintId} className="text-xs" style={{ color: 'var(--color-text-faint)' }}>{hint}</span>
     </label>
   )
 }
 
 export default function FixedIncomeCalculatorPage() {
+  const firstTaxHintId = useId()
+  const secondTaxHintId = useId()
   const [principal, setPrincipal] = useState('10000')
   const [days, setDays] = useState('365')
   const [firstProductType, setFirstProductType] = useState<FixedIncomeProductType>('CDB')
@@ -133,10 +137,10 @@ export default function FixedIncomeCalculatorPage() {
           />
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Tipo do primeiro título</span>
-            <select className="input w-full" value={firstProductType} onChange={event => setFirstProductType(event.target.value as FixedIncomeProductType)}>
+            <select aria-describedby={firstTaxHintId} className="input w-full" value={firstProductType} onChange={event => setFirstProductType(event.target.value as FixedIncomeProductType)}>
               {productTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
+            <span id={firstTaxHintId} className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
               Tratamento automático: {isFixedIncomeProductTaxExempt(firstProductType) ? 'isento de IR, conforme enquadramento legal' : 'tributável pela tabela regressiva'}.
             </span>
           </label>
@@ -152,10 +156,10 @@ export default function FixedIncomeCalculatorPage() {
           />
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Tipo do segundo título</span>
-            <select className="input w-full" value={secondProductType} onChange={event => setSecondProductType(event.target.value as FixedIncomeProductType)}>
+            <select aria-describedby={secondTaxHintId} className="input w-full" value={secondProductType} onChange={event => setSecondProductType(event.target.value as FixedIncomeProductType)}>
               {productTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
+            <span id={secondTaxHintId} className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
               Tratamento automático: {isFixedIncomeProductTaxExempt(secondProductType) ? 'isento de IR, conforme enquadramento legal' : 'tributável pela tabela regressiva'}.
             </span>
           </label>
@@ -184,7 +188,7 @@ export default function FixedIncomeCalculatorPage() {
 
           {comparison ? (
             <>
-              <div className="table-scroll">
+              <div className="table-scroll" role="region" aria-label="Tabela de comparação dos títulos; use as setas para rolar horizontalmente" tabIndex={0}>
                 <table className="min-w-[560px]">
                   <thead>
                     <tr>
@@ -245,6 +249,12 @@ export default function FixedIncomeCalculatorPage() {
           )}
         </div>
       </section>
+
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {comparison
+          ? `Comparação atualizada. Valor líquido no vencimento: ${comparison.first.productType}, ${currency.format(comparison.first.netMaturityValue)}; ${comparison.second.productType}, ${currency.format(comparison.second.netMaturityValue)}.`
+          : result.error ?? 'A comparação ainda não está disponível.'}
+      </p>
 
       <aside className="card flex items-start gap-3 p-4" aria-label="Limites e premissas tributárias">
         <CircleHelp size={17} className="mt-0.5 shrink-0" style={{ color: 'var(--color-text-muted)' }} aria-hidden="true" />

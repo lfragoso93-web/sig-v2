@@ -36,4 +36,14 @@ describe('FixedIncomeCalculatorPage', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/taxa efetiva anual/)
     expect(screen.getByText(/Corrija as premissas/)).toBeTruthy()
   })
+
+  it('associates field guidance and announces updated comparisons accessibly', () => {
+    render(<FixedIncomeCalculatorPage />)
+
+    const principal = screen.getByRole('spinbutton', { name: 'Valor aplicado' })
+    expect(principal.getAttribute('aria-describedby')).toBeTruthy()
+    expect(document.getElementById(principal.getAttribute('aria-describedby')!)).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toContain('Comparação atualizada')
+    expect(screen.getByRole('region', { name: /Tabela de comparação dos títulos/ })).toBeTruthy()
+  })
 })
