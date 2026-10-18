@@ -423,3 +423,15 @@ estava disponível nesta sessão (`agent.browsers.list()` vazio); portanto a
 validação visual desktop/mobile ainda não foi feita e as Issues #355/#359
 continuam sem fechamento dessa etapa. A imagem frontend da stack `sig-v2` será
 atualizada, sem mudanças em backend ou serviços de dados.
+
+## Publicacao do bloco de acessibilidade - 18/10/2026
+
+O frontend do commit `5352ddea1c8e2f0a57ac25fd0f8cd3ef21354f85` foi publicado
+na stack existente `sig-v2`. Imagem `sig-v2-frontend:latest`:
+`sha256:e82229851445c188c899e5cebe31cc9ad6f1c2f8ef1753197bcb4236e6f0016f`.
+As rotas de Calculadora e Simulador RF responderam HTTP 200 e o bundle
+`/assets/index-Dm3xHvfF.js` respondeu 200 com `aria-live`, `aria-atomic`,
+`aria-describedby` e regioes de tabela presentes. Frontend, backend, DB, Redis e
+Cloudflare Tunnel estao ativos; backend, DB e Redis permanecem healthy. Apenas
+o container frontend foi recriado. Validacao visual desktop/mobile permanece
+pendente por indisponibilidade do navegador integrado.
