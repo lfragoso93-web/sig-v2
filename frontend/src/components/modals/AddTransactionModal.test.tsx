@@ -176,16 +176,13 @@ describe('AddTransactionModal', () => {
     expect(screen.getByLabelText('Tipo de produto de Renda Fixa').compareDocumentPosition(
       screen.getByLabelText('Indexador'),
     ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    fireEvent.change(screen.getByPlaceholderText('ex: CDB XP 110% CDI'), {
+    fireEvent.change(screen.getByPlaceholderText('ex: CDB Banco XP 110% CDI'), {
       target: { value: 'CDB Banco XP' },
     })
     fireEvent.change(screen.getByLabelText('Indexador'), { target: { value: 'CDI' } })
     fireEvent.change(screen.getByLabelText('Taxa do contrato'), { target: { value: '110' } })
     fireEvent.change(screen.getByLabelText('Tipo de produto de Renda Fixa'), {
       target: { value: 'LCI' },
-    })
-    fireEvent.change(screen.getByLabelText('Isenção tributária'), {
-      target: { value: 'true' },
     })
     fireEvent.change(screen.getByLabelText('Fim da carência'), {
       target: { value: '2027-02-01' },
@@ -211,12 +208,13 @@ describe('AddTransactionModal', () => {
           rate_unit: 'PERCENT_OF_INDEXER',
           grace_period_end: '2027-02-01',
           tax_exempt: true,
+          issuer: null,
         }),
       }),
     }))
   })
 
-  it('apresenta produto antes do indexador e sugere isencao para produtos com regra usual', async () => {
+  it('deriva o tratamento tributario do produto sem pedir emissor ou classificacao manual', async () => {
     setup()
     fireEvent.change(screen.getByRole('combobox', { name: /Tipo de ativo/i }), {
       target: { value: 'renda_fixa' },
@@ -225,18 +223,40 @@ describe('AddTransactionModal', () => {
     const productType = screen.getByLabelText('Tipo de produto de Renda Fixa')
     const indexer = screen.getByLabelText('Indexador')
     expect(productType.compareDocumentPosition(indexer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect((screen.getByLabelText('Isenção tributária') as HTMLSelectElement).value).toBe('')
+    expect(screen.queryByLabelText(/Isenção tributária/i)).toBeNull()
+    expect(screen.queryByLabelText(/Emissor/i)).toBeNull()
 
     fireEvent.change(productType, { target: { value: 'LCI' } })
-    expect((screen.getByLabelText('Isenção tributária') as HTMLSelectElement).value).toBe('true')
-    expect(screen.getByText(/Regra usual para LCI: isento/)).toBeTruthy()
-
-    fireEvent.change(screen.getByLabelText('Isenção tributária'), { target: { value: 'false' } })
-    fireEvent.change(productType, { target: { value: 'CRA' } })
-    expect((screen.getByLabelText('Isenção tributária') as HTMLSelectElement).value).toBe('false')
+    expect(screen.getByText(/isento de IR/)).toBeTruthy()
 
     fireEvent.change(productType, { target: { value: 'CDB' } })
-    expect((screen.getByLabelText('Isenção tributária') as HTMLSelectElement).value).toBe('false')
+    expect(screen.getByText(/tributavel pela tabela regressiva/)).toBeTruthy()
+  })
+
+  it('oculta e limpa a carencia quando a liquidez diaria e marcada', async () => {
+    setup()
+    fireEvent.change(screen.getByRole('combobox', { name: /Tipo de ativo/i }), {
+      target: { value: 'renda_fixa' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('ex: CDB Banco XP 110% CDI'), { target: { value: 'CDB Teste' } })
+    fireEvent.change(screen.getByLabelText('Indexador'), { target: { value: 'CDI' } })
+    fireEvent.change(screen.getByLabelText(/Fim da car/), { target: { value: '2027-02-01' } })
+    expect(screen.getByLabelText(/Fim da car/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Liquidez/ }))
+    expect(screen.queryByLabelText(/Fim da car/)).toBeNull()
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], { target: { value: '1000' } })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/i }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        fixed_income_contract: expect.objectContaining({
+          liquidity_type: 'DAILY',
+          grace_period_end: null,
+        }),
+      }),
+    }))
   })
 
   it('preserva valores, vinculo ausente e notas ao editar renda fixa legada', async () => {
@@ -293,7 +313,7 @@ describe('AddTransactionModal', () => {
     render(<AddTransactionModal onClose={vi.fn()} />)
 
     await waitFor(() => {
-      expect(screen.getByText(/Contrato existente reconhecido automaticamente/)).toBeTruthy()
+      expect(screen.getByText(/Tratamento tributario automatico/)).toBeTruthy()
       expect((screen.getByLabelText('Tipo de produto de Renda Fixa') as HTMLSelectElement).value).toBe('CDB')
       expect((screen.getByLabelText('Indexador') as HTMLSelectElement).value).toBe('CDI')
       expect((screen.getByLabelText('Taxa do contrato') as HTMLInputElement).value).toBe('110')

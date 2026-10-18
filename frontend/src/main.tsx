@@ -28,6 +28,7 @@ import ProventosPage     from '@/pages/ProventosPage'
 import IRPFPage          from '@/pages/IRPFPage'
 import MetasPage         from '@/pages/MetasPage'
 import IncomeCalculatorPage from '@/pages/IncomeCalculatorPage'
+import FixedIncomeCalculatorPage from '@/pages/FixedIncomeCalculatorPage'
 import WelcomePage       from '@/pages/WelcomePage'
 
 // Patrimônio
@@ -104,6 +105,7 @@ const router = createBrowserRouter([
           { path: 'proventos',     element: <ProventosPage /> },
           { path: 'metas',         element: <MetasPage /> },
           { path: 'ferramentas/rendimentos', element: <IncomeCalculatorPage /> },
+          { path: 'ferramentas/renda-fixa', element: <FixedIncomeCalculatorPage /> },
           { path: 'irpf',          element: <IRPFPage /> },
           { path: 'configuracoes', element: <Configuracoes /> },
           { path: 'patrimonio',                element: <PatrimonioPage /> },

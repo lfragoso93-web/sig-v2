@@ -40,6 +40,27 @@ def _contract_payload(**overrides) -> FixedIncomeContractCreate:
     return FixedIncomeContractCreate(**values)
 
 
+@pytest.mark.parametrize(
+    ("product_type", "submitted_tax_value", "expected_tax_value"),
+    [
+        ("CDB", True, False),
+        ("RDB", True, False),
+        ("LCI", False, True),
+        ("LCA", False, True),
+        ("DEBENTURE", True, False),
+        ("DEBENTURE_INCENTIVADA", False, True),
+    ],
+)
+def test_tax_treatment_is_derived_from_product_type(
+    product_type, submitted_tax_value, expected_tax_value
+) -> None:
+    contract = _contract_payload(
+        product_type=product_type, tax_exempt=submitted_tax_value
+    )
+
+    assert contract.tax_exempt is expected_tax_value
+
+
 @pytest.mark.asyncio
 async def test_contract_create_list_and_link_transaction(db, portfolio, user) -> None:
     created = await post_fixed_income_contract(
@@ -159,6 +180,46 @@ async def test_transaction_writer_reuses_only_equivalent_contracts_in_portfolio(
     assert different_terms.fixed_income_contract_id != first.fixed_income_contract_id
     contracts = (await db.execute(select(FixedIncomeContract))).scalars().all()
     assert len(contracts) == 2
+
+
+@pytest.mark.asyncio
+async def test_transaction_writer_reuses_legacy_issuer_when_title_name_contains_it(
+    db, portfolio
+) -> None:
+    legacy = await add_transaction_record(
+        db,
+        portfolio_id=portfolio.id,
+        payload=TransactionCreate(
+            ticker="CDB BANCO EXEMPLO",
+            asset_type="RENDA_FIXA",
+            operation="buy",
+            quantity=1,
+            price=1000,
+            date=date(2026, 10, 18),
+            fixed_income_contract=_contract_payload(
+                display_name="CDB Banco Exemplo 110 CDI"
+            ),
+        ),
+        flush=True,
+    )
+    without_separate_issuer = await add_transaction_record(
+        db,
+        portfolio_id=portfolio.id,
+        payload=TransactionCreate(
+            ticker="CDB BANCO EXEMPLO",
+            asset_type="RENDA_FIXA",
+            operation="buy",
+            quantity=2,
+            price=1000,
+            date=date(2026, 10, 18),
+            fixed_income_contract=_contract_payload(
+                display_name="cdb banco exemplo 110 cdi", issuer=None
+            ),
+        ),
+        flush=True,
+    )
+
+    assert legacy.fixed_income_contract_id == without_separate_issuer.fixed_income_contract_id
 
 
 @pytest.mark.asyncio

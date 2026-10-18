@@ -1,21 +1,18 @@
 # SGI v2 — Sistema de Gestão de Investimentos
 
-## Ambiente de testes de usuarios
+## Ambiente de validação com usuários
 
-Para desenvolvimento e validacao assistida, atualize a stack isolada
-`sgi-usertest` conforme [`docs/USER_TEST_STACK.md`](docs/USER_TEST_STACK.md).
-Ela nao compartilha o banco/artefatos do runtime `sig-v2` e usa dados
-sinteticos. A certificacao de dados reais nao bloqueia cada iteracao; `/ready`
-e a promocao operacional continuam protegendo o ambiente com dados reais.
+O runtime único de testes assistidos é o projeto Compose existente `sig-v2`,
+publicado pelo Cloudflare Tunnel. Toda alteração de produto validada com
+usuários deve ser incorporada às imagens backend/frontend dessa stack. Não
+iniciar `sgi-usertest`; o procedimento atual está em
+[`docs/USER_VALIDATION_RUNBOOK.md`](docs/USER_VALIDATION_RUNBOOK.md).
 
 ## Simulacoes
 
-A primeira ferramenta da #359 está disponível em `/carteira/ferramentas/rendimentos`.
-Ela usa apenas premissas inseridas pelo usuário e não modifica a carteira.
-Fórmula, hipóteses e limitações estão em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
+A calculadora de aportes esta em `/carteira/ferramentas/rendimentos`; o simulador de Renda Fixa esta em `/carteira/ferramentas/renda-fixa`. No simulador, o tratamento de IR e derivado automaticamente do tipo de produto. Ambos usam premissas informadas pelo usuario e nao modificam a carteira. Formulas, fontes, hipoteses e limites estao em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
 
-O inventário e a próxima etapa da taxonomia de Renda Fixa (#355) estão em
-[`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
+No cadastro de Renda Fixa, o nome do titulo inclui o emissor, o tipo do produto define o tratamento fiscal e a carencia some com liquidez diaria. A taxonomia e as regras estao descritas em [`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
 
 Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e evolução patrimonial de carteiras multiclasse, com backend FastAPI e frontend React + TypeScript.
 

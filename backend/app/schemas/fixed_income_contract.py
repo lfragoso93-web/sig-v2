@@ -64,6 +64,10 @@ class FixedIncomeContractCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_rate_contract(self) -> "FixedIncomeContractCreate":
+        # IR treatment is a product rule, not user-entered contract metadata.
+        self.tax_exempt = self.product_type in {
+            "LCI", "LCA", "LIG", "CRI", "CRA", "DEBENTURE_INCENTIVADA"
+        }
         if (self.rate_value is None) != (self.rate_unit is None):
             raise ValueError("rate_value and rate_unit must be provided together")
 

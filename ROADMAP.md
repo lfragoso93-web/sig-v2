@@ -1,27 +1,19 @@
-# Roadmap — SGI v2
+# Roadmap - SGI v2
 
-> Última atualização: 18/10/2026.
+> Ultima atualizacao: 18/10/2026.
 
-## Próximo bloco ativo — fechar experiência de Renda Fixa e priorizar ferramentas
+## Proximo bloco ativo - fechar experiencia de Renda Fixa e priorizar ferramentas
 
-- O ambiente único de validação com usuários é `sig-v2`, publicado pelo
-  Cloudflare Tunnel. Toda mudança de produto destinada aos usuários deve ser
-  incorporada à imagem desse projeto; não iniciar `sgi-usertest`.
-- A entrega de contratos de Renda Fixa (#355) está implementada e publicada:
-  metadados, associação automática por termos equivalentes, prefill do Resumo,
-  Tesouro, CSV e migration aditiva. `transactions` segue como ledger único.
-- O próximo passo de #355 é validação assistida visual e acessível quando o
-  navegador estiver disponível. Os critérios remotos já foram alinhados à UX
-  transparente. O teste focado de `AddTransactionModal` passou (15/15).
-- A frente A de #359 (calculadora de rendimentos) está implementada. A frente B
-  (simulação de Renda Fixa com tributação) fica pendente de premissas fiscais
-  explícitas antes de qualquer fórmula de imposto.
-- `/ready` permanece fail-closed e o evento de certificação antigo não foi
-  atribuído à nova identidade. Esse gate é separado da validação assistida.
+- O ambiente unico de validacao assistida e o Compose `sig-v2`, publicado pelo Cloudflare Tunnel. Toda alteracao destinada aos usuarios deve ser publicada nessa imagem; nao usar `sgi-usertest`.
+- #355 tem contratos estruturados, associacao por termos equivalentes, prefill de Resumo/Tesouro e fluxos CSV. A rodada atual remove a escolha manual de tratamento fiscal e o campo separado de emissor; liquidez diaria oculta e limpa carencia.
+- #359 compara titulos por tipo de produto. O tratamento fiscal vem automaticamente da taxonomia; premissas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
+- Testes focados da rodada: frontend 31/31, backend de contratos 20/20 e typecheck aprovado. Rebuild e publicacao das imagens estao em andamento.
+- A validacao visual desktop/mobile e acessibilidade segue pendente de uma sessao de navegador disponivel. Readiness/certificacao de dados reais nao e gate para esta validacao assistida, conforme decisao do usuario.
 
 ## Estado publicado do ambiente — 18/10/2026
 
-- Branch `stable-15jun`, remoto sincronizado com o commit `77fb237b`.
+- Branch `stable-15jun`; este bloco será commitado e publicado após a validação
+  final da imagem.
 - Backend e frontend atuais foram aplicados ao projeto Compose existente
   `sig-v2`; banco, Redis e volumes foram preservados. Evidência e digests estão
   em `docs/DEVELOPMENT_CONTINUITY.md`.
@@ -31,7 +23,9 @@
 - `/ready=503` decorre da divergência entre o SHA/revisão/dataset atuais e o
   evento de certificação anterior. Nenhuma nova certificação foi promovida.
 - O navegador integrado não está disponível nesta sessão; a verificação visual
-  desktop/mobile permanece pendente. Vitest focado do modal: 15 testes passaram.
+  desktop/mobile permanece pendente. Testes focados do comparador: 15/15;
+  typecheck e build de produção passaram após a correção para rejeitar campos
+  vazios.
 
 As seções abaixo descrevem fases e snapshots históricos; não são o status
 operacional vigente quando divergirem deste bloco.
@@ -422,3 +416,13 @@ Correcao do registro anterior: a frase de que a imagem backend "sera atualizada"
 ### Stack completa para testes assistidos - 18/10/2026
 
 Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, checagens e limites em `docs/USER_TEST_STACK.md`. Frontend e bundle retornam 200, rotas de contratos RF e exportacao CSV estao presentes na OpenAPI, banco/volumes permanecem preservados e sem transacoes/contratos/eventos de certificacao. Pronta para testes assistidos por usuarios; `/ready=503` e esperado e nao ha certificacao de dados reais. A verificacao visual do agente e Vitest de prefill seguem pendentes.
+
+
+## Atualizacao de execucao - UX fiscal e carencia de Renda Fixa - 18/10/2026
+
+- O tipo de produto determina `tax_exempt` tanto no frontend quanto no schema da API. CDB, RDB, LC, debenture comum, Letra Financeira e Outro seguem tabela regressiva. LCI, LCA, LIG, CRI, CRA e debenture incentivada sao classificados como isentos, condicionados aos requisitos legais da emissao e do titular.
+- O nome do titulo passa a incluir o emissor; o campo separado foi removido. Contratos legados continuam preservados e o agrupamento considera o nome de exibicao informado.
+- Liquidez diaria limpa vencimento/carencia; carencia fica oculta e o payload envia `grace_period_end=null`.
+- O simulador #359 escolhe o tipo de cada titulo e deriva a aliquota sem perguntar ao usuario se o produto e isento.
+- Testes: frontend 31/31; backend `test_fixed_income_contract_service.py` 20/20; `npm run typecheck` aprovado. Imagens de `sig-v2` aguardam rebuild/publicacao desta revisao.
+- Limite: classificacao por tipo nao transmite a declaracao IRPF nem substitui informe financeiro; isencoes dependem do enquadramento legal. Validacao visual depende de browser conectado.

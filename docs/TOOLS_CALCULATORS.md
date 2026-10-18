@@ -27,13 +27,28 @@ Os campos aceitam aporte de R$ 0 a R$ 1 bilhão, taxa efetiva anual acima de
 valores inválidos e crescimento numérico sem limite na interface; não são
 recomendação de investimento.
 
-## Estado e próximo passo
+## Comparador de Renda Fixa - frente B da #359
 
-A entrega cobre apenas a frente A da #359. Quatro testes determinísticos da
-fórmula passaram em 17/10/2026, assim como `npm run typecheck` e o build de
-produção do frontend; o destino de validação vigente é `sig-v2` via Cloudflare
-Tunnel (ver `docs/USER_VALIDATION_RUNBOOK.md`). O cálculo e a rota foram
-validados por HTTP. A validação visual desktop/mobile continua pendente porque
-não havia navegador integrado disponível nesta sessão. A calculadora de Renda
-Fixa permanece separada: comparação tributável/isenta depende de regras e
-premissas tributárias explicitamente validadas.
+A rota protegida `/carteira/ferramentas/renda-fixa` compara dois tipos de titulo e suas taxas efetivas anuais. O tratamento de IR e derivado automaticamente do tipo de produto; nao existe uma escolha manual de isencao. Para cada cenario, a interface mostra valor/rendimento bruto, aliquota e IR estimados, valor liquido e retorno liquido efetivo anual, alem da taxa equivalente do primeiro titulo para igualar o valor liquido do segundo. O simulador nao le carteira, contratos, precos ou benchmarks e nao grava dados.
+
+Regra automatica aplicada pelo produto:
+
+- Tributaveis pela tabela regressiva: CDB, RDB, LC, debenture comum, Letra Financeira e Outro.
+- Isentos no enquadramento legal padrao: LCI, LCA, LIG, CRI, CRA e debenture incentivada.
+- A isencao pressupoe que emissao e titular atendam aos requisitos legais. A classificacao no SGI nao substitui o informe da instituicao nem prepara ou transmite a declaracao de IRPF.
+- Nos produtos tributaveis, a retencao e feita pela fonte pagadora; nao e gerada uma obrigacao de DARF no simulador.
+
+Premissas implementadas:
+
+- a taxa anual inserida e efetiva, constante e capitalizada por dias corridos com expoente `dias / 365`;
+- o prazo vai de 30 a 36.500 dias; o limite inferior exclui a estimativa de IOF ate o 29o dia;
+- IR e calculado somente sobre rendimento positivo: ate 180 dias (22,5%), 181 a 360 (20%), 361 a 720 (17,5%) e acima de 720 (15%);
+- o valor liquido e o bruto final menos IR estimado; a taxa equivalente resolve a taxa bruta anual do primeiro titulo que produz o mesmo valor liquido no prazo dado;
+- taxas efetivas anuais devem representar a oferta completa; o simulador nao coleta cotacoes ou taxas de mercado.
+
+Nao se modelam taxas de custodia/distribuicao, cupons, amortizacoes, marcacao a mercado, variacao de CDI/IPCA/SELIC, risco de credito ou resgate antecipado. A simulacao e educacional e nao substitui o informe da instituicao financeira ou orientacao fiscal.
+
+As aliquotas seguem a tabela de aplicacoes de renda fixa da [Instrucao Normativa RFB 1.585/2015, art. 46](https://normas.receita.fazenda.gov.br/sijut2consulta/link.action?idAto=67494). O tratamento das rendas e titulos isentos consta no [Manual da Receita Federal sobre rendimentos do capital](https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/preenchimento/manual-mir/rendimentos/rendimentos-do-capital) e nas [hipoteses de isencao da Lei 11.033/2004, art. 3](https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2004/lei/l11033compilado.htm). A retencao na fonte esta descrita pela [Receita Federal - IRRF](https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/tributos/IRRF). Fontes consultadas em 18/10/2026.
+
+Testes focados: 31 testes frontend e 20 testes backend do contrato passaram. Typecheck passou. O rebuild e a publicacao desta
+revisao no projeto `sig-v2` estao em andamento.

@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 16/10/2026.
+> Last updated: 18/10/2026.
 
 ## Objetivo
 
@@ -120,6 +120,16 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
   tratados como fluxos externos e oracles para resgate parcial e múltiplas
   aplicações por produto/indexador.
 
+Novos contratos recebem o tratamento fiscal a partir de `product_type`; a API
+normaliza `tax_exempt` e nao aceita escolha manual como regra canonica. CDB,
+RDB, LC, debenture comum, Letra Financeira e Outro sao tributaveis pela tabela
+regressiva; LCI, LCA, LIG, CRI, CRA e debenture incentivada sao classificados
+como isentos, sujeitos aos requisitos legais da emissao e do titular. A tela de
+lancamento pede o nome completo do titulo (incluindo emissor), indexador e taxa;
+emissor deixa de ser campo separado. Liquidez diaria limpa e oculta vencimento
+e carencia. Contratos legados preservam emissor armazenado e podem ser
+reutilizados quando o nome informado identifica esse emissor.
+
 A #149 permanece aberta para evidência por conta/carteira da posição de custódia
 na manhã de pagamento e para base tributável/IRRF por lote. A regra oficial de
 elegibilidade foi identificada; detalhes em
@@ -163,13 +173,13 @@ Deve ser determinístico, DB-first e consumir contratos financeiros existentes s
 
 Somente depois do Analysis Engine. IA é camada explicativa sobre DTO estruturado; não calcula números financeiros e não acessa banco/provider de forma irrestrita.
 
-## Ferramentas de simulação
+## Ferramentas de simulacao
 
-A calculadora de rendimentos da #359 é uma ferramenta isolada, com fórmula e
-premissas explícitas na tela. Ela não lê nem persiste dados de carteira, não
-consulta providers e não altera `transactions` ou snapshots. Simulações de
-Renda Fixa que envolvam tributação continuam bloqueadas até que as premissas e
-regras aplicáveis sejam validadas e documentadas.
+As ferramentas da #359 sao simulacoes isoladas, sem leitura ou escrita da
+carteira. A comparacao de Renda Fixa calcula o tratamento tributario pelo tipo
+de produto usando a mesma taxonomia exibida no cadastro; a isencao pressupoe
+emissao e titular elegiveis. Taxas e premissas sao informadas pelo usuario. As
+formulas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
 
 ## Asset Detail
 

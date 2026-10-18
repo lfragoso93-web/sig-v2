@@ -99,6 +99,30 @@ sintetico; somente depois preparar backfill revisado, idempotente e reversivel.
 O backfill nao deve ser parte da migration estrutural nem deduzir identidade de
 contrato usando apenas ticker ou texto bruto.
 
+## Decisao corrente de produto - 18/10/2026
+
+Esta decisao supersede a proposta preliminar acima para o preenchimento fiscal
+e a identidade visivel do titulo:
+
+- `tax_exempt` e derivado de `product_type` no schema da API e na UI; nao e um
+  campo editavel nem uma informacao solicitada ao usuario;
+- CDB, RDB, LC, debenture comum, Letra Financeira e Outro seguem o tratamento
+  tributavel padrao. LCI, LCA, LIG, CRI, CRA e debenture incentivada sao
+  classificados como isentos, sujeitos aos requisitos da emissao e do titular;
+- a classificacao padrao nao prepara nem transmite declaracao de IRPF e nao gera
+  DARF. A retencao aplicavel a produtos tributaveis e feita pela fonte pagadora;
+- a tela usa um campo para nome completo do titulo, incluindo o emissor; nao
+  solicita emissor separado. O metadado legado `issuer` permanece no modelo e
+  em importacoes antigas, mas novos contratos da tela o deixam nulo;
+- liquidez diaria oculta vencimento e carencia e grava `grace_period_end=null`;
+- contratos antigos podem ser reaproveitados sem campo de emissor quando o nome
+  informado contem o emissor legado. Nomes que nao identificam o emissor nao
+  sao fundidos automaticamente.
+
+As regras fiscais implementadas e fontes oficiais estao em
+`docs/TOOLS_CALCULATORS.md`; essa classificacao e uma regra padrao do produto,
+nao substitui o informe financeiro nem a verificacao do enquadramento legal.
+
 ## Revisao dos caminhos de escrita — 17/10/2026
 
 A verificacao das chamadas existentes detalhou os pontos que uma ligacao

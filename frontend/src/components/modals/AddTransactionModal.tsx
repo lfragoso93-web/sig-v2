@@ -14,6 +14,7 @@ import { useTickerQuote } from '@/hooks/useTickerQuote'
 import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
 import { useTreasuryPrice } from '@/hooks/useTreasuryPrice'
+import { isFixedIncomeProductTaxExempt } from '@/utils/fixedIncomeTaxTreatment'
 
 interface Props { onClose: () => void }
 
@@ -33,7 +34,7 @@ const TABS: AssetTab[] = [
   { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'stock_int' },
   { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'etf_int'   },
   { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB Banco XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
   { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={12} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC ou Bitcoin',        brapiEnabled: true,  brapiSuggestType: 'cripto'    },
 ]
 
@@ -45,14 +46,6 @@ const RF_PRODUCT_TYPES = [
   ['DEBENTURE', 'Debênture'], ['DEBENTURE_INCENTIVADA', 'Debênture incentivada'],
   ['LETRA_FINANCEIRA', 'Letra Financeira'], ['OUTRO', 'Outro'],
 ] as const
-const PRODUCT_TAX_EXEMPTION: Record<string, boolean> = {
-  LCI: true,
-  LCA: true,
-  LIG: true,
-  CRI: true,
-  CRA: true,
-  DEBENTURE_INCENTIVADA: true,
-}
 const TODAY       = new Date().toISOString().split('T')[0]
 
 function canonicalContractIndexer(value: string): string | null {
@@ -318,12 +311,10 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [maturity,       setMaturity]       = useState(initialIsTesouro
     ? (prefill?.maturityDate?.slice(0, 10) || inferTreasuryMaturity(initialTreasuryLabel || initialTreasuryIdentity))
     : '')
-  const [issuer,         setIssuer]         = useState('')
   const [dailyLiquidity, setDailyLiquidity] = useState(false)
   const [contractChoice, setContractChoice] = useState(initialContractChoice)
   const [productType, setProductType] = useState('CDB')
   const [gracePeriodEnd, setGracePeriodEnd] = useState('')
-  const [taxExempt, setTaxExempt] = useState('')
   const [activeSlug,     setActiveSlug]     = useState(initialTreasuryIdentity)
   const [priceEdited,    setPriceEdited]    = useState(isEditMode)
   const [showTDSugg,     setShowTDSugg]     = useState(false)
@@ -343,7 +334,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   )
   const existingContractSelected = isRF && /^\d+$/.test(contractChoice)
   const legacyRFEdit = isRF && isEditMode && contractChoice === 'legacy'
-  const productTaxRule = PRODUCT_TAX_EXEMPTION[productType]
 
   const modalTitle = isEditMode
     ? `Editar — ${ticker}`
@@ -359,7 +349,10 @@ export default function AddTransactionModal({ onClose }: Props) {
   const lookupError = quoteError ?? tdSearchError ?? rvSearchError ?? tdPriceError
 
   useEffect(() => {
-    if (dailyLiquidity) setMaturity('')
+    if (dailyLiquidity) {
+      setMaturity('')
+      setGracePeriodEnd('')
+    }
   }, [dailyLiquidity])
 
   useEffect(() => {
@@ -374,13 +367,11 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (!selectedContract || hydratedContractRef.current === selectedContract.id) return
     hydratedContractRef.current = selectedContract.id
     setProductType(selectedContract.product_type)
-    setIssuer(selectedContract.issuer ?? '')
     setIndexer(formIndexer(selectedContract.indexer))
     setRate(selectedContract.rate_value == null ? '' : String(selectedContract.rate_value))
     setMaturity(selectedContract.maturity_date ?? '')
     setDailyLiquidity(selectedContract.liquidity_type === 'DAILY')
     setGracePeriodEnd(selectedContract.grace_period_end ?? '')
-    setTaxExempt(selectedContract.tax_exempt == null ? '' : String(selectedContract.tax_exempt))
     setCurrency(selectedContract.currency)
   }, [selectedContract])
 
@@ -469,10 +460,10 @@ export default function AddTransactionModal({ onClose }: Props) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key); setCurrency(t.currency)
     if (!prefill?.ticker) { setTicker(''); setAssetName('') }
-    setPrice(''); setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setPrice(''); setIndexer(''); setRate(''); setMaturity('')
     setDailyLiquidity(false)
     setContractChoice(key === 'renda_fixa' ? (isEditMode ? 'legacy' : 'new') : 'legacy')
-    setProductType('CDB'); setGracePeriodEnd(''); setTaxExempt('')
+    setProductType('CDB'); setGracePeriodEnd('')
     hydratedContractRef.current = null
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
@@ -541,7 +532,6 @@ export default function AddTransactionModal({ onClose }: Props) {
         rateLabel,
         dailyLiquidity  && 'Liquidez: Diária',
         !dailyLiquidity && maturity && `Vencimento: ${maturity}`,
-        isRF && issuer  && `Emissor: ${issuer}`,
       ].filter(Boolean).join(' | ')
       enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
@@ -559,14 +549,14 @@ export default function AddTransactionModal({ onClose }: Props) {
         contractFields.fixed_income_contract = {
           display_name: assetName.trim() || ticker.trim(),
           product_type: productType,
-          issuer: issuer.trim() || null,
+          issuer: null,
           indexer: canonicalIndexer,
           rate_value: parsedRate,
           rate_unit: parsedRate == null ? null : rateUnit,
           maturity_date: maturity || null,
           liquidity_type: dailyLiquidity ? 'DAILY' : maturity ? 'AT_MATURITY' : 'UNKNOWN',
-          grace_period_end: gracePeriodEnd || null,
-          tax_exempt: taxExempt === '' ? null : taxExempt === 'true',
+          grace_period_end: dailyLiquidity ? null : gracePeriodEnd || null,
+          tax_exempt: isFixedIncomeProductTaxExempt(productType),
           currency,
         }
       } else {
@@ -604,8 +594,8 @@ export default function AddTransactionModal({ onClose }: Props) {
     setSuccess(false)
     setTicker(prefill?.ticker ?? ''); setAssetName(prefill?.assetName ?? '')
     setQuantity(''); setPrice(''); setFees(''); setDate(TODAY); setNotes('')
-    setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setProductType('CDB'); setGracePeriodEnd(''); setTaxExempt('')
+    setIndexer(''); setRate(''); setMaturity('')
+    setProductType('CDB'); setGracePeriodEnd('')
     setContractChoice(isRF ? 'new' : 'legacy'); hydratedContractRef.current = null
     setDailyLiquidity(false)
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
@@ -781,7 +771,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Ticker + Moeda */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label={tab.tickerLabel} style={{ flex: 1 }}>
+                <Field label={isRF ? 'Nome do t\u00edtulo' : tab.tickerLabel} style={{ flex: 1 }}>
                   <div ref={dropdownRef} style={{ position: 'relative' }}>
                     <Input
                       type="text" value={ticker}
@@ -887,13 +877,6 @@ export default function AddTransactionModal({ onClose }: Props) {
                           onChange={e => {
                             const nextProductType = e.target.value
                             setProductType(nextProductType)
-                            const exemption = PRODUCT_TAX_EXEMPTION[nextProductType]
-                            const currentSuggestion = PRODUCT_TAX_EXEMPTION[productType]
-                            const isFollowingSuggestion = taxExempt === ''
-                              || (currentSuggestion !== undefined && taxExempt === String(currentSuggestion))
-                            if (isFollowingSuggestion) {
-                              setTaxExempt(exemption === undefined ? '' : String(exemption))
-                            }
                           }}
                         >
                           {RF_PRODUCT_TYPES.map(([value, label]) => (
@@ -902,9 +885,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                         </Select>
                       </Field>
                       <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: '-0.4rem 0 0' }}>
-                        {selectedContract
-                          ? 'Contrato existente reconhecido automaticamente; os termos abaixo foram preenchidos por ele.'
-                          : 'O produto orienta o tratamento financeiro e tributário. Confirme a classificação e as condições no documento da aplicação.'}
+                        {`Tratamento tributario automatico: ${isFixedIncomeProductTaxExempt(productType) ? 'isento de IR, conforme enquadramento legal do titulo' : 'tributavel pela tabela regressiva, com retencao usual na fonte'}.` }
                       </p>
                     </>
                   )}
@@ -962,42 +943,15 @@ export default function AddTransactionModal({ onClose }: Props) {
                         </span>
                       </div>
                     )}
-                    {isRF && (
-                      <Field label="Emissor" style={{ flex: 1 }}>
-                        <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" readOnly={existingContractSelected || legacyRFEdit} />
-                      </Field>
-                    )}
                   </div>
 
                   {isRF && (contractChoice === 'new' || selectedContract) && (
                     <>
-                      <div style={{ display: 'flex', gap: '0.75rem' }}>
-                        <Field label="Tratamento tributário do contrato" style={{ flex: 1 }}>
-                          <Select
-                            aria-label="Isenção tributária"
-                            value={taxExempt}
-                            disabled={!!selectedContract}
-                            onChange={e => setTaxExempt(e.target.value)}
-                          >
-                            <option value="">Não informado</option>
-                            <option value="true">Sim</option>
-                            <option value="false">Não</option>
-                          </Select>
+                      {!dailyLiquidity && (
+                        <Field label={'Fim da car\u00eancia'}>
+                          <Input aria-label={'Fim da car\u00eancia'} type="date" value={gracePeriodEnd} onChange={e => setGracePeriodEnd(e.target.value)} />
                         </Field>
-                        {productTaxRule !== undefined && (
-                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>
-                            Regra usual para {RF_PRODUCT_TYPES.find(([value]) => value === productType)?.[1]}: {productTaxRule ? 'isento' : 'tributável'}. Confirme conforme a emissão e o titular.
-                          </div>
-                        )}
-                      </div>
-                      <Field label="Fim da carência">
-                        <Input
-                          aria-label="Fim da carência"
-                          type="date"
-                          value={gracePeriodEnd}
-                          onChange={e => setGracePeriodEnd(e.target.value)}
-                        />
-                      </Field>
+                      )}
                       {indexer === 'Outro' && rate && (
                         <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>
                           A taxa e o indexador não catalogados ficarão nas observações, sem normalização automática.

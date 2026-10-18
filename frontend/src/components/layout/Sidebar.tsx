@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
   { to: '/carteira/metas',          icon: Target,          label: 'Metas'         },
   { to: '/carteira/ferramentas/rendimentos', icon: Calculator, label: 'Calculadora' },
+  { to: '/carteira/ferramentas/renda-fixa', icon: Calculator, label: 'Simulador RF' },
   { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
   { to: '/carteira/configuracoes',  icon: Settings,        label: 'Configurações' },
 ]

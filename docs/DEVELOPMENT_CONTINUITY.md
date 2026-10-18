@@ -5,39 +5,19 @@
 
 ## Estado atual
 
-- Branch obrigatória: `stable-15jun`.
-- O último SHA remoto observado era `b37661921e3a8455f45c8b676b28955d6ad3d0ea`.
-  A identidade exata do runtime e do checkout corrente está no proof allowlisted
-  em `artifacts/certification-proof/`.
-- GitHub compara `stable-15jun` como 7 commits à frente e 0 atrás de `main`
-  (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); nenhuma PR estava aberta.
-- O working tree não está limpo. A inspeção inicial identificou 15 alterações
-  preexistentes e cinco itens não rastreados, incluindo código/migration de
-  eventos corporativos, UI/testes de frações pendentes e artefatos temporários.
-  Esta rebaseline acrescentou documentação. Não descartar, substituir ou incluir
-  artefatos temporários em commit sem identificar seu uso.
-- Na observação anterior ao deploy, backend/PostgreSQL/Redis estavam saudáveis;
-  `/health=200` e `/ready=503` por `runtime_identity_error`.
-- O backend/frontend candidatos foram implantados em `production`; a migration
-  `20261016_corp_ev_effective_date` está aplicada. `/health=200`, readiness
-  assistida `GO_ASSISTED` sem blockers/warnings e zero escritas.
-- `/ready=503` continua fail-closed porque o evento persistido anterior diverge
-  em SHA, dataset e Alembic. Proof e dry-run #384 confirmaram a identidade; o
-  dry-run não escreveu e aguarda autorização explícita para promoção.
-- Validacao do checkout em 17/10: suite backend completa com 2.401 passed, 5 skipped e 0 failed; flake8 e mypy passaram (411 arquivos); Architecture Doctor passou (6/6); migrations completas e drift gate passaram em PostgreSQL 16 descartavel. A execucao foi isolada, sem rede, com a arvore somente leitura.
-- A suite frontend (171 testes, typecheck e lint) passou na verificacao de 16/10.
-- Os gates backend/frontend e Doctor passaram; backup v3 e restore isolado
-  reconciliaram. O candidato está implantado. A promoção #384 é o único passo
-  pendente desta rodada e exige autorização para o plano atual.
+- Branch obrigatoria: `stable-15jun`; HEAD no inicio deste bloco `f2e12eec6907ed1cc6880b47090d9b92681b3e56`, igual a `origin/stable-15jun`.
+- O working tree ja continha documentacao, calculadora #359 e artefatos `.tmp-candidate-*`; os itens temporarios foram preservados e nao fazem parte desta entrega.
+- Ambiente unico de testes assistidos: Compose `sig-v2` pelo Cloudflare Tunnel. Nao usar `sgi-usertest`; DB, Redis, volumes e tunnel devem permanecer.
+- UX de Renda Fixa em implementacao: tratamento fiscal derivado do tipo no frontend/API; titulo inclui emissor; carencia oculta/limpa com liquidez diaria; comparador #359 usa a mesma taxonomia.
+- Testes focados: frontend 31 aprovados; backend do servico de contratos 20 aprovados; typecheck aprovado.
+- Proxima acao: atualizar imagens backend/frontend de `sig-v2`, conferir `/health`, migration, bundle/rota publica e registrar digests. Readiness de certificacao nao e gate para testes assistidos, conforme decisao do usuario; nenhum evento sera promovido.
+- A classificacao pelo produto nao transmite a declaracao IRPF nem substitui informes; isencoes dependem do enquadramento legal da emissao/titular.
 
-## Próximo caminho
+## Proximo caminho
 
-1. Consolidar a atualização factual em novo SHA; repetir backup v3, restore,
-   gates, Doctor, proof e dry-run #384, pois o SHA muda.
-2. Revisar a confirmação exata do plano atualizado e executar somente após
-   autorização explícita; então comprovar `/ready` e persistência após restart.
-3. Fechar os gates residuais #408 (CodeQL), #83 (backup/restore isolado) e GOV-07
-   da #293; então escolher uma única entrega de produto.
+1. Atualizar a imagem unica `sig-v2`, preservando servicos de dados e volumes.
+2. Registrar digests ativos, health, migration e verificacoes de rota/bundle apos o deploy.
+3. Continuar validacao visual desktop/mobile e acessibilidade quando houver sessao de navegador; nao bloquear o desenvolvimento por certificacao de dados reais.
 
 ## Mapa de Issues abertas
 
@@ -418,3 +398,8 @@ Nenhum dado do ledger foi escrito. A imagem existente de `sig-v2` permanece a
 publicada; esta rodada alterou apenas documentação local e executou testes
 focados. A próxima mudança de produto deve atualizar backend/frontend dessa
 mesma stack, preservando DB, Redis, volumes e Tunnel.
+
+
+## Registro corrente - UX tributaria de Renda Fixa - 18/10/2026
+
+A classificacao fiscal deixou de ser editavel: o tipo canonico de produto alimenta `tax_exempt` no schema e formulario. O comparador #359 usa o mesmo mapeamento. O campo separado de emissor foi removido; o nome do titulo identifica o emissor, preservando dados antigos. Liquidez diaria oculta e limpa vencimento/carencia. Testes focados: frontend 31/31, backend de contratos 20/20, typecheck aprovado. Publicacao da revisao e validacao visual permanecem pendentes neste registro.
