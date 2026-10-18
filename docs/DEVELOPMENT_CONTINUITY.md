@@ -457,3 +457,23 @@ Simulador RF responderam HTTP 200, assim como o bundle `index-Co5T9z9c.js`.
 Backend, DB e Redis permanecem healthy; Tunnel ativo; so o frontend foi
 recriado. A chamada autenticada pelo fluxo real nao foi exercitada nesta
 verificacao.
+
+## Auditoria read-only de cobertura de precos - 18/10/2026
+
+A rotina `summarize_asset_price_coverage` foi executada no backend em transacao
+PostgreSQL `READ ONLY`; nenhuma sincronizacao, chamada a provider ou escrita foi
+feita. No catalogo global (nao equivalente a ativos mantidos por usuarios),
+3.677 ativos foram classificados: 2.810 `STALE`, 71 `MISSING`, 6
+`PARTIAL_BOTH`, 632 aliases canonicos, 152 com provedor dedicado e 6 sem
+cotacao de mercado. 2.338 itens sinalizam intervalos para sincronizacao; parte
+das lacunas permanece indisponivel segundo o estado do provider e nao deve ser
+fabricada.
+
+Na carteira 15 consultada nos logs recentes, 15 de 15 posicoes de ativos com
+cotacao tinham preco persistido e nenhuma estava sem preco. Os timestamps
+`last_price_updated_at` variaram de `2026-10-16 21:02:55 UTC` a
+`2026-10-16 21:03:03 UTC` (sexta-feira, perto do fechamento em Sao Paulo).
+Isso cobre a ultima sessao de bolsa ate 18/10, domingo; nao e cotacao em tempo
+real, e nao prova frescor diario de cripto durante o fim de semana. O proximo
+bloco deve reconciliar somente posicoes atuais com a cobertura global e montar
+um plano de sincronizacao por escopo, sem executar escrita nesta auditoria.

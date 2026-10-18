@@ -12,7 +12,8 @@
 - Testes focados da rodada: frontend 31/31, backend de contratos 20/20, typecheck e build de producao aprovados. Commit publicado e imagens aplicadas em `sig-v2`.
 - A validacao visual desktop/mobile e acessibilidade segue pendente de uma sessao de navegador disponivel. Readiness/certificacao de dados reais nao e gate para esta validacao assistida, conforme decisao do usuario.
 - Verificacao operacional posterior encontrou no detalhe do ativo uma chamada antiga de Proventos retornando 404; a tela principal usa o contrato canonico. A correcao do detalhe esta neste bloco.
-- O runtime usa precos persistidos DB-first. Logs recentes registram ausencia de preco para 10 ativos em `2026-10-17`; a completude/frescor do universo precisa de auditoria de cobertura antes de afirmar atualizacao integral. IRPF anual respondeu nos endpoints canonicos para 2025 e 2026, limitado as classes suportadas.
+- Auditoria read-only de precos: as 15 posicoes cotadas da carteira observada tinham preco persistido, atualizado em 16/10 perto do fechamento; nao e cotacao em tempo real. No catalogo inteiro, 2.810/3.677 ativos estao stale, 71 sem preco e 6 com cobertura parcial. Proximo passo: separar ativos efetivamente mantidos das lacunas do catalogo e preparar um plano escopado antes de qualquer sincronizacao.
+- IRPF anual respondeu nos endpoints canonicos para 2025 e 2026, limitado as classes suportadas.
 
 ## Estado publicado do ambiente — 18/10/2026
 
