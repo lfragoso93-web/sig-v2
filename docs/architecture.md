@@ -120,10 +120,13 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
   tratados como fluxos externos e oracles para resgate parcial e múltiplas
   aplicações por produto/indexador.
 
-A #149 permanece aberta somente para evidência factual de cupons/amortizações
-do Tesouro e para certificar operacionalmente uma nova identidade runtime. A
-ausência de PU, benchmark ou calendário não deve ser mascarada por retorno
-simples, evento inferido ou fallback rotulado como TWR.
+A #149 permanece aberta para evidência por conta/carteira da posição de custódia
+na manhã de pagamento e para base tributável/IRRF por lote. A regra oficial de
+elegibilidade foi identificada; detalhes em
+`docs/TREASURY_CASH_EVENT_SOURCE_AUDIT.md`. Certificação de identidade runtime
+é gate de promoção operacional para dados reais, separada do desenvolvimento
+da Issue. Ausência de PU, benchmark ou calendário não deve ser mascarada por
+retorno simples, evento inferido ou fallback rotulado como TWR.
 
 ## IRPF
 
@@ -159,6 +162,14 @@ Deve ser determinístico, DB-first e consumir contratos financeiros existentes s
 ### IA #361
 
 Somente depois do Analysis Engine. IA é camada explicativa sobre DTO estruturado; não calcula números financeiros e não acessa banco/provider de forma irrestrita.
+
+## Ferramentas de simulação
+
+A calculadora de rendimentos da #359 é uma ferramenta isolada, com fórmula e
+premissas explícitas na tela. Ela não lê nem persiste dados de carteira, não
+consulta providers e não altera `transactions` ou snapshots. Simulações de
+Renda Fixa que envolvam tributação continuam bloqueadas até que as premissas e
+regras aplicáveis sejam validadas e documentadas.
 
 ## Asset Detail
 
@@ -264,7 +275,7 @@ sequência corrente. A higiene de dependências priorizada também foi integrada
 
 ## Backlog pós-GO por padrão
 
-- #149 — evidência factual de cupons/amortizações e certificação da nova identidade;
+- #149 — posição elegível por carteira e tributação por lote de cupons/amortizações;
 - #351/#90/#58 — UX/detalhe de ativo;
 - #355–#359 — features auxiliares;
 - #246/#360 — Metas + Analysis Engine;

@@ -6,13 +6,15 @@ export interface TransactionModalPrefill {
   ticker?: string
   assetName?: string
   treasurySlug?: string
+  maturityDate?: string | null
   transactionId?: number
+  fixedIncomeContractId?: number | null
   operation?: 'buy' | 'sell'
   quantity?: number
   price?: number
   fees?: number
   date?: string
-  notes?: string
+  notes?: string | null
   currency?: string
 }
 

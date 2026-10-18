@@ -5,6 +5,7 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
+    Response,
     UploadFile,
     status,
 )
@@ -243,3 +244,22 @@ async def import_portfolio_csv(
         await _refresh_after_csv_import(portfolio_id)
         background_tasks.add_task(rebuild_snapshots_after_csv_import, portfolio_id)
     return result
+
+
+@router.get("/{portfolio_id}/export-csv", tags=["csv-import"])
+async def export_portfolio_csv(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await get_portfolio(db, portfolio_id, current_user.id)
+    csv_content = await csv_import_service.export_transactions_csv(db, portfolio_id)
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="portfolio_{portfolio_id}_transactions.csv"'
+            )
+        },
+    )

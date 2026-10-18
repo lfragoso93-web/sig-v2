@@ -1,5 +1,22 @@
 # SGI v2 — Sistema de Gestão de Investimentos
 
+## Ambiente de testes de usuarios
+
+Para desenvolvimento e validacao assistida, atualize a stack isolada
+`sgi-usertest` conforme [`docs/USER_TEST_STACK.md`](docs/USER_TEST_STACK.md).
+Ela nao compartilha o banco/artefatos do runtime `sig-v2` e usa dados
+sinteticos. A certificacao de dados reais nao bloqueia cada iteracao; `/ready`
+e a promocao operacional continuam protegendo o ambiente com dados reais.
+
+## Simulacoes
+
+A primeira ferramenta da #359 está disponível em `/carteira/ferramentas/rendimentos`.
+Ela usa apenas premissas inseridas pelo usuário e não modifica a carteira.
+Fórmula, hipóteses e limitações estão em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
+
+O inventário e a próxima etapa da taxonomia de Renda Fixa (#355) estão em
+[`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
+
 Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e evolução patrimonial de carteiras multiclasse, com backend FastAPI e frontend React + TypeScript.
 
 ## Branch e governança
@@ -10,7 +27,7 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Status do projeto — 16/10/2026
+## Snapshot historico do projeto — 16/10/2026
 
 O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
 promovida para `main` pela PR #362 e a certificação persistente para dados reais
@@ -205,11 +222,12 @@ Princípios obrigatórios:
 - #384 foi concluída e mantém a liberação para dados reais explícita,
   persistente e separada da promoção para `main`.
 
-#149 permanece aberta para a evidência factual de elegibilidade de cupons e
-amortizações do Tesouro e para a certificação operacional de uma nova identidade
-runtime. Os contratos de TWR dedicado de Tesouro e Renda Fixa já estão cobertos
-por oracles; lacunas de PU, benchmark ou calendário continuam fail-closed e não
-são apresentadas como retorno oficial.
+#149 permanece aberta para evidência de posição de custódia por carteira na
+manhã do pagamento e base tributável/IRRF por lote. A regra oficial de
+elegibilidade está documentada; certificação de runtime é gate separado de
+promoção para dados reais, não requisito de desenvolvimento. Os contratos de
+TWR dedicado já estão cobertos por oracles; lacunas de PU, benchmark ou
+calendário continuam fail-closed e não são apresentadas como retorno oficial.
 
 ## Evolução pós-GO
 
@@ -259,3 +277,17 @@ docker compose run --rm backend python -m app.cli.user_test_readiness
 - `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`;
 - `docs/deployment/oci-execution-index.md` (referência futura OCI);
 - Issues #408, #83, #293, #149, #370 e #284 (estados atuais e backlog).
+
+## Status atual — 17/10/2026
+
+O runtime consultado nesta data esta no SHA `5c4ad390`, saudavel e com `/ready=200` para a identidade certificada registrada. A Issue #83 foi concluida no GitHub apos ensaio administrativo integrado em dois bancos descartaveis; procedimento em `docs/ADMIN_BACKUP_RESTORE_REHEARSAL.md`. #408 continua aguardando confirmacao CodeQL posterior as correcoes e GOV-07/#293 segue como proximo bloco de governanca. Este status atualiza fotografias anteriores deste README, preservadas como historico.
+
+### Atualizacao de governanca — 17/10/2026
+
+O inventario GitHub ao vivo encontrou 22 Issues abertas e nenhuma PR aberta.
+GOV-07 foi correlacionada no snapshot local sem encontrar Issue claramente
+duplicada ou sem destino. #353 ja tem scroll restoration global e testes
+unitarios; faltam validacoes desktop/mobile, sem bloquear a jornada critica.
+#293 segue aberta ate reconciliar/publicar a documentacao porque a ponta remota
+`stable-15jun` nao foi obtida (consulta Git indisponivel). #408 segue aberta ate
+reconciliar a evidencia CodeQL divergente. Ver `docs/ISSUE_GOVERNANCE.md`.

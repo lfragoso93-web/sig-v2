@@ -52,6 +52,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string[][]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
   const [rowFilter, setRowFilter] = useState<RowFilter>(null)
@@ -169,6 +170,29 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
       URL.revokeObjectURL(url)
     } catch (err) {
       setError('Erro ao baixar modelo: ' + (err instanceof Error ? err.message : 'Erro desconhecido'))
+    }
+  }
+
+  const handleExportTransactions = async () => {
+    setIsExporting(true)
+    setError('')
+    try {
+      const response = await api.get(`/portfolios/${portfolioId}/export-csv`, {
+        responseType: 'blob',
+      })
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `portfolio_${portfolioId}_transactions.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Erro ao exportar transações: ' + getApiValidationErrorMessage(err, 'Erro desconhecido'))
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -315,9 +339,17 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 Colunas obrigatórias: <strong>{REQUIRED_COLUMNS.join(', ')}</strong>. Operações aceitas: <strong>buy</strong> e <strong>sell</strong>. Data em <strong>YYYY-MM-DD</strong>.
               </div>
-              <button onClick={handleDownloadTemplate} style={{ ...buttonStyle, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-text) l c h / 0.12)', background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                <Download size={14} /> Baixar modelo CSV
-              </button>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                Para Renda Fixa, os campos de contrato são opcionais. Repita a mesma <strong>fixed_income_contract_key</strong> nas aplicações vinculadas ao mesmo contrato; arquivos antigos continuam aceitos.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <button onClick={handleDownloadTemplate} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-text) l c h / 0.12)', background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+                  <Download size={14} /> Baixar modelo CSV
+                </button>
+                <button onClick={handleExportTransactions} disabled={isExporting} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-primary) l c h / 0.35)', background: 'transparent', color: 'var(--color-primary)', cursor: isExporting ? 'wait' : 'pointer', opacity: isExporting ? 0.7 : 1 }}>
+                  <Download size={14} /> {isExporting ? 'Exportando...' : 'Exportar transações da carteira'}
+                </button>
+              </div>
             </div>
           )}
 

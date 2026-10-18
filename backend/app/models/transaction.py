@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -15,7 +16,7 @@ from sqlalchemy import (
     desc,
     func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import foreign, relationship
 
 from app.core.database import Base
 import enum
@@ -34,6 +35,13 @@ class Transaction(Base):
         Index("idx_txn_ticker_date", "ticker", desc("date")),
         Index("idx_txn_asset_type", "asset_type"),
         Index("idx_txn_portfolio_date_asc", "portfolio_id", "date", "id"),
+        ForeignKeyConstraint(
+            ["portfolio_id", "fixed_income_contract_id"],
+            ["fixed_income_contracts.portfolio_id", "fixed_income_contracts.id"],
+            name="fk_transactions_fixed_income_contract_portfolio",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -58,7 +66,16 @@ class Transaction(Base):
     fx_rate: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # cotacao USD/BRL na data
     price_brl: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # preco convertido para BRL
     notes = Column(Text, nullable=True)
+    fixed_income_contract_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
 
     portfolio = relationship("Portfolio", back_populates="transactions")
+    fixed_income_contract = relationship(
+        "FixedIncomeContract",
+        back_populates="transactions",
+        primaryjoin=(
+            "and_(Transaction.portfolio_id == FixedIncomeContract.portfolio_id, "
+            "foreign(Transaction.fixed_income_contract_id) == FixedIncomeContract.id)"
+        ),
+    )

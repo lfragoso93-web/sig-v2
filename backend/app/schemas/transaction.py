@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from decimal import Decimal
 from typing import Literal, Optional, List
 from datetime import date as DateType
+from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 
 VALID_OPERATIONS = {"buy", "sell"}
 VALID_ASSET_TYPES = {
@@ -32,6 +33,8 @@ class TransactionCreate(BaseModel):
     date:       DateType
     currency:   Optional[str]  = "BRL"
     notes:      Optional[str]  = None
+    fixed_income_contract_id: Optional[int] = None
+    fixed_income_contract: Optional[FixedIncomeContractCreate] = None
 
     @field_validator("operation", mode="before")
     @classmethod
@@ -64,6 +67,8 @@ class TransactionUpdate(BaseModel):
     date:       Optional[DateType]  = None
     currency:   Optional[str]   = None
     notes:      Optional[str]   = None
+    fixed_income_contract_id: Optional[int] = None
+    fixed_income_contract: Optional[FixedIncomeContractCreate] = None
 
     @field_validator("operation", mode="before")
     @classmethod
@@ -102,6 +107,7 @@ class TransactionOut(BaseModel):
     date:         DateType
     currency:     str
     notes:        Optional[str]
+    fixed_income_contract_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

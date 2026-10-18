@@ -17,10 +17,22 @@ from app.services.csv_import_service import (
     import_csv_transactions,
     parse_csv_content,
 )
+from app.services.csv_import_service import (
+    export_transactions_csv as _export_transactions_csv,
+    generate_csv_template as _generate_csv_template,
+)
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.ticker_change_event_service import register_ticker_change
 from app.services.ticker_change_processor import apply_pending_ticker_changes
 from app.services.ticker_resolution_service import ResolvedTicker
+
+
+def generate_csv_template() -> str:
+    return _generate_csv_template()
+
+
+async def export_transactions_csv(db: AsyncSession, portfolio_id: int) -> str:
+    return await _export_transactions_csv(db, portfolio_id)
 
 
 async def _build_dry_run_result(

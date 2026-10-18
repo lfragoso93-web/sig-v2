@@ -204,7 +204,11 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
       label: 'Adicionar Lançamento',
       onClick: () => {
         setOpen(false)
-        openTransactionModal({ tab: assetTypeToTab(assetType), ticker, assetName: assetLabel })
+        openTransactionModal({
+          tab: assetTypeToTab(assetType),
+          ticker,
+          assetName: assetLabel,
+        })
       },
     },
     {

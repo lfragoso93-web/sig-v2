@@ -25,6 +25,7 @@ from app.routers import (
     class_targets,
     dividends,
     fx,
+    fixed_income_contracts,
     goals,
     irpf,
     performance,
@@ -184,6 +185,11 @@ app.include_router(admin_bootstrap_router, prefix=f"{PREFIX}/admin",        tags
 
 app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
+app.include_router(
+    fixed_income_contracts.router,
+    prefix=f"{PREFIX}/portfolios",
+    tags=["fixed-income-contracts"],
+)
 app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
 app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags=["positions"])
 app.include_router(dividends.router,       prefix=f"{PREFIX}/portfolios",   tags=["dividends"])

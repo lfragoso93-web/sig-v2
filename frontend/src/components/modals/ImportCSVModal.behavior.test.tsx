@@ -5,13 +5,14 @@ import ImportCSVModal from './ImportCSVModal'
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
+  get: vi.fn(),
   invalidateQueries: vi.fn(),
 }))
 
 vi.mock('@/services/api', () => ({
   default: {
     post: mocks.post,
-    get: vi.fn(),
+    get: mocks.get,
   },
 }))
 
@@ -37,7 +38,29 @@ function selectCsv(container: HTMLElement) {
 describe('ImportCSVModal behavior', () => {
   beforeEach(() => {
     mocks.post.mockReset()
+    mocks.get.mockReset()
     mocks.invalidateQueries.mockReset()
+  })
+
+  it('downloads an authenticated portfolio transaction export as a blob', async () => {
+    const createObjectURL = vi.fn(() => 'blob:transactions')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    mocks.get.mockResolvedValue({ data: new Blob(['csv']) })
+
+    render(<ImportCSVModal portfolioId={5} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar transações da carteira' }))
+
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith(
+      '/portfolios/5/export-csv',
+      { responseType: 'blob' },
+    ))
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    expect(click).toHaveBeenCalledOnce()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:transactions')
+    click.mockRestore()
+    vi.unstubAllGlobals()
   })
 
   it('blocks real import when dry-run returns warnings', async () => {

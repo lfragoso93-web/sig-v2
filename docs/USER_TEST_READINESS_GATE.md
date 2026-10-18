@@ -1,5 +1,17 @@
 # Gate de readiness para testes assistidos
 
+## Runtime de validacao vigente — 18/10/2026
+
+Os usuarios testam a imagem publicada na stack existente `sig-v2` pelo
+Cloudflare Tunnel. Nao iniciar nem manter `sgi-usertest` como ambiente paralelo.
+O procedimento de rebuild e validacao esta em
+`docs/USER_VALIDATION_RUNBOOK.md`.
+
+O relatorio `user_test_readiness` e diagnostico assistido; nao promove nem
+certifica a imagem. `/ready` segue fail-closed quando o runtime opera sobre o
+dataset real. Qualquer rotina de release deve preservar essa distincao e nunca
+reutilizar um evento de certificacao de outra identidade.
+
 Atualizado em 16/10/2026.
 
 ## Rebaseline do checkout e runtime — 16/10/2026
@@ -40,14 +52,13 @@ como `status=GO`: a promoção usou evidência própria
 - Docker: `docker compose run --rm backend python -m app.cli.user_test_readiness`
 - SuperAdmin: `GET /api/v1/admin/bootstrap/user-test-readiness`
 
-### Imagem Docker usada nos testes
+### Imagem Docker usada nos testes (politica anterior)
 
-Validacoes de runtime e testes acompanhados devem usar a imagem que ja esta
-ativa no Docker, identificando tag/digest, `APP_BRANCH`, `APP_COMMIT_SHA`,
-revision Alembic e resultado de `/health` e `/ready` antes/depois. Nao reconstruir
-nem substituir a imagem ativa apenas para executar validacoes. Testes unitarios
-locais podem verificar mudancas de codigo, mas nao substituem evidencias do
-runtime ativo; um SHA ou schema diferente exige novo ciclo de deploy e validacao.
+O procedimento acima descreve a politica anterior de usar a imagem ativa
+compartilhada. Desde 17/10, testes assistidos de desenvolvimento usam a stack
+isolada documentada em `docs/USER_TEST_STACK.md`; identidade e saude ainda devem
+ser conferidas, mas essa iteracao nao exige certificacao de dados reais. Um
+ambiente que acesse dados reais continua sujeito ao gate operacional proprio.
 
 ## Evidencia registrada
 

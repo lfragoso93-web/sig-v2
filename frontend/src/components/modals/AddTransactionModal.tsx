@@ -3,7 +3,12 @@ import {
   X, TrendingUp, Building2, Globe, Landmark,
   Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle, Globe2,
 } from 'lucide-react'
-import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
+import {
+  FixedIncomeContractCreate,
+  useCreateTransaction,
+  useFixedIncomeContracts,
+  useUpdateTransaction,
+} from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
 import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
@@ -34,7 +39,44 @@ const TABS: AssetTab[] = [
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
+const RF_PRODUCT_TYPES = [
+  ['CDB', 'CDB'], ['RDB', 'RDB'], ['LCI', 'LCI'], ['LCA', 'LCA'],
+  ['LC', 'LC'], ['LIG', 'LIG'], ['CRI', 'CRI'], ['CRA', 'CRA'],
+  ['DEBENTURE', 'Debênture'], ['DEBENTURE_INCENTIVADA', 'Debênture incentivada'],
+  ['LETRA_FINANCEIRA', 'Letra Financeira'], ['OUTRO', 'Outro'],
+] as const
+const PRODUCT_TAX_EXEMPTION: Record<string, boolean> = {
+  LCI: true,
+  LCA: true,
+  LIG: true,
+  CRI: true,
+  CRA: true,
+  DEBENTURE_INCENTIVADA: true,
+}
 const TODAY       = new Date().toISOString().split('T')[0]
+
+function canonicalContractIndexer(value: string): string | null {
+  const map: Record<string, string> = {
+    CDI: 'CDI', SELIC: 'SELIC', IPCA: 'IPCA_PLUS',
+    'IPCA+': 'IPCA_PLUS', Prefixado: 'PREFIXADO', 'IGP-M': 'IGPM_PLUS',
+  }
+  return map[value] ?? null
+}
+
+function contractRateUnit(indexer: string | null): string | null {
+  if (indexer === 'CDI' || indexer === 'SELIC') return 'PERCENT_OF_INDEXER'
+  if (indexer === 'PREFIXADO') return 'ANNUAL_PERCENT'
+  if (indexer === 'IPCA_PLUS' || indexer === 'IGPM_PLUS') return 'ANNUAL_SPREAD_PERCENT'
+  return null
+}
+
+function formIndexer(indexer?: string | null): string {
+  const map: Record<string, string> = {
+    CDI: 'CDI', SELIC: 'SELIC', IPCA_PLUS: 'IPCA',
+    PREFIXADO: 'Prefixado', IGPM_PLUS: 'IGP-M',
+  }
+  return indexer ? map[indexer] ?? '' : ''
+}
 
 function normalizeTreasurySearch(value: string | null | undefined) {
   return String(value ?? '')
@@ -173,13 +215,14 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 // ── Toggle pill (Liquidez diária) ────────────────────────────────────────────
-function TogglePill({ label, checked, onChange }: {
-  label: string; checked: boolean; onChange: (v: boolean) => void
+function TogglePill({ label, checked, onChange, disabled }: {
+  label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
+      disabled={disabled}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '4px 10px',
@@ -192,7 +235,8 @@ function TogglePill({ label, checked, onChange }: {
           : 'var(--color-surface-2)',
         color: checked ? 'var(--color-success)' : 'var(--color-text-muted)',
         fontSize: 'var(--text-xs)', fontWeight: checked ? 600 : 400,
-        cursor: 'pointer', transition: 'all 150ms ease',
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.72 : 1,
+        transition: 'all 150ms ease',
         whiteSpace: 'nowrap',
       }}
     >
@@ -244,12 +288,23 @@ export default function AddTransactionModal({ onClose }: Props) {
   const initialTreasuryLabel = initialIsTesouro
     ? prefill?.assetName || prefill?.ticker || ''
     : ''
+  const initialContractChoice = prefill?.fixedIncomeContractId != null
+    ? String(prefill.fixedIncomeContractId)
+    : initialTab === 'renda_fixa' && !isEditMode
+      ? 'new'
+      : 'legacy'
+  const initialQuantity = isEditMode && initialTab === 'renda_fixa'
+    && prefill?.quantity != null && prefill.price != null
+    ? String(prefill.quantity * prefill.price)
+    : prefill?.quantity != null
+      ? String(prefill.quantity)
+      : ''
 
   const [activeTab,      setActiveTab]      = useState(initialTab)
   const [operation,      setOperation]      = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
   const [ticker,         setTicker]         = useState(prefill?.ticker    ?? '')
   const [assetName,      setAssetName]      = useState(prefill?.assetName ?? '')
-  const [quantity,       setQuantity]       = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
+  const [quantity,       setQuantity]       = useState(initialQuantity)
   const [price,          setPrice]          = useState(prefill?.price     != null ? String(prefill.price)     : '')
   const [fees,           setFees]           = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
   const [date,           setDate]           = useState(prefill?.date      ?? TODAY)
@@ -260,20 +315,35 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
   const [indexer,        setIndexer]        = useState(initialIsTesouro ? inferTreasuryIndexer(initialTreasuryLabel || initialTreasuryIdentity) : '')
   const [rate,           setRate]           = useState('')
-  const [maturity,       setMaturity]       = useState(initialIsTesouro ? inferTreasuryMaturity(initialTreasuryLabel || initialTreasuryIdentity) : '')
+  const [maturity,       setMaturity]       = useState(initialIsTesouro
+    ? (prefill?.maturityDate?.slice(0, 10) || inferTreasuryMaturity(initialTreasuryLabel || initialTreasuryIdentity))
+    : '')
   const [issuer,         setIssuer]         = useState('')
   const [dailyLiquidity, setDailyLiquidity] = useState(false)
+  const [contractChoice, setContractChoice] = useState(initialContractChoice)
+  const [productType, setProductType] = useState('CDB')
+  const [gracePeriodEnd, setGracePeriodEnd] = useState('')
+  const [taxExempt, setTaxExempt] = useState('')
   const [activeSlug,     setActiveSlug]     = useState(initialTreasuryIdentity)
   const [priceEdited,    setPriceEdited]    = useState(isEditMode)
   const [showTDSugg,     setShowTDSugg]     = useState(false)
   const [showRVSugg,     setShowRVSugg]     = useState(false)
   const dropdownRef                          = useRef<HTMLDivElement>(null)
   const autoAppliedTreasuryRef               = useRef('')
+  const hydratedContractRef                  = useRef<number | null>(null)
 
   const tab            = TABS.find(t => t.key === activeTab)!
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
+  const { data: fixedIncomeContracts = [] } =
+    useFixedIncomeContracts(selectedPortfolioId, isRF)
+  const selectedContract = fixedIncomeContracts.find(
+    contract => String(contract.id) === contractChoice,
+  )
+  const existingContractSelected = isRF && /^\d+$/.test(contractChoice)
+  const legacyRFEdit = isRF && isEditMode && contractChoice === 'legacy'
+  const productTaxRule = PRODUCT_TAX_EXEMPTION[productType]
 
   const modalTitle = isEditMode
     ? `Editar — ${ticker}`
@@ -291,6 +361,28 @@ export default function AddTransactionModal({ onClose }: Props) {
   useEffect(() => {
     if (dailyLiquidity) setMaturity('')
   }, [dailyLiquidity])
+
+  useEffect(() => {
+    if (!isRF || isEditMode || !prefill?.ticker || contractChoice !== 'new') return
+    const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleUpperCase('pt-BR')
+    const names = new Set([prefill.ticker, prefill.assetName].filter(Boolean).map(value => normalize(value!)))
+    const matches = fixedIncomeContracts.filter(contract => names.has(normalize(contract.display_name)))
+    if (matches.length === 1) setContractChoice(String(matches[0].id))
+  }, [contractChoice, fixedIncomeContracts, isEditMode, isRF, prefill?.assetName, prefill?.ticker])
+
+  useEffect(() => {
+    if (!selectedContract || hydratedContractRef.current === selectedContract.id) return
+    hydratedContractRef.current = selectedContract.id
+    setProductType(selectedContract.product_type)
+    setIssuer(selectedContract.issuer ?? '')
+    setIndexer(formIndexer(selectedContract.indexer))
+    setRate(selectedContract.rate_value == null ? '' : String(selectedContract.rate_value))
+    setMaturity(selectedContract.maturity_date ?? '')
+    setDailyLiquidity(selectedContract.liquidity_type === 'DAILY')
+    setGracePeriodEnd(selectedContract.grace_period_end ?? '')
+    setTaxExempt(selectedContract.tax_exempt == null ? '' : String(selectedContract.tax_exempt))
+    setCurrency(selectedContract.currency)
+  }, [selectedContract])
 
   useEffect(() => {
     if (isEditMode || !quote) { setPriceFromBrapi(false); return }
@@ -379,6 +471,9 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (!prefill?.ticker) { setTicker(''); setAssetName('') }
     setPrice(''); setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
     setDailyLiquidity(false)
+    setContractChoice(key === 'renda_fixa' ? (isEditMode ? 'legacy' : 'new') : 'legacy')
+    setProductType('CDB'); setGracePeriodEnd(''); setTaxExempt('')
+    hydratedContractRef.current = null
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
@@ -394,21 +489,29 @@ export default function AddTransactionModal({ onClose }: Props) {
     const fee = parseFloat(fees || '0')
 
     if (!ticker.trim()) { setError('Informe o ticker/código do ativo.'); return }
-    if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
+    if (((isRF && !existingContractSelected && !legacyRFEdit) || isTesouro) && !indexer) {
+      setError('Selecione o indexador.')
+      return
+    }
 
     let qty: number
     let prc: number
 
     if (isRF) {
-      // Renda Fixa: usuário informa apenas valor investido
-      // Enviamos quantity=1 e price=valor_investido ao backend
-      const valorInvestido = parseFloat(quantity)
-      if (isNaN(valorInvestido) || valorInvestido <= 0) {
-        setError('Informe o valor investido (deve ser maior que zero).')
-        return
+      if (isEditMode && prefill?.quantity != null && prefill.price != null) {
+        // Preserva a representação contábil original, inclusive lotes legados.
+        qty = prefill.quantity
+        prc = prefill.price
+      } else {
+        // Novos registros legados usam quantity=1 e price=valor investido.
+        const valorInvestido = parseFloat(quantity)
+        if (isNaN(valorInvestido) || valorInvestido <= 0) {
+          setError('Informe o valor investido (deve ser maior que zero).')
+          return
+        }
+        qty = 1
+        prc = valorInvestido
       }
-      qty = 1
-      prc = valorInvestido
     } else {
       qty = parseFloat(quantity)
       prc = parseFloat(price)
@@ -416,9 +519,18 @@ export default function AddTransactionModal({ onClose }: Props) {
       if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
     }
 
+    if (isRF && contractChoice === 'new' && rate.trim()) {
+      const parsedRate = Number(rate)
+      if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+        setError('Informe uma taxa válida ou deixe o campo em branco.')
+        return
+      }
+    }
+
     let enrichedNotes = notes.trim()
-    if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
-    if (isRF || isTesouro) {
+    const preserveExistingRFNotes = isRF && isEditMode && contractChoice !== 'new'
+    if (assetName && !isEditMode) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
+    if ((isRF || isTesouro) && !preserveExistingRFNotes) {
       const rateLabel = isRF
         // Renda Fixa: "110% do CDI" (percentual do indexador)
         ? rate && indexer && `${rate}% do ${indexer}`
@@ -435,6 +547,34 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
 
     const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
+    const contractFields: {
+      fixed_income_contract_id?: number | null
+      fixed_income_contract?: FixedIncomeContractCreate | null
+    } = {}
+    if (isRF) {
+      if (contractChoice === 'new') {
+        const canonicalIndexer = canonicalContractIndexer(indexer)
+        const rateUnit = contractRateUnit(canonicalIndexer)
+        const parsedRate = rate.trim() && rateUnit ? Number(rate) : null
+        contractFields.fixed_income_contract = {
+          display_name: assetName.trim() || ticker.trim(),
+          product_type: productType,
+          issuer: issuer.trim() || null,
+          indexer: canonicalIndexer,
+          rate_value: parsedRate,
+          rate_unit: parsedRate == null ? null : rateUnit,
+          maturity_date: maturity || null,
+          liquidity_type: dailyLiquidity ? 'DAILY' : maturity ? 'AT_MATURITY' : 'UNKNOWN',
+          grace_period_end: gracePeriodEnd || null,
+          tax_exempt: taxExempt === '' ? null : taxExempt === 'true',
+          currency,
+        }
+      } else {
+        contractFields.fixed_income_contract_id = /^\d+$/.test(contractChoice)
+          ? Number(contractChoice)
+          : null
+      }
+    }
     const payload = {
       ticker:     finalTicker,
       asset_type: tab.assetType,
@@ -444,7 +584,8 @@ export default function AddTransactionModal({ onClose }: Props) {
       fees:       isNaN(fee) ? 0 : fee,
       date,
       currency,
-      notes:      enrichedNotes || undefined,
+      notes:      isEditMode ? (enrichedNotes || null) : (enrichedNotes || undefined),
+      ...contractFields,
     }
 
     try {
@@ -464,6 +605,8 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(prefill?.ticker ?? ''); setAssetName(prefill?.assetName ?? '')
     setQuantity(''); setPrice(''); setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setProductType('CDB'); setGracePeriodEnd(''); setTaxExempt('')
+    setContractChoice(isRF ? 'new' : 'legacy'); hydratedContractRef.current = null
     setDailyLiquidity(false)
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
@@ -722,20 +865,58 @@ export default function AddTransactionModal({ onClose }: Props) {
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
-                      {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
+                      {isTesouro ? 'Dados do Título' : contractChoice === 'new' ? 'Dados do Contrato' : 'Dados de Renda Fixa'}
                     </p>
                     {isRF && (
                       <TogglePill
                         label="Liquidez diária"
                         checked={dailyLiquidity}
                         onChange={setDailyLiquidity}
+                        disabled={existingContractSelected || legacyRFEdit}
                       />
                     )}
                   </div>
 
+                  {isRF && (contractChoice === 'new' || selectedContract) && (
+                    <>
+                      <Field label="Tipo de produto" required={!selectedContract}>
+                        <Select
+                          aria-label="Tipo de produto de Renda Fixa"
+                          value={productType}
+                          disabled={!!selectedContract}
+                          onChange={e => {
+                            const nextProductType = e.target.value
+                            setProductType(nextProductType)
+                            const exemption = PRODUCT_TAX_EXEMPTION[nextProductType]
+                            const currentSuggestion = PRODUCT_TAX_EXEMPTION[productType]
+                            const isFollowingSuggestion = taxExempt === ''
+                              || (currentSuggestion !== undefined && taxExempt === String(currentSuggestion))
+                            if (isFollowingSuggestion) {
+                              setTaxExempt(exemption === undefined ? '' : String(exemption))
+                            }
+                          }}
+                        >
+                          {RF_PRODUCT_TYPES.map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: '-0.4rem 0 0' }}>
+                        {selectedContract
+                          ? 'Contrato existente reconhecido automaticamente; os termos abaixo foram preenchidos por ele.'
+                          : 'O produto orienta o tratamento financeiro e tributário. Confirme a classificação e as condições no documento da aplicação.'}
+                      </p>
+                    </>
+                  )}
+
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <Field label="Indexador" required style={{ flex: 1 }}>
-                      <Select value={indexer} onChange={e => setIndexer(e.target.value)} disabled={isTesouro && !!activeSlug}>
+                      <Select
+                        aria-label="Indexador"
+                        value={indexer}
+                        onChange={e => setIndexer(e.target.value)}
+                        disabled={(isTesouro && !!activeSlug) || existingContractSelected || legacyRFEdit}
+                      >
                         <option value="">Selecionar…</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
@@ -747,6 +928,8 @@ export default function AddTransactionModal({ onClose }: Props) {
                     >
                       <Input
                         type="number" value={rate} onChange={e => setRate(e.target.value)}
+                        aria-label={isRF ? 'Taxa do contrato' : 'Taxa anual'}
+                        readOnly={existingContractSelected || legacyRFEdit}
                         placeholder={isRF ? 'ex: 110' : 'ex: 5.82'}
                         min="0" step="any"
                       />
@@ -758,10 +941,11 @@ export default function AddTransactionModal({ onClose }: Props) {
                       <Field label="Vencimento" style={{ flex: 1 }}>
                         <Input
                           type="date"
+                          aria-label="Vencimento"
                           value={maturity}
                           onChange={e => setMaturity(e.target.value)}
-                          readOnly={isTesouro && !!activeSlug}
-                          style={isTesouro && !!activeSlug ? { opacity: 0.75 } : undefined}
+                          readOnly={(isTesouro && !!activeSlug) || existingContractSelected || legacyRFEdit}
+                          style={(isTesouro && !!activeSlug) || existingContractSelected || legacyRFEdit ? { opacity: 0.75 } : undefined}
                         />
                       </Field>
                     )}
@@ -780,24 +964,63 @@ export default function AddTransactionModal({ onClose }: Props) {
                     )}
                     {isRF && (
                       <Field label="Emissor" style={{ flex: 1 }}>
-                        <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" />
+                        <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" readOnly={existingContractSelected || legacyRFEdit} />
                       </Field>
                     )}
                   </div>
+
+                  {isRF && (contractChoice === 'new' || selectedContract) && (
+                    <>
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <Field label="Tratamento tributário do contrato" style={{ flex: 1 }}>
+                          <Select
+                            aria-label="Isenção tributária"
+                            value={taxExempt}
+                            disabled={!!selectedContract}
+                            onChange={e => setTaxExempt(e.target.value)}
+                          >
+                            <option value="">Não informado</option>
+                            <option value="true">Sim</option>
+                            <option value="false">Não</option>
+                          </Select>
+                        </Field>
+                        {productTaxRule !== undefined && (
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>
+                            Regra usual para {RF_PRODUCT_TYPES.find(([value]) => value === productType)?.[1]}: {productTaxRule ? 'isento' : 'tributável'}. Confirme conforme a emissão e o titular.
+                          </div>
+                        )}
+                      </div>
+                      <Field label="Fim da carência">
+                        <Input
+                          aria-label="Fim da carência"
+                          type="date"
+                          value={gracePeriodEnd}
+                          onChange={e => setGracePeriodEnd(e.target.value)}
+                        />
+                      </Field>
+                      {indexer === 'Outro' && rate && (
+                        <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                          A taxa e o indexador não catalogados ficarão nas observações, sem normalização automática.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
               {/* Valor/Quantidade + Preço */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 {isRF ? (
-                  <Field label={`Valor Investido (${currency})`} style={{ flex: 1 }}>
+                  <Field label={`${isEditMode ? 'Valor registrado' : 'Valor Investido'} (${currency})`} style={{ flex: 1 }}>
                     <Input
                       type="number"
+                      aria-label={isEditMode ? 'Valor registrado' : 'Valor investido'}
                       value={quantity}
                       onChange={e => setQuantity(e.target.value)}
                       placeholder="0,00"
                       min="0"
                       step="0.01"
+                      readOnly={isEditMode}
                     />
                   </Field>
                 ) : (

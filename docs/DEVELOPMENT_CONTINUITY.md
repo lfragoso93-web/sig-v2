@@ -84,3 +84,262 @@ GitHub ao vivo antes de encerrar ou reordenar trabalho.
 
 Changelogs e documentos em `docs/changelog/` preservam evidência histórica; não
 devem ser reescritos como se descrevessem o runtime atual.
+
+## Atualizacao factual — 17/10/2026
+
+O runtime foi consultado no Docker: backend healthy, imagem rotulada com o SHA `5c4ad3906475316294196a826ff140cb3e4bf950`, `ENVIRONMENT=production`, branch `stable-15jun`, dataset `pre-prod-backup.v3:sha256:7d97c52de9ae58ad457f3ffe25055a9963a6a0dea4c9690b8dc72f900fa7133e`, Alembic `20261016_corp_ev_effective_date` e `/ready=200` (`ready_for_real_data=true`, evento 6 persistido). A certificacao vale somente para essa identidade.
+
+O checkout/runtime estao em `5c4ad3906475316294196a826ff140cb3e4bf950`; `origin/stable-15jun` local permanece em `b37661921e3a8455f45c8b676b28955d6ad3d0ea` (tres commits atras). O SHA remoto vivo nao foi confirmado e nenhum push foi feito. Quatro itens `.tmp-candidate-*` preexistentes foram preservados.
+
+Issues #83, #293 e #408 foram consultadas ao vivo e permanecem abertas. A prova recente de #83 cobre backup/restore por funcoes de servico e reconciliacao estrutural em banco descartavel, mas nao autentica/audita/consulta status via API administrativa. #408 aguarda confirmacao CodeQL posterior as correcoes. GOV-07/#293 aguarda correlacao final do inventario integral. Esses status prevalecem sobre fotografias anteriores neste documento; os registros historicos permanecem preservados.
+
+Qualquer novo SHA implantado exige novo backup v3, restore, proof, gates e dry-run vinculados a identidade nova. A promocao anterior certifica apenas `5c4ad390`.
+## Revisao do bloqueio de certificacao por SHA — 17/10/2026
+
+A certificacao atual nao bloqueia startup nem `/health`: o Compose considera o backend saudavel por healthcheck separado. `/ready` e a autoridade fail-closed para a capacidade declarada `ready_for_real_data`; seu leitor compara ambiente, branch, SHA completo, dataset, Alembic, gate #227 e PR #362. `GO_ASSISTED` e diagnostico separado. O Compose observado e o ambiente production com o banco atual; nao foi identificada uma stack isolada de testes de usuario nesta verificacao.
+
+Conclusao de arquitetura para o proximo bloco: remover a recertificacao como exigencia de cada iteracao de desenvolvimento pode reduzir a friccao, mas remover ou afrouxar o fail-closed do ambiente que usa o dataset real tambem libera uma identidade de codigo nao avaliada para operacoes financeiras. O caminho seguro a desenhar e separar deploy/teste assistido de ativacao para dados reais, com dataset isolado e controle de acesso para usuarios convidados; a promocao para uso amplo com dados reais continua vinculada a evidencia. Nenhuma regra de runtime foi alterada nesta revisao; a politica ainda precisa ser escolhida antes de mudar o contrato da #384 ou `/ready`.
+## Proximo bloco — 17/10/2026
+
+#83 foi fechada no GitHub apos o ensaio HTTP integrado em bancos descartaveis. O procedimento e os limites restantes estao em `docs/ADMIN_BACKUP_RESTORE_REHEARSAL.md`. Proximo bloco unico: confirmar CodeQL pos-correcao (#408). Depois disso, concluir GOV-07/#293 e escolher uma entrega de produto. Os passos anteriores deste documento sao fotografias da retomada de 16/10.
+
+## Resultado da correlacao GOV-07 — 17/10/2026
+
+Inventario GitHub ao vivo encontrou 22 Issues abertas e nenhuma PR aberta. A
+correlacao do snapshot local nao encontrou Issue claramente duplicada ou sem
+destino. #83 esta fechada; #353 ja possui scroll restoration global e testes
+unitarios, restando validacao desktop/mobile. #149, #370, #408 e #272 conservam
+residuos factuais/tecnicos distintos; as demais Issues sao backlog de produto,
+providers, bootstrap ou OCI conforme `docs/ISSUE_GOVERNANCE.md`.
+
+A ponta remota de `stable-15jun` nao pode ser associada ao checkout local: a
+comparacao GitHub informa 7 commits a frente e 0 atras de `main`, mas nao fornece
+o SHA da ponta; `git ls-remote` falhou por indisponibilidade de rede. GOV-07 foi
+correlacionada para o snapshot disponivel, mas #293 permanece aberta ate a
+reconciliacao/publicacao do estado documental. Nenhuma mudanca runtime ou de
+certificacao foi feita.
+
+## Revisao da evidencia CodeQL #408 — 17/10/2026
+
+A Issue foi consultada ao vivo: o corpo informa que CodeQL pos-correcao ainda
+esta pendente, mas um comentario remoto afirma que o deep scan confirmou CodeQL
+e Trivy verdes e que os findings nao aparecem na `stable-15jun`; o mesmo
+comentario condiciona o fechamento a propagacao para `main` e confirmacao global.
+O workflow configurado e manual/semanal e inclui dois jobs CodeQL e um Trivy da
+imagem backend. O conector GitHub disponivel neste ambiente retorna somente
+execucoes associadas a PR e nao disponibiliza consulta de runs schedule/manual,
+alertas CodeQL ou dispatch. Assim, nao foi possivel reconciliar o resultado nem
+confirmar alertas em ambas as branches; #408 segue aberta. Nao foi repetido o
+workflow completo e nao houve alteracao de runtime. Retomar quando for possivel
+consultar a execucao existente e os alertas para `stable-15jun` e `main`.
+
+## Bloco ambiente de testes isolado — 17/10/2026
+
+Foi criada `docker-compose.usertest.yml` e seu runbook
+`docs/USER_TEST_STACK.md`. A stack `sgi-usertest` separa banco/artefatos e
+identidade do runtime `sig-v2`, nao carrega `.env`, nao expoe backend/DB/Redis
+ao host e publica frontend apenas em loopback. Ela remove a certificacao de
+dados reais do ciclo cotidiano de desenvolvimento; `/ready` e promocao real
+continuam preservados para a stack que opera dados reais.
+
+O container `sig-v2` inspecionado antes da alteracao estava saudavel e
+pertence ao projeto existente. A stack `sgi-usertest` subiu com backend,
+PostgreSQL e Redis saudaveis; Alembic em `20261016_corp_ev_effective_date`,
+`/health=200`, frontend loopback `127.0.0.1:18080=200` e identidade de teste
+com SHA igual ao checkout. `/ready=503` por `runtime_identity_error` e esperado
+nesse ambiente sem dataset real/certificacao. A imagem principal e seu
+banco/volume nao foram alterados. Detalhes e digests em `docs/USER_TEST_STACK.md`.
+
+Atualizacao da calculadora #359 — 17/10/2026: a stack `sgi-usertest` foi
+reconstruida apos a implementacao local. Typecheck, build de producao e quatro
+testes deterministas passaram; `/health`, rota SPA e asset JS responderam 200.
+A imagem referencia `5c4ad3906475316294196a826ff140cb3e4bf950` como SHA base,
+mas incorpora arquivos locais nao commitados; nao representa SHA reproduzivel
+nem certificacao real. `/ready=503` continua esperado para identidade sintetica.
+Validacao visual desktop/mobile permanece pendente porque o navegador integrado
+nao estava disponivel. A stack principal `sig-v2` permaneceu parada e intocada.
+Digests e verificacoes operacionais estao em `docs/USER_TEST_STACK.md`.
+
+## Entrega parcial da #359 — 17/10/2026
+
+Foi adicionada a frente A (calculadora de rendimentos) em
+`/carteira/ferramentas/rendimentos`, com projeção de taxa efetiva anual e aporte
+mensal no fim de cada período. O fluxo é frontend-only e não lê nem grava dados
+de carteira. Fórmula, premissas e limites estão em `docs/TOOLS_CALCULATORS.md`.
+Testes deterministas, typecheck e build passaram na atualizacao descrita acima;
+a revisao visual desktop/mobile permanece pendente por indisponibilidade do
+navegador integrado. A calculadora de Renda Fixa continua fora deste bloco.
+
+## Inventario estatico de Renda Fixa #355 - 17/10/2026
+
+O inventario de schema, API, formulario, CSV, valuation, snapshots e TWR foi
+registrado em `docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`. Confirmou dados de
+contrato serializados em `transactions.notes`, writer canonico compartilhado e
+remocao irreversivel da antiga tabela de projecao. A auditoria DB-only da stack
+de testes validou a identidade sintetica e encontrou zero transacoes. A
+auditoria remota de setembro segue historica.
+
+## Implementacao inicial de contratos de Renda Fixa #355 - 17/10/2026
+
+Foi preparada implementacao local aditiva de `fixed_income_contracts` e da
+ligacao nullable em `transactions`, com API portfolio-scoped, validacao no
+writer canonico e limpeza da ligacao ao editar a classe para fora de Renda
+Fixa. Foram incluidos cenarios unitarios e a migration
+`20261017_fixed_income_contracts`. A validacao permanece incompleta: pytest
+local nao iniciou por ausencia de `pydantic`; o rebuild de `sgi-usertest` falhou
+com BuildKit `error reading from server: EOF`, e as consultas subsequentes ao
+daemon Docker ficaram sem resposta. Portanto, a migration nao foi aplicada, a
+imagem nao foi atualizada e nenhum teste de runtime/PostgreSQL foi confirmado.
+Nenhum dado existente foi associado ou alterado. Retomar verificando/restaurando
+o daemon e executar testes focados e migration em banco descartavel antes de
+considerar este bloco validado. A stack principal `sig-v2` nao foi alvo de
+comandos de alteracao.
+
+
+### Retomada operacional e validacao #355 - 17/10/2026
+
+O Docker voltou a responder. Rebuild isolado concluido; o alvo de migration agora
+e configuravel por ambiente, mantendo o pin `20261016_corp_ev_effective_date`
+como default e escolhendo `head` somente em `sgi-usertest`. A imagem de backend e
+a de frontend foram atualizadas e seus digests estao em
+`docs/USER_TEST_STACK.md`. Migration em head, 18 testes passaram sem avisos ORM,
+API consta na OpenAPI, `/health=200` e frontend local=200. `/ready=503` e esperado
+para a identidade de testes sem dados reais. Exercicio PostgreSQL em transacao
+com rollback rejeitou ligacao cross-portfolio e deixou zero carteiras, transacoes
+e contratos. Nenhuma operacao foi feita na stack principal.
+
+
+### Integracao do formulario de Renda Fixa #355 — 17/10/2026
+
+O formulario de transacoes passou a consumir a API de contratos: cria o contrato no mesmo unit of work do lancamento, permite selecionar contrato existente, mantem associacao durante edicao e conserva quantidade/preco originais. Linhas legadas sem contrato continuam editaveis; o CSV legado segue sem campos novos e nao recebe associacao automatica. Validacao: 16 testes de frontend focados, `npm run typecheck` e quatro testes backend focados passaram.
+
+BuildKit encerrou a primeira exportacao com `error reading from server: EOF`; o Docker Desktop foi reiniciado e o rebuild isolado concluido. Backend e frontend em execucao correspondem as novas imagens; migration `20261017_fixed_income_contracts` esta em head. `/health=200`, frontend `127.0.0.1:18080=200`, `/ready=503` esperado para identidade sintetica. PostgreSQL confirmou zero transacoes e zero contratos. Nenhum dado financeiro foi criado, nenhum backfill foi feito e a stack principal permaneceu fora da operacao. Esta atualizacao substitui as notas anteriores que diziam que a integracao de formulario nao existia.
+
+O proximo bloco e suportar metadados de contrato por colunas explicitas no CSV de importacao/exportacao, sem inferencia para arquivos antigos.
+
+
+### CSV de contratos de Renda Fixa #355 - 18/10/2026
+
+O modelo CSV foi estendido com campos opcionais `fixed_income_*` e `fixed_income_contract_key`. A chave agrupa aplicacoes do mesmo contrato dentro daquele arquivo; termos inconsistentes para a mesma chave falham no dry-run. A importacao usa o writer canonico, cria no maximo um contrato por chave e preserva commit/rollback do lote. Metadados em outras classes sao rejeitados. CSV legado de nove colunas continua sem inferencia nem link automatico. A exportacao `GET /api/v1/portfolios/{portfolio_id}/export-csv` verifica ownership, devolve o ledger e os termos de contrato, e produz chaves locais ao arquivo em vez de IDs internos. O modal oferece o download autenticado por blob.
+
+Validacao: 82 testes backend CSV/fixture sintetico passaram na imagem atualizada; 7 testes frontend, `npm run typecheck`, `npm run build` Docker e Flake8 com E501/W293 ignorados passaram. A execucao Flake8 sem ignores mostrou apenas avisos legados de comprimento de linha/espacos em branco, mais os imports de reexportacao corrigidos nesta etapa.
+
+### Hierarquia e metadados fiscais no formulario de Renda Fixa #355 - 18/10/2026
+
+Feedback da revisao visual: tipo de produto deve ser a primeira escolha dos
+dados do contrato, antes do indexador, pois a classificacao orienta as demais
+condicoes. O modal foi reorganizado nessa ordem. Produtos com tratamento
+usualmente isento (LCI, LCA, LIG, CRI, CRA e debenture incentivada) passam a
+sugerir `tax_exempt=true`; para os demais, a UI deixa nao informado. A sugestao
+e editavel e orienta confirmar emissao/titular/documentos. Nao altera o motor de
+IRPF e nao deve ser interpretada como calculo ou aconselhamento fiscal.
+Acrescentada regressao de ordem, sugestao e preservacao de escolha manual.
+Validacao: 14 testes do modal, typecheck e build Docker passaram. Imagem
+frontend aplicada a `sgi-usertest`; frontend 200 em `127.0.0.1:18080`, backend
+`/health=200`, `/ready=503` esperado para identidade sintetica. Alembic segue
+`20261017_fixed_income_contracts (head)`; banco e volumes preservados; stack
+principal nao tocada.
+
+O container backend manteve a imagem existente
+`sha256:1495e3127f0b938d7b6ac3a2152eb3bb5ed01c94311a371b6cbcb020cb98f776`.
+A nova imagem frontend em execucao e
+`sha256:9cedcea08da45ee3d07055fd98bc45e9d5c5e586d681f44b4bccff1f7c368b8d`.
+Como o working tree permanece com alteracoes locais, `APP_COMMIT_SHA` e apenas
+o SHA base e esta imagem nao e release reproduzivel nem certificacao de dados
+reais.
+
+
+### Associacao automatica e prefill por instrumento #355 - 18/10/2026
+
+O seletor explicito de contrato foi removido do fluxo normal. Ao gravar novos
+termos, o service agora reutiliza um contrato da mesma carteira somente quando
+todos os termos tipados e o nome (case-insensitive) coincidem; ticker sozinho
+nao funde produtos diferentes. O atalho do resumo carrega dados de contrato
+quando o nome/codigo da posicao aponta para uma unica correspondencia; vinculos
+existentes tambem hidratam os campos do modal. O atalho Tesouro da pagina agora
+passa vencimento conhecido e preserva a consulta do catalogo para indexador,
+taxa e PU. Nao houve alteracao do ledger ou migracao.
+
+Validacao local: typecheck passou e o build Docker do frontend compilou. O
+build combinado perdeu o BuildKit durante a exportacao/unpack da imagem
+backend (`error reading from server: EOF`); em seguida o Docker Desktop
+reportou falha ao iniciar a engine WSL (`0xc00000fd`). Portanto, nao foi
+possivel confirmar o estado dos containers nem aplicar as imagens. Nenhum
+teste foi adicionado/executado nesta alteracao. A retomada deve primeiro
+recuperar o Docker, inspecionar `sgi-usertest` e entao rebuild/recriar e checar
+`/health`, `/ready`, frontend e imagem efetivamente ativa.
+
+#### Recuperacao e implantacao - 18/10/2026
+
+O Docker voltou a responder sem reiniciar o engine. O rebuild foi concluido e
+somente backend/frontend de `sgi-usertest` foram recriados; PostgreSQL, Redis e
+volumes permaneceram ativos. As imagens efetivamente em execucao sao backend
+`sha256:598f73a8fc949493e25a919b4449992b6e40f5449b1bbd9ba6ba11ec710b929d` e
+frontend `sha256:7224856e167182dab7db87f49c69a92a2ba88bb1d4d445b5eace5666d8b57169`.
+Typecheck passou; Alembic `20261017_fixed_income_contracts (head)`,
+`/health=200`, `/ready=503` esperado, endpoint de contratos na OpenAPI e
+frontend `127.0.0.1:18080=200`. Nenhum teste foi adicionado ou executado. A
+validacao visual/funcional de agrupamento continua sendo o proximo bloco.
+
+O primeiro build combinado encerrou com `error reading from server: EOF` apos exportar e registrar as imagens. Apos reiniciar o Docker Desktop, o daemon voltou a responder; o backend foi reconstruido em comando isolado e os containers backend/frontend de `sgi-usertest` foram recriados. Backend healthy, PostgreSQL/Redis healthy, frontend `127.0.0.1:18080=200`; `/health=200`; rota no OpenAPI; exportacao sem autenticacao retorna 401. `/ready=503` e esperado para identidade sintetica. Alembic `20261017_fixed_income_contracts (head)`; PostgreSQL confirma zero transacoes e zero contratos.
+
+Identidade de origem: checkout `stable-15jun` em `5c4ad3906475316294196a826ff140cb3e4bf950`, tres commits a frente de `origin/stable-15jun` (`b37661921e3a8455f45c8b676b28955d6ad3d0ea`), confirmado tambem pela API GitHub em 18/10. Nao ha PR aberta. A arvore tem varias alteracoes locais preexistentes e as imagens incluem o estado de trabalho nao commitado; `APP_COMMIT_SHA` aponta apenas para o HEAD base. A stack principal nao foi rebuildada, migrada ou certificada.
+
+### Agrupamento RF - alinhamento documental e normalizacao - 18/10/2026
+
+A Issue #355 foi consultada: seus criterios ainda pedem seletor explicito,
+enquanto o fluxo atual e transparente e agrupa por equivalencia de termos na
+carteira. A divergencia esta documentada em `ROADMAP.md`; o tracker remoto nao
+foi alterado. Revisao do service encontrou que caixa do emissor e espacos
+repetidos em nome/emissor podiam impedir reuso. O schema agora colapsa espacos
+consecutivos e a equivalencia compara caixa de display_name e issuer sem
+sensibilidade a caixa; taxa, unidade, produto, datas, liquidez, tributacao e
+moeda continuam exatos. Treze testes focados passaram em SQLite em memoria,
+incluindo reuso, termos divergentes e isolamento entre carteiras. A validacao
+visual e o teste Vitest permanecem pendentes. Nenhuma escrita persistente foi
+realizada; volumes, DB principal e ledger foram preservados.
+
+### Imagem completa para testes assistidos - 18/10/2026
+
+A stack `sgi-usertest` recebeu ambas as imagens atuais: backend
+`sha256:93053a6fb003b46b84beaea359235033deb051f4cde3654904e436aaef1cba58` e
+frontend `sha256:86b034acfd1ae248af234f6dd97c926c9f74f57ecb8fed5e40d87a9d3a74e3ea`.
+O backend, DB e Redis estao saudaveis, Alembic em head, frontend e bundle 200,
+e OpenAPI contem contratos RF e exportacao CSV. A base segue sem transacoes,
+contratos ou eventos de certificacao. `/ready=503` permanece esperado em
+`ENVIRONMENT=testing` sem dataset real. Stack pronta para teste assistido; isso
+nao certifica dados reais. A stack principal nao foi atualizada, nenhum volume
+foi removido e nao houve publicacao em registry. A validacao visual pelo agente
+e o teste Vitest de prefill continuam sem conclusao.
+
+### Correção do destino de testes e publicação da imagem — 18/10/2026
+
+O runtime de validação com usuários é exclusivamente `sig-v2` via Cloudflare
+Tunnel (`https://sgi.lfconsultoria.dpdns.org`). O procedimento isolado
+`sgi-usertest` fica arquivado e não deve ser iniciado nem atualizado; seus
+containers foram parados sem remover volumes. A imagem do backend/frontend da
+stack `sig-v2` é o artefato que deve receber cada atualização.
+
+Inventário local: 34 arquivos modificados e 15 novos de produto, agrupados em
+importação/exportação CSV e metadados de renda fixa, vínculo de contratos ao
+ledger canônico, modal e associação automática, calculadora de rendimentos,
+migração Alembic, testes e documentação/governança. Os pacotes `.tmp-candidate-*`
+são artefatos locais e não entram no Git nem na imagem.
+
+Validação antes de publicação: backend focado 89/89; frontend Vitest 23/23;
+typecheck e build de produção aprovados. O Vitest detectou inicialmente falta
+de nome acessível no controle de vencimento; `aria-label="Vencimento"` foi
+adicionado e a suíte passou na repetição.
+
+O `.env` de execução já possui os tokens de provedores e do Tunnel; os valores
+não foram exibidos. `VITE_API_URL` permanece vazio para usar o proxy Nginx.
+Backup consistente pré-migration gerado como `pre-prod-backup.v3`, run
+`20261018-183455`, SHA-256 `476cedea77044ccf63198f39d540412538dcc0808deaf57053966fb34978548f`;
+nenhuma escrita no banco ocorreu no backup.
+
+Pendente ao registrar esta nota: publicar os commits locais em `stable-15jun`,
+definir o alvo runtime para `20261017_fixed_income_contracts`, atualizar apenas
+backend/frontend da stack `sig-v2` preservando banco/volumes e validar imagem,
+migration, API, `/health`, `/ready` e URL pública. A certificação atual pertence
+ao SHA/dataset/revision anteriores; não deve ser atribuída automaticamente à
+imagem nova.

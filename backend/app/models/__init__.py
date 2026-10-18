@@ -14,6 +14,7 @@ from app.models.corporate_event_reconciliation_evidence import (
     CorporateEventReconciliationEvidence,
 )
 from app.models.fx_rate import FxRate
+from app.models.fixed_income_contract import FixedIncomeContract
 from app.models.goal import Goal
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
@@ -43,6 +44,7 @@ __all__ = [
     "CorporateEvent",
     "CorporateEventReconciliationEvidence",
     "FxRate",
+    "FixedIncomeContract",
     "Goal",
     "Portfolio",
     "PortfolioClassSnapshot",

@@ -87,16 +87,23 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ### Dívidas financeiras/estruturais
 
 - #149 — TWR diário dedicado restante de Tesouro/RF; não blocker automático se indisponibilidade permanecer explícita;
-- #83 — Backup/Restore administrativo; reautenticação, auditoria, status dos
-  jobs, download autenticado e retenção já estão no código. Falta validar o
-  ciclo de backup e restore em banco isolado.
-- #272 — contração física residual de `corporate_events` e aliases relacionados.
+- #83 — concluída e fechada em 17/10/2026 após ensaio HTTP integrado de backup,
+  download autenticado e restore em bancos PostgreSQL descartáveis; worker
+  durável e teste frontend permanecem hardening futuro documentado.
+- #272 — contração física de `corporate_events` permanece bloqueada por
+  consumidores ativos: troca de ticker por carteira ainda usa os campos
+  históricos. Inventário estático em
+  `docs/CORPORATE_EVENTS_LEGACY_COLUMN_INVENTORY.md`; sem DDL ou consulta de
+  dados runtime.
 
 ### Segurança
 
 - #408 — sanitização integrada pela PR #413 e testes complementares pela
-  #419; CI aprovada. A última execução do deep scan precede essas correções,
-  então a confirmação CodeQL permanece pendente e a Issue segue aberta.
+  #419; CI aprovada. O comentário remoto da Issue registra deep scan verde e
+  findings ausentes na `stable-15jun`, enquanto o corpo ainda diz que essa
+  confirmação está pendente e cita a propagação para `main` como condição.
+  O conector disponível não expõe execuções manuais/schedule nem alertas
+  CodeQL; a evidência precisa ser reconciliada antes de encerrar a Issue.
 
 ### Evolução de produto
 
@@ -141,4 +148,94 @@ fechar somente com evidência ou Issue canônica substituta.
 
 #293 permanece aberta até essa correlação terminar.
 
+## Resultado da correlação GOV-07 — 17/10/2026
+
+Inventário GitHub ao vivo: 22 Issues abertas e nenhuma PR aberta. #83 está
+fechada; os demais itens foram correlacionados ao mapa abaixo. Nenhuma Issue
+aberta foi identificada como duplicada ou sem destino/documentação:
+
+- #408: sanitização implementada; permanece aberta pela evidência CodeQL
+  divergente/incompleta entre o corpo e comentário remoto, além da confirmação
+  de alertas em `stable-15jun` e `main`;
+- #149: TWR dedicado implementado; o regulamento B3 item 95 fixa a regra de
+  elegibilidade na manhã do pagamento, mas falta prova de posição custodiada
+  por carteira/conta e base tributável/IRRF por lote. Promoção de runtime é gate
+  operacional separado, não requisito de desenvolvimento da Issue;
+- #370: conflitos de eventos permanecem fora da projeção até evidência externa
+  de liquidação fracionária de KLBN11;
+- #272: contração física de schema, com inventário e janela DDL ainda exigidos;
+- #127/#130/#253: evolução futura de providers, enriquecimento e interface de
+  bootstrap; catálogo COTAHIST-first e engine system-bootstrap já existem;
+- #58/#90/#351 e #353: detalhe/UX. #353 já tem restauração global de scroll e
+  testes unitários; permanecem pendentes validação de uso desktop/mobile;
+- #246/#360/#361 e #97: Metas+Análise, Analysis Engine, IA e OAuth pós-GO;
+- #355-#358: taxonomia RF, paginação, exportação e import B3;
+- #359: frente A da calculadora de rendimentos está implementada e implantada
+  na stack de testes; quatro testes determinísticos, typecheck e build passaram.
+  Revisão visual desktop/mobile segue pendente; simulador tributário de Renda
+  Fixa permanece separado;
+- #284: backlog OCI fora do caminho local;
+- #293: governança; #353 permanece P2 e não bloqueia jornada crítica;
+- #83 não faz mais parte do inventário aberto.
+
+O mapa foi validado contra os contratos e artefatos atuais no checkout local
+`stable-15jun` (`5c4ad3906475316294196a826ff140cb3e4bf950`). O conector GitHub
+confirma `stable-15jun` sete commits à frente e zero atrás de `main`, mas não
+retorna o SHA da ponta da branch; `git ls-remote` falhou por indisponibilidade
+de rede e o SHA local ainda não foi encontrado no remoto. Portanto, a correlação
+está concluída para o snapshot disponível, mas #293 permanece aberta até o
+checkout documental ser publicado e a ponta remota ser reconciliada. Nenhuma
+alteração de runtime ou certificação foi feita.
+
 Baseline documental para iniciar GOV-06: `959d3edf051b37f18089936f8f142fd4d2958d43`.
+
+## Atualizacao factual — 17/10/2026
+
+O runtime foi consultado no Docker: backend healthy, imagem rotulada com o SHA `5c4ad3906475316294196a826ff140cb3e4bf950`, `ENVIRONMENT=production`, branch `stable-15jun`, dataset `pre-prod-backup.v3:sha256:7d97c52de9ae58ad457f3ffe25055a9963a6a0dea4c9690b8dc72f900fa7133e`, Alembic `20261016_corp_ev_effective_date` e `/ready=200` (`ready_for_real_data=true`, evento 6 persistido). A certificacao vale somente para essa identidade.
+
+O checkout/runtime estao em `5c4ad3906475316294196a826ff140cb3e4bf950`; `origin/stable-15jun` local permanece em `b37661921e3a8455f45c8b676b28955d6ad3d0ea` (tres commits atras). O SHA remoto vivo nao foi confirmado e nenhum push foi feito. Quatro itens `.tmp-candidate-*` preexistentes foram preservados.
+
+Issues #83, #293 e #408 foram consultadas ao vivo e permanecem abertas. A prova recente de #83 cobre backup/restore por funcoes de servico e reconciliacao estrutural em banco descartavel, mas nao autentica/audita/consulta status via API administrativa. #408 aguarda confirmacao CodeQL posterior as correcoes. GOV-07/#293 aguarda correlacao final do inventario integral. Esses status prevalecem sobre fotografias anteriores neste documento; os registros historicos permanecem preservados.
+
+Qualquer novo SHA implantado exige novo backup v3, restore, proof, gates e dry-run vinculados a identidade nova. A promocao anterior certifica apenas `5c4ad390`.
+## Estado das Issues prioritarias — 17/10/2026
+
+- #83: concluida e fechada apos ensaio HTTP ponta a ponta em bancos PostgreSQL descartaveis; documentacao em `docs/ADMIN_BACKUP_RESTORE_REHEARSAL.md`.
+- #408: aberta ate confirmacao CodeQL posterior as correcoes integradas.
+- #293: GOV-07 aberto; proximo bloco apos #408, sem reabrir o trabalho da #83.
+
+Os inventarios e agrupamentos anteriores neste documento sao snapshots datados; esta secao registra a mudanca posterior confirmada no GitHub.
+
+## Validacao da entrega #359 - 17/10/2026
+
+A primeira frente da calculadora de rendimentos foi reconstruida na stack isolada `sgi-usertest`. Quatro testes deterministas, typecheck e build frontend passaram; rota e asset responderam HTTP 200. A revisao visual desktop/mobile permanece pendente por indisponibilidade do navegador integrado. A imagem incorpora alteracoes locais nao commitadas e serve somente para testes assistidos; nao e certificacao para dados reais. Evidencias e digests em `docs/USER_TEST_STACK.md` e `docs/TOOLS_CALCULATORS.md`.
+
+## Bloco de inventario #355 - 17/10/2026
+
+O inventario estatico de schema, API, formulario, CSV, valuation e consumidores
+foi registrado em `docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`, incluindo proposta
+preliminar e revisao dos caminhos de escrita. Metadados de contrato ainda sao
+serializados em `notes`; `transactions` segue como ledger canonico e a tabela
+de projecao antiga foi removida irreversivelmente. A FK nullable parece
+compativel se ownership/classe forem validados e criacoes legadas continuarem
+suportadas. A auditoria DB-only em `sgi-usertest` encontrou zero transacoes,
+portanto o proximo passo e preparar massa sintetica antes da implementacao em
+banco descartavel. A auditoria remota de setembro nao e estado atual. Nenhum
+dado ou runtime foi alterado neste bloco.
+
+### Atualizacao da Issue #355 - 18/10/2026
+
+A anotacao de 17/10 acima e um snapshot historico: desde entao, metadados
+estruturados, FK opcional, API/writer, formulario e CSV foram implementados.
+Novos registros de Renda Fixa associam os metadados no writer canonico e
+reutilizam automaticamente contrato equivalente dentro da mesma carteira; nao
+ha escolha de ID interno na jornada normal. A equivalencia normaliza espacos e
+caixa de nome/emissor e preserva igualdade exata dos outros termos. Os 13
+testes focados passaram; o banco `sgi-usertest` permaneceu vazio. O teste
+Vitest de prefill nao concluiu e validacao visual desktop/mobile segue pendente.
+
+O corpo remoto da #355 ainda contem o criterio antigo de seletor explicito.
+Antes de fechar a Issue, atualizar esse criterio para associacao transparente,
+marcar os criterios demonstrados e deixar a validacao visual como pendencia. O
+tracker remoto nao foi alterado porque este bloco priorizou a implementacao e
+alinhamento local; nenhuma conclusao remota foi publicada.
