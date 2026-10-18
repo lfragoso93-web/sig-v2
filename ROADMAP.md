@@ -430,3 +430,11 @@ Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, chec
 - O simulador #359 escolhe o tipo de cada titulo e deriva a aliquota sem perguntar ao usuario se o produto e isento.
 - Testes: frontend 31/31; backend `test_fixed_income_contract_service.py` 20/20; `npm run typecheck` aprovado. Imagens atualizadas e publicadas em `sig-v2` no commit `8391474917684caa4e92f30d8b7c00cdb7ac5a28`; `/health=200`, rota/bundle publicos 200 e Alembic head. `/ready=503` continua associado a identidade de certificacao anterior; nenhum evento foi promovido. DB, Redis, volumes e Tunnel preservados.
 - Limite: classificacao por tipo nao transmite a declaracao IRPF nem substitui informe financeiro; isencoes dependem do enquadramento legal. Validacao visual depende de browser conectado.
+
+## Rebaseline de validacao - 18/10/2026
+
+- A stack unica sig-v2 esta em execucao: backend, PostgreSQL e Redis healthy; Tunnel e frontend ativos; /health=200; Alembic esta em head.
+- Eventos corporativos tem rotas e UI implementadas. Os testes focados passaram (backend 80/80, frontend 6/6). No banco, 125 eventos: 121 UNRECONCILED, 3 CONFLICT, 1 MATCHED canonico; tres conflitos incidem em datas de posicao de AMOB3/KLBN11 e sao excluidos da projecao. NIKE34 tem dois eventos B3 sem data efetiva. A coleta nao roda em job recorrente.
+- A Issue #370 permanece aberta ate existir evidencia externa para KLBN11. Este e um limite factual dos dados: nao alterar fator/data nem autorizar liquidacao sem documento de custodia/corretora.
+- /ready=503 por divergencia do evento persistido de certificacao em commit, dataset e revisao Alembic. Conforme decisao do usuario, esse estado nao e tratado como gate para desenvolvimento e testes assistidos; nenhum evento de certificacao foi promovido neste bloco.
+- O proximo bloco deve reconciliar as posicoes atuais com a cobertura de precos e definir plano por escopo, depois executar smoke autenticado de Proventos, IRPF e lifecycle. Nenhuma sincronizacao de provider foi executada nesta rodada.

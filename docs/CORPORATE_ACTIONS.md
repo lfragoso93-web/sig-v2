@@ -162,3 +162,21 @@ validação antes de receber SHA de candidato. KLBN11 permanece em `CONFLICT` at
 evidência de custodiante/corretora para quantidade, preço de liquidação e
 tratamento de caixa. A lacuna de NIKE34 deve ser tratada por ativo sob a política
 B3, sem seed global e sem inferir data, caixa ou liquidação.
+
+## Auditoria do runtime publicado - 18/10/2026
+
+Esta validacao posterior substitui o retrato de publicacao de 16/10 acima para o estado operacional. O Compose sig-v2 esta ativo: backend, PostgreSQL e Redis healthy; frontend e Cloudflare Tunnel em execucao. Backend /health=200, Alembic 20261017_fixed_income_contracts (head). Nenhuma sincronizacao, reconciliacao nem escrita de dados financeiros foi feita.
+
+### Cobertura funcional verificada
+
+- O OpenAPI publicado expoe as rotas de lifecycle do ativo e de fracoes pendentes. GETs sem sessao responderam 401, confirmando autenticacao; a jornada autenticada nao foi exercitada nesta auditoria.
+- O leitor canonico exclui eventos novos sem MATCHED, sem is_canonical ou com requires_review=true; a compatibilidade legacy segue separada. A projecao nao altera o ledger.
+- Testes backend focados em elegibilidade, leitor, snapshots, lifecycle, reconciliacao e migration: 80 passaram. Testes de UI do detalhe do ativo e painel de fracoes: 6 passaram.
+- O catalogo runtime tem 125 eventos: 121 UNRECONCILED, 3 CONFLICT e 1 MATCHED elegivel. Dois eventos B3 de NIKE34 permanecem sem effective_date. Ha tres conflitos em datas com posicao registrada: AMOB3 (evento 12, 28/05/2025) e KLBN11 (eventos 81/82, 17-18/12/2025). Eles ficam fora da projecao por politica; seus efeitos historicos nao estao reconciliados.
+- O scheduler nao sincroniza eventos corporativos de forma recorrente. A coleta ocorre pelo bootstrap explicitamente autorizado; a politica evita escrita externa implicita em runtime. Os registros mais recentes no catalogo sao de 16/10 para B3 e 22/09 para BRAPI/Yahoo, portanto a atualidade de provedores precisa de uma auditoria/execucao escopada antes de qualquer conclusao de cobertura completa.
+
+### Limites e proximos passos
+
+/ready=503 indica incompatibilidade da identidade persistida de certificacao nos campos commit, dataset e revisao Alembic. O bloqueio e do contrato de readiness para dados reais; backend e interface seguem em funcionamento para a stack atual. Nenhuma certificacao foi renovada neste bloco.
+
+A Issue #370 continua aberta pela falta de evidencia externa de liquidacao de KLBN11. Nao converter conflitos em MATCHED nem corrigir fatores/datas por suposicao. Proxima validacao funcional: executar os GETs de lifecycle com uma sessao de teste autorizada e revisar os tres conflitos junto de extrato de custodia/corretora; completar a lacuna de data efetiva de NIKE34 com calendario oficial antes de considerar esse evento elegivel.

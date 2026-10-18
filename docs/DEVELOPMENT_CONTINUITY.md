@@ -477,3 +477,15 @@ Isso cobre a ultima sessao de bolsa ate 18/10, domingo; nao e cotacao em tempo
 real, e nao prova frescor diario de cripto durante o fim de semana. O proximo
 bloco deve reconciliar somente posicoes atuais com a cobertura global e montar
 um plano de sincronizacao por escopo, sem executar escrita nesta auditoria.
+
+## Validacao de eventos corporativos e estado operacional - 18/10/2026
+
+Checkout stable-15jun em 23c0df2de342868ce989c45993fbd1e75bf39eb4, igual a origin/stable-15jun; runtime de produto segue no commit 8391474917684caa4e92f30d8b7c00cdb7ac5a28, com imagem backend sha256:35970f9574348e8d7199354694130d9e3a8997de868ae2a2ba711f6515436cfd e frontend sha256:f9f2b1f24ef85654f67e68f5fc5abc7f4bfacf36b104ef1cbd6539dae9a6a9d9. Somente documentacao mudou neste bloco; nao houve rebuild nem alteracao do runtime.
+
+Backend, PostgreSQL e Redis healthy; Tunnel e frontend em execucao; /health=200 e Alembic 20261017_fixed_income_contracts (head). /ready=503 segue identity_mismatch para commit, dataset e revisao; nenhuma promocao ou escrita de certificacao foi feita. O endpoint de readiness nao foi usado como criterio de saude da interface para testes assistidos.
+
+Eventos corporativos: 125 registros persistidos, 121 UNRECONCILED, 3 CONFLICT, 1 MATCHED canonico e sem revisao. Tres conflitos ocorrem em datas em que havia operacao/posicao na carteira: AMOB3 e KLBN11; permanecem fora da projecao por desenho fail-closed. Dois eventos B3 de NIKE34 nao tem data efetiva. Nao ha job recorrente de coleta de eventos; a coleta e um estagio de bootstrap opt-in. A Issue #370 permanece aberta pela evidencia externa de KLBN11.
+
+Validacao: 80 testes backend e 6 testes frontend focados em projecao, reconciliacao, lifecycle e fracoes passaram. As rotas aparecem na OpenAPI; GETs sem sessao responderam 401, entao a chamada autenticada via jornada de usuario permanece pendente. Auditoria PostgreSQL em transacao READ ONLY; nenhum dado financeiro foi escrito e nenhum provider foi chamado.
+
+Proximo bloco: auditoria escopada das posicoes atuais versus cobertura de precos, plano de sincronizacao sem execucao implicita, e smoke autenticado das rotas de Proventos, IRPF e eventos. Para fechar eventos, obter evidencia de custodiante antes de qualquer reconciliacao e registrar a data efetiva oficial de NIKE34.
