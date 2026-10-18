@@ -404,15 +404,15 @@ A validação visual desktop/mobile continua pendente. O runtime do navegador fo
 inicializado, mas nenhum navegador conectado foi disponibilizado nesta sessão.
 Não foi feita interação nem escrita na aplicação por navegador.
 
-A consulta remota à Issue #355 confirmou que seus critérios ainda pedem um
+A consulta remota à Issue #355 confirmou que seus critérios ainda pediam um
 seletor explícito de contrato, enquanto o produto atual associa automaticamente
-por equivalência e pré-carrega os termos pelo Resumo. A Issue permanece aberta
-até seus critérios serem alinhados; não foi editada remotamente nesta rodada.
-Também foi confirmado que #359 contém uma segunda frente de comparação de Renda
-Fixa, ainda sem premissas tributárias detalhadas. Não avançar para cálculo de IR
-sem essas regras. O roadmap agora aponta a validação visual/critério de aceite
-como fechamento de #355 e mantém a frente B de #359 condicionada a essas
-premissas.
+por equivalência e pré-carrega os termos pelo Resumo. Os critérios foram
+atualizados no GitHub para refletir esse fluxo; a Issue permanece aberta somente
+para validação visual e acessível. Também foi confirmado que #359 contém uma
+segunda frente de comparação de Renda Fixa, ainda sem premissas tributárias
+detalhadas. Não avançar para cálculo de IR sem essas regras. O roadmap aponta a
+validação visual como fechamento de #355 e mantém a frente B de #359
+condicionada a essas premissas.
 
 Nenhum dado do ledger foi escrito. A imagem existente de `sig-v2` permanece a
 publicada; esta rodada alterou apenas documentação local e executou testes

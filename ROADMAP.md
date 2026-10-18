@@ -10,8 +10,8 @@
 - A entrega de contratos de Renda Fixa (#355) está implementada e publicada:
   metadados, associação automática por termos equivalentes, prefill do Resumo,
   Tesouro, CSV e migration aditiva. `transactions` segue como ledger único.
-- O próximo passo de #355 é validação assistida visual quando o navegador
-  estiver disponível e alinhamento dos critérios remotos de aceite com a UX
+- O próximo passo de #355 é validação assistida visual e acessível quando o
+  navegador estiver disponível. Os critérios remotos já foram alinhados à UX
   transparente. O teste focado de `AddTransactionModal` passou (15/15).
 - A frente A de #359 (calculadora de rendimentos) está implementada. A frente B
   (simulação de Renda Fixa com tributação) fica pendente de premissas fiscais
@@ -21,7 +21,7 @@
 
 ## Estado publicado do ambiente — 18/10/2026
 
-- Branch `stable-15jun`, remoto sincronizado com o commit `826c74ce`.
+- Branch `stable-15jun`, remoto sincronizado com o commit `77fb237b`.
 - Backend e frontend atuais foram aplicados ao projeto Compose existente
   `sig-v2`; banco, Redis e volumes foram preservados. Evidência e digests estão
   em `docs/DEVELOPMENT_CONTINUITY.md`.
