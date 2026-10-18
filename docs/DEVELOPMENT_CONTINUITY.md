@@ -445,3 +445,15 @@ Leitura dos logs recentes do backend, sem escrita de dados:
 - Precos: a leitura financeira e DB-first, sem cotacao ao vivo na abertura das paginas. Logs registraram preco ausente na data `2026-10-17` para ADA, ALOS3, AREA11, BTC, DIVD11, E1CO34, ETH, NIKE34, NVDC34 e POMO4. Isso nao prova que os demais ativos estejam todos atualizados; a cobertura e o ultimo sync precisam de auditoria dedicada.
 
 Testes focados do hook/painel: 5/5; typecheck e build de producao aprovados. Publicar o frontend corrigido em `sig-v2` depois do commit. Nenhuma alteracao de backend ou escrita em dados financeiros.
+
+Confirmacao apos publicacao do bloco de Proventos (18/10/2026): commit
+`4509d3e480df07836af8064dbb6fb7029ce9ca05` enviado a `stable-15jun` e aplicado
+na imagem `sig-v2-frontend:latest`, ID
+`sha256:f9f2b1f24ef85654f67e68f5fc5abc7f4bfacf36b104ef1cbd6539dae9a6a9d9`.
+A URL antiga `/api/v1/dividends?portfolio_id=15` respondeu 404; a rota
+`/api/v1/portfolios/15/dividends` respondeu 401 sem autenticacao, confirmando
+que o backend reconhece o caminho e exige sessao. As paginas Proventos, IRPF e
+Simulador RF responderam HTTP 200, assim como o bundle `index-Co5T9z9c.js`.
+Backend, DB e Redis permanecem healthy; Tunnel ativo; so o frontend foi
+recriado. A chamada autenticada pelo fluxo real nao foi exercitada nesta
+verificacao.
