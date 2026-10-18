@@ -356,10 +356,37 @@ rota de contratos e exportação CSV, URL pública `200`; Alembic chegou a
 `20261017_fixed_income_contracts`. `/ready=503` por divergência de SHA e
 revision com o evento antigo, sem reaproveitar certificação.
 
-O backup pós-migration foi bloqueado corretamente pelo inventário, que marcou
-`fixed_income_contracts` como tabela desconhecida (vazia, 0 linhas). A tabela é
-metadado de contrato informado pelo usuário, ligado ao ledger, e foi classificada
-como `preserved`; o teste da política passou (19/19). Nenhuma escrita financeira
-ocorreu nessa auditoria. A correção precisa ser publicada e aplicada à imagem
-backend `sig-v2` antes de repetir o backup pós-migration e atualizar a referência
-do dataset no `.env`.
+O primeiro backup pós-migration foi bloqueado corretamente pelo inventário, que
+marcou `fixed_income_contracts` como tabela desconhecida (vazia, 0 linhas). A
+tabela é metadado de contrato informado pelo usuário, ligado ao ledger, e foi
+classificada como `preserved`; o teste da política passou (19/19). Nenhuma
+escrita financeira ocorreu nessa auditoria.
+
+#### Publicação concluída e validação do Tunnel — 18/10/2026
+
+A correção de inventário foi publicada no commit `82e896e146152f85dcd31610f169e3483545e2af`.
+A imagem backend foi reconstruída e aplicada à stack `sig-v2`; digest efetivo
+`sha256:4a69a849f2e66ede2934970ef45ec46bd303bfa0eb34ec3049c8184f258bb2d0`. O
+frontend permanece no digest `sha256:8acaec4d92bc6e4588c73b2e129efcdc131bfc24a565aa2cca70609b3d45b4fb` e serve o bundle
+`/assets/index-CIYn_A9s.js`. A imagem exibe SHA completo
+`82e896e146152f85dcd31610f169e3483545e2af`.
+
+O inventário final read-only retornou 26 tabelas, 4.440.517 linhas,
+`unclassified_tables=0`, `blocking_findings=0` e zero escritas. O backup
+consistente pós-migration `20261018-184424` foi validado; SHA-256
+`24349a92bdbc024a633e5a6a662dbf63d19f52780e626fc4da928206f5d33ade`. A CLI
+derivou `REAL_DATASET_REFERENCE=pre-prod-backup.v3:sha256:24349a92bdbc024a633e5a6a662dbf63d19f52780e626fc4da928206f5d33ade`; o `.env` local
+está alinhado com esse valor, `APP_COMMIT_SHA=82e896e146152f85dcd31610f169e3483545e2af` e
+`RUNTIME_MIGRATION_TARGET=20261017_fixed_income_contracts`. Os tokens de
+providers e Tunnel continuam configurados e não foram exibidos.
+
+Validação final: DB, Redis e backend healthy; `/health=200`; Alembic
+`20261017_fixed_income_contracts`; OpenAPI inclui contrato de renda fixa e
+exportação CSV; URL pública e bundle JS retornam 200; sem erros DNS recentes no
+Tunnel. `sgi-usertest` está parado, sem containers ativos; volumes foram
+preservados e seu compose dedicado foi removido do checkout.
+
+`/ready=503` com `identity_mismatch` nos campos `commit_sha`,
+`dataset_reference` e `alembic_revision`, pois o evento de certificação existente
+pertence à identidade anterior. Nenhum novo evento foi promovido; readiness
+permanece fail-closed e a imagem pode ser validada pelos usuários pelo Tunnel.
