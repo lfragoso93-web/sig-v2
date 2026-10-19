@@ -29,7 +29,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Gera um plano dry-run-first para reparar identidade semantica "
-            "historica de eventos corporativos BRAPI."
+            "historica de eventos corporativos BRAPI ou B3."
         )
     )
     parser.add_argument("--event-id", type=int, action="append", required=True)

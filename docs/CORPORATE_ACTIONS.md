@@ -308,3 +308,49 @@ invalido ou tipo sem regra. Estado global apos a aplicacao: 2 `MATCHED`, 3
 reparo semantico atual, que aceita apenas eventos BRAPI e nao corrige a
 identidade/fator B3; manter fora da projecao ate implementar esse fluxo e
 repetir backup, dry-run e preflight.
+
+### Revisao integral de UNRECONCILED - 18/10/2026
+
+O inventario read-only encontrou 120 linhas `UNRECONCILED`: 119 eventos
+globais (`B3=1`, `BRAPI=46`, `Yahoo=72`) e uma troca de ticker PETZ3/AUAU3
+limitada a carteira. Todos possuem `asset_id`; eventos globais usam
+`portfolio_id=NULL`. O leitor mantem os 119 eventos globais fora da projecao
+enquanto nao houver reconciliacao.
+
+O retorno oficial B3 foi coletado novamente pelo adaptador implantado. Em 16
+tickers o payload normalizou; 4 falharam fechado: BBDC3/RANI3 por fator
+invalido e PETZ3/SANB11 por labels `INCORPORACAO`/`CIS RED CAP` sem regra de
+quantidade. O cruzamento encontrou 19 registros com tipo, record date e fator
+iguais ao retorno B3; tambem apontou divergencias e 16 acoes sem linha
+correspondente em `UNRECONCILED`. Destas, 9 sao subscricoes (direitos, sem
+aumento automatico de quantidade); das outras 7, uma e o evento 165 NIKE34 ja
+`MATCHED` e seis ainda exigem avaliacao de identidade/data efetiva. Nenhuma foi
+inserida nesta auditoria.
+
+Cinco linhas BRAPI tem `raw_metadata.label` igual a `INCORPORACAO`,
+`CIS RED CAP` ou `RESG TOTAL RV`, mas o tipo persistido e `BONIFICACAO`; seguem
+fora da projecao e precisam de correcao tipada ou quarentena. Ha seis linhas
+BRAPI com fator bruto >=50, uma linha Yahoo GOAU4 com fator 100 e o evento B3
+164 NIKE34 com fator persistido 900. O conector B3 normaliza NIKE34 para fator
+10, que coincide com o Yahoo NIKE34 de 09/02/2021. Identidade e fator legado do
+evento 164 ainda exigem reparo.
+
+Ha 10 pares BRAPI/Yahoo com mesmo tipo e fator e datas separadas por 1 a 3 dias.
+O B3 confirma varios record dates BRAPI; as datas Yahoo ficam a 1-3 dias, muitas
+vezes no pregao seguinte. Assim, `effective_date` atualmente igual a `event_date` nao esta
+comprovado para as linhas BRAPI. Um preflight SQL somente leitura nao encontrou
+posicoes positivas nas datas hoje persistidas para os eventos BRAPI/Yahoo; isso
+nao substitui novo preflight depois de resolver a data efetiva oficial.
+
+O reparo semantico B3 foi ampliado para aceitar somente evento global
+`UNRECONCILED` com label de split/grupamento, `record_date` coerente, ISIN bruto
+igual ao ISIN persistido e fator bruto igual ao fator legado. Recalcula fator,
+`ratio`, identidade e hash de origem; preserva status, revisao e data efetiva.
+Assim, o dry-run do evento 164 pode propor fator 10 sem promover o evento.
+Reconciliacao e data efetiva continuam operacoes posteriores e separadas.
+
+Conclusao: nao promover em lote os 119 eventos globais. Proximas acoes seguras:
+reparar semanticamente o evento 164 sob backup; classificar labels nao
+quantitativos e fatores extremos; resolver datas por calendario/registro
+oficial; manter os 10 pares de provedores separados ate validacao por ISIN e
+evento economico. Nenhuma escrita foi feita nesta auditoria.
