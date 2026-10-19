@@ -239,57 +239,107 @@ def normalize_yahoo_splits(
 def normalize_b3_corporate_actions(
     ticker: str,
     payload: dict[str, Any],
+    *,
+    expected_isin: str | None = None,
 ) -> tuple[NormalizedCorporateAction, ...]:
-    """Normalize official B3 stock dividends and subscriptions."""
+    """Normalize official B3 actions for one identified security class."""
     ticker = ticker.strip().upper()
     if not ticker:
         raise CorporateActionNormalizationError("ticker ausente")
-    actions: list[NormalizedCorporateAction] = []
-    for field, default_kind in (
-        ("stockDividends", CorporateActionKind.STOCK_BONUS),
-        ("subscriptions", CorporateActionKind.SUBSCRIPTION),
-    ):
+
+    expected_isin = expected_isin.strip().upper() if expected_isin else None
+    source_rows: list[tuple[str, dict[str, Any]]] = []
+    reported_isins: set[str] = set()
+    for field in ("stockDividends", "subscriptions"):
         rows = payload.get(field)
         if not isinstance(rows, list):
             raise CorporateActionNormalizationError(f"B3 {field} deve ser lista")
         for raw in rows:
             if not isinstance(raw, dict):
                 raise CorporateActionNormalizationError(f"B3 {field} item invalido")
-            label = str(raw.get("label") or "").strip().upper()
-            kind = default_kind
-            if field == "stockDividends":
-                if "GRUPAMENTO" in label:
-                    kind = CorporateActionKind.REVERSE_SPLIT
-                elif "DESDOBRAMENTO" in label or "SPLIT" in label:
-                    kind = CorporateActionKind.SPLIT
-            try:
-                event_date = parse_b3_date(raw.get("lastDatePrior") or raw.get("exDate"))
-            except Exception as exc:
+            row_isin = str(raw.get("isinCode") or "").strip().upper()
+            if not row_isin:
+                raise CorporateActionNormalizationError(f"B3 {field}.isinCode ausente")
+            reported_isins.add(row_isin)
+            source_rows.append((field, raw))
+
+    if expected_isin is None and len(reported_isins) > 1:
+        raise CorporateActionNormalizationError(
+            "B3 retornou varias classes; expected_isin obrigatorio"
+        )
+    if expected_isin and reported_isins and expected_isin not in reported_isins:
+        raise CorporateActionNormalizationError(
+            "B3 nao retornou acao identificada pelo ISIN esperado"
+        )
+
+    actions: list[NormalizedCorporateAction] = []
+    for field, raw in source_rows:
+        row_isin = str(raw.get("isinCode") or "").strip().upper()
+        if expected_isin and row_isin != expected_isin:
+            continue
+        label = str(raw.get("label") or "").strip().upper()
+        kind = (
+            CorporateActionKind.SUBSCRIPTION
+            if field == "subscriptions"
+            else CorporateActionKind.STOCK_BONUS
+        )
+        if field == "stockDividends":
+            if "GRUPAMENTO" in label:
+                kind = CorporateActionKind.REVERSE_SPLIT
+            elif "DESDOBRAMENTO" in label or "SPLIT" in label:
+                kind = CorporateActionKind.SPLIT
+            elif "BONIFICACAO" not in label:
                 raise CorporateActionNormalizationError(
-                    f"B3 {field}.lastDatePrior invalido"
-                ) from exc
+                    f"B3 stockDividends.label nao suportado: {label or 'ausente'}"
+                )
+        try:
+            event_date = parse_b3_date(raw.get("lastDatePrior") or raw.get("exDate"))
+        except Exception as exc:
+            raise CorporateActionNormalizationError(
+                f"B3 {field}.lastDatePrior invalido"
+            ) from exc
+        factor = Decimal(1)
+        if kind != CorporateActionKind.SUBSCRIPTION:
+            raw_factor = _positive_decimal(
+                raw.get("factor"), field=f"B3 {field}.factor"
+            )
+            # B3 reports percentage for free share increases (bonus/split)
+            # and a direct quantity multiplier for reverse splits.
             factor = (
-                _positive_decimal(raw.get("factor"), field=f"B3 {field}.factor")
-                if kind != CorporateActionKind.SUBSCRIPTION
-                else Decimal(1)
+                Decimal(1) + raw_factor / Decimal(100)
+                if kind in {
+                    CorporateActionKind.STOCK_BONUS,
+                    CorporateActionKind.SPLIT,
+                }
+                else raw_factor
             )
-            raw_payload = {
-                **raw,
-                "sourcePage": "B3 Listed Companies",
-                "sourceIssuer": payload.get("code"),
-                "sourceIsin": raw.get("isinCode"),
-                "sourceOfficialRecordDate": str(raw.get("lastDatePrior") or ""),
-                "effectiveDateResolution": "unresolved_until_b3_trading_calendar",
-            }
-            source_event_id = _event_id(
-                source="b3", ticker=ticker, kind=kind,
-                event_date=event_date, quantity_factor=factor, payload=raw_payload
-            )
-            actions.append(NormalizedCorporateAction(
-                source="b3", source_event_id=source_event_id, ticker=ticker,
-                event_date=event_date, kind=kind, quantity_factor=factor,
-                raw_payload=raw_payload,
-            ))
+        raw_payload = {
+            **raw,
+            "sourcePage": "B3 Listed Companies",
+            "sourceIssuer": payload.get("code"),
+            "sourceIsin": raw.get("isinCode"),
+            "sourceOfficialRecordDate": str(raw.get("lastDatePrior") or ""),
+            "sourceFactorConvention": (
+                "subscription_right_not_auto_applied"
+                if kind == CorporateActionKind.SUBSCRIPTION
+                else "percentage_increase"
+                if kind in {
+                    CorporateActionKind.STOCK_BONUS,
+                    CorporateActionKind.SPLIT,
+                }
+                else "quantity_multiplier"
+            ),
+            "effectiveDateResolution": "unresolved_until_b3_trading_calendar",
+        }
+        source_event_id = _event_id(
+            source="b3", ticker=ticker, kind=kind,
+            event_date=event_date, quantity_factor=factor, payload=raw_payload
+        )
+        actions.append(NormalizedCorporateAction(
+            source="b3", source_event_id=source_event_id, ticker=ticker,
+            event_date=event_date, kind=kind, quantity_factor=factor,
+            raw_payload=raw_payload,
+        ))
     return tuple(sorted(actions, key=lambda item: (item.event_date, item.source_event_id)))
 
 

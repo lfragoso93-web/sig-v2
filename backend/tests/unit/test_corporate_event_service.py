@@ -27,6 +27,7 @@ def _asset(asset_type="ACAO"):
         ticker="AERI3",
         brapi_ticker=None,
         asset_type=asset_type,
+        isin_code="BRAERIACNOR0",
     )
 
 
@@ -54,7 +55,7 @@ async def test_sync_persists_only_b3_events_for_listed_assets() -> None:
         assert ticker == "AERI3" and asset_type == "ACAO"
         return {
             "code": "AERI", "stockDividends": [{
-                "label": "BONIFICACAO", "factor": "1.05",
+                "label": "BONIFICACAO", "factor": "5",
                 "lastDatePrior": "03/01/2023", "isinCode": "BRAERIACNOR0",
             }], "subscriptions": [],
         }
@@ -109,8 +110,8 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
     async def b3_fetcher(ticker: str, asset_type: str):
         return {
             "code": "AERI", "stockDividends": [{
-                "label": "BONIFICACAO", "factor": "1.05",
-                "lastDatePrior": "03/01/2023",
+                "label": "BONIFICACAO", "factor": "5",
+                "lastDatePrior": "03/01/2023", "isinCode": "BRAERIACNOR0",
             }], "subscriptions": [],
         }
 

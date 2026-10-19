@@ -16,6 +16,7 @@ from app.integrations.b3_listed_companies import (
 )
 from app.services.corporate_action_engine import (
     CorporateActionKind,
+    CorporateActionNormalizationError,
     normalize_b3_corporate_actions,
 )
 from app.services.pre_prod_dividends_seed_providers import StrictB3DividendProvider
@@ -163,3 +164,83 @@ def test_b3_grouping_action_keeps_official_record_date_and_isin() -> None:
     assert action.event_date == date(2026, 10, 9)
     assert action.raw_payload["isinCode"] == "BRNIKEBDR006"
     assert action.raw_payload["effectiveDateResolution"] == "unresolved_until_b3_trading_calendar"
+
+
+def test_b3_share_actions_convert_percentages_and_filter_by_isin() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [
+            {
+                "label": "BONIFICACAO", "factor": "4", "lastDatePrior": "01/02/2025",
+                "isinCode": "BRTESTACNOR0",
+            },
+            {
+                "label": "DESDOBRAMENTO", "factor": "100", "lastDatePrior": "02/03/2025",
+                "isinCode": "BRTESTACNPR7",
+            },
+            {
+                "label": "GRUPAMENTO", "factor": "0.02", "lastDatePrior": "03/04/2025",
+                "isinCode": "BRTESTACNOR0",
+            },
+        ],
+        "subscriptions": [],
+    }
+
+    actions = normalize_b3_corporate_actions(
+        "TEST3", payload, expected_isin="brtestacnor0"
+    )
+
+    assert [action.quantity_factor for action in actions] == [
+        Decimal("1.04"), Decimal("0.02")
+    ]
+    assert [action.kind for action in actions] == [
+        CorporateActionKind.STOCK_BONUS,
+        CorporateActionKind.REVERSE_SPLIT,
+    ]
+    assert all(action.raw_payload["sourceFactorConvention"] in {
+        "percentage_increase", "quantity_multiplier"
+    } for action in actions)
+
+
+def test_b3_split_percentage_converts_to_quantity_multiplier() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [{
+            "label": "DESDOBRAMENTO", "factor": "300", "lastDatePrior": "01/02/2025",
+            "isinCode": "BRTESTACNOR0",
+        }],
+        "subscriptions": [],
+    }
+
+    action, = normalize_b3_corporate_actions("TEST3", payload)
+
+    assert action.kind == CorporateActionKind.SPLIT
+    assert action.quantity_factor == Decimal("4")
+
+
+def test_b3_multi_class_payload_requires_expected_isin() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [
+            {"label": "BONIFICACAO", "factor": "5", "lastDatePrior": "01/02/2025", "isinCode": "BRTESTACNOR0"},
+            {"label": "BONIFICACAO", "factor": "5", "lastDatePrior": "01/02/2025", "isinCode": "BRTESTACNPR7"},
+        ],
+        "subscriptions": [],
+    }
+
+    with pytest.raises(CorporateActionNormalizationError, match="expected_isin"):
+        normalize_b3_corporate_actions("TEST3", payload)
+
+
+def test_b3_unknown_stock_action_label_fails_closed() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [{
+            "label": "CIS RED CAP", "factor": "100", "lastDatePrior": "01/02/2025",
+            "isinCode": "BRTESTACNOR0",
+        }],
+        "subscriptions": [],
+    }
+
+    with pytest.raises(CorporateActionNormalizationError, match="label nao suportado"):
+        normalize_b3_corporate_actions("TEST3", payload)

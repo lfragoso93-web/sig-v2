@@ -241,10 +241,52 @@ mas nao resolvem por si so data efetiva, fracao/liquidacao ou a elegibilidade de
 cada carteira. AMOB3 IDs 12/13 e KLBN11 IDs 81/82 mantem seus estados atuais; o
 conector nao gravou, promoveu, ocultou nem aplicou nenhum evento.
 
-Proximo passo obrigatorio antes de nova coleta com escrita: corrigir a
-normalizacao percentual, filtrar ou rejeitar linhas cujo ISIN nao corresponda
-ao ativo e rejeitar payloads incompletos sem descartar silenciosamente os dados.
-Depois, repetir dry-run, gerar backup consistente e validar os efeitos por
-ledger e politica de fracao antes de qualquer promocao ou projeção. O estado
+### Correcao local do normalizador - 18/10/2026
+
+O normalizador agora converte bonificacao/desdobramento percentual em
+multiplicador, conserva grupamento como multiplicador, restringe eventos ao
+ISIN atual do ativo e falha fechado quando ha classe ambigua ou tipo nao
+suportado. Subscricoes ficam identificadas como direito sem efeito automatico
+na quantidade. Um novo dry-run foi feito para os mesmos 21 tickers: 17 payloads
+passaram; BBDC3 e RANI3 continuam bloqueados por fator invalido; PETZ3 e SANB11
+por acoes corporativas nao suportadas (`INCORPORACAO` e `CIS RED CAP`). Os testes
+focados passaram (22/22) numa copia isolada do codigo. Nenhuma escrita foi feita
+no banco e a imagem/runtime ainda precisa receber esta alteracao.
+
+Antes de nova coleta ampla com escrita, tratar manualmente os quatro payloads
+bloqueados. Naquele dry-run, os dois registros B3 de NIKE34 ainda precisavam de
+plano de reconciliacao e calendario; o evento 164 tinha fator persistido 900,
+embora o fator de quantidade normalizado pela B3 seja 10. O evento 165 foi
+tratado na secao seguinte. Gerar backup consistente e validar por ledger e
+politica de fracao antes de qualquer promocao ou projecao. O estado
 `UNRECONCILED` continua significando fato pendente de reconciliacao, mesmo
 quando ha evidencia B3 associada ao ativo.
+
+### Aplicacao do grupamento B3 NIKE34 - 18/10/2026
+
+O evento B3 165 foi reconciliado como canonico apos dry-run e backup v3
+consistente. A B3 informa fator 0,2 e `lastDatePrior=2026-10-09`; o calendario
+oficial B3 marca 12/10 como feriado, portanto a primeira sessao efetiva e
+13/10/2026. O registro ficou `MATCHED`, `effective_date=2026-10-13` e politica
+`PENDING_SETTLEMENT`. A evidencia oficial foi persistida sem preco de liquidacao
+ou tratamento de caixa.
+
+No preflight global, somente a carteira 15 tinha posicao elegivel: 6 NIKE34 em
+3 compras anteriores ao record date. A projecao agora resulta em 1 BDR e fracao
+pendente de 0,2; nenhum caixa ou resultado realizado foi criado. A execucao
+invalidou 4 snapshots, reconstruiu 520 e invalidou o cache de rentabilidade de
+uma carteira. A leitura read-only posterior confirmou que o evento entrou no
+projetor e que a fracao de 0,2 permanece pendente.
+
+O backup anterior a escrita e
+`artifacts/pre-prod-rebuild/20261018-nike34-event165-pre`, contrato
+`pre-prod-backup.v3`, snapshot consistente, SHA-256
+`32ea9db5f816beeab5c83386277dfe7493f4c19d26aa5cd61066078354b92711`, associado
+ao commit de runtime `8391474917684caa4e92f30d8b7c00cdb7ac5a28`. Fontes do
+calendario: [B3 2026](https://www.b3.com.br/data/files/20/57/01/AA/06A1F910ADC36BE9AC094EA8/OC%20041-2026-VNC%20ERRATA%20-%20CALENDARIO%20DE%20FERIADOS%20EM%202026_PT.pdf)
+e [calendario B3 2021](https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/calendario-de-negociacao/feriados/).
+
+O outro registro B3, evento 164 (desdobramento de 2021), segue `UNRECONCILED` e
+fora da projecao. O fator persistido 900 ainda precisa de reparo para o
+multiplicador oficial 10; nao havia transacoes NIKE34 ate 09/02/2021 em nenhuma
+carteira. Os estados de AMOB3 e KLBN11 nao foram alterados.

@@ -170,7 +170,11 @@ async def sync_corporate_events_for_asset(
             logger.exception("[corporate_events] B3 indisponivel para %s", ticker)
             raise
         if b3_payload is not None:
-            actions = normalize_b3_corporate_actions(ticker, b3_payload)
+            actions = normalize_b3_corporate_actions(
+                ticker,
+                b3_payload,
+                expected_isin=asset.isin_code,
+            )
         else:
             actions = ()
         if actions:

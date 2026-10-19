@@ -49,6 +49,14 @@ oficial B3 válida para ativos listados. Estas rotas são um detalhe operacional
 do portal e podem mudar sem contrato B2B estável; falhas devem permanecer
 explícitas.
 
+Para eventos corporativos, cada linha precisa pertencer ao ISIN do ativo; o
+endpoint do emissor pode retornar classes diferentes. `factor` de bonificação
+e desdobramento é percentual de aumento de ações e deve virar multiplicador
+`1 + factor / 100`; grupamento já usa multiplicador direto. Subscrição é direito
+e não aumenta a quantidade. `lastDatePrior` é o último dia com direito e não
+substitui a data efetiva do primeiro pregão seguinte, que exige calendário B3.
+Tipos sem regra de projeção e payloads inválidos falham fechados.
+
 ---
 
 ## Estratégia por classe

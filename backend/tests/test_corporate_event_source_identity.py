@@ -265,8 +265,9 @@ async def test_sync_supports_fii_and_international_securities(
             "stockDividends": [
                 {
                     "label": "DESDOBRAMENTO",
-                    "factor": "2",
+                    "factor": "100",
                     "lastDatePrior": "2026-02-01",
+                    "isinCode": "BRTEST11ALQ0",
                 }
             ],
             "subscriptions": [],
