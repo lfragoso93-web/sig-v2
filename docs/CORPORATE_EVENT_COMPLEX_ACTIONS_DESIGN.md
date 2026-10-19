@@ -163,11 +163,10 @@ caixa e sem conflito. A falta de qualquer campo conserva o evento fora da
 projecao. A politica de fracao continua obrigatoria antes de materializar
 posicoes.
 
-A migration e aditiva, sem backfill automatico dos campos de destino legados e
-sem tocar nos 123 eventos existentes. Nao altera `transactions`, snapshots,
-ativos ou status de reconciliacao. Antes de aplica-la ao banco do ambiente,
-seguir o runbook de backup/restore e validar upgrade/downgrade em banco
-descartavel. Esta especificacao nao executou DDL nem consulta/escrita no banco.
+A migration e aditiva, sem backfill automatico dos campos de destino legados.
+Nao altera `transactions`, snapshots, ativos ou status de reconciliacao. O DDL
+foi validado em clone descartavel antes da aplicacao ao ambiente; a evidencia
+esta registrada abaixo.
 
 ## Migration aditiva implementada - 19/10/2026
 
@@ -186,5 +185,21 @@ O backup v3 do estado anterior foi gerado no run `20261019-094105`, commit
 `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`. Restore
 isolado reconciliou com `ok=true`: migrations iguais em
 `20261017_fixed_income_contracts`, sem tabelas, contagens ou findings divergentes.
-O DDL compilou em modo offline. A migration ainda nao foi aplicada ao banco
-principal; `/ready` e a certificacao permanecem fora deste ciclo.
+O DDL compilou em modo offline. Este paragrafo descreve o estado antes do
+deploy controlado registrado abaixo; `/ready` e a certificacao permanecem
+fora do gate de desenvolvimento.
+
+
+## Aplicacao controlada no ambiente de testes - 19/10/2026
+
+A migration foi validada no clone restaurado `sgi_restore_20261019_094105`:
+upgrade para `20261019_corp_event_legs`, downgrade em clone vazio e novo
+upgrade passaram; tabela presente no head e ausente apos downgrade. Relatorio:
+`artifacts/pre-prod-rebuild/20261019-094105/corporate-event-legs-migration-validation.json`.
+Apos essa validacao, o alvo do ambiente foi alinhado para a nova revision e
+aplicado no backend existente. Sem backfill; a tabela filha inicia vazia, sem
+mutacao de eventos, ledger ou snapshots. Backup pre-DDL: run
+`20261019-094105`, SHA-256
+`d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`.
+`/health=200`. `/ready=503` permanece esperado, pois a certificacao foi
+removida como gate de desenvolvimento.

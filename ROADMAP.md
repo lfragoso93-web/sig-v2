@@ -463,3 +463,14 @@ O motor recebeu contrato em memoria para pernas destino e projetor puro para inc
 ## Persistencia de eventos corporativos multi-perna - 19/10/2026
 
 Decidida estrutura aditiva: campos de fator/alocacao residual no evento pai e linhas filhas por ISIN destino, com fator, alocacao e evidencia por perna. Validacao de soma e elegibilidade fica no servico de dominio; eventos incompletos seguem fora da projecao. Nenhum backfill/DDL foi executado. Modelo e migration implementados; backup v3 e restore isolado reconciliado (`ok=true`). Proximo: validar upgrade/downgrade no clone e depois aplicar a revisao aditiva ao runtime preservando o backup. #272 permanece separada; #370 segue limitada a evidencia KLBN11.
+
+
+### Persistencia multi-perna publicada - 19/10/2026
+
+Migration aditiva `20261019_corp_event_legs` aplicada apos restore reconciliado
+e teste upgrade/downgrade/upgrade em clone descartavel. A tabela destino foi
+criada vazia; 125 eventos corporativos e 425 transacoes permaneceram iguais.
+Imagem unica de testes: runtime commit `f03bb5555db71c8c3ffad16e1955ebef3fb4a62e`,
+digest `sha256:ad89f1e0e7644809b93ded1dc7ee927689dbba8d9b9114b311d74081cd275f4d`.
+Proximo bloco: persistencia atomica e idempotente das resolucoes com evidencia,
+validacao origem+destinos e gate fail-closed antes de integrar ao projetor.

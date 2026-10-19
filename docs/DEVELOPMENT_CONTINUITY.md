@@ -547,4 +547,20 @@ Revisados `CorporateEvent`, evidencia, migrations Alembic, consumers de destino,
 
 Implementados `CorporateEventDestinationLeg`, os campos de origem residual e a migration aditiva `20261019_corp_event_legs`; o entrypoint usa essa revision como alvo default. Checks locais cobrem par de fatores/alocacoes, fator positivo, alocacao de custo, ISIN normalizado e referencia de evidencia. Downgrade falha fechado se houver dados resolvidos. `compileall`, import do metadata, `git diff --check` e SQL offline passaram; nao foram executados testes.
 
-Backup pre-DDL v3 run `20261019-094105`, commit base `bd62ff58f81843fb76899eb5c6ba1569b2ef5f8e`, checksum `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`; clone `sgi_restore_20261019_094105` reconciliou `ok=true`, sem divergencias de migration/tabelas/contagens/findings. O banco operacional continua no head `20261017_fixed_income_contracts`; aplicar DDL somente apos upgrade/downgrade no clone. Nao ha backfill nem aplicacao financeira.
+Backup pre-DDL v3 run `20261019-094105`, commit base `bd62ff58f81843fb76899eb5c6ba1569b2ef5f8e`, checksum `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`; clone `sgi_restore_20261019_094105` reconciliou `ok=true`, sem divergencias de migration/tabelas/contagens/findings. A migration passou upgrade, downgrade em clone vazio e upgrade novamente. Foi aplicada ao banco operacional e publicada na imagem unica de testes; tabela nova vazia, sem backfill ou aplicacao financeira. `/health=200`; `/ready=503` e esperado sem certificacao.
+
+
+Proximo bloco recomendado: servico atomico de persistencia para resolucoes
+evidenciadas, validacao da soma origem+destinos e idempotencia; depois integrar
+o projetor com gate fail-closed. Manter #272 separado e nenhum evento sem
+evidencia completa deve ser materializado.
+
+
+## Estado publicado do schema de eventos - 19/10/2026
+
+Imagem unica de testes: runtime commit `f03bb5555db71c8c3ffad16e1955ebef3fb4a62e`,
+digest `sha256:ad89f1e0e7644809b93ded1dc7ee927689dbba8d9b9114b311d74081cd275f4d`.
+Alembic `20261019_corp_event_legs`; 125 corporate_events, 425 transactions e
+zero linhas em `corporate_event_destination_legs`. `/health=200`; `/ready=503`
+esperado sem certificacao. Backup pre-DDL e validacao de clone detalhados em
+`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`.

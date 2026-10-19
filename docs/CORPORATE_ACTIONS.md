@@ -420,4 +420,17 @@ A proposta aditiva mantem `corporate_events` como pai e cria uma tabela filha pa
 
 ### Migration multi-perna e backup pre-DDL - 19/10/2026
 
-A migration `20261019_corp_event_legs` e os modelos ORM aditivos estao implementados; o banco operacional ainda esta no head anterior. Backup v3 run `20261019-094105` validado (SHA-256 `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`). O restore isolado conciliou sem diferencas (`ok=true`, revision `20261017_fixed_income_contracts`). Nenhum evento recebeu perna e nenhum DDL foi aplicado ao banco principal.
+A migration `20261019_corp_event_legs` e os modelos ORM aditivos foram aplicados ao banco operacional apos restore/conciliacao e teste upgrade-downgrade-upgrade no clone `sgi_restore_20261019_094105`. O backup v3 pre-DDL (`20261019-094105`) tem SHA-256 `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`; restore `ok=true`. A tabela de pernas foi criada vazia: sem backfill, evento reconciliado, escrita em `transactions` ou snapshot. Runtime publicado: ver registro de deploy abaixo.
+
+
+### Deploy da migration multi-perna - 19/10/2026
+
+Backend do ambiente unico de testes recriado com commit
+`f03bb5555db71c8c3ffad16e1955ebef3fb4a62e`, imagem
+`sha256:ad89f1e0e7644809b93ded1dc7ee927689dbba8d9b9114b311d74081cd275f4d`;
+nenhum segundo servico/imagem de aplicacao foi iniciado.
+Verificacoes pos-deploy: `/health=200`, revision Alembic
+`20261019_corp_event_legs`, tabela multi-perna presente e vazia; 125 eventos
+e 425 transacoes preservados,
+`/ready=503` (sem gate de certificacao). Eventos existentes, ledger e
+snapshots nao foram escritos.
