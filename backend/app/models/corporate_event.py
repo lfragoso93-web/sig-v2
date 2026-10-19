@@ -188,6 +188,10 @@ class CorporateEventDestinationLeg(Base):
             "length(trim(evidence_reference)) > 0",
             name="ck_corp_event_destination_leg_evidence_nonempty",
         ),
+        Index(
+            "ix_corp_event_destination_leg_asset",
+            "destination_asset_id",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
