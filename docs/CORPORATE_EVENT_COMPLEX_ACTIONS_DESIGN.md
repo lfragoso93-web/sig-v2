@@ -1,7 +1,8 @@
 # Contrato proposto para eventos corporativos complexos
 
 Data: 19/10/2026  
-Status: desenho para validação; sem implementação ou alteração de dados.
+Status: DTO/classificador B3 implementado parcialmente; sem persistência,
+projeção ou alteração de dados.
 
 ## Contexto verificado
 
@@ -9,6 +10,16 @@ O motor atual normaliza desdobramento, grupamento, bonificação e subscrição.
 O projetor canônico aplica fatores de quantidade e preserva custo total nos
 eventos suportados. Ele não implementa transformação de ativos de destino nem
 liquidação monetária de resgate.
+
+O primeiro bloco técnico acrescentou `ComplexCorporateActionKind`,
+`B3ComplexCorporateActionCandidate` e
+`normalize_b3_complex_corporate_action_candidates()` em
+`corporate_action_engine.py`. O classificador identifica incorporação, cisão e
+resgate conhecidos da B3, exige ticker/ISIN de origem e data de direito e
+agrupa várias linhas de ativo emitido para a mesma ação. Para incorporação/cisão
+exige ao menos um ISIN de destino. O DTO sempre declara `projectable=false`,
+`quantity_factor=None` e `effective_date=None`; não está ligado à persistência,
+ao leitor nem ao projetor.
 
 `corporate_events` já contém `destination_asset_id`, `destination_ticker`,
 `destination_isin_code`, `quantity_factor`, `destination_cost_allocation`,
@@ -71,9 +82,9 @@ multiplicador utilizável.
 
 ## Sequência de implementação
 
-1. Adicionar DTOs/enum neutros para incorporação, cisão e resgate; normalizadores
-   B3 devem falhar fechado quando destinos, classes ou fatores estiverem
-   ambíguos.
+1. DTO/enum e classificador candidato B3: concluído. O classificador falha
+   fechado para classe/data/destino ausentes, mas ainda não demonstra relação de
+   conversão nem autoriza projeção.
 2. Decidir e migrar a representação de pernas de destino e alocação de custo.
 3. Implementar um projetor puro para transformação não monetária multiativo,
    com invariantes de quantidade e custo e sem escrita no ledger.

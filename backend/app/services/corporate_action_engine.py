@@ -22,6 +22,39 @@ class CorporateActionKind(StrEnum):
     SUBSCRIPTION = "SUBSCRICAO"
 
 
+class ComplexCorporateActionKind(StrEnum):
+    """Classificacoes tipadas sem regra de projecao implementada."""
+
+    INCORPORATION = "INCORPORACAO"
+    SPIN_OFF = "CISAO"
+    REDEMPTION = "RESGATE"
+
+
+@dataclass(frozen=True)
+class B3ComplexCorporateActionCandidate:
+    """Fato complexo classificado, ainda sem conversao projetavel.
+
+    `record_date` representa o ultimo dia com direito informado pela B3. A
+    relacao de conversao, data efetiva e efeito em custo/caixa ficam ausentes
+    ate serem demonstrados por contrato e evidencia proprios.
+    """
+
+    source: str
+    source_event_id: str
+    ticker: str
+    source_isin: str
+    record_date: date
+    kind: ComplexCorporateActionKind
+    destination_isins: tuple[str, ...]
+    raw_payload: tuple[dict[str, Any], ...]
+    quantity_factor: None = None
+    effective_date: None = None
+
+    @property
+    def projectable(self) -> bool:
+        return False
+
+
 class CorporateActionNormalizationError(ValueError):
     """Payload corporativo não satisfaz o contrato canônico."""
 
@@ -110,6 +143,185 @@ def _event_id(
         json.dumps(identity, sort_keys=True, ensure_ascii=True).encode("utf-8")
     ).hexdigest()
     return f"{source}:{digest}"
+
+
+_B3_COMPLEX_ACTION_LABELS = {
+    "INCORPORACAO": ComplexCorporateActionKind.INCORPORATION,
+    "CIS RED CAP": ComplexCorporateActionKind.SPIN_OFF,
+    "CISAO": ComplexCorporateActionKind.SPIN_OFF,
+    "CISSAO": ComplexCorporateActionKind.SPIN_OFF,
+    "RESG TOTAL RV": ComplexCorporateActionKind.REDEMPTION,
+    "RESGATE TOTAL": ComplexCorporateActionKind.REDEMPTION,
+}
+_B3_SIMPLE_ACTION_LABELS = {
+    "BONIFICACAO",
+    "DESDOBRAMENTO",
+    "GRUPAMENTO",
+    "SPLIT",
+    "SUBSCRICAO",
+}
+
+
+def normalize_b3_complex_corporate_action_candidates(
+    ticker: str,
+    payload: dict[str, Any],
+    *,
+    expected_isin: str,
+) -> tuple[B3ComplexCorporateActionCandidate, ...]:
+    """Classifica fatos B3 complexos sem inventar fator ou data efetiva.
+
+    Linhas de outras classes sao filtradas por ISIN. Linhas complexas da classe
+    solicitada precisam ter data de direito; incorporacao/cisao tambem precisam
+    identificar ao menos um ISIN emitido. O fator original permanece somente no
+    payload bruto e nunca e disponibilizado como quantity_factor.
+    """
+
+    normalized_ticker = ticker.strip().upper()
+    source_isin = expected_isin.strip().upper()
+    if not normalized_ticker or not source_isin:
+        raise CorporateActionNormalizationError(
+            "ticker e expected_isin sao obrigatorios para a classificacao B3"
+        )
+    if len(source_isin) != 12 or not source_isin.isalnum():
+        raise CorporateActionNormalizationError(
+            "expected_isin B3 deve ter formato ISIN de 12 caracteres"
+        )
+    rows = payload.get("stockDividends")
+    if not isinstance(rows, list):
+        raise CorporateActionNormalizationError(
+            "B3 stockDividends deve ser lista"
+        )
+
+    grouped: dict[
+        tuple[ComplexCorporateActionKind, date, str, str],
+        list[dict[str, Any]],
+    ] = {}
+    for raw in rows:
+        if not isinstance(raw, dict):
+            raise CorporateActionNormalizationError(
+                "B3 stockDividends contem item invalido"
+            )
+        row_isin = str(raw.get("isinCode") or "").strip().upper()
+        if not row_isin:
+            raise CorporateActionNormalizationError(
+                "B3 stockDividends sem ISIN da classe de origem"
+            )
+        if len(row_isin) != 12 or not row_isin.isalnum():
+            raise CorporateActionNormalizationError(
+                "B3 stockDividends.isinCode invalido"
+            )
+        if row_isin != source_isin:
+            continue
+        label = str(raw.get("label") or "").strip().upper()
+        kind = _B3_COMPLEX_ACTION_LABELS.get(label)
+        if kind is None:
+            if label not in _B3_SIMPLE_ACTION_LABELS:
+                raise CorporateActionNormalizationError(
+                    "B3 stockDividends.label nao suportado: "
+                    f"{label or 'ausente'}"
+                )
+            continue
+
+        try:
+            record_date = parse_b3_date(raw.get("lastDatePrior"))
+        except Exception as exc:
+            raise CorporateActionNormalizationError(
+                "B3 acao complexa sem data de direito valida"
+            ) from exc
+
+        destination_isin = str(raw.get("assetIssued") or "").strip().upper()
+        if destination_isin and (
+            len(destination_isin) != 12 or not destination_isin.isalnum()
+        ):
+            raise CorporateActionNormalizationError(
+                "B3 stockDividends.assetIssued invalido"
+            )
+        if kind in {
+            ComplexCorporateActionKind.INCORPORATION,
+            ComplexCorporateActionKind.SPIN_OFF,
+        } and not destination_isin:
+            raise CorporateActionNormalizationError(
+                "B3 incorporacao/cisao sem ISIN do ativo emitido"
+            )
+
+        # Group rows that describe one approved event but emit multiple assets.
+        group_key = (
+            kind,
+            record_date,
+            str(raw.get("approvedOn") or "").strip(),
+            str(raw.get("factor") or "").strip(),
+        )
+        grouped.setdefault(group_key, []).append(
+            {**raw, "sourcePage": "B3 Listed Companies"}
+        )
+
+    candidates: list[B3ComplexCorporateActionCandidate] = []
+    for (
+        kind,
+        record_date,
+        _approved_on,
+        _raw_factor,
+    ), event_rows in grouped.items():
+        ordered_rows = tuple(
+            sorted(
+                event_rows,
+                key=lambda row: str(row.get("assetIssued") or "").upper(),
+            )
+        )
+        destination_isins = tuple(
+            sorted(
+                {
+                    str(row.get("assetIssued") or "").strip().upper()
+                    for row in ordered_rows
+                    if row.get("assetIssued")
+                }
+            )
+        )
+        if (
+            kind
+            in {
+                ComplexCorporateActionKind.INCORPORATION,
+                ComplexCorporateActionKind.SPIN_OFF,
+            }
+            and not destination_isins
+        ):
+            raise CorporateActionNormalizationError(
+                "B3 incorporacao/cisao sem destino identificado"
+            )
+        identity_payload = {
+            "source": "b3",
+            "ticker": normalized_ticker,
+            "source_isin": source_isin,
+            "record_date": record_date.isoformat(),
+            "kind": kind.value,
+            "rows": ordered_rows,
+        }
+        encoded = json.dumps(
+            identity_payload,
+            sort_keys=True,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        candidates.append(
+            B3ComplexCorporateActionCandidate(
+                source="b3",
+                source_event_id=f"b3-complex:{digest}",
+                ticker=normalized_ticker,
+                source_isin=source_isin,
+                record_date=record_date,
+                kind=kind,
+                destination_isins=destination_isins,
+                raw_payload=ordered_rows,
+            )
+        )
+    return tuple(
+        sorted(
+            candidates,
+            key=lambda item: (item.record_date, item.source_event_id),
+        )
+    )
 
 
 def _brapi_stock_dividend_kind(raw: dict[str, Any]) -> CorporateActionKind:

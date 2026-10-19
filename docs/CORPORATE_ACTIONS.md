@@ -402,4 +402,5 @@ Decisao: manter os cinco eventos fora da projecao, sem reclassificar como `TICKE
 
 O contrato proposto, invariantes financeiros e sequência de implementação estão
 em [`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
-Trata-se de desenho, não de funcionalidade disponível no runtime.
+O primeiro DTO/classificador B3 está implementado, mas não persiste, reconcilia
+ou projeta efeitos; portanto não muda a funcionalidade financeira do runtime.
