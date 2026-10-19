@@ -564,3 +564,22 @@ Alembic `20261019_corp_event_legs`; 125 corporate_events, 425 transactions e
 zero linhas em `corporate_event_destination_legs`. `/health=200`; `/ready=503`
 esperado sem certificacao. Backup pre-DDL e validacao de clone detalhados em
 `CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`.
+
+
+## Correcao do gate de transacoes CRIPTO - 19/10/2026
+
+Diagnostico somente leitura no ambiente de testes: 482 ativos CRIPTO no catalogo;
+471 com `HISTORY_END_UNAVAILABLE` e zero com lifecycle antes aceito pelo gate
+financeiro. BTC existe no catalogo, tem `last_price` persistido e 4.378 precos
+entre 17/09/2014 e 05/10/2026, mas era recusado porque o writer exigia historico
+completo. O mesmo guard bloqueava dry-run/importacao CSV e a busca de ativos
+filtrava fora os nao certificados.
+
+Alteracao: transacoes manuais e CSV passam a exigir ativo persistido, mantendo
+a verificacao de proveniencia para fixtures sinteticas. Visibilidade do catalogo
+nao depende de completude do historico. Nenhum status de provider, preco,
+transacao, snapshot ou dado de carteira foi alterado; coberturas incompletas
+continuam explicitas. Validacao focada: 82 testes passaram nos guards, CSV,
+router, catalogo e fixtures sinteticas. Falhas CSV de tipos nao cripto continuam
+com o preflight de precos original; solicitar linhas anonimizadas e relatorio do
+dry-run para diagnosticar esses casos separadamente.

@@ -69,7 +69,7 @@ Tipos sem regra de projeção e payloads inválidos falham fechados.
 | FII | Rota dedicada, janela explícita quando a documentação não oferece histórico máximo |
 | Stock | Fonte internacional, fallback controlado com histórico máximo |
 | ETF internacional | Fonte internacional, fallback controlado com histórico máximo |
-| Cripto | Roteamento definitivo em revisão |
+| Cripto | BRAPI principal; fallback historico Yahoo USD + PTAX documentado |
 | Tesouro Direto | Serviço dedicado, fora do pipeline genérico |
 | Renda Fixa | Motor interno, sem cotação externa genérica |
 
@@ -195,3 +195,5 @@ Evitar um warning por linha quando o problema é repetitivo.
 - Uso em lote da rota histórica quando a fonte suportar múltiplos símbolos.
 - Roteamento definitivo de cripto após validação da cobertura atual.
 - Consumo de Tesouro nos snapshots por meio do histórico dedicado.
+
+A completude do historico de mercado e separada da elegibilidade para registrar uma operacao: compras/vendas manuais e CSV aceitam somente tickers CRIPTO ja presentes no catalogo persistido. Status de cobertura continuam explicitos para valuation e readiness.

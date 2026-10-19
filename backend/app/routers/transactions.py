@@ -26,7 +26,7 @@ from app.services.portfolio_asset_corporate_lifecycle_service import (
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_service import list_transactions_paginated
@@ -77,7 +77,7 @@ async def _validate_crypto_transaction_asset(
         return
 
     try:
-        await require_financially_certified_crypto_asset(db, ticker)
+        await require_catalog_crypto_asset(db, ticker)
     except CryptoTransactionEligibilityError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

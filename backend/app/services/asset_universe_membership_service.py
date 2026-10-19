@@ -13,6 +13,7 @@ from app.services.crypto_supported_universe_service import SupportedCrypto
 
 CRYPTO_TOP100_UNIVERSE_KEY = "crypto_top100_market_cap"
 CRYPTO_TOP100_UNIVERSE_SOURCE = "coingecko_market_cap_intersect_brapi"
+CRYPTO_SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
 CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY = "crypto_synthetic_certification"
 CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE = "synthetic-certification"
 

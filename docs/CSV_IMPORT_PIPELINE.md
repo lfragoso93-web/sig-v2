@@ -44,3 +44,17 @@ O rebuild roda em segundo plano para não bloquear a resposta da importação.
 - Venda parcial e venda total antes do renome.
 - Rebuild a partir da primeira transação.
 - Invalidação de caches.
+
+## Cripto e cobertura de mercado
+
+O preflight e o gravador canonico permitem registrar compra/venda CRIPTO quando
+o ticker existe no catalogo persistido, mesmo que o historico esteja incompleto
+ou com status `HISTORY_END_UNAVAILABLE`. A transacao contem quantidade, preco e
+data informados pelo usuario; cobertura de mercado e uma dimensao separada e
+continua visivel para valuation/readiness. O SGI nao cria ticker CRIPTO ausente
+do catalogo nem consulta provider durante a importacao.
+
+Para as demais classes listadas em `PRICE_HISTORY_REQUIRED_TYPES`, o preflight
+ainda exige ativo e precos persistidos. Falhas em linhas desses tipos precisam
+ser diagnosticadas pelo relatorio do dry-run (ticker/tipo/erro), pois nao sao
+explicadas pelo gate especifico de cripto.

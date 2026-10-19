@@ -20,7 +20,7 @@ from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_write_service import (
@@ -335,7 +335,7 @@ async def _validate_writer_preflight(
             continue
 
         try:
-            await require_financially_certified_crypto_asset(db, ticker)
+            await require_catalog_crypto_asset(db, ticker)
         except CryptoTransactionEligibilityError as exc:
             row.add_error(str(exc))
 

@@ -10,15 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.asset_universe_membership import AssetUniverseMembership
 from app.services.asset_universe_membership_service import (
+    CRYPTO_SYNTHETIC_CERTIFICATION_PROVIDER as SYNTHETIC_CERTIFICATION_PROVIDER,
     CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
     CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
-    CRYPTO_TOP100_UNIVERSE_KEY,
-)
-from app.services.crypto_financial_certification_service import (
-    is_crypto_financially_certified,
 )
 
-SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
 SYNTHETIC_CERTIFICATION_PROVIDER_STATUS = "synthetic-owned"
 
 
@@ -37,17 +33,16 @@ class CryptoTransactionEligibilityError(ValueError):
         return detail
 
 
-async def require_financially_certified_crypto_asset(
+async def require_catalog_crypto_asset(
     db: AsyncSession,
     ticker: str,
 ) -> Asset:
-    """Retorna CRIPTO elegível usando somente provas persistidas no banco.
+    """Resolve a persisted CRIPTO asset for a user-entered portfolio fact.
 
-    Ativos reais continuam exigindo membership Top100 e lifecycle financeiro
-    certificado. Ativos sintéticos de certificação usam um universo separado e
-    só são aceitos quando provider, provider_status, universe_key e source
-    comprovam explicitamente a origem sintética. Nenhum provider externo é
-    consultado durante o request transacional.
+    Incomplete market coverage does not invalidate a transaction supplied by
+    the user. Coverage statuses remain available to valuation and readiness.
+    Synthetic certification assets still require their dedicated provenance.
+    No external provider is queried during a transaction request.
     """
     normalized_ticker = ticker.strip().upper()
     if not normalized_ticker:
@@ -66,51 +61,42 @@ async def require_financially_certified_crypto_asset(
     if asset is None:
         raise CryptoTransactionEligibilityError(
             ticker=normalized_ticker,
-            reason="ativo não pertence ao catálogo CRIPTO persistido",
+            reason="ativo nao pertence ao catalogo CRIPTO persistido",
         )
 
-    membership_result = await db.execute(
-        select(
-            AssetUniverseMembership.universe_key,
-            AssetUniverseMembership.source,
-        )
-        .where(AssetUniverseMembership.asset_id == asset.id)
-        .where(
-            AssetUniverseMembership.universe_key.in_(
-                {
-                    CRYPTO_TOP100_UNIVERSE_KEY,
-                    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
-                }
+    if asset.provider == SYNTHETIC_CERTIFICATION_PROVIDER:
+        if asset.provider_status != SYNTHETIC_CERTIFICATION_PROVIDER_STATUS:
+            raise CryptoTransactionEligibilityError(
+                ticker=normalized_ticker,
+                reason="identidade sintetica invalida",
+                provider_status=asset.provider_status,
+            )
+        membership_result = await db.execute(
+            select(
+                AssetUniverseMembership.universe_key,
+                AssetUniverseMembership.source,
+            )
+            .where(AssetUniverseMembership.asset_id == asset.id)
+            .where(
+                AssetUniverseMembership.universe_key
+                == CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY
             )
         )
-    )
-    memberships = {universe_key: source for universe_key, source in membership_result.all()}
+        memberships = dict(membership_result.all())
+        if memberships.get(CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY) != (
+            CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE
+        ):
+            raise CryptoTransactionEligibilityError(
+                ticker=normalized_ticker,
+                reason="prova de elegibilidade sintetica ausente ou invalida",
+                provider_status=asset.provider_status,
+            )
+        return asset
 
-    synthetic_identity = (
-        asset.provider == SYNTHETIC_CERTIFICATION_PROVIDER
-        and asset.provider_status == SYNTHETIC_CERTIFICATION_PROVIDER_STATUS
-    )
-    synthetic_source = memberships.get(CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY)
-    if synthetic_identity:
-        if synthetic_source == CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE:
-            return asset
+    if asset.provider_status == SYNTHETIC_CERTIFICATION_PROVIDER_STATUS:
         raise CryptoTransactionEligibilityError(
             ticker=normalized_ticker,
-            reason="prova de elegibilidade sintética ausente ou inválida",
-            provider_status=asset.provider_status,
-        )
-
-    if CRYPTO_TOP100_UNIVERSE_KEY not in memberships:
-        raise CryptoTransactionEligibilityError(
-            ticker=normalized_ticker,
-            reason="ativo fora do universo candidato Top 100 persistido",
-            provider_status=asset.provider_status,
-        )
-
-    if not is_crypto_financially_certified(asset.provider_status):
-        raise CryptoTransactionEligibilityError(
-            ticker=normalized_ticker,
-            reason="histórico financeiro não certificado",
+            reason="metadata sintetica em ativo de provedor real",
             provider_status=asset.provider_status,
         )
 

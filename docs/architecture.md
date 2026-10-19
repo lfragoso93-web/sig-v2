@@ -299,3 +299,14 @@ sequência corrente. A higiene de dependências priorizada também foi integrada
 - #97 — OAuth.
 
 #352 foi fechada apos validacao manual do seletor `Tipo de ativo` no modal de lancamento. #354 foi fechada após alinhamento da política de senha frontend/backend e só deve reabrir com regressão comprovada.
+
+
+## Lancamentos de cripto e historico de mercado
+
+A compra/venda manual ou importada pode ser registrada para ativo CRIPTO
+presente no catalogo persistido. A completude do historico de precos nao e uma
+pre-condicao para persistir o fato do usuario: `HISTORY_END_UNAVAILABLE` e
+outros status continuam informando cobertura incompleta a valuation, serie
+historica e readiness, sem serem promovidos a cobertura completa nem usados
+para inventar precos. Tickers fora do catalogo continuam bloqueados; fixtures
+sinteticas exigem proveniencia de certificacao propria.

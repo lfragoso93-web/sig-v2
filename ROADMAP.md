@@ -474,3 +474,15 @@ Imagem unica de testes: runtime commit `f03bb5555db71c8c3ffad16e1955ebef3fb4a62e
 digest `sha256:ad89f1e0e7644809b93ded1dc7ee927689dbba8d9b9114b311d74081cd275f4d`.
 Proximo bloco: persistencia atomica e idempotente das resolucoes com evidencia,
 validacao origem+destinos e gate fail-closed antes de integrar ao projetor.
+
+
+### Separar lancamentos CRIPTO da cobertura de historico - 19/10/2026
+
+Corrigido o acoplamento que recusava compras/vendas e CSV quando a cauda de
+precos tinha `HISTORY_END_UNAVAILABLE`, apesar de o ativo e o preco da operacao
+serem informados e o ativo existir no catalogo. Historico incompleto permanece
+fail-explicit para valuation/readiness. Busca de catalogo tambem inclui ativos
+persistidos sem lifecycle de historico certificado e exclui fixtures sinteticas.
+Validacao focada: 82 testes passaram. Proximos: publicar imagem unica e confirmar
+fluxos de lancamento manual/CSV com cripto; diagnosticar demais falhas CSV quando
+houver relatorio do dry-run ou amostra anonimizada.

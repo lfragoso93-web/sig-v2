@@ -12,7 +12,7 @@ from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 from app.services.fixed_income_contract_service import (
     FixedIncomeContractNotFound,
@@ -159,7 +159,7 @@ async def add_transaction_record(
 
     if asset_type == "CRIPTO":
         try:
-            await require_financially_certified_crypto_asset(db, ticker)
+            await require_catalog_crypto_asset(db, ticker)
         except CryptoTransactionEligibilityError as exc:
             raise TransactionWriteError(str(exc)) from exc
 

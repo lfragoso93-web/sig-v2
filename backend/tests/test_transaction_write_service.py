@@ -190,7 +190,7 @@ async def test_create_transaction_record_requires_crypto_eligibility() -> None:
     )
 
     with patch(
-        "app.services.transaction_write_service.require_financially_certified_crypto_asset",
+        "app.services.transaction_write_service.require_catalog_crypto_asset",
         new_callable=AsyncMock,
         side_effect=Exception("unexpected"),
     ):

@@ -642,7 +642,7 @@ Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
                 new_callable=AsyncMock,
             ) as add_record,
             patch(
-                "app.services.csv_import_service.require_financially_certified_crypto_asset",
+                "app.services.csv_import_service.require_catalog_crypto_asset",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -659,9 +659,9 @@ Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
         assert payload.ticker == "BTC"
         assert result["rows"][0]["ticker"] == "BTC"
 
-    async def test_dry_run_surfaces_non_certified_crypto_before_import(self):
+    async def test_dry_run_allows_catalog_crypto_with_incomplete_history(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
-BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
+BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto com cobertura incompleta"""
 
         db = AsyncMock(spec=AsyncSession)
 
@@ -679,23 +679,13 @@ BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
             ticker="BTC",
             asset_type=AssetType.CRIPTO.value,
             provider="brapi",
-            provider_status="ACTIVE",
+            provider_status="HISTORY_END_UNAVAILABLE",
         )
         crypto_asset_result = MagicMock()
         crypto_asset_result.scalar_one_or_none = MagicMock(return_value=crypto_asset)
 
-        membership_result = MagicMock()
-        membership_result.all = MagicMock(
-            return_value=[(CRYPTO_TOP100_UNIVERSE_KEY, "coingecko")]
-        )
-
         db.execute = AsyncMock(
-            side_effect=[
-                portfolio_result,
-                existing_tx_result,
-                crypto_asset_result,
-                membership_result,
-            ]
+            side_effect=[portfolio_result, existing_tx_result, crypto_asset_result]
         )
 
         result = await csv_import_service.import_transactions_csv(
@@ -706,11 +696,11 @@ BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
             dry_run=True,
         )
 
-        assert result["success"] is False
+        assert result["success"] is True
         assert result["imported_count"] == 0
-        assert result["error_count"] == 1
-        assert result["rows"][0]["status"] == "error"
-        assert "histórico financeiro não certificado" in result["rows"][0]["errors"][0]
+        assert result["error_count"] == 0
+        assert result["rows"][0]["status"] == "valid"
+        assert result["rows"][0]["errors"] == []
 
     async def test_import_rolls_back_when_later_canonical_writer_row_fails(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes

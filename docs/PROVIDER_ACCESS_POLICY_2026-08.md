@@ -69,6 +69,8 @@ Regras:
 14. quando a probe Yahoo `max` não comprova qualquer histórico anterior à janela BRAPI já persistida, o ativo recebe `HISTORY_START_SHALLOW_UNAVAILABLE`: o estado sai da fila automática para evitar retry infinito, mas continua bloqueando readiness e não equivale a histórico verificado/completo;
 15. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
 
+16. a elegibilidade para registrar compra/venda manual ou via CSV depende de o ativo CRIPTO existir no catalogo persistido; status de cobertura, inclusive `HISTORY_END_UNAVAILABLE`, nao bloqueia o fato informado pelo usuario. Esses status continuam explicitos para valuation, historico e readiness; nao significam preco atual nem cobertura completa. Ativo ausente do catalogo permanece bloqueado.
+
 ## Runtime normal
 
 Após o bootstrap:

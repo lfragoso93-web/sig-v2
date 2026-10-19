@@ -11,7 +11,7 @@ from app.services.asset_universe_membership_service import (
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 
 
@@ -58,7 +58,7 @@ async def test_owned_synthetic_crypto_is_eligible_only_with_dedicated_membership
         ]
     )
 
-    actual = await require_financially_certified_crypto_asset(db, "cert303-btc")
+    actual = await require_catalog_crypto_asset(db, "cert303-btc")
 
     assert actual is asset
     assert db.execute.await_count == 2
@@ -85,27 +85,21 @@ async def test_synthetic_crypto_rejects_missing_or_wrong_membership_source() -> 
 
         with pytest.raises(
             CryptoTransactionEligibilityError,
-            match="prova de elegibilidade sintética ausente ou inválida",
+            match="prova de elegibilidade sintetica ausente ou invalida",
         ):
-            await require_financially_certified_crypto_asset(db, "CERT303-BTC")
+            await require_catalog_crypto_asset(db, "CERT303-BTC")
 
 
 @pytest.mark.asyncio
-async def test_real_crypto_path_still_requires_top100_and_financial_status() -> None:
+async def test_real_crypto_eligibility_does_not_depend_on_history_status_or_top100() -> None:
     db = AsyncMock(spec=AsyncSession)
-    asset = _asset(provider="brapi", provider_status="HISTORY_START_EXHAUSTED")
-    db.execute = AsyncMock(
-        side_effect=[
-            _result_with_asset(asset),
-            _result_with_memberships(
-                [(CRYPTO_TOP100_UNIVERSE_KEY, "real-source")]
-            ),
-        ]
-    )
+    asset = _asset(provider="brapi", provider_status="HISTORY_END_UNAVAILABLE")
+    db.execute = AsyncMock(side_effect=[_result_with_asset(asset)])
 
-    actual = await require_financially_certified_crypto_asset(db, "CERT303-BTC")
+    actual = await require_catalog_crypto_asset(db, "CERT303-BTC")
 
     assert actual is asset
+    assert db.execute.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -128,6 +122,6 @@ async def test_synthetic_membership_does_not_certify_non_synthetic_asset() -> No
 
     with pytest.raises(
         CryptoTransactionEligibilityError,
-        match="fora do universo candidato Top 100 persistido",
+        match="metadata sintetica em ativo de provedor real",
     ):
-        await require_financially_certified_crypto_asset(db, "CERT303-BTC")
+        await require_catalog_crypto_asset(db, "CERT303-BTC")

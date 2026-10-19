@@ -193,7 +193,7 @@ async def test_non_crypto_transaction_skips_crypto_eligibility(
 
     monkeypatch.setattr(
         transactions,
-        "require_financially_certified_crypto_asset",
+        "require_catalog_crypto_asset",
         _unexpected_call,
     )
 
@@ -217,7 +217,7 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(
 
     monkeypatch.setattr(
         transactions,
-        "require_financially_certified_crypto_asset",
+        "require_catalog_crypto_asset",
         _reject,
     )
 
