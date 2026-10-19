@@ -483,6 +483,9 @@ precos tinha `HISTORY_END_UNAVAILABLE`, apesar de o ativo e o preco da operacao
 serem informados e o ativo existir no catalogo. Historico incompleto permanece
 fail-explicit para valuation/readiness. Busca de catalogo tambem inclui ativos
 persistidos sem lifecycle de historico certificado e exclui fixtures sinteticas.
-Validacao focada: 82 testes passaram. Proximos: publicar imagem unica e confirmar
-fluxos de lancamento manual/CSV com cripto; diagnosticar demais falhas CSV quando
-houver relatorio do dry-run ou amostra anonimizada.
+Validacao focada: 82 testes passaram. Publicado na imagem unica do backend no
+commit `a32b5885f939c236b7e97fecaec4fbbc3209d005`, digest
+`sha256:47a7c0b0d5e602c5f8572ead9a4b11b23ee08ff0f023435d60c40c56a885e42f`.
+Runtime read-only confirmou BTC no catalogo, busca e preflight CSV sem erros;
+`/health=200`, servicos saudaveis. Proximo: obter relatorio do dry-run/amostra
+anonimizada para falhas CSV de outros tipos de ativo.

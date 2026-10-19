@@ -583,3 +583,11 @@ continuam explicitas. Validacao focada: 82 testes passaram nos guards, CSV,
 router, catalogo e fixtures sinteticas. Falhas CSV de tipos nao cripto continuam
 com o preflight de precos original; solicitar linhas anonimizadas e relatorio do
 dry-run para diagnosticar esses casos separadamente.
+
+
+Deploy confirmado: imagem unica backend commit
+`a32b5885f939c236b7e97fecaec4fbbc3209d005`, digest
+`sha256:47a7c0b0d5e602c5f8572ead9a4b11b23ee08ff0f023435d60c40c56a885e42f`.
+Backend healthy; `/health=200`, `/ready=503` segue esperado sem certificacao.
+Validacao read-only no runtime resolveu BTC, encontrou a sugestao do catalogo e
+rodou preflight CSV sem erros; nenhum lancamento ou dado foi gravado.
