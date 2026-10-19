@@ -9,7 +9,10 @@ from app.models.admin_backup_operation import (
     BackupOperationStatus,
     BackupOperationType,
 )
-from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event import (
+    CorporateEvent,
+    CorporateEventDestinationLeg,
+)
 from app.models.corporate_event_reconciliation_evidence import (
     CorporateEventReconciliationEvidence,
 )
@@ -42,6 +45,7 @@ __all__ = [
     "BackupOperationStatus",
     "BackupOperationType",
     "CorporateEvent",
+    "CorporateEventDestinationLeg",
     "CorporateEventReconciliationEvidence",
     "FxRate",
     "FixedIncomeContract",

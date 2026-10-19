@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
     Column,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -44,6 +45,21 @@ class CorporateEvent(Base):
             "source_provider",
             "source_event_id",
             name="uq_corporate_events_source_identity",
+        ),
+        CheckConstraint(
+            "(source_quantity_factor IS NULL AND source_cost_allocation IS NULL) "
+            "OR (source_quantity_factor IS NOT NULL "
+            "AND source_cost_allocation IS NOT NULL)",
+            name="ck_corporate_event_source_transform_pair",
+        ),
+        CheckConstraint(
+            "source_quantity_factor IS NULL OR source_quantity_factor >= 0",
+            name="ck_corporate_event_source_quantity_factor_nonnegative",
+        ),
+        CheckConstraint(
+            "source_cost_allocation IS NULL OR "
+            "source_cost_allocation BETWEEN 0 AND 1",
+            name="ck_corporate_event_source_cost_allocation_range",
         ),
         Index(
             "ix_corporate_events_economic_identity",
@@ -109,6 +125,8 @@ class CorporateEvent(Base):
     cash_component = Column(Numeric(24, 8), nullable=True)
     subscription_price = Column(Numeric(24, 8), nullable=True)
     destination_cost_allocation = Column(Numeric(12, 10), nullable=True)
+    source_quantity_factor = Column(Numeric(24, 12), nullable=True)
+    source_cost_allocation = Column(Numeric(12, 10), nullable=True)
     quantity_step = Column(Numeric(24, 12), nullable=True)
     fractional_settlement_price = Column(Numeric(24, 8), nullable=True)
     cash_treatment = Column(String(40), nullable=True)
@@ -131,3 +149,64 @@ class CorporateEvent(Base):
     reconciled_at = Column(DateTime(timezone=True), nullable=True)
 
     portfolio = relationship("Portfolio", back_populates="corporate_events")
+    destination_legs = relationship(
+        "CorporateEventDestinationLeg",
+        back_populates="corporate_event",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="CorporateEventDestinationLeg.destination_isin_code",
+    )
+
+
+class CorporateEventDestinationLeg(Base):
+    """Resolved, evidenced destination security for a complex event."""
+
+    __tablename__ = "corporate_event_destination_legs"
+    __table_args__ = (
+        UniqueConstraint(
+            "corporate_event_id",
+            "destination_isin_code",
+            name="uq_corp_event_destination_leg_isin",
+        ),
+        CheckConstraint(
+            "length(trim(destination_isin_code)) = 12",
+            name="ck_corp_event_destination_leg_isin_length",
+        ),
+        CheckConstraint(
+            "destination_isin_code = upper(trim(destination_isin_code))",
+            name="ck_corp_event_destination_leg_isin_normalized",
+        ),
+        CheckConstraint(
+            "quantity_factor > 0",
+            name="ck_corp_event_destination_leg_factor_positive",
+        ),
+        CheckConstraint(
+            "cost_allocation BETWEEN 0 AND 1",
+            name="ck_corp_event_destination_leg_cost_range",
+        ),
+        CheckConstraint(
+            "length(trim(evidence_reference)) > 0",
+            name="ck_corp_event_destination_leg_evidence_nonempty",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    corporate_event_id = Column(
+        Integer,
+        ForeignKey("corporate_events.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    destination_asset_id = Column(
+        Integer,
+        ForeignKey("assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    destination_ticker = Column(String, nullable=True)
+    destination_isin_code = Column(String(32), nullable=False)
+    quantity_factor = Column(Numeric(24, 12), nullable=False)
+    cost_allocation = Column(Numeric(12, 10), nullable=False)
+    evidence_reference = Column(Text, nullable=False)
+
+    corporate_event = relationship(
+        "CorporateEvent", back_populates="destination_legs"
+    )

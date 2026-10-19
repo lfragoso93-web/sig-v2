@@ -1,7 +1,7 @@
 # Contrato proposto para eventos corporativos complexos
 
 Data: 19/10/2026  
-Status: classificador B3 e projetor puro em memoria implementados; modelo aditivo multi-perna decidido, migration e integracao pendentes.
+Status: classificador/projetor e migration aditiva implementados; validacao isolada concluida, aplicacao no banco e integracao financeira pendentes.
 
 ## Contexto verificado
 
@@ -84,11 +84,11 @@ multiplicador utilizável.
 1. DTO/enum e classificador candidato B3: concluído. O classificador falha
    fechado para classe/data/destino ausentes, mas ainda não demonstra relação de
    conversão nem autoriza projeção.
-2. Modelo persistido multi-perna decidido neste documento; migration ainda
-   pendente. O evento pai registra fator e alocacao residuais da origem; cada
-   destino fica numa linha filha identificada pelo ISIN, com fator, alocacao e
-   referencia de evidencia proprios. A especificacao completa esta na secao
-   "Modelo de persistencia multi-perna" abaixo.
+2. Modelo e migration aditiva implementados. O evento pai registra fator e
+   alocacao residuais da origem; cada destino fica numa linha filha identificada
+   por ISIN, com fator, alocacao e referencia de evidencia proprios. A migration
+   foi validada em clone restaurado; a aplicacao no banco operacional aguarda
+   confirmacao final do runtime e do backup.
 3. Projetor puro nao monetario: concluido para incorporacoes e cisoes. Recebe
    somente conversoes ja resolvidas, valida ISINs, fatores e conservacao do
    custo, e devolve origem residual e destinos sem precos de mercado. Nao le
@@ -141,7 +141,7 @@ pendentes. Compilacao e `git diff --check` passaram; testes nao foram executados
   entre zero e um. Incorporacao exige ambos iguais a zero.
 - Criar `corporate_event_destination_legs`, com FK para o evento pai e exclusao
   em cascata da linha filha. Cada linha contem `destination_isin_code` obrigatorio,
-  `destination_asset_id` opcional ate a resolucao no catalogo, ticker informativo,
+  `destination_asset_id` opcional ate a resolucao no catalogo, com `ON DELETE SET NULL` para preservar o ISIN, ticker informativo,
   `quantity_factor` positivo, `cost_allocation` entre zero e um e uma
   `evidence_reference` para a relacao/custo daquela perna.
 - Garantir unicidade de ISIN de destino por evento e indice por evento. Uma
@@ -168,3 +168,23 @@ sem tocar nos 123 eventos existentes. Nao altera `transactions`, snapshots,
 ativos ou status de reconciliacao. Antes de aplica-la ao banco do ambiente,
 seguir o runbook de backup/restore e validar upgrade/downgrade em banco
 descartavel. Esta especificacao nao executou DDL nem consulta/escrita no banco.
+
+## Migration aditiva implementada - 19/10/2026
+
+`CorporateEvent` ganhou `source_quantity_factor` e `source_cost_allocation`
+com checks de par, sinal e faixa. O modelo novo
+`CorporateEventDestinationLeg` mapeia `corporate_event_destination_legs`, com
+identidade unica por evento/ISIN, ISIN de 12 caracteres normalizado, fator
+positivo, alocacao de zero a um, referencia de evidencia obrigatoria, FKs para
+evento/ativo e cascade do pai. A migration `20261019_corp_event_legs` e
+aditiva; downgrade recusa quando houver dados resolvidos. O alvo default do
+entrypoint aponta para essa revision. Nenhum backfill foi escrito no codigo.
+
+O backup v3 do estado anterior foi gerado no run `20261019-094105`, commit
+`bd62ff58f81843fb76899eb5c6ba1569b2ef5f8e`, PostgreSQL 16 consistente,
+41.091.595 bytes, SHA-256
+`d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`. Restore
+isolado reconciliou com `ok=true`: migrations iguais em
+`20261017_fixed_income_contracts`, sem tabelas, contagens ou findings divergentes.
+O DDL compilou em modo offline. A migration ainda nao foi aplicada ao banco
+principal; `/ready` e a certificacao permanecem fora deste ciclo.

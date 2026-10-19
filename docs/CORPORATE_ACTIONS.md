@@ -416,3 +416,8 @@ O motor possui agora DTOs em memoria para pernas destino e um projetor puro de i
 ### Decisao de schema para destino multi-perna - 19/10/2026
 
 A proposta aditiva mantem `corporate_events` como pai e cria uma tabela filha para cada destino, identificada por ISIN, com fator, parcela de custo e referencia de evidencia. O pai guarda fator/alocacao residuais da origem. Alocacoes da origem e destinos precisam somar exatamente 1 no gate de dominio; evento sem resolucao completa fica fora da projecao. Campos de destino legados permanecem intactos sob #272. Migration, backfill, DDL e alteracao de dados nao foram executados. Ver especificacao e requisitos de backup em `CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`.
+
+
+### Migration multi-perna e backup pre-DDL - 19/10/2026
+
+A migration `20261019_corp_event_legs` e os modelos ORM aditivos estao implementados; o banco operacional ainda esta no head anterior. Backup v3 run `20261019-094105` validado (SHA-256 `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`). O restore isolado conciliou sem diferencas (`ok=true`, revision `20261017_fixed_income_contracts`). Nenhum evento recebeu perna e nenhum DDL foi aplicado ao banco principal.
