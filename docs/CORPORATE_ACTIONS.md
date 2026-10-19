@@ -251,7 +251,8 @@ na quantidade. Um novo dry-run foi feito para os mesmos 21 tickers: 17 payloads
 passaram; BBDC3 e RANI3 continuam bloqueados por fator invalido; PETZ3 e SANB11
 por acoes corporativas nao suportadas (`INCORPORACAO` e `CIS RED CAP`). Os testes
 focados passaram (22/22) numa copia isolada do codigo. Nenhuma escrita foi feita
-no banco e a imagem/runtime ainda precisa receber esta alteracao.
+no banco durante esta coleta; a publicacao do normalizador consta na secao de
+deploy abaixo.
 
 Antes de nova coleta ampla com escrita, tratar manualmente os quatro payloads
 bloqueados. Naquele dry-run, os dois registros B3 de NIKE34 ainda precisavam de
@@ -290,3 +291,20 @@ O outro registro B3, evento 164 (desdobramento de 2021), segue `UNRECONCILED` e
 fora da projecao. O fator persistido 900 ainda precisa de reparo para o
 multiplicador oficial 10; nao havia transacoes NIKE34 ate 09/02/2021 em nenhuma
 carteira. Os estados de AMOB3 e KLBN11 nao foram alterados.
+
+### Publicacao do conector B3 - 18/10/2026
+
+O normalizador foi publicado em `stable-15jun`, commit
+`f5cae2ddd21f684b7a1b772ae3e273182497e575`, e implantado na imagem unica da
+stack `sig-v2`: `sha256:26d2c42f35d6ede6bc842cbbadc6c73811cf1347df8211583bacd2d5e976ce6b`.
+O backend ficou healthy, `/health` respondeu com PostgreSQL e Redis, Alembic
+permaneceu em `20261017_fixed_income_contracts (head)`, e frontend, banco,
+Redis e cloudflared continuaram ativos. A primeira tentativa com SHA abreviado
+reiniciou o backend; o deploy foi corrigido usando o SHA completo e validado.
+
+A consulta B3 cobriu 21 tickers: 17 normalizaveis e quatro bloqueados por fator
+invalido ou tipo sem regra. Estado global apos a aplicacao: 2 `MATCHED`, 3
+`CONFLICT` e 120 `UNRECONCILED`. O evento 164 ainda nao pode ser promovido pelo
+reparo semantico atual, que aceita apenas eventos BRAPI e nao corrige a
+identidade/fator B3; manter fora da projecao ate implementar esse fluxo e
+repetir backup, dry-run e preflight.
