@@ -103,3 +103,7 @@ multiplicador utilizÃ¡vel.
 - NÃ£o muda o comportamento de `ticker_change_processor`.
 - NÃ£o autoriza coleta ampla, seed, migration, reconstruÃ§Ã£o ou alteraÃ§Ã£o da imagem.
 
+
+## Publicação no ambiente de testes - 19/10/2026
+
+O código foi publicado no commit `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754` e imagem `sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`. Apenas o serviço backend foi recriado. O import do DTO e classificador foi confirmado no container; `/health=200`, PostgreSQL e Redis OK, Alembic `20261017_fixed_income_contracts (head)`. Frontend e cloudflared permaneceram ativos. `/ready=503`; nenhuma certificacao foi criada e nenhum dado financeiro foi escrito. Nenhum teste foi executado neste bloco.

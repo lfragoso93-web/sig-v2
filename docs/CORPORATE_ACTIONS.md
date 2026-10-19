@@ -404,3 +404,5 @@ O contrato proposto, invariantes financeiros e sequência de implementação est
 em [`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
 O primeiro DTO/classificador B3 está implementado, mas não persiste, reconcilia
 ou projeta efeitos; portanto não muda a funcionalidade financeira do runtime.
+
+Deploy do classificador candidato no backend da imagem unica do tunnel: `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754`, digest `sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`. `/health=200`; PostgreSQL, Redis e Alembic head saudaveis. Frontend e cloudflared continuaram ativos. `/ready=503` sem ciclo de certificacao, por decisao de desenvolvimento; nenhum dado financeiro foi escrito.
