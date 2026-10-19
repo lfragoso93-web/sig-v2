@@ -10,7 +10,8 @@ def test_fixed_income_placeholder_router_is_removed() -> None:
     assert not REMOVED_ROUTER_PATH.exists()
 
 
-def test_main_does_not_register_fixed_income_placeholder() -> None:
+def test_main_registers_typed_contract_router_without_legacy_placeholder() -> None:
     source = MAIN_PATH.read_text(encoding="utf-8")
-    assert "fixed_income" not in source
-    assert "/fixed-income" not in source
+    assert "fixed_income_contracts.router" in source
+    assert "from app.routers import fixed_income" not in source
+    assert '"/fixed-income"' not in source
