@@ -532,3 +532,7 @@ Publicacao do classificador parcial na imagem de testes: commit `2e8b36bdb0cd4d5
 ## Projecao pura de eventos complexos - 19/10/2026
 
 `corporate_action_engine.py` agora modela pernas destino e projeta transformacoes nao monetarias com fatores/alocacoes explicitos e custo conservado. Incorpora??o extingue origem; cisao pode manter saldo. A funcao e isolada, sem banco, ledger, integracao financeira ou promocao de candidatos. `compileall` e `git diff --check` passaram; testes nao foram executados. Proxima etapa e desenho/persistencia multi-perna e evidencias; os cinco registros BRAPI seguem fora da projecao e #370 permanece independente.
+
+## Correcao da importacao do projetor - 19/10/2026
+
+A primeira verificacao no container revelou importacao de `localcontext` pelo modulo errado (`contextlib`). A funcao pertence a `decimal`; corrigido em `corporate_action_engine.py`. O primeiro container havia subido, mas o import do motor falhou; a imagem sera reconstruida e a verificacao sera repetida antes do fechamento deste bloco. Nenhum dado financeiro foi alterado.

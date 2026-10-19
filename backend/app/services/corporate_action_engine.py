@@ -5,10 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
-from contextlib import localcontext
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from enum import StrEnum
 from typing import Any
 
