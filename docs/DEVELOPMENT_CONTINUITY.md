@@ -527,3 +527,8 @@ Contrato proposto para eventos corporativos complexos: `docs/CORPORATE_EVENT_COM
 Implementacao parcial do contrato de eventos complexos: `corporate_action_engine.py` agora define `ComplexCorporateActionKind`, `B3ComplexCorporateActionCandidate` e `normalize_b3_complex_corporate_action_candidates`. A classificacao B3 e read-only/in-memory, exige ISIN de origem e data lastDatePrior; incorporacao/cisao exigem ISIN(s) de destino. Linhas de outra classe sao filtradas, identidades sao deterministicas e o candidato explicita `projectable=false`, `quantity_factor=None`, `effective_date=None`. Nenhuma persistencia, reconciliacao, projecao, migration, teste ou alteracao de banco ocorreu. `compileall` e `git diff --check` passaram. Proxima etapa: pernas persistidas multiativo e projetor puro de transformacao sem caixa.
 
 Publicacao do classificador parcial na imagem de testes: commit `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754`, imagem `sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`. Backend healthy, banco/Redis OK, Alembic head e novo DTO importado. Frontend/tunnel preservados; `/ready=503`, sem novo evento de certificacao. Nenhuma escrita financeira ou teste foi feito.
+
+
+## Projecao pura de eventos complexos - 19/10/2026
+
+`corporate_action_engine.py` agora modela pernas destino e projeta transformacoes nao monetarias com fatores/alocacoes explicitos e custo conservado. Incorpora??o extingue origem; cisao pode manter saldo. A funcao e isolada, sem banco, ledger, integracao financeira ou promocao de candidatos. `compileall` e `git diff --check` passaram; testes nao foram executados. Proxima etapa e desenho/persistencia multi-perna e evidencias; os cinco registros BRAPI seguem fora da projecao e #370 permanece independente.

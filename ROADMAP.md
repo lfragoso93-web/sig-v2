@@ -453,3 +453,8 @@ Consulta B3 cobriu 21 tickers; o normalizador filtra ISIN, converte percentuais 
 Mapeamento de incorporacao, cisao e resgate em `docs/CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`. DTO/enum neutro e classificador candidato B3 foram implementados; a saída fica explicitamente não projetável e sem fator/data efetiva. O modelo ainda não tem pernas multiativo nem projetor de conversão/caixa. `ticker_change_processor` é portfolio-scoped e cria transações sintéticas no fluxo CSV, portanto não é reutilizado. Nenhum evento real foi alterado. Próximo bloco: modelar pernas de destino/alocação de custo e projetor puro não monetário; resgates em dinheiro ficam separados. Os cinco registros BRAPI mal tipados permanecem fora da projeção.
 
 Deploy no ambiente de testes: backend da imagem unica atualizado para `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754` (`sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`). `/health=200`, `/ready=503`; nenhum dado financeiro ou certificacao foi alterado.
+
+
+## Eventos corporativos complexos - 19/10/2026
+
+O motor recebeu contrato em memoria para pernas destino e projetor puro para incorporacoes/cisoes sem caixa. Fatores de conversao e alocacoes de custo sao explicitos; o custo total precisa ser conservado. Nao ha persistencia multi-perna nem integracao com posicoes/snapshots; nenhum evento ou dado financeiro foi aplicado. Proximo bloco: definir persistencia e vincular evidencias/reconciliacao antes de integrar os leitores.

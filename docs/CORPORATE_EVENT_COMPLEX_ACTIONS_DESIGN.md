@@ -1,8 +1,7 @@
 # Contrato proposto para eventos corporativos complexos
 
 Data: 19/10/2026  
-Status: DTO/classificador B3 implementado parcialmente; sem persistência,
-projeção ou alteração de dados.
+Status: classificador B3 e projetor puro em memoria implementados parcialmente; sem persistencia, integracao financeira ou alteracao de dados.
 
 ## Contexto verificado
 
@@ -85,9 +84,14 @@ multiplicador utilizável.
 1. DTO/enum e classificador candidato B3: concluído. O classificador falha
    fechado para classe/data/destino ausentes, mas ainda não demonstra relação de
    conversão nem autoriza projeção.
-2. Decidir e migrar a representação de pernas de destino e alocação de custo.
-3. Implementar um projetor puro para transformação não monetária multiativo,
-   com invariantes de quantidade e custo e sem escrita no ledger.
+2. Contrato em memoria de pernas de destino: concluido. Cada perna exige ISIN,
+   fator positivo explicito e alocacao de custo entre zero e um; a origem tambem
+   tem fator e alocacao explicitos. A soma das alocacoes deve ser exatamente um.
+   Ainda falta decidir e migrar a representacao persistida multi-perna.
+3. Projetor puro nao monetario: concluido para incorporacoes e cisoes. Recebe
+   somente conversoes ja resolvidas, valida ISINs, fatores e conservacao do
+   custo, e devolve origem residual e destinos sem precos de mercado. Nao le
+   payload de provedor, nao reconcilia candidatos e nao grava ledger/banco.
 4. Integrar leitor, posições, custo, realizações, snapshots, resumo e IRPF,
    mantendo desconhecidos fora da projeção.
 5. Tratar resgates monetários em bloco separado, após definir a fronteira entre
@@ -107,3 +111,20 @@ multiplicador utilizável.
 ## Publica��o no ambiente de testes - 19/10/2026
 
 O c�digo foi publicado no commit `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754` e imagem `sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`. Apenas o servi�o backend foi recriado. O import do DTO e classificador foi confirmado no container; `/health=200`, PostgreSQL e Redis OK, Alembic `20261017_fixed_income_contracts (head)`. Frontend e cloudflared permaneceram ativos. `/ready=503`; nenhuma certificacao foi criada e nenhum dado financeiro foi escrito. Nenhum teste foi executado neste bloco.
+
+## Projetor puro de pernas nao monetarias - 19/10/2026
+
+`corporate_action_engine.py` agora contem `CorporateActionDestinationLeg`,
+`ResolvedNonCashCorporateAction`, `NonCashCorporateActionProjection` e
+`project_non_cash_corporate_action()`. Cada destino exige ISIN, fator quantitativo
+explicito e parcela de custo; a origem recebe fator residual e parcela propria.
+As parcelas devem somar exatamente 1. Incorporacao extingue quantidade e custo
+da origem; cisao permite origem residual. O custo anterior e conservado sem
+inferencia de preco de mercado.
+
+O projetor rejeita resgates monetarios, campos incompletos, destinos duplicados
+ou iguais a origem, alocacao invalida e fatores nao positivos nos destinos.
+Candidatos B3 nao se tornam projetaveis automaticamente. O projetor nao consulta
+nem modifica `corporate_events` ou `transactions` e nao integra posicoes ou
+snapshots. Persistencia multi-perna, evidencia/reconciliacao e fracoes continuam
+pendentes. Compilacao e `git diff --check` passaram; testes nao foram executados.

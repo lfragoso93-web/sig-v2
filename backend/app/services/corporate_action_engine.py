@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
+from contextlib import localcontext
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -53,6 +54,40 @@ class B3ComplexCorporateActionCandidate:
     @property
     def projectable(self) -> bool:
         return False
+
+
+@dataclass(frozen=True)
+class CorporateActionDestinationLeg:
+    """Perna destino com conversao e rateio de custo explicitamente resolvidos."""
+
+    destination_isin: str
+    quantity_factor: Decimal
+    cost_allocation: Decimal
+
+
+@dataclass(frozen=True)
+class ResolvedNonCashCorporateAction:
+    """Contrato em memoria para uma transformacao sem componente em caixa."""
+
+    source_event_id: str
+    source_isin: str
+    effective_date: date
+    kind: ComplexCorporateActionKind
+    destination_legs: tuple[CorporateActionDestinationLeg, ...]
+    source_quantity_factor: Decimal
+    source_cost_allocation: Decimal
+
+
+@dataclass(frozen=True)
+class NonCashCorporateActionProjection:
+    """Posicoes e custos resultantes, sem persistencia ou precificacao de mercado."""
+
+    source_isin: str
+    source_quantity: Decimal
+    source_cost: Decimal
+    destinations: tuple[tuple[str, Decimal, Decimal], ...]
+    effective_date: date
+    source_event_id: str
 
 
 class CorporateActionNormalizationError(ValueError):
@@ -117,6 +152,139 @@ def _positive_decimal(value: object, *, field: str) -> Decimal:
     if not parsed.is_finite() or parsed <= 0:
         raise CorporateActionNormalizationError(f"{field} deve ser positivo")
     return parsed
+
+
+def _decimal_value(value: object, *, field: str) -> Decimal:
+    try:
+        parsed = Decimal(str(value))
+    except Exception as exc:
+        raise CorporateActionNormalizationError(f"{field} invalido") from exc
+    if not parsed.is_finite():
+        raise CorporateActionNormalizationError(f"{field} deve ser finito")
+    return parsed
+
+
+def _non_negative_decimal(value: object, *, field: str) -> Decimal:
+    parsed = _decimal_value(value, field=field)
+    if parsed < 0:
+        raise CorporateActionNormalizationError(
+            f"{field} deve ser nao negativo"
+        )
+    return parsed
+
+
+def _cost_allocation(value: object, *, field: str) -> Decimal:
+    parsed = _non_negative_decimal(value, field=field)
+    if parsed > 1:
+        raise CorporateActionNormalizationError(
+            f"{field} deve estar entre zero e um"
+        )
+    return parsed
+
+
+def project_non_cash_corporate_action(
+    *,
+    quantity: Decimal,
+    total_cost: Decimal,
+    action: ResolvedNonCashCorporateAction,
+) -> NonCashCorporateActionProjection:
+    """Projeta pernas explicitamente resolvidas sem tocar no ledger ou banco.
+
+    Conversoes de quantidade e alocacoes de custo devem vir de evidencia
+    reconciliada pelo chamador. O projetor nao interpreta payload de provedor.
+    """
+
+    if action.kind not in {
+        ComplexCorporateActionKind.INCORPORATION,
+        ComplexCorporateActionKind.SPIN_OFF,
+    }:
+        raise CorporateActionNormalizationError(
+            "somente incorporacao e cisao sem caixa sao suportadas"
+        )
+    if not action.source_event_id.strip():
+        raise CorporateActionNormalizationError("source_event_id ausente")
+    source_isin = action.source_isin.strip().upper()
+    if len(source_isin) != 12 or not source_isin.isalnum():
+        raise CorporateActionNormalizationError("source_isin invalido")
+    if not isinstance(action.effective_date, date):
+        raise CorporateActionNormalizationError("effective_date invalida")
+    if not action.destination_legs:
+        raise CorporateActionNormalizationError("perna destino ausente")
+
+    source_quantity = _non_negative_decimal(quantity, field="quantity")
+    source_cost = _non_negative_decimal(total_cost, field="total_cost")
+    source_factor = _non_negative_decimal(
+        action.source_quantity_factor, field="source_quantity_factor"
+    )
+    source_allocation = _cost_allocation(
+        action.source_cost_allocation, field="source_cost_allocation"
+    )
+    if (
+        action.kind == ComplexCorporateActionKind.INCORPORATION
+        and (source_factor != 0 or source_allocation != 0)
+    ):
+        raise CorporateActionNormalizationError(
+            "incorporacao deve extinguir quantidade e custo da origem"
+        )
+
+    normalized_legs: list[tuple[str, Decimal, Decimal]] = []
+    seen_isins = {source_isin}
+    allocation_total = source_allocation
+    for index, leg in enumerate(action.destination_legs):
+        destination_isin = leg.destination_isin.strip().upper()
+        if len(destination_isin) != 12 or not destination_isin.isalnum():
+            raise CorporateActionNormalizationError(
+                f"destination_legs[{index}].destination_isin invalido"
+            )
+        if destination_isin in seen_isins:
+            raise CorporateActionNormalizationError(
+                "ISIN de destino duplicado ou igual a origem"
+            )
+        seen_isins.add(destination_isin)
+        factor = _positive_decimal(
+            leg.quantity_factor,
+            field=f"destination_legs[{index}].quantity_factor",
+        )
+        allocation = _cost_allocation(
+            leg.cost_allocation,
+            field=f"destination_legs[{index}].cost_allocation",
+        )
+        normalized_legs.append((destination_isin, factor, allocation))
+        allocation_total += allocation
+
+    if allocation_total != 1:
+        raise CorporateActionNormalizationError(
+            "alocacoes de custo da origem e destinos devem somar um"
+        )
+
+    with localcontext() as context:
+        context.prec = max(context.prec, 60)
+        projected_source_quantity = source_quantity * source_factor
+        projected_source_cost = source_cost * source_allocation
+        destinations = tuple(
+            (
+                destination_isin,
+                source_quantity * factor,
+                source_cost * allocation,
+            )
+            for destination_isin, factor, allocation in normalized_legs
+        )
+        projected_cost = projected_source_cost + sum(
+            (cost for _, _, cost in destinations), Decimal(0)
+        )
+        if projected_cost != source_cost:
+            raise CorporateActionNormalizationError(
+                "projecao nao preservou o custo total"
+            )
+
+    return NonCashCorporateActionProjection(
+        source_isin=source_isin,
+        source_quantity=projected_source_quantity,
+        source_cost=projected_source_cost,
+        destinations=destinations,
+        effective_date=action.effective_date,
+        source_event_id=action.source_event_id,
+    )
 
 
 def _event_id(

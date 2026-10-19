@@ -406,3 +406,8 @@ O primeiro DTO/classificador B3 está implementado, mas não persiste, reconcili
 ou projeta efeitos; portanto não muda a funcionalidade financeira do runtime.
 
 Deploy do classificador candidato no backend da imagem unica do tunnel: `2e8b36bdb0cd4d534c4b61b58fa06d7f64e43754`, digest `sha256:4e129ab9b32319c193ee9655cd43432b4bd400288f4c734fc504c0e377134cb7`. `/health=200`; PostgreSQL, Redis e Alembic head saudaveis. Frontend e cloudflared continuaram ativos. `/ready=503` sem ciclo de certificacao, por decisao de desenvolvimento; nenhum dado financeiro foi escrito.
+
+
+### Projetor puro de eventos complexos - 19/10/2026
+
+O motor possui agora DTOs em memoria para pernas destino e um projetor puro de incorporacao/cisao sem caixa. Exige conversoes e alocacoes de custo explicitas, ISINs distintos e conservacao exata do custo; nao interpreta payload de provider nem grava eventos, transacoes ou snapshots. Persistencia multi-perna e integracao continuam pendentes. Nenhum evento foi reconciliado ou aplicado neste bloco.
