@@ -535,4 +535,4 @@ Publicacao do classificador parcial na imagem de testes: commit `2e8b36bdb0cd4d5
 
 ## Correcao da importacao do projetor - 19/10/2026
 
-A primeira verificacao no container revelou importacao de `localcontext` pelo modulo errado (`contextlib`). A funcao pertence a `decimal`; corrigido em `corporate_action_engine.py`. O primeiro container havia subido, mas o import do motor falhou; a imagem sera reconstruida e a verificacao sera repetida antes do fechamento deste bloco. Nenhum dado financeiro foi alterado.
+A primeira verificacao no container revelou importacao de `localcontext` pelo modulo errado (`contextlib`). A funcao pertence a `decimal`; corrigido no commit `aefda2fe88b1176f372e9fc2805e1c0fab6d4591`. A imagem foi reconstruida: import do projetor OK, `/health=200`, Alembic `20261017_fixed_income_contracts (head)`, PostgreSQL e Redis saudaveis. `/ready=503`, sem certificacao, conforme o escopo deste bloco. Backend, frontend, banco, Redis e cloudflared estao ativos. Nenhum dado financeiro foi alterado; testes nao foram executados.
