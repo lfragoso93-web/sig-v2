@@ -163,7 +163,7 @@ evidência de custodiante/corretora para quantidade, preço de liquidação e
 tratamento de caixa. A lacuna de NIKE34 deve ser tratada por ativo sob a política
 B3, sem seed global e sem inferir data, caixa ou liquidação.
 
-## Auditoria do runtime publicado - 18/10/2026
+## Auditoria do runtime publicado - 18/10/2026 (fotografia anterior ao reparo NIKE34)
 
 Esta validacao posterior substitui o retrato de publicacao de 16/10 acima para o estado operacional. O Compose sig-v2 esta ativo: backend, PostgreSQL e Redis healthy; frontend e Cloudflare Tunnel em execucao. Backend /health=200, Alembic 20261017_fixed_income_contracts (head). Nenhuma sincronizacao, reconciliacao nem escrita de dados financeiros foi feita.
 
@@ -180,9 +180,9 @@ Esta validacao posterior substitui o retrato de publicacao de 16/10 acima para o
 /ready=503 indica incompatibilidade da identidade persistida de certificacao nos campos commit, dataset e revisao Alembic. O bloqueio e do contrato de readiness para dados reais; backend e interface seguem em funcionamento para a stack atual. Nenhuma certificacao foi renovada neste bloco.
 
 A Issue #370 continua aberta pela falta de evidencia externa de liquidacao de KLBN11. Nao converter conflitos em MATCHED nem corrigir fatores/datas por suposicao. Proxima validacao funcional: executar os GETs de lifecycle com uma sessao de teste autorizada e revisar os tres conflitos junto de extrato de custodia/corretora; completar a lacuna de data efetiva de NIKE34 com calendario oficial antes de considerar esse evento elegivel.
-## Significado e inventario de UNRECONCILED - 18/10/2026
+## Significado e inventario de UNRECONCILED - 18/10/2026 (fotografia anterior ao reparo NIKE34)
 
-UNRECONCILED e um estado de reconciliacao do fato, nao uma indicacao de que o evento nao esteja ligado ao ativo global nem de que seja falso. Os registros do catalogo sao associados por asset_id; a projecao financeira atual tambem exige portfolio_id nulo para tratar uma acao como global. Para eventos de provedores, o leitor so permite projeção quando a linha e canonical, reconciliation_status=MATCHED e requires_review=false. Portanto, hoje os 120 eventos globais UNRECONCILED estao persistidos mas nao afetam nenhuma carteira.
+UNRECONCILED e um estado de reconciliacao do fato, nao uma indicacao de que o evento nao esteja ligado ao ativo global nem de que seja falso. Os registros do catalogo sao associados por asset_id; a projecao financeira atual tambem exige portfolio_id nulo para tratar uma acao como global. Para eventos de provedores, o leitor so permite projeção quando a linha e canonical, reconciliation_status=MATCHED e requires_review=false. Na fotografia desta auditoria, os 120 eventos globais UNRECONCILED estavam persistidos mas nao afetavam nenhuma carteira. O estado corrente, apos reconciliar NIKE34 164, esta registrado ao final deste documento.
 
 ### Composicao do catalogo
 
@@ -302,12 +302,10 @@ permaneceu em `20261017_fixed_income_contracts (head)`, e frontend, banco,
 Redis e cloudflared continuaram ativos. A primeira tentativa com SHA abreviado
 reiniciou o backend; o deploy foi corrigido usando o SHA completo e validado.
 
-A consulta B3 cobriu 21 tickers: 17 normalizaveis e quatro bloqueados por fator
-invalido ou tipo sem regra. Estado global apos a aplicacao: 2 `MATCHED`, 3
-`CONFLICT` e 120 `UNRECONCILED`. O evento 164 ainda nao pode ser promovido pelo
-reparo semantico atual, que aceita apenas eventos BRAPI e nao corrige a
-identidade/fator B3; manter fora da projecao ate implementar esse fluxo e
-repetir backup, dry-run e preflight.
+A consulta B3 cobriu 21 tickers; no conjunto atual de eventos nao reconciliados,
+16 tickers normalizaram e quatro falharam fechado. Naquele momento, o evento
+164 ainda aguardava suporte de reparo semantico B3, implantado e executado na
+secao seguinte.
 
 ### Revisao integral de UNRECONCILED - 18/10/2026
 
@@ -346,7 +344,7 @@ O reparo semantico B3 foi ampliado para aceitar somente evento global
 `UNRECONCILED` com label de split/grupamento, `record_date` coerente, ISIN bruto
 igual ao ISIN persistido e fator bruto igual ao fator legado. Recalcula fator,
 `ratio`, identidade e hash de origem; preserva status, revisao e data efetiva.
-Assim, o dry-run do evento 164 pode propor fator 10 sem promover o evento.
+Assim, o dry-run do evento 164 podia propor fator 10 sem promover o evento.
 Reconciliacao e data efetiva continuam operacoes posteriores e separadas.
 
 Conclusao: nao promover em lote os 119 eventos globais. Proximas acoes seguras:
@@ -354,3 +352,50 @@ reparar semanticamente o evento 164 sob backup; classificar labels nao
 quantitativos e fatores extremos; resolver datas por calendario/registro
 oficial; manter os 10 pares de provedores separados ate validacao por ISIN e
 evento economico. Nenhuma escrita foi feita nesta auditoria.
+
+### Reparo e reconciliacao do evento B3 NIKE34 164 - 19/10/2026
+
+O reparo semantico B3 foi publicado no commit
+`6816a418b79bea29402cd91576414ff17ad7c806` e implantado na imagem unica
+`sha256:8208c72fab61ca73e184b129b82e1889b35ebdf187c8baae0704603016a815a0`.
+O dry-run identificou fator bruto 900 como 900%, normalizando para multiplicador
+10. Foi persistida somente a correcao semantica (fator, `ratio`,
+`source_event_id` e hash); status de reconciliacao e data efetiva ficaram
+inalterados nessa primeira operacao.
+
+O backup pre-escrita v3 e
+`artifacts/pre-prod-rebuild/20261018-nike34-event164-repair-pre`, snapshot
+consistente, dump 41.087.870 bytes, SHA-256
+`61a87fe941c8a03f29b1d77350d190693b700d7fa3c22813c1ee91482a829434`, associado
+ao commit `6816a418b79bea29402cd91576414ff17ad7c806`.
+
+O preflight read-only confirmou zero transacoes/quantidade NIKE34 na carteira
+15 ate 09/02/2021. A evidencia B3 identifica ISIN `BRNIKEBDR006`,
+`lastDatePrior=2021-02-08`, fator oficial 900% e calendario de negociacao; a
+primeira sessao efetiva usada foi 09/02/2021. Com politica
+`NO_FRACTIONAL_RESIDUE`, o evento 164 foi reconciliado como canonico `MATCHED`,
+fator 10, `requires_review=false`. Nao houve alteracao do ledger.
+
+A manutencao pos-reconciliacao invalidou e reconstruiu 520 snapshots da carteira
+15 e invalidou um cache de rentabilidade. A leitura posterior em transacao
+`READ ONLY` confirmou que eventos 164 e 165 estao elegiveis; o evento 164 nao
+altera as compras posteriores a sua data efetiva. A posicao atual projetada
+continua em 1 NIKE34 e fracao 0,2 pendente do evento 165, sem caixa ou preco
+inventados.
+
+Estado do catalogo depois da escrita: 3 `MATCHED`, 3 `CONFLICT` e 119
+`UNRECONCILED`. Permanecem pendentes os 118 fatos BRAPI/Yahoo, alem dos seis
+eventos B3 sem registro correspondente identificados pela auditoria; nove
+subscricoes B3 sao direitos sem quantidade automatica. A troca ticker-resolution
+de PETZ3 permanece portfolio-scoped e fora do projetor global. As cinco linhas
+BRAPI com labels nao-quantitativos, os fatores extremos, as datas efetivas e as
+divergencias entre fontes devem ser triados individualmente; nenhum lote foi
+promovido.
+
+### Triagem tipada BRAPI: incorporacao, cisao e resgate - 19/10/2026
+
+A consulta read-only ao catalogo do runtime identificou cinco linhas `UNRECONCILED` cujo `event_type` persistido e `BONIFICACAO`, mas cujo label original contradiz esse tipo. Todas tem fator bruto 100; esse valor nao e conversivel em fator de quantidade sem contrato proprio. IDs: ALOS3/6 `INCORPORACAO`, BBDC3/19 `CIS RED CAP`, ITSA4/64 `RESG TOTAL RV`, PETZ3/97 `INCORPORACAO` e SANB11/111 `CIS RED CAP`. Nenhuma linha foi corrigida, promovida ou aplicada.
+
+A pagina oficial da B3 para BBDC confirma `CIS RED CAP`, ISIN `BRBBDCACNOR1`, deliberacao em 30/03/2000, negocios com direito ate 09/08/2000, fator 100 e ativos emitidos distintos. A pagina de PETZ confirma incorporacao deliberada em 14/03/2025, negocios com direito ate 02/01/2026, fator 100 e dois ISINs de ativos emitidos. Esses fatos exigem semantica de ativo de destino/incorporacao; nao sao bonificacoes quantitativas simples. ALOS3, ITSA4 e SANB11 continuam sem evidencia oficial individual suficiente nesta rodada.
+
+Decisao: manter os cinco eventos fora da projecao, sem reclassificar como `TICKER_CHANGE` automaticamente. O projeto precisa de contrato tipado para incorporacao/cisao/resgate, incluindo ativo de destino, relacao de conversao, data efetiva e tratamento da posicao/custo. A Issue #370 permanece restrita aos conflitos materiais AMOB3/KLBN11 e evidencia de fracao; nao foi usada para autorizar escrita nesses cinco casos. A consulta de candidatos cross-provider retornou zero grupos e zero escritas.
