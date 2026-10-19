@@ -399,3 +399,7 @@ A consulta read-only ao catalogo do runtime identificou cinco linhas `UNRECONCIL
 A pagina oficial da B3 para BBDC confirma `CIS RED CAP`, ISIN `BRBBDCACNOR1`, deliberacao em 30/03/2000, negocios com direito ate 09/08/2000, fator 100 e ativos emitidos distintos. A pagina de PETZ confirma incorporacao deliberada em 14/03/2025, negocios com direito ate 02/01/2026, fator 100 e dois ISINs de ativos emitidos. Esses fatos exigem semantica de ativo de destino/incorporacao; nao sao bonificacoes quantitativas simples. ALOS3, ITSA4 e SANB11 continuam sem evidencia oficial individual suficiente nesta rodada.
 
 Decisao: manter os cinco eventos fora da projecao, sem reclassificar como `TICKER_CHANGE` automaticamente. O projeto precisa de contrato tipado para incorporacao/cisao/resgate, incluindo ativo de destino, relacao de conversao, data efetiva e tratamento da posicao/custo. A Issue #370 permanece restrita aos conflitos materiais AMOB3/KLBN11 e evidencia de fracao; nao foi usada para autorizar escrita nesses cinco casos. A consulta de candidatos cross-provider retornou zero grupos e zero escritas.
+
+O contrato proposto, invariantes financeiros e sequência de implementação estão
+em [`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
+Trata-se de desenho, não de funcionalidade disponível no runtime.

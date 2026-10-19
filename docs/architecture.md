@@ -95,6 +95,11 @@ Eventos pertencem ao ativo em `corporate_events`. Transações históricas não 
 Eventos complexos podem permanecer `UNRECONCILED` até tratamento canônico.
 Eventos materiais precisam estar reconciliados ou formalizados como `CONFLICT`
 fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência.
+O contrato proposto para incorporações, cisões com ativos destino e resgates
+está em [`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
+Esse desenho ainda não está implementado: até lá, esses eventos ficam fora da
+projeção e o processador portfolio-scoped de troca de ticker não deve ser
+reutilizado como substituto.
 
 ## Renda Fixa e Tesouro
 
