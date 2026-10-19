@@ -443,3 +443,7 @@ Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, chec
 UNRECONCILED descreve estado de reconciliacao; nao significa falta de asset_id ou fato falso. Dos 121 registros, 120 sao eventos globais de provedor e 1 e troca de ticker especifica de carteira. A regra atual exige MATCHED para qualquer evento nao legado, logo ainda nao aplica os 120 eventos globais; o CLI achou zero pares exatos e ha 10 pares BRAPI/Yahoo com datas divergentes de 1-3 dias. Nenhum dos 118 eventos BRAPI/Yahoo com effective_date coincidiu com quantidade positiva no ledger existente; NIKE34 segue sem data efetiva e os conflitos AMOB3/KLBN11 permanecem materiais.
 
 Proximo bloco: definir elegibilidade canonica por autoridade e cobertura do provedor, manter B3 como primaria, BRAPI como complemento limitado e Yahoo como fallback explicito. Validar que um unico fato canonico se projeta em cada carteira elegivel sem duplicar eventos nem mutar o ledger. Nao promover linhas em lote nem inferir datas.
+
+## Auditoria B3 e bloqueio de seed - 18/10/2026
+
+Consulta read-only pelo conector B3 para 21 tickers do catalogo: 19 payloads passaram pela normalizacao, BBDC3/RANI3 falharam por fator invalido e nenhuma linha foi gravada. A auditoria encontrou dois defeitos no normalizador: nao limita todas as linhas ao ISIN do ativo e trata percentuais de bonificacao/desdobramento como multiplicadores absolutos. Corrigir e validar esses contratos antes de nova coleta com escrita; fazer backup e preflight de ledger/fracoes antes de reconciliar qualquer evento.

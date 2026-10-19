@@ -208,3 +208,43 @@ Usando somente transactions persistidas e effective_date disponivel, nenhum dos 
 A arquitetura pretendida e global: um fato corporativo canonico do ativo deve ser projetado sobre cada ledger que possuia quantidade elegivel na data efetiva, sem mutar transacoes historicas. O estado de reconciliacao atual exige MATCHED inclusive para uma linha isolada de fonte autorizada, e a descoberta de candidatos depende de duas fontes com data identica. Isso deixa fatos potencialmente validos bloqueados e nao representa sozinho a autoridade por provedor.
 
 O proximo bloco deve classificar elegibilidade por fonte e tipo: B3 oficial pode fundamentar o fato quando data efetiva, fator e payload estao completos; BRAPI so complementa fatos fora da cobertura B3; Yahoo continua fallback explicitamente identificado onde nao ha cobertura oficial. Duplicatas e divergencias devem continuar sem dupla aplicacao, com proveniencia preservada. Nenhuma promocao em lote de UNRECONCILED para MATCHED e autorizada por este inventario.
+
+## Auditoria do conector B3 - 18/10/2026
+
+Foi feita uma consulta read-only pelo `B3ListedCompaniesClient` para os 21 tickers
+de eventos globais cujo ativo no catalogo e ACAO ou BDR. A B3 respondeu para os
+21 emissores; 19 payloads passaram pela normalizacao atual e dois falharam por
+fator invalido (BBDC3 e RANI3). A consulta e a comparacao fizeram zero escritas
+no banco.
+
+Esta auditoria encontrou dois defeitos que impedem executar o seed atual com
+`--execute`:
+
+1. O endpoint de emissor retorna acoes de varias classes, identificadas por
+   `isinCode`. `corporate_actions()` apenas verifica que o ISIN esperado aparece
+   em algum item, mas `normalize_b3_corporate_actions()` inclui todos os itens.
+   Exemplo: ALUP11 retornou seis linhas, das quais somente duas tinham o ISIN
+   do ativo. Isso pode vincular acoes de outra classe ao ticker consultado.
+2. A coluna B3 e `% / Split Factor`. A normalizacao atual grava o valor bruto de
+   `factor` como `quantity_factor`. A comparacao com eventos existentes mostra
+   que bonificacoes e desdobramentos precisam ser convertidos de percentual para
+   multiplicador (`1 + percentual / 100`); grupamentos ja chegam como fator
+   multiplicador. Exemplos observados: bonificacao de 4% corresponde a 1,04;
+   desdobramento de 70% corresponde a 1,70; grupamento de 0,02 permanece 0,02.
+   As paginas B3 mostram a coluna e identificam as acoes por classe/ISIN:
+   [exemplo de acoes corporativas B3](https://sistemaswebb3-listados.b3.com.br/listedCompaniesPage/main/1228/BNBR/corporate-actions?language=en-US).
+
+A comparacao somente para investigacao encontrou corroboracao B3 de eventos
+existentes, incluindo AMOB3 (record date 28/05/2025, grupamento 0,02) e KLBN11
+(bonificacao de 1% em 17/12/2025). Essas respostas confirmam fatos do emissor,
+mas nao resolvem por si so data efetiva, fracao/liquidacao ou a elegibilidade de
+cada carteira. AMOB3 IDs 12/13 e KLBN11 IDs 81/82 mantem seus estados atuais; o
+conector nao gravou, promoveu, ocultou nem aplicou nenhum evento.
+
+Proximo passo obrigatorio antes de nova coleta com escrita: corrigir a
+normalizacao percentual, filtrar ou rejeitar linhas cujo ISIN nao corresponda
+ao ativo e rejeitar payloads incompletos sem descartar silenciosamente os dados.
+Depois, repetir dry-run, gerar backup consistente e validar os efeitos por
+ledger e politica de fracao antes de qualquer promocao ou projeção. O estado
+`UNRECONCILED` continua significando fato pendente de reconciliacao, mesmo
+quando ha evidencia B3 associada ao ativo.

@@ -501,3 +501,9 @@ Auditoria read-only do catalogo:
 O evento 3 de PETZ3 e uma troca especifica da carteira para AUAU3, marcada APLICADO, mas nao e um dos eventos de split/bonificacao. O subsistema nao encontrou transacoes com o marcador de ledger desse evento. As tres linhas CONFLICT AMOB3/KLBN11 continuam a pendencia material separada da Issue #370.
 
 Proximo bloco atualizado: desenhar e testar a elegibilidade canonica por autoridade de fonte e reconciliar os 10 pares de datas divergentes com a regra oficial de data efetiva. Preservar os conflitos sem evidencia; nao fazer MATCHED em lote.
+
+### Auditoria B3 do catálogo global - 18/10/2026
+
+A consulta read-only do `B3ListedCompaniesClient` cobriu 21 tickers de eventos globais; 19 payloads normalizaram e BBDC3/RANI3 falharam por `factor` invalido. O endpoint mistura linhas de varios ISINs do emissor, enquanto a validacao atual so confere que o ISIN do ativo aparece em alguma linha. A conversao do `factor` tambem esta incorreta para bonificacoes e desdobramentos: os valores B3 sao percentuais, mas o normalizador os grava como multiplicadores absolutos. Nenhuma escrita foi feita.
+
+Bloqueio antes de seed: corrigir fator e escopo por ISIN, repetir o dry-run e inspecionar eventos e saldos afetados. Gerar backup consistente antes de gravar. A evidencia B3 de AMOB3 confirma o grupamento de fator 0,02 com record date 28/05/2025; para KLBN11 confirma bonificacao de 1% em 17/12/2025. A liquidacao de fracoes e a elegibilidade por carteira continuam sem conclusao automatica.
