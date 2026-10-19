@@ -536,3 +536,8 @@ Publicacao do classificador parcial na imagem de testes: commit `2e8b36bdb0cd4d5
 ## Correcao da importacao do projetor - 19/10/2026
 
 A primeira verificacao no container revelou importacao de `localcontext` pelo modulo errado (`contextlib`). A funcao pertence a `decimal`; corrigido no commit `aefda2fe88b1176f372e9fc2805e1c0fab6d4591`. A imagem foi reconstruida: import do projetor OK, `/health=200`, Alembic `20261017_fixed_income_contracts (head)`, PostgreSQL e Redis saudaveis. `/ready=503`, sem certificacao, conforme o escopo deste bloco. Backend, frontend, banco, Redis e cloudflared estao ativos. Nenhum dado financeiro foi alterado; testes nao foram executados.
+
+
+## Decisao de persistencia para transformacoes corporativas - 19/10/2026
+
+Revisados `CorporateEvent`, evidencia, migrations Alembic, consumers de destino, `docs/CORPORATE_EVENTS_LEGACY_COLUMN_INVENTORY.md`, #272, #370 e #129. Modelo escolhido: evento pai global conserva fator/alocacao da origem; tabela filha aditiva mantem uma linha por ISIN destino com fator, alocacao, referencia de evidencia e asset_id opcional. Unicidade por evento+ISIN, fatores/allocation com checks locais; soma de alocacoes e validacao atomica no servico, pois e uma invariavel entre linhas. Nenhum backfill dos campos legados, alteracao de schema ou dado executado. Antes da migration: runbook de backup/restore, fixture descartavel, gates Alembic/MetaData e preservacao dos consumidores #272.

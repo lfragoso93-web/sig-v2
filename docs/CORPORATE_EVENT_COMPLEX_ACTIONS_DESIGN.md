@@ -1,7 +1,7 @@
 # Contrato proposto para eventos corporativos complexos
 
 Data: 19/10/2026  
-Status: classificador B3 e projetor puro em memoria implementados parcialmente; sem persistencia, integracao financeira ou alteracao de dados.
+Status: classificador B3 e projetor puro em memoria implementados; modelo aditivo multi-perna decidido, migration e integracao pendentes.
 
 ## Contexto verificado
 
@@ -84,10 +84,11 @@ multiplicador utilizável.
 1. DTO/enum e classificador candidato B3: concluído. O classificador falha
    fechado para classe/data/destino ausentes, mas ainda não demonstra relação de
    conversão nem autoriza projeção.
-2. Contrato em memoria de pernas de destino: concluido. Cada perna exige ISIN,
-   fator positivo explicito e alocacao de custo entre zero e um; a origem tambem
-   tem fator e alocacao explicitos. A soma das alocacoes deve ser exatamente um.
-   Ainda falta decidir e migrar a representacao persistida multi-perna.
+2. Modelo persistido multi-perna decidido neste documento; migration ainda
+   pendente. O evento pai registra fator e alocacao residuais da origem; cada
+   destino fica numa linha filha identificada pelo ISIN, com fator, alocacao e
+   referencia de evidencia proprios. A especificacao completa esta na secao
+   "Modelo de persistencia multi-perna" abaixo.
 3. Projetor puro nao monetario: concluido para incorporacoes e cisoes. Recebe
    somente conversoes ja resolvidas, valida ISINs, fatores e conservacao do
    custo, e devolve origem residual e destinos sem precos de mercado. Nao le
@@ -128,3 +129,42 @@ Candidatos B3 nao se tornam projetaveis automaticamente. O projetor nao consulta
 nem modifica `corporate_events` ou `transactions` e nao integra posicoes ou
 snapshots. Persistencia multi-perna, evidencia/reconciliacao e fracoes continuam
 pendentes. Compilacao e `git diff --check` passaram; testes nao foram executados.
+
+## Modelo de persistencia multi-perna - 19/10/2026
+
+### Estrutura aditiva proposta
+
+- Manter `corporate_events` como evento pai global e identidade canonica do
+  fato. Acrescentar `source_quantity_factor` e `source_cost_allocation`, ambos
+  nulos enquanto o evento nao tiver conversao resolvida. Quando preenchidos,
+  ambos sao obrigatorios em conjunto; o fator e nao negativo e a alocacao fica
+  entre zero e um. Incorporacao exige ambos iguais a zero.
+- Criar `corporate_event_destination_legs`, com FK para o evento pai e exclusao
+  em cascata da linha filha. Cada linha contem `destination_isin_code` obrigatorio,
+  `destination_asset_id` opcional ate a resolucao no catalogo, ticker informativo,
+  `quantity_factor` positivo, `cost_allocation` entre zero e um e uma
+  `evidence_reference` para a relacao/custo daquela perna.
+- Garantir unicidade de ISIN de destino por evento e indice por evento. Uma
+  repeticao de ingestao atualiza/ignora pela mesma identidade, sem criar perna
+  duplicada. A ordenacao de leitura e pelo ISIN, sem depender da ordem do provider.
+- Preservar as colunas legadas de destino no pai durante esta transicao; nao
+  espelha-las nem usa-las como fonte das novas pernas. #272 governa qualquer
+  retirada futura de aliases e segue separada desta migration.
+
+### Gate de resolucao e projecao
+
+Nao usar trigger cross-table para somar alocacoes. O servico de dominio valida
+em uma transacao consistente que a alocacao da origem mais a soma das pernas e
+exatamente 1, que ha ao menos um destino, que todos os ISINs/ativos estao
+resolvidos e que cada referencia de evidencia esta presente. A acao so pode
+chegar ao projetor quando estiver `MATCHED`, canonica, sem revisao, com
+`effective_date`, evidencia de reconciliacao compativel, sem componente em
+caixa e sem conflito. A falta de qualquer campo conserva o evento fora da
+projecao. A politica de fracao continua obrigatoria antes de materializar
+posicoes.
+
+A migration e aditiva, sem backfill automatico dos campos de destino legados e
+sem tocar nos 123 eventos existentes. Nao altera `transactions`, snapshots,
+ativos ou status de reconciliacao. Antes de aplica-la ao banco do ambiente,
+seguir o runbook de backup/restore e validar upgrade/downgrade em banco
+descartavel. Esta especificacao nao executou DDL nem consulta/escrita no banco.

@@ -97,9 +97,10 @@ Eventos materiais precisam estar reconciliados ou formalizados como `CONFLICT`
 fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência.
 O contrato para incorporações, cisões com ativos destino e resgates está em
 [`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
-Há um classificador B3 de candidatos, ainda sem persistência ou projeção; esses
-eventos continuam fora do efeito financeiro. O processador portfolio-scoped de
-troca de ticker não deve ser reutilizado como substituto.
+O classificador B3 e o projetor puro para transformacoes nao monetarias
+estao implementados em memoria, sem persistencia ou integracao financeira;
+os candidatos reais continuam fora do efeito financeiro. O processador
+portfolio-scoped de troca de ticker nao deve ser reutilizado como substituto.
 
 ## Renda Fixa e Tesouro
 

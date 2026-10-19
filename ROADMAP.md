@@ -458,3 +458,8 @@ Deploy no ambiente de testes: backend da imagem unica atualizado para `2e8b36bdb
 ## Eventos corporativos complexos - 19/10/2026
 
 O motor recebeu contrato em memoria para pernas destino e projetor puro para incorporacoes/cisoes sem caixa. Fatores de conversao e alocacoes de custo sao explicitos; o custo total precisa ser conservado. Nao ha persistencia multi-perna nem integracao com posicoes/snapshots; nenhum evento ou dado financeiro foi aplicado. Proximo bloco: definir persistencia e vincular evidencias/reconciliacao antes de integrar os leitores.
+
+
+## Persistencia de eventos corporativos multi-perna - 19/10/2026
+
+Decidida estrutura aditiva: campos de fator/alocacao residual no evento pai e linhas filhas por ISIN destino, com fator, alocacao e evidencia por perna. Validacao de soma e elegibilidade fica no servico de dominio; eventos incompletos seguem fora da projecao. Nenhum backfill/DDL foi executado. Proximo: implementar migration/modelo apos revisar backup/restore e validacao em banco descartavel. #272 permanece separada; #370 segue limitada a evidencia KLBN11.
