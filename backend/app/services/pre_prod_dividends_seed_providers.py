@@ -1,17 +1,22 @@
-"""Adaptadores estritos de provedores para o seed isolado de proventos."""
+﻿"""Adaptadores estritos de provedores para o seed isolado de proventos."""
 from __future__ import annotations
 
 import asyncio
 import warnings
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
 from pandas.errors import Pandas4Warning
 from yfinance.exceptions import YFTickerMissingError
 
+from app.integrations.b3_listed_companies import (
+    B3ListedCompaniesClient,
+    B3ListedCompaniesError,
+    parse_b3_date,
+)
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.services.dividend_brapi_payload import (
     FII_ASSET_TYPES,
@@ -28,6 +33,88 @@ YahooHistoryRow = tuple[date, float] | tuple[date, float, dict[str, Any]]
 YahooHistoryFetcher = Callable[[str], Awaitable[list[YahooHistoryRow]]]
 
 
+class StrictB3DividendProvider:
+    """Coleta proventos estruturados do portal oficial da B3."""
+
+    def __init__(self, *, client: B3ListedCompaniesClient) -> None:
+        self._client = client
+
+    async def __call__(
+        self, ticker: str, asset_type: str
+    ) -> StrictDividendProviderResult:
+        try:
+            supplement, rows, empty_reason = await self._client.cash_dividends(
+                ticker=ticker, asset_type=asset_type
+            )
+        except B3ListedCompaniesError as exc:
+            if "sem cÃƒÂ³digo de emissor resolvÃƒÂ­vel" in str(exc).lower():
+                return StrictDividendProviderResult(
+                    source="b3", rows=(), empty_reason="provider_no_coverage_issuer"
+                )
+            raise StrictDividendCollectionError(f"{ticker}/b3: {exc}") from exc
+        if empty_reason:
+            return StrictDividendProviderResult(
+                source="b3", rows=(), empty_reason=empty_reason
+            )
+        normalized: list[dict[str, Any]] = []
+        is_bdr = asset_type.strip().upper() == "BDR"
+        suffix = ticker.strip()[-1:]
+        expected_share_class = {
+            "3": "ON", "4": "PN", "5": "PNA", "6": "PNB",
+            "7": "PNC", "8": "PND",
+        }.get(suffix) if asset_type.strip().upper() == "ACAO" else None
+        supplement_cash = (supplement or {}).get("cashDividends", [])
+        for row in rows:
+            item = dict(row)
+            if not is_bdr:
+                row_class = str(item.get("typeStock") or "").strip().upper()
+                if expected_share_class and row_class and row_class != expected_share_class:
+                    continue
+                item["label"] = item.get("corporateAction") or item.get("label")
+                item["rate"] = item.get("valueCash") or item.get("rate")
+                item["lastDatePrior"] = (
+                    item.get("lastDatePriorEx") or item.get("lastDatePrior")
+                )
+                item["approvedOn"] = item.get("dateApproval") or item.get("approvedOn")
+                # Supplement records include payment date and ISIN for a
+                # shorter window. Join only on exact official identity fields.
+                for detail in (supplement_cash if isinstance(supplement_cash, list) else ()):
+                    if not isinstance(detail, dict):
+                        continue
+                    try:
+                        rate_matches = Decimal(str(detail.get("rate"))) == Decimal(str(item.get("rate")))
+                    except (InvalidOperation, TypeError, ValueError):
+                        rate_matches = False
+                    if (
+                        str(detail.get("lastDatePrior") or "") == str(item.get("lastDatePrior") or "")
+                        and rate_matches
+                        and str(detail.get("label") or "").upper() == str(item.get("label") or "").upper()
+                    ):
+                        item["paymentDate"] = detail.get("paymentDate")
+                        item["isinCode"] = detail.get("isinCode")
+                        item["assetIssued"] = detail.get("assetIssued")
+                        item["relatedTo"] = detail.get("relatedTo")
+                        item["remarks"] = detail.get("remarks")
+                        break
+            for field in ("lastDatePrior", "paymentDate", "approvedOn", "exDate"):
+                if item.get(field):
+                    item[field] = parse_b3_date(item[field]).isoformat()
+            item["eventCategory"] = "cash"
+            normalized.append(item)
+        if not normalized:
+            return StrictDividendProviderResult(
+                source="b3", rows=(), empty_reason="provider_returned_no_events"
+            )
+        return StrictDividendProviderResult(source="b3", rows=tuple(normalized))
+
+
+def make_strict_b3_dividend_provider(client: httpx.AsyncClient):
+    """Build the collector-compatible B3 provider from a shared HTTP client."""
+    from app.integrations.b3_listed_companies import B3ListedCompaniesClient
+
+    return StrictB3DividendProvider(client=B3ListedCompaniesClient(client=client))
+
+
 def _decimal_scale(value: float) -> int:
     """Retorna a escala decimal efetivamente exposta pelo provedor."""
 
@@ -36,7 +123,7 @@ def _decimal_scale(value: float) -> int:
 
 
 class StrictBrapiDividendProvider:
-    """Consulta uma fonte BRAPI sem ocultar falhas como ausência de eventos."""
+    """Consulta uma fonte BRAPI sem ocultar falhas como ausÃªncia de eventos."""
 
     def __init__(
         self,
@@ -70,7 +157,7 @@ class StrictBrapiDividendProvider:
 
         if response.status_code in {401, 403}:
             raise StrictDividendCollectionError(
-                f"{ticker}/brapi: autorização recusada ({response.status_code})"
+                f"{ticker}/brapi: autorizaÃ§Ã£o recusada ({response.status_code})"
             )
         if response.status_code in {400, 404}:
             return StrictDividendProviderResult(
@@ -89,7 +176,7 @@ class StrictBrapiDividendProvider:
             payload = response.json()
         except ValueError as exc:
             raise StrictDividendCollectionError(
-                f"{ticker}/brapi: JSON inválido"
+                f"{ticker}/brapi: JSON invÃ¡lido"
             ) from exc
         if not isinstance(payload, dict):
             raise StrictDividendCollectionError(
@@ -115,14 +202,14 @@ class StrictBrapiDividendProvider:
 
 
 class StrictYahooDividendProvider:
-    """Complementa histórico sem cooldown nem fallback silencioso.
+    """Complementa histÃ³rico sem cooldown nem fallback silencioso.
 
-    O índice de ``Dividends`` do Yahoo representa a data ex do evento, não a
-    data efetiva de pagamento. O adaptador normaliza essa semântica na fronteira
-    e registra a escala numérica observada para reconciliação auditável com a
-    fonte primária. O histórico real mostra valores quantizados ora por
+    O Ã­ndice de ``Dividends`` do Yahoo representa a data ex do evento, nÃ£o a
+    data efetiva de pagamento. O adaptador normaliza essa semÃ¢ntica na fronteira
+    e registra a escala numÃ©rica observada para reconciliaÃ§Ã£o auditÃ¡vel com a
+    fonte primÃ¡ria. O histÃ³rico real mostra valores quantizados ora por
     truncamento, ora por arredondamento; por isso o adapter declara somente a
-    escala observada, sem inventar um único modo de redução do provedor.
+    escala observada, sem inventar um Ãºnico modo de reduÃ§Ã£o do provedor.
     """
 
     def __init__(self, *, history_fetcher: YahooHistoryFetcher) -> None:
@@ -133,6 +220,13 @@ class StrictYahooDividendProvider:
         ticker: str,
         asset_type: str,
     ) -> StrictDividendProviderResult:
+        if asset_type.upper() == "BDR":
+            return StrictDividendProviderResult(
+                source="yfinance_history",
+                rows=(),
+                empty_reason="b3_authoritative_source_required",
+            )
+
         symbol = _yf_symbol(ticker, asset_type)
         try:
             history = await self._history_fetcher(symbol)
@@ -146,7 +240,7 @@ class StrictYahooDividendProvider:
             raise
         except Exception as exc:
             raise StrictDividendCollectionError(
-                f"{ticker}/yfinance_history: provedor indisponível"
+                f"{ticker}/yfinance_history: provedor indisponÃ­vel"
             ) from exc
 
         rows = []
@@ -183,7 +277,7 @@ class StrictYahooDividendProvider:
 
 
 async def fetch_yahoo_dividend_history(symbol: str) -> list[YahooHistoryRow]:
-    """Consulta padrão do Yahoo; exceções são preservadas para o adaptador."""
+    """Consulta padrÃ£o do Yahoo; exceÃ§Ãµes sÃ£o preservadas para o adaptador."""
 
     def _sync() -> list[YahooHistoryRow]:
         import yfinance as yf

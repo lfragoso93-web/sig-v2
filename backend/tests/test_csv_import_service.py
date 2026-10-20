@@ -1,10 +1,14 @@
 """Testes para csv_import_service — importacao de transacoes via CSV."""
+import csv
 import inspect
+import io
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.models.asset import Asset, AssetType
+from app.models.fixed_income_contract import FixedIncomeContract
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.services import csv_import_service
@@ -15,11 +19,13 @@ from app.services.csv_import_service import (
     CSVRow,
     _parse_date,
     _validate_writer_preflight,
+    export_transactions_csv,
     generate_csv_template,
     import_csv_transactions,
     parse_csv_content,
 )
 from app.services.transaction_write_service import TransactionWriteError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -36,6 +42,9 @@ class TestGenerateCSVTemplate:
         assert "fees" in template
         assert "currency" in template
         assert "notes" in template
+        assert "fixed_income_contract_key" in template
+        assert "fixed_income_product_type" in template
+        assert "fixed_income_display_name" in template
 
     def test_template_has_example_rows(self):
         template = generate_csv_template()
@@ -58,6 +67,182 @@ def test_import_csv_transactions_uses_canonical_write_boundary():
 
     assert "add_transaction_record(" in source
     assert "Transaction(" not in source
+
+
+@pytest.mark.asyncio
+async def test_legacy_fixed_income_csv_remains_unlinked_and_uses_canonical_writer():
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(user_id=7)
+    db.execute.return_value = portfolio_result
+    content = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
+        "CDB LEGADO,RENDA_FIXA,buy,1,1000,2026-10-17,0,BRL,Indexador CDI\n"
+    )
+    transaction = SimpleNamespace(id=91)
+
+    with (
+        patch(
+            "app.services.csv_import_service._validate_duplicate_transactions",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.csv_import_service._validate_writer_preflight",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.csv_import_service.add_transaction_record",
+            new_callable=AsyncMock,
+            return_value=transaction,
+        ) as writer,
+        patch(
+            "app.services.csv_import_service.invalidate_portfolio_cache",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await import_csv_transactions(
+            content=content,
+            portfolio_id=12,
+            user_id=7,
+            db=db,
+        )
+
+    assert result["success"] is True
+    assert result["imported_count"] == 1
+    payload = writer.await_args.kwargs["payload"]
+    assert payload.asset_type == "RENDA_FIXA"
+    assert payload.fixed_income_contract_id is None
+    assert payload.fixed_income_contract is None
+
+
+@pytest.mark.asyncio
+async def test_csv_contract_metadata_is_validated_and_grouped_by_file_key():
+    content = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes,"
+        "fixed_income_contract_key,fixed_income_product_type,fixed_income_display_name,"
+        "fixed_income_issuer,fixed_income_indexer,fixed_income_rate_value,"
+        "fixed_income_rate_unit,fixed_income_maturity_date,fixed_income_liquidity_type,"
+        "fixed_income_grace_period_end,fixed_income_tax_exempt,fixed_income_currency\n"
+        "CDB ALPHA,RENDA_FIXA,buy,1,1000,2026-01-10,0,BRL,,ALPHA,CDB,Alpha CDB,"
+        "Banco Alpha,CDI,100,PERCENT_OF_INDEXER,2030-12-31,AT_MATURITY,,false,BRL\n"
+        "CDB ALPHA,RENDA_FIXA,buy,2,1000,2026-02-10,0,BRL,,ALPHA,CDB,Alpha CDB,"
+        "Banco Alpha,CDI,100,PERCENT_OF_INDEXER,2030-12-31,AT_MATURITY,,false,BRL\n"
+    )
+    rows, global_errors = await parse_csv_content(content, 1, AsyncMock(spec=AsyncSession))
+
+    assert global_errors == []
+    assert all(row.is_valid() for row in rows)
+    assert rows[0].data["fixed_income_contract_key"] == "ALPHA"
+    assert rows[0].data["fixed_income_contract"].display_name == "Alpha CDB"
+    assert rows[1].data["fixed_income_contract"].product_type == "CDB"
+
+
+@pytest.mark.asyncio
+async def test_csv_rejects_contract_metadata_for_non_fixed_income_rows():
+    content = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes,"
+        "fixed_income_contract_key,fixed_income_product_type,fixed_income_display_name\n"
+        "PETR4,ACAO,buy,1,10,2026-01-10,0,BRL,,P1,CDB,Alpha CDB\n"
+    )
+    rows, global_errors = await parse_csv_content(content, 1, AsyncMock(spec=AsyncSession))
+
+    assert global_errors == []
+    assert "fixed income contract metadata can only be used with RENDA_FIXA" in rows[0].errors
+
+
+@pytest.mark.asyncio
+async def test_csv_rejects_conflicting_metadata_for_reused_contract_key():
+    content = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes,"
+        "fixed_income_contract_key,fixed_income_product_type,fixed_income_display_name\n"
+        "CDB A,RENDA_FIXA,buy,1,100,2026-01-10,0,BRL,,P1,CDB,Alpha\n"
+        "CDB B,RENDA_FIXA,buy,1,100,2026-01-11,0,BRL,,P1,CDB,Beta\n"
+    )
+    rows, global_errors = await parse_csv_content(content, 1, AsyncMock(spec=AsyncSession))
+
+    assert global_errors == []
+    assert rows[0].is_valid()
+    assert rows[1].errors == [
+        "fixed income contract key 'P1' has inconsistent metadata"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_csv_import_export_round_trip_recreates_one_portfolio_scoped_contract(
+    db, portfolio
+):
+    content = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes,"
+        "fixed_income_contract_key,fixed_income_product_type,fixed_income_display_name,"
+        "fixed_income_issuer,fixed_income_indexer,fixed_income_rate_value,"
+        "fixed_income_rate_unit,fixed_income_maturity_date,fixed_income_liquidity_type,"
+        "fixed_income_grace_period_end,fixed_income_tax_exempt,fixed_income_currency\n"
+        "CDB ALPHA,RENDA_FIXA,buy,1,1000,2026-01-10,0,BRL,aplicacao,ALPHA,CDB,Alpha CDB,"
+        "Banco Alpha,CDI,100,PERCENT_OF_INDEXER,2030-12-31,AT_MATURITY,,false,BRL\n"
+        "CDB ALPHA,RENDA_FIXA,buy,2,1000,2026-02-10,0,BRL,aporte,ALPHA,CDB,Alpha CDB,"
+        "Banco Alpha,CDI,100,PERCENT_OF_INDEXER,2030-12-31,AT_MATURITY,,false,BRL\n"
+    )
+    with patch(
+        "app.services.csv_import_service.invalidate_portfolio_cache",
+        new_callable=AsyncMock,
+    ):
+        imported = await import_csv_transactions(
+            content,
+            portfolio.id,
+            portfolio.user_id,
+            db,
+        )
+
+    assert imported["success"] is True
+    assert imported["imported_count"] == 2
+    contract_result = await db.execute(
+        select(FixedIncomeContract).where(
+            FixedIncomeContract.portfolio_id == portfolio.id
+        )
+    )
+    contracts = contract_result.scalars().all()
+    assert len(contracts) == 1
+
+    exported = await export_transactions_csv(db, portfolio.id)
+    exported_rows = list(csv.DictReader(io.StringIO(exported)))
+    assert len(exported_rows) == 2
+    assert {row["fixed_income_contract_key"] for row in exported_rows} == {
+        "FIXED_INCOME_CONTRACT_1"
+    }
+    assert {row["fixed_income_display_name"] for row in exported_rows} == {"Alpha CDB"}
+
+    second_portfolio = Portfolio(
+        user_id=portfolio.user_id,
+        name="Carteira Importada",
+        description="",
+    )
+    db.add(second_portfolio)
+    await db.flush()
+    with patch(
+        "app.services.csv_import_service.invalidate_portfolio_cache",
+        new_callable=AsyncMock,
+    ):
+        reimported = await import_csv_transactions(
+            exported,
+            second_portfolio.id,
+            portfolio.user_id,
+            db,
+        )
+
+    assert reimported["success"] is True
+    assert reimported["imported_count"] == 2
+    new_contract_result = await db.execute(
+        select(FixedIncomeContract).where(
+            FixedIncomeContract.portfolio_id == second_portfolio.id
+        )
+    )
+    new_contract = new_contract_result.scalar_one()
+    new_transactions = await db.execute(
+        select(Transaction).where(Transaction.portfolio_id == second_portfolio.id)
+    )
+    assert {tx.fixed_income_contract_id for tx in new_transactions.scalars()} == {
+        new_contract.id
+    }
 
 
 @pytest.mark.asyncio
@@ -457,7 +642,7 @@ Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
                 new_callable=AsyncMock,
             ) as add_record,
             patch(
-                "app.services.csv_import_service.require_financially_certified_crypto_asset",
+                "app.services.csv_import_service.require_catalog_crypto_asset",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -474,9 +659,9 @@ Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
         assert payload.ticker == "BTC"
         assert result["rows"][0]["ticker"] == "BTC"
 
-    async def test_dry_run_surfaces_non_certified_crypto_before_import(self):
+    async def test_dry_run_allows_catalog_crypto_with_incomplete_history(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
-BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
+BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto com cobertura incompleta"""
 
         db = AsyncMock(spec=AsyncSession)
 
@@ -494,23 +679,13 @@ BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
             ticker="BTC",
             asset_type=AssetType.CRIPTO.value,
             provider="brapi",
-            provider_status="ACTIVE",
+            provider_status="HISTORY_END_UNAVAILABLE",
         )
         crypto_asset_result = MagicMock()
         crypto_asset_result.scalar_one_or_none = MagicMock(return_value=crypto_asset)
 
-        membership_result = MagicMock()
-        membership_result.all = MagicMock(
-            return_value=[(CRYPTO_TOP100_UNIVERSE_KEY, "coingecko")]
-        )
-
         db.execute = AsyncMock(
-            side_effect=[
-                portfolio_result,
-                existing_tx_result,
-                crypto_asset_result,
-                membership_result,
-            ]
+            side_effect=[portfolio_result, existing_tx_result, crypto_asset_result]
         )
 
         result = await csv_import_service.import_transactions_csv(
@@ -521,11 +696,11 @@ BTC,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto sem historico"""
             dry_run=True,
         )
 
-        assert result["success"] is False
+        assert result["success"] is True
         assert result["imported_count"] == 0
-        assert result["error_count"] == 1
-        assert result["rows"][0]["status"] == "error"
-        assert "histórico financeiro não certificado" in result["rows"][0]["errors"][0]
+        assert result["error_count"] == 0
+        assert result["rows"][0]["status"] == "valid"
+        assert result["rows"][0]["errors"] == []
 
     async def test_import_rolls_back_when_later_canonical_writer_row_fails(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes

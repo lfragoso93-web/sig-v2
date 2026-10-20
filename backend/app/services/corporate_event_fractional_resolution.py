@@ -20,3 +20,5 @@ class FractionalResolution:
     fractional_quantity: Decimal | None = None
     settlement_price: Decimal | None = None
     cash_treatment: str | None = None
+    ledger_basis: str | None = None
+    fraction_is_post_event_quantity: bool = False

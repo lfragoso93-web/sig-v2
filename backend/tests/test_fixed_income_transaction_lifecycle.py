@@ -6,6 +6,7 @@ from fastapi import BackgroundTasks
 
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
+from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionUpdate
 
 
@@ -105,6 +106,7 @@ async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transac
     monkeypatch,
 ) -> None:
     tx = _transaction(transaction_id=102)
+    tx.fixed_income_contract_id = 77
     db = _LifecycleSession(tx)
 
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
@@ -124,6 +126,52 @@ async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transac
     )
 
     assert result.asset_type == "ACAO"
+    assert result.fixed_income_contract_id is None
+    assert db.commit_called is True
+
+
+@pytest.mark.asyncio
+async def test_edit_can_create_and_link_structured_contract_atomically(monkeypatch) -> None:
+    tx = _transaction(transaction_id=104)
+    db = _LifecycleSession(tx)
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transactions,
+        "_validate_crypto_transaction_asset",
+        _allow_validation,
+    )
+
+    async def create_link(_db, **kwargs):
+        assert kwargs["portfolio_id"] == 1
+        assert kwargs["asset_type"] == "RENDA_FIXA"
+        assert kwargs["contract_id"] is None
+        assert kwargs["contract_payload"].product_type == "CDB"
+        return 123
+
+    monkeypatch.setattr(
+        transactions, "resolve_fixed_income_contract_for_write", create_link
+    )
+    payload = TransactionUpdate(
+        fixed_income_contract=FixedIncomeContractCreate(
+            display_name="CDB estruturado",
+            product_type="CDB",
+            indexer="CDI",
+            rate_value=110,
+            rate_unit="PERCENT_OF_INDEXER",
+            currency="BRL",
+        )
+    )
+
+    result = await transactions.update_transaction(
+        portfolio_id=1,
+        transaction_id=104,
+        payload=payload,
+        background_tasks=BackgroundTasks(),
+        db=db,
+        current_user=object(),
+    )
+
+    assert result.fixed_income_contract_id == 123
     assert db.commit_called is True
 
 

@@ -11,7 +11,7 @@ ENUMS_PATH = APP_ROOT / "models" / "dividend_enums.py"
 
 
 def test_dividend_enums_have_no_orm_or_legacy_model_dependency() -> None:
-    tree = ast.parse(ENUMS_PATH.read_text(encoding="utf-8"))
+    tree = ast.parse(ENUMS_PATH.read_text(encoding="utf-8-sig"))
     imported_modules = {
         node.module
         for node in ast.walk(tree)
@@ -31,7 +31,7 @@ def test_application_does_not_import_legacy_orm_module() -> None:
     offenders: list[str] = []
 
     for path in APP_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.ImportFrom)

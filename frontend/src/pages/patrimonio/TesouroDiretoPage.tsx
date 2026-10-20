@@ -33,6 +33,7 @@ export default function TesouroDiretoPage() {
       ticker:    canonicalTicker,
       assetName: item.brapi_name,
       treasurySlug: canonicalTicker,
+      maturityDate: item.maturity_date,
     })
   }
 

@@ -258,7 +258,7 @@ async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
             new=AsyncMock(return_value=_TREASURY_SYMBOL),
         ),
         patch(
-            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            "app.services.csv_import_service.require_catalog_crypto_asset",
             new=AsyncMock(),
         ),
     ):
@@ -336,7 +336,7 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
             new=AsyncMock(return_value=_TREASURY_SYMBOL),
         ),
         patch(
-            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            "app.services.csv_import_service.require_catalog_crypto_asset",
             new=AsyncMock(),
         ),
         patch(
@@ -345,7 +345,7 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
         ),
         patch(
             "app.services.transaction_write_service."
-            "require_financially_certified_crypto_asset",
+            "require_catalog_crypto_asset",
             new=AsyncMock(),
         ),
         patch(

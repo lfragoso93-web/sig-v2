@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -45,6 +46,7 @@ class CorporateEventReconciliationEvidence(Base):
     ledger_basis = Column(String(40), nullable=True)
     ledger_transformation_reference = Column(Text, nullable=True)
     ledger_quantity_factor = Column(Numeric(24, 12), nullable=True)
+    effective_date = Column(Date, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

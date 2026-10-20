@@ -1,10 +1,10 @@
-"""Dry-run planning for historical BRAPI corporate-event semantic repair."""
+"""Dry-run planning for historical BRAPI/B3 corporate-event repair."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.corporate_event import CorporateEvent
 from app.services.corporate_action_engine import (
     CorporateActionKind,
+    normalize_b3_corporate_actions,
     normalize_brapi_corporate_actions,
     source_payload_hash,
 )
@@ -31,6 +32,7 @@ class CorporateEventSemanticRepairError(ValueError):
 class CorporateEventSemanticRepairCandidate:
     event_id: int
     ticker: str
+    source_provider: str
     old_event_type: str
     new_event_type: str
     old_source_event_id: str | None
@@ -38,12 +40,14 @@ class CorporateEventSemanticRepairCandidate:
     old_source_payload_hash: str | None
     new_source_payload_hash: str
     event_date: date
+    old_quantity_factor: Decimal
     quantity_factor: Decimal
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "event_id": self.event_id,
             "ticker": self.ticker,
+            "source_provider": self.source_provider,
             "old_event_type": self.old_event_type,
             "new_event_type": self.new_event_type,
             "old_source_event_id": self.old_source_event_id,
@@ -51,6 +55,7 @@ class CorporateEventSemanticRepairCandidate:
             "old_source_payload_hash": self.old_source_payload_hash,
             "new_source_payload_hash": self.new_source_payload_hash,
             "event_date": self.event_date.isoformat(),
+            "old_quantity_factor": str(self.old_quantity_factor),
             "quantity_factor": str(self.quantity_factor),
         }
 
@@ -82,7 +87,10 @@ def _raw_label(raw_metadata: object) -> str:
     return str(raw_metadata.get("label") or "").strip().upper()
 
 
-def _brapi_single_event_payload(ticker: str, raw_metadata: dict[str, Any]) -> dict[str, Any]:
+def _brapi_single_event_payload(
+    ticker: str,
+    raw_metadata: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "results": [
             {
@@ -110,8 +118,11 @@ def _require_event_contract(event: CorporateEvent) -> dict[str, Any]:
     event_id = getattr(event, "id", None)
     if event_id is None:
         raise CorporateEventSemanticRepairError("evento sem id")
-    if event.source_provider != "brapi":
-        raise CorporateEventSemanticRepairError(f"evento {event_id}: provider nao e brapi")
+    provider = str(event.source_provider or "").strip().lower()
+    if provider not in {"brapi", "b3"}:
+        raise CorporateEventSemanticRepairError(
+            f"evento {event_id}: provider fora do escopo do reparo: {provider}"
+        )
     if event.reconciliation_status != "UNRECONCILED":
         raise CorporateEventSemanticRepairError(
             f"evento {event_id}: reconciliation_status deve ser UNRECONCILED"
@@ -133,6 +144,32 @@ def _require_event_contract(event: CorporateEvent) -> dict[str, Any]:
         raise CorporateEventSemanticRepairError(
             f"evento {event_id}: label fora do escopo do reparo: {label or '<vazio>'}"
         )
+    if provider == "b3":
+        raw_isin = str(event.raw_metadata.get("isinCode") or "").strip().upper()
+        event_isin = str(event.isin_code or "").strip().upper()
+        if not raw_isin or not event_isin or raw_isin != event_isin:
+            raise CorporateEventSemanticRepairError(
+                f"evento {event_id}: ISIN B3 ausente ou divergente"
+            )
+        if event.record_date is None or event.record_date != event.event_date:
+            raise CorporateEventSemanticRepairError(
+                f"evento {event_id}: record_date B3 divergente do evento"
+            )
+        try:
+            raw_factor = Decimal(str(event.raw_metadata.get("factor")))
+            stored_factor = Decimal(str(event.quantity_factor))
+        except (InvalidOperation, ValueError) as exc:
+            raise CorporateEventSemanticRepairError(
+                f"evento {event_id}: fator B3 invalido"
+            ) from exc
+        if (
+            not raw_factor.is_finite()
+            or raw_factor <= 0
+            or raw_factor != stored_factor
+        ):
+            raise CorporateEventSemanticRepairError(
+                f"evento {event_id}: fator B3 bruto diverge do fator persistido"
+            )
     return event.raw_metadata
 
 
@@ -143,10 +180,22 @@ def _build_candidate(
 ) -> CorporateEventSemanticRepairCandidate:
     raw_metadata = _require_event_contract(event)
     ticker = str(event.ticker or "").strip().upper()
-    actions = normalize_brapi_corporate_actions(
-        ticker,
-        _brapi_single_event_payload(ticker, raw_metadata),
-    )
+    provider = str(event.source_provider).strip().lower()
+    if provider == "b3":
+        actions = normalize_b3_corporate_actions(
+            ticker,
+            {
+                "code": raw_metadata.get("sourceIssuer"),
+                "stockDividends": [dict(raw_metadata)],
+                "subscriptions": [],
+            },
+            expected_isin=str(event.isin_code),
+        )
+    else:
+        actions = normalize_brapi_corporate_actions(
+            ticker,
+            _brapi_single_event_payload(ticker, raw_metadata),
+        )
     if len(actions) != 1:
         raise CorporateEventSemanticRepairError(
             f"evento {event.id}: normalizacao deve produzir exatamente uma acao"
@@ -174,11 +223,13 @@ def _build_candidate(
         ticker=ticker,
         old_event_type=str(event.event_type),
         new_event_type=action.kind.value,
+        source_provider=provider,
         old_source_event_id=event.source_event_id,
         new_source_event_id=action.source_event_id,
         old_source_payload_hash=event.source_payload_hash,
         new_source_payload_hash=new_payload_hash,
         event_date=action.event_date,
+        old_quantity_factor=Decimal(str(event.quantity_factor)),
         quantity_factor=action.quantity_factor,
     )
 
@@ -192,7 +243,9 @@ def build_corporate_event_semantic_repair_plan(
     candidates = []
     for event in events:
         candidate = _build_candidate(event, existing_identities=existing_identities)
-        existing_identities.add(("brapi", candidate.new_source_event_id))
+        existing_identities.add(
+            (candidate.source_provider, candidate.new_source_event_id)
+        )
         candidates.append(candidate)
     candidates = tuple(candidates)
     return CorporateEventSemanticRepairReport(candidates=candidates)
@@ -265,6 +318,8 @@ def _apply_candidate(
     event.event_type = candidate.new_event_type
     event.source_event_id = candidate.new_source_event_id
     event.source_payload_hash = candidate.new_source_payload_hash
+    event.quantity_factor = candidate.quantity_factor
+    event.ratio = candidate.quantity_factor
 
 
 async def execute_corporate_event_semantic_repair(

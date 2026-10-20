@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from app.models.asset import AssetType
-from app.services.asset_catalog_query_service import _normalize_filter
+from app.services.asset_catalog_query_service import (
+    _normalize_filter,
+    _user_selectable_catalog_predicate,
+)
 
 
 SERVICE_PATH = (
@@ -38,3 +41,13 @@ def test_catalog_query_is_read_only() -> None:
     forbidden = {"commit()", "flush()", "add(", "delete(", "update("}
     findings = sorted(token for token in forbidden if token in source)
     assert findings == []
+
+
+def test_crypto_catalog_visibility_is_not_gated_by_market_history_status() -> None:
+    sql = str(
+        _user_selectable_catalog_predicate().compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "provider_status" not in sql
+    assert "synthetic-certification" in sql

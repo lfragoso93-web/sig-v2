@@ -24,7 +24,7 @@ def _legacy_config_classes() -> set[str]:
     found: set[str] = set()
 
     for path in APP_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         relative_path = path.relative_to(APP_ROOT).as_posix()
 
         for node in ast.walk(tree):

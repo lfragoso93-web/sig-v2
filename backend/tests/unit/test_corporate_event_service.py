@@ -1,10 +1,9 @@
-from datetime import date
+﻿from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from app.services.corporate_event_service import sync_corporate_events_for_asset
 
 
@@ -28,11 +27,12 @@ def _asset(asset_type="ACAO"):
         ticker="AERI3",
         brapi_ticker=None,
         asset_type=asset_type,
+        isin_code="BRAERIACNOR0",
     )
 
 
 @pytest.mark.asyncio
-async def test_sync_persists_only_brapi_events_when_brapi_is_available() -> None:
+async def test_sync_persists_only_b3_events_for_listed_assets() -> None:
     async def brapi_fetcher(ticker: str):
         assert ticker == "AERI3"
         return {
@@ -49,7 +49,16 @@ async def test_sync_persists_only_brapi_events_when_brapi_is_available() -> None
         }
 
     async def yahoo_fetcher(symbol: str):
-        raise AssertionError("Yahoo nao deve ser consultado quando BRAPI responde")
+        raise AssertionError("Yahoo nao deve ser consultado para classe B3")
+
+    async def b3_fetcher(ticker: str, asset_type: str):
+        assert ticker == "AERI3" and asset_type == "ACAO"
+        return {
+            "code": "AERI", "stockDividends": [{
+                "label": "BONIFICACAO", "factor": "5",
+                "lastDatePrior": "03/01/2023", "isinCode": "BRAERIACNOR0",
+            }], "subscriptions": [],
+        }
 
     db = _db()
     created = await sync_corporate_events_for_asset(
@@ -57,6 +66,7 @@ async def test_sync_persists_only_brapi_events_when_brapi_is_available() -> None
         _asset(),
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
+        b3_fetcher=b3_fetcher,
     )
 
     assert len(created) == 1
@@ -64,7 +74,10 @@ async def test_sync_persists_only_brapi_events_when_brapi_is_available() -> None
     assert {event.ratio for event in created} == {Decimal("1.05")}
     assert all(event.ticker == "AERI3" for event in created)
     assert all(event.portfolio_id is None for event in created)
-    assert all(event.source_provider == "brapi" for event in created)
+    assert all(event.source_provider == "b3" for event in created)
+    assert all(event.record_date == date(2023, 3, 1) for event in created)
+    assert all(event.effective_date is None for event in created)
+    assert all("resolver data efetiva" in event.review_reason for event in created)
     assert all(event.source_event_id for event in created)
     assert all(event.source_payload_hash for event in created)
     assert all(event.raw_metadata is not None for event in created)
@@ -94,12 +107,21 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
     async def yahoo_fetcher(symbol: str):
         return []
 
+    async def b3_fetcher(ticker: str, asset_type: str):
+        return {
+            "code": "AERI", "stockDividends": [{
+                "label": "BONIFICACAO", "factor": "5",
+                "lastDatePrior": "03/01/2023", "isinCode": "BRAERIACNOR0",
+            }], "subscriptions": [],
+        }
+
     first_db = _db()
     first = await sync_corporate_events_for_asset(
         first_db,
         _asset(),
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
+        b3_fetcher=b3_fetcher,
     )
     event = first[0]
 
@@ -109,6 +131,7 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
         _asset(),
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
+        b3_fetcher=b3_fetcher,
     )
 
     assert second == []
@@ -120,6 +143,7 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
 async def test_sync_skips_crypto_without_provider_calls() -> None:
     brapi_fetcher = AsyncMock()
     yahoo_fetcher = AsyncMock()
+    b3_fetcher = AsyncMock()
     db = _db()
 
     created = await sync_corporate_events_for_asset(
@@ -127,9 +151,11 @@ async def test_sync_skips_crypto_without_provider_calls() -> None:
         _asset("CRIPTO"),
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
+        b3_fetcher=b3_fetcher,
     )
 
     assert created == []
     brapi_fetcher.assert_not_awaited()
     yahoo_fetcher.assert_not_awaited()
+    b3_fetcher.assert_not_awaited()
     db.execute.assert_not_awaited()

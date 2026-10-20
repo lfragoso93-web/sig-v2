@@ -19,7 +19,7 @@ def test_application_does_not_import_legacy_dividend_aggregator() -> None:
     offenders: list[str] = []
 
     for path in APP_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         for node in ast.walk(tree):
             imports_legacy = (
                 isinstance(node, ast.ImportFrom) and node.module == legacy_module

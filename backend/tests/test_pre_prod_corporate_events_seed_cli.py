@@ -80,6 +80,34 @@ async def test_seed_cli_dry_run_rolls_back_and_reports_zero_writes(
 
 
 @pytest.mark.asyncio
+async def test_seed_cli_dry_run_handles_multiple_assets_before_single_rollback(
+    monkeypatch, capsys
+) -> None:
+    session = _Session()
+    session.execute = AsyncMock(
+        side_effect=[
+            _Result(["AMOB3", "NIKE34"]),
+            _Result([
+                SimpleNamespace(ticker="AMOB3", asset_type="ACAO"),
+                SimpleNamespace(ticker="NIKE34", asset_type="BDR"),
+            ]),
+        ]
+    )
+    _configure(monkeypatch, session, execute=False)
+    sync = AsyncMock(side_effect=[[object()], []])
+    monkeypatch.setattr(cli, "sync_corporate_events_for_asset", sync)
+
+    await cli._main()
+
+    payload = capsys.readouterr().out
+    assert '"assets_processed": 2' in payload
+    assert '"database_writes_executed": 0' in payload
+    assert sync.await_count == 2
+    session.rollback.assert_awaited_once()
+    session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_seed_cli_execute_commits_and_counts_writes(monkeypatch, capsys) -> None:
     session = _Session()
     _configure(monkeypatch, session, execute=True)

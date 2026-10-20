@@ -68,4 +68,4 @@ async def test_dividends_stage_reuses_strict_seed_when_authorized() -> None:
     assert call["commit_sha"] == _CONTEXT.commit_sha
     assert call["start_date"] == DIVIDENDS_HISTORY_START_DATE
     assert call["end_date"] == DIVIDENDS_HISTORY_START_DATE
-    assert len(call["providers"]) == 2
+    assert len(call["providers"]) == 3

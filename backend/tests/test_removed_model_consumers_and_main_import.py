@@ -15,7 +15,7 @@ _REMOVED_MODEL_IMPORTS = {
 
 def _removed_model_imports(path: Path) -> list[str]:
     findings: list[str] = []
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module in _REMOVED_MODEL_IMPORTS:

@@ -25,7 +25,7 @@ def test_application_does_not_import_legacy_linker_modules() -> None:
     offenders: list[str] = []
 
     for path in APP_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         for node in ast.walk(tree):
             imported_modules = (
                 {node.module}

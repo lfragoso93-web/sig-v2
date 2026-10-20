@@ -125,20 +125,16 @@ class TestResolveCurrentValue:
 
     async def test_resolve_patrimonio(self):
         db = AsyncMock(spec=AsyncSession)
-        
-        # Mock PortfolioPosition query
-        position = MagicMock()
-        position.market_value = 5000.0
-        
-        execute_result = MagicMock()
-        execute_result.scalars = MagicMock(return_value=execute_result)
-        execute_result.all = MagicMock(return_value=[position])
-        
-        db.execute = AsyncMock(return_value=execute_result)
-        
-        value = await _resolve_current_value(db, 1, "PATRIMONIO", 0.0)
-        
+        with patch(
+            "app.services.goals_service.get_portfolio_summary",
+            new=AsyncMock(return_value={"total_patrimonio": 5000.0}),
+        ) as summary:
+            value = await _resolve_current_value(
+                db, 1, "PATRIMONIO", 0.0, user_id=7
+            )
+
         assert value == 5000.0
+        summary.assert_awaited_once_with(db, 1, 7)
 
     async def test_resolve_livre(self):
         db = AsyncMock(spec=AsyncSession)
@@ -222,7 +218,7 @@ class TestListGoals:
         
         db.execute = AsyncMock(return_value=execute_result)
         
-        goals = await list_goals(db, 1)
+        goals = await list_goals(db, 1, 7)
         
         assert goals == []
 
@@ -261,9 +257,16 @@ class TestListGoals:
         
         db.execute = AsyncMock(return_value=execute_result)
         
-        goals = await list_goals(db, 1)
+        with patch(
+            "app.services.goals_service._resolve_current_value",
+            new=AsyncMock(side_effect=[750.0, 125.0]),
+        ):
+            goals = await list_goals(db, 1, 7)
         
         assert len(goals) == 2
+        assert goals[0]["current_value"] == 750.0
+        assert goals[0]["progress_pct"] == 75.0
+        assert goals[1]["current_value"] == 125.0
 
 
 @pytest.mark.asyncio
@@ -290,7 +293,11 @@ class TestGetGoal:
         
         db.execute = AsyncMock(return_value=execute_result)
         
-        result = await get_goal(db, 1, 1)
+        with patch(
+            "app.services.goals_service._resolve_current_value",
+            new=AsyncMock(return_value=750.0),
+        ):
+            result = await get_goal(db, 1, 1, 7)
         
         assert result is not None
         assert result["id"] == 1
@@ -303,7 +310,7 @@ class TestGetGoal:
         
         db.execute = AsyncMock(return_value=execute_result)
         
-        result = await get_goal(db, 999, 1)
+        result = await get_goal(db, 999, 1, 7)
         
         assert result is None
 
@@ -332,7 +339,7 @@ class TestCreateGoal:
             description="Test",
         )
         
-        result = await create_goal(db, data)
+        result = await create_goal(db, data, 7)
         
         assert result is not None
         db.add.assert_called_once()
@@ -367,9 +374,14 @@ class TestUpdateGoal:
         
         data = GoalUpdate(name="New Name")
         
-        result = await update_goal(db, 1, 1, data)
+        with patch(
+            "app.services.goals_service._resolve_current_value",
+            new=AsyncMock(return_value=750.0),
+        ):
+            result = await update_goal(db, 1, 1, data, 7)
         
         assert result is not None
+        assert result["current_value"] == 750.0
         db.commit.assert_called_once()
 
     async def test_update_goal_not_found(self):
@@ -382,7 +394,7 @@ class TestUpdateGoal:
         
         data = GoalUpdate(name="New Name")
         
-        result = await update_goal(db, 999, 1, data)
+        result = await update_goal(db, 999, 1, data, 7)
         
         assert result is None
 

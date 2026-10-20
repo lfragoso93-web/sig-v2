@@ -1,4 +1,4 @@
-"""Coleta e persistência do catálogo global de eventos corporativos."""
+﻿"""Coleta e persistÃªncia do catÃ¡logo global de eventos corporativos."""
 
 from __future__ import annotations
 
@@ -15,6 +15,10 @@ from pandas.errors import Pandas4Warning
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations.b3_listed_companies import (
+    B3ListedCompaniesClient,
+    B3ListedCompaniesError,
+)
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
 from app.models.corporate_event import (
@@ -23,6 +27,7 @@ from app.models.corporate_event import (
 )
 from app.services.corporate_action_engine import (
     NormalizedCorporateAction,
+    normalize_b3_corporate_actions,
     normalize_brapi_corporate_actions,
     normalize_yahoo_splits,
     source_payload_hash,
@@ -33,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 BrapiPayloadFetcher = Callable[[str], Awaitable[dict[str, Any]]]
 YahooSplitsFetcher = Callable[[str], Awaitable[list[tuple[date, float]]]]
+B3CorporateActionsFetcher = Callable[[str, str], Awaitable[dict[str, Any] | None]]
 _SUPPORTED_ASSET_TYPES = {
     "ACAO",
     "BDR",
@@ -44,11 +50,11 @@ _SUPPORTED_ASSET_TYPES = {
 
 
 class CorporateActionCollectionError(RuntimeError):
-    """Falha bloqueante na coleta do catálogo corporativo."""
+    """Falha bloqueante na coleta do catÃ¡logo corporativo."""
 
 
 async def fetch_brapi_corporate_actions_payload(ticker: str) -> dict[str, Any]:
-    """Consulta a rota Pro tipada de dividendos e eventos de ações."""
+    """Consulta a rota Pro tipada de dividendos e eventos de aÃ§Ãµes."""
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -66,17 +72,17 @@ async def fetch_brapi_corporate_actions_payload(ticker: str) -> dict[str, Any]:
         return {"results": []}
     if response.status_code in {401, 403}:
         raise CorporateActionCollectionError(
-            f"{ticker}/brapi: autorização recusada ({response.status_code})"
+            f"{ticker}/brapi: autorizaÃ§Ã£o recusada ({response.status_code})"
         )
     try:
         response.raise_for_status()
         payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise CorporateActionCollectionError(
-            f"{ticker}/brapi: resposta inválida"
+            f"{ticker}/brapi: resposta invÃ¡lida"
         ) from exc
     if not isinstance(payload, dict):
-        raise CorporateActionCollectionError(f"{ticker}/brapi: payload inválido")
+        raise CorporateActionCollectionError(f"{ticker}/brapi: payload invÃ¡lido")
     return payload
 
 
@@ -113,8 +119,22 @@ async def fetch_yahoo_splits(symbol: str) -> list[tuple[date, float]]:
         return await asyncio.to_thread(_sync)
     except Exception as exc:
         raise CorporateActionCollectionError(
-            f"{symbol}/yahoo: provedor indisponível"
+            f"{symbol}/yahoo: provedor indisponÃ­vel"
         ) from exc
+
+
+async def fetch_b3_corporate_actions(
+    ticker: str,
+    asset_type: str,
+) -> dict[str, Any] | None:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            payload, _ = await B3ListedCompaniesClient(client=client).corporate_actions(
+                ticker=ticker, asset_type=asset_type
+            )
+            return payload
+    except B3ListedCompaniesError as exc:
+        raise CorporateActionCollectionError(f"{ticker}/b3: {exc}") from exc
 
 
 def _source_payload_hash(action: NormalizedCorporateAction) -> str:
@@ -127,8 +147,9 @@ async def sync_corporate_events_for_asset(
     *,
     brapi_fetcher: BrapiPayloadFetcher | None = None,
     yahoo_fetcher: YahooSplitsFetcher | None = None,
+    b3_fetcher: B3CorporateActionsFetcher | None = None,
 ) -> list[CorporateEvent]:
-    """Coleta fontes explícitas e persiste somente eventos globais idempotentes."""
+    """Coleta fontes explÃ­citas e persiste somente eventos globais idempotentes."""
 
     raw_asset_type = asset.asset_type
     asset_type = str(getattr(raw_asset_type, "value", raw_asset_type)).upper()
@@ -141,11 +162,32 @@ async def sync_corporate_events_for_asset(
 
     brapi_fetcher = brapi_fetcher or fetch_brapi_corporate_actions_payload
     yahoo_fetcher = yahoo_fetcher or fetch_yahoo_splits
+    b3_fetcher = b3_fetcher or fetch_b3_corporate_actions
+    if asset_type in {"ACAO", "BDR", "ETF_NACIONAL", "FII"}:
+        try:
+            b3_payload = await b3_fetcher(ticker, asset_type)
+        except CorporateActionCollectionError:
+            logger.exception("[corporate_events] B3 indisponivel para %s", ticker)
+            raise
+        if b3_payload is not None:
+            actions = normalize_b3_corporate_actions(
+                ticker,
+                b3_payload,
+                expected_isin=asset.isin_code,
+            )
+        else:
+            actions = ()
+        if actions:
+            return await _persist_actions(db, asset, ticker, actions)
+        # A consulta oficial vÃ¡lida sem eventos Ã© cobertura, nÃ£o licenÃ§a para
+        # substituir B3 por Yahoo. Eventos histÃ³ricos ficam sem inferÃªncia.
+        return []
     try:
         brapi_payload = await brapi_fetcher(ticker)
     except CorporateActionCollectionError as exc:
         logger.warning(
-            "[corporate_events] BRAPI indisponivel para %s; usando Yahoo como fallback: %s",
+            "[corporate_events] BRAPI indisponivel para %s; usando Yahoo "
+            "como fallback: %s",
             ticker,
             exc,
         )
@@ -177,6 +219,15 @@ async def sync_corporate_events_for_asset(
                 )
                 for action in normalize_yahoo_splits(ticker, yahoo_rows)
             )
+    return await _persist_actions(db, asset, ticker, actions)
+
+
+async def _persist_actions(
+    db: AsyncSession,
+    asset: Asset,
+    ticker: str,
+    actions: tuple[NormalizedCorporateAction, ...],
+) -> list[CorporateEvent]:
     if not actions:
         return []
 
@@ -199,7 +250,10 @@ async def sync_corporate_events_for_asset(
     }
 
     created: list[CorporateEvent] = []
-    for action in sorted(actions, key=lambda item: (item.event_date, item.source_event_id)):
+    for action in sorted(
+        actions,
+        key=lambda item: (item.event_date, item.source_event_id),
+    ):
         identity = (action.source, action.source_event_id)
         if identity in existing_identities:
             continue
@@ -208,17 +262,37 @@ async def sync_corporate_events_for_asset(
             ticker=ticker,
             event_type=action.kind.value,
             status=CorporateEventStatus.PENDENTE.value,
-            effective_date=action.event_date,
+            # B3 lastDatePrior establishes entitlement, not the effective
+            # trading session. Keep effective_date null until resolved from
+            # authoritative calendar evidence.
+            effective_date=None if action.source == "b3" else action.event_date,
             quantity_factor=action.quantity_factor,
             source_provider=action.source,
             source_event_id=action.source_event_id,
             source_payload_hash=_source_payload_hash(action),
             raw_metadata=action.raw_payload,
+            review_reason=(
+                "B3 lastDatePrior indica último dia com direito; resolver data efetiva "
+                "com evidência oficial antes de reconciliação"
+                if action.source == "b3" else None
+            ),
+            isin_code=(
+                str(action.raw_payload.get("isinCode"))
+                if action.raw_payload.get("isinCode") else None
+            ),
+            record_date=(
+                action.event_date if action.source == "b3" else None
+            ),
+            ex_date=None if action.source == "b3" else action.event_date,
+            approved_on=(
+                _parse_b3_optional_date(action.raw_payload.get("approvedOn"))
+                if action.source == "b3" else None
+            ),
             description=(
                 f"{action.kind.value} global coletado de {action.source} "
                 f"(fator {action.quantity_factor})"
             ),
-            # Espelhos obrigatórios de schema legado; sem uso funcional.
+            # Espelhos obrigatÃ³rios de schema legado; sem uso funcional.
             event_date=action.event_date,
             ratio=action.quantity_factor,
         )
@@ -229,3 +303,11 @@ async def sync_corporate_events_for_asset(
     if created:
         await db.flush()
     return created
+
+
+def _parse_b3_optional_date(value: Any) -> date | None:
+    if not value:
+        return None
+    from app.integrations.b3_listed_companies import parse_b3_date
+
+    return parse_b3_date(value)

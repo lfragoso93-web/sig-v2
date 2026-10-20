@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from app.models.goal import Goal
 from app.schemas.goal import GoalCreate, GoalUpdate
+from app.services.portfolio_service import get_portfolio_summary
 from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
@@ -50,13 +51,18 @@ def _calc_projection(
     return round(months, 1), proj
 
 
-def _enrich(goal: Goal) -> dict:
+def _enrich(goal: Goal, current_value: float | None = None) -> dict:
+    resolved_current_value = (
+        float(goal.current_value or 0.0)
+        if current_value is None
+        else float(current_value)
+    )
     progress = 0.0
     if goal.target_value and goal.target_value > 0:
-        progress = min(goal.current_value / goal.target_value * 100, 100.0)
+        progress = min(resolved_current_value / goal.target_value * 100, 100.0)
 
     months_to_goal, projected_date = _calc_projection(
-        goal.current_value,
+        resolved_current_value,
         goal.target_value,
         goal.monthly_contribution,
     )
@@ -67,14 +73,16 @@ def _enrich(goal: Goal) -> dict:
         "goal_type": goal.goal_type,
         "name": goal.name,
         "target_value": goal.target_value,
-        "current_value": goal.current_value,
+        "current_value": resolved_current_value,
         "base_value": goal.base_value or 0.0,
         "monthly_contribution": goal.monthly_contribution,
         "target_date": goal.target_date,
         "description": goal.description,
         "created_at": goal.created_at,
         "progress_pct": round(progress, 2),
-        "is_completed": bool(goal.target_value and goal.current_value >= goal.target_value),
+        "is_completed": bool(
+            goal.target_value and resolved_current_value >= goal.target_value
+        ),
         "months_to_goal": months_to_goal,
         "projected_date": projected_date,
     }
@@ -84,16 +92,14 @@ def _enrich(goal: Goal) -> dict:
 # queries básicas de KPI para resolver current_value automático
 # ---------------------------------------------------------------------------
 
-async def _get_patrimonio_atual(db: AsyncSession, portfolio_id: int) -> float:
-    """Soma market_value de todas as posições do portfólio."""
-    from app.models.portfolio_position import PortfolioPosition
-    result = await db.execute(
-        select(PortfolioPosition).where(
-            PortfolioPosition.portfolio_id == portfolio_id
-        )
-    )
-    positions = result.scalars().all()
-    return sum(p.market_value or 0.0 for p in positions)
+async def _get_patrimonio_atual(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+) -> float:
+    """Use the canonical summary; portfolio_positions is not the ledger."""
+    summary = await get_portfolio_summary(db, portfolio_id, user_id)
+    return float(summary["total_patrimonio"])
 
 
 async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
@@ -138,10 +144,13 @@ async def _resolve_current_value(
     portfolio_id: int,
     goal_type: str,
     provided_current: float,
+    user_id: int | None = None,
 ) -> float:
     """Para tipos auto, busca o valor real da carteira; LIVRE usa o valor informado."""
     if goal_type == "PATRIMONIO":
-        return await _get_patrimonio_atual(db, portfolio_id)
+        if user_id is None:
+            raise ValueError("user_id is required to resolve portfolio value")
+        return await _get_patrimonio_atual(db, portfolio_id, user_id)
     if goal_type == "PROVENTOS":
         return await _get_proventos_mensais(db, portfolio_id)
     if goal_type == "RENTABILIDADE":
@@ -153,26 +162,58 @@ async def _resolve_current_value(
 # CRUD
 # ---------------------------------------------------------------------------
 
-async def list_goals(db: AsyncSession, portfolio_id: int) -> list[dict]:
+async def list_goals(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+) -> list[dict]:
     result = await db.execute(
         select(Goal)
         .where(Goal.portfolio_id == portfolio_id)
         .order_by(Goal.created_at.desc())
     )
-    return [_enrich(g) for g in result.scalars().all()]
+    payloads = []
+    for goal in result.scalars().all():
+        current_value = await _resolve_current_value(
+            db,
+            portfolio_id,
+            goal.goal_type,
+            float(goal.current_value or 0.0),
+            user_id=user_id,
+        )
+        payloads.append(_enrich(goal, current_value=current_value))
+    return payloads
 
 
-async def get_goal(db: AsyncSession, goal_id: int, portfolio_id: int) -> Optional[dict]:
+async def get_goal(
+    db: AsyncSession,
+    goal_id: int,
+    portfolio_id: int,
+    user_id: int,
+) -> Optional[dict]:
     result = await db.execute(
         select(Goal).where(Goal.id == goal_id, Goal.portfolio_id == portfolio_id)
     )
     goal = result.scalar_one_or_none()
-    return _enrich(goal) if goal else None
+    if goal is None:
+        return None
+    current_value = await _resolve_current_value(
+        db,
+        portfolio_id,
+        goal.goal_type,
+        float(goal.current_value or 0.0),
+        user_id=user_id,
+    )
+    return _enrich(goal, current_value=current_value)
 
 
-async def create_goal(db: AsyncSession, data: GoalCreate) -> dict:
+async def create_goal(db: AsyncSession, data: GoalCreate, user_id: int) -> dict:
     current = await _resolve_current_value(
-        db, data.portfolio_id, data.goal_type, data.current_value
+        db,
+        data.portfolio_id,
+        data.goal_type,
+        data.current_value,
+        user_id=user_id,
     )
     goal = Goal(
         portfolio_id=data.portfolio_id,
@@ -192,7 +233,11 @@ async def create_goal(db: AsyncSession, data: GoalCreate) -> dict:
 
 
 async def update_goal(
-    db: AsyncSession, goal_id: int, portfolio_id: int, data: GoalUpdate
+    db: AsyncSession,
+    goal_id: int,
+    portfolio_id: int,
+    data: GoalUpdate,
+    user_id: int,
 ) -> Optional[dict]:
     result = await db.execute(
         select(Goal).where(Goal.id == goal_id, Goal.portfolio_id == portfolio_id)
@@ -201,10 +246,19 @@ async def update_goal(
     if not goal:
         return None
     for field, value in data.model_dump(exclude_unset=True).items():
+        if field == "current_value" and goal.goal_type != "LIVRE":
+            continue
         setattr(goal, field, value)
     await db.commit()
     await db.refresh(goal)
-    return _enrich(goal)
+    current_value = await _resolve_current_value(
+        db,
+        portfolio_id,
+        goal.goal_type,
+        float(goal.current_value or 0.0),
+        user_id=user_id,
+    )
+    return _enrich(goal, current_value=current_value)
 
 
 async def delete_goal(db: AsyncSession, goal_id: int, portfolio_id: int) -> bool:

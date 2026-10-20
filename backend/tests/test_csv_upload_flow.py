@@ -2,7 +2,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.routers.portfolios import _localize_csv_message, import_portfolio_csv
+from app.routers.portfolios import (
+    _localize_csv_message,
+    export_portfolio_csv,
+    import_portfolio_csv,
+)
 from app.services.csv_import_service import import_transactions_csv
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -261,3 +265,30 @@ async def test_router_skips_refresh_and_rebuild_when_import_failed():
     assert background_tasks.tasks == []
     assert result["success"] is False
     assert result["imported_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_export_router_checks_portfolio_access_and_returns_download():
+    db = AsyncMock(spec=AsyncSession)
+    user = SimpleNamespace(id=11)
+    with patch(
+        "app.routers.portfolios.get_portfolio",
+        new_callable=AsyncMock,
+    ) as get_portfolio, patch(
+        "app.routers.portfolios.csv_import_service.export_transactions_csv",
+        new_callable=AsyncMock,
+        return_value="ticker,asset_type\nCDB A,RENDA_FIXA\n",
+    ) as export_csv:
+        response = await export_portfolio_csv(
+            portfolio_id=5,
+            db=db,
+            current_user=user,
+        )
+
+    get_portfolio.assert_awaited_once_with(db, 5, 11)
+    export_csv.assert_awaited_once_with(db, 5)
+    assert response.media_type.startswith("text/csv")
+    assert response.body == b"ticker,asset_type\nCDB A,RENDA_FIXA\n"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="portfolio_5_transactions.csv"'
+    )

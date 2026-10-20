@@ -55,6 +55,40 @@ def _event(**overrides: object) -> CorporateEvent:
     return CorporateEvent(**values)
 
 
+def _b3_event(**overrides: object) -> CorporateEvent:
+    values = {
+        "id": 164,
+        "asset_id": 2005,
+        "ticker": "NIKE34",
+        "event_type": "DESDOBRAMENTO",
+        "status": CorporateEventStatus.PENDENTE.value,
+        "event_date": date(2021, 2, 8),
+        "record_date": date(2021, 2, 8),
+        "ratio": Decimal("900"),
+        "source_provider": "b3",
+        "source_event_id": "b3:old-factor-900",
+        "source_payload_hash": "old-b3-hash",
+        "raw_metadata": {
+            "label": "DESDOBRAMENTO",
+            "factor": "900",
+            "lastDatePrior": "2021-02-08",
+            "isinCode": "BRNIKEBDR006",
+            "sourceIssuer": "NIKE",
+        },
+        "isin_code": "BRNIKEBDR006",
+        "portfolio_id": None,
+        "effective_date": None,
+        "quantity_factor": Decimal("900"),
+        "reconciliation_status": "UNRECONCILED",
+        "requires_review": True,
+        "is_canonical": True,
+        "matched_event_id": None,
+        "brapi_event_id": None,
+    }
+    values.update(overrides)
+    return CorporateEvent(**values)
+
+
 def _action_for(event: CorporateEvent):
     payload = {
         "results": [
@@ -103,6 +137,22 @@ def test_desdobramento_generates_dry_run_candidate() -> None:
     [candidate] = report.candidates
     assert candidate.new_event_type == "DESDOBRAMENTO"
     assert candidate.quantity_factor == Decimal("5")
+
+
+def test_b3_percent_factor_repair_isin_scoped_and_dry_run_only() -> None:
+    event = _b3_event()
+
+    report = build_corporate_event_semantic_repair_plan([event])
+
+    [candidate] = report.candidates
+    assert candidate.source_provider == "b3"
+    assert candidate.event_id == 164
+    assert candidate.old_quantity_factor == Decimal("900")
+    assert candidate.quantity_factor == Decimal("10")
+    assert candidate.new_source_event_id != event.source_event_id
+    assert report.database_writes_executed == 0
+    assert event.quantity_factor == Decimal("900")
+    assert event.ratio == Decimal("900")
 
 
 @pytest.mark.parametrize("label", ["BONIFICACAO", "INCORPORACAO"])
@@ -221,6 +271,44 @@ async def test_execute_repairs_only_semantic_identity_fields(db: AsyncSession) -
     assert event.matched_event_id == original_matched_event_id
     assert event.raw_metadata == original_raw_metadata
     assert event.quantity_factor == original_quantity_factor
+
+
+@pytest.mark.asyncio
+async def test_execute_b3_repair_updates_factor_and_identity_not_reconciliation(
+    db: AsyncSession,
+) -> None:
+    event = _b3_event()
+    db.add(event)
+    await db.flush()
+
+    report = await execute_corporate_event_semantic_repair(
+        db,
+        event_ids=(int(event.id),),
+    )
+
+    [candidate] = report.candidates
+    assert report.database_writes_executed == 1
+    assert event.quantity_factor == Decimal("10")
+    assert event.ratio == Decimal("10")
+    assert event.source_event_id == candidate.new_source_event_id
+    assert event.source_payload_hash == candidate.new_source_payload_hash
+    assert event.reconciliation_status == "UNRECONCILED"
+    assert event.requires_review is True
+    assert event.effective_date is None
+
+
+def test_b3_semantic_repair_rejects_mismatched_isin() -> None:
+    event = _b3_event(isin_code="WRONG")
+
+    with pytest.raises(CorporateEventSemanticRepairError, match="ISIN B3"):
+        build_corporate_event_semantic_repair_plan([event])
+
+
+def test_b3_semantic_repair_rejects_raw_factor_drift() -> None:
+    event = _b3_event(quantity_factor=Decimal("899"))
+
+    with pytest.raises(CorporateEventSemanticRepairError, match="diverge"):
+        build_corporate_event_semantic_repair_plan([event])
 
 
 @pytest.mark.asyncio

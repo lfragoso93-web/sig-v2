@@ -21,6 +21,10 @@ REPORT_SCHEMA_VERSION = "pre-prod-inventory.v2"
 _SAFE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 TABLE_POLICIES: dict[str, tuple[str, str]] = {
+    "admin_backup_operations": (
+        "preserved",
+        "HistÃ³rico operacional de solicitaÃ§Ãµes administrativas de backup e restore; status e responsÃ¡vel nÃ£o sÃ£o reconstruÃ­veis com seguranÃ§a.",
+    ),
     "alembic_version": (
         "preserved",
         "Controle estrutural das migrations aplicadas; nunca deve ser reconstruído pelo rebuild de dados.",
@@ -88,6 +92,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
     "fixed_income_investments": (
         "export_before_cleanup",
         "Projeção financeira legada que pode existir em bancos pré-contração; deve ser preservada antes da migration controlada que remove a tabela.",
+    ),
+    "fixed_income_contracts": (
+        "preserved",
+        "Metadados contratuais vinculados ao ledger de transações; não são reconstruíveis sem os termos informados pelo usuário.",
     ),
     "asset_aliases": (
         "rebuildable",

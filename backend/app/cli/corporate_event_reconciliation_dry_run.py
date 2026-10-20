@@ -104,6 +104,10 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--fractional-settlement-price")
     parser.add_argument("--cash-treatment")
     parser.add_argument(
+        "--effective-date",
+        help="Data efetiva comprovada, no formato YYYY-MM-DD (eventos B3).",
+    )
+    parser.add_argument(
         "--ledger-basis",
         choices=[item.value for item in CorporateEventLedgerBasis],
     )
@@ -197,6 +201,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                 "dataset_id",
                 "window_start",
                 "window_end",
+                "effective_date",
                 "ledger_basis",
                 "ledger_transformation_reference",
                 "ledger_quantity_factor",
@@ -268,6 +273,12 @@ async def _main(arguments: argparse.Namespace) -> int:
             raise ValueError("janela deve usar datas ISO YYYY-MM-DD") from None
         if window_start > window_end:
             raise ValueError("window-start nao pode ser posterior a window-end")
+    effective_date = None
+    if arguments.effective_date is not None:
+        try:
+            effective_date = date.fromisoformat(arguments.effective_date)
+        except ValueError:
+            raise ValueError("effective-date deve usar YYYY-MM-DD") from None
     if arguments.source_sha is not None and not re.fullmatch(
         r"[0-9a-fA-F]{40}", arguments.source_sha
     ):
@@ -287,6 +298,7 @@ async def _main(arguments: argparse.Namespace) -> int:
         arguments.fractional_quantity,
         arguments.fractional_settlement_price,
         arguments.cash_treatment,
+        arguments.effective_date,
         arguments.ledger_basis,
         arguments.ledger_transformation_reference,
         arguments.ledger_quantity_factor,
@@ -308,6 +320,7 @@ async def _main(arguments: argparse.Namespace) -> int:
             fractional_quantity=arguments.fractional_quantity,
             fractional_settlement_price=arguments.fractional_settlement_price,
             cash_treatment=arguments.cash_treatment,
+            effective_date=effective_date,
             ledger_basis=(
                 CorporateEventLedgerBasis(arguments.ledger_basis)
                 if arguments.ledger_basis

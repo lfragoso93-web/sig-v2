@@ -3,20 +3,24 @@ import io
 import logging
 from datetime import date as DateType
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
+from app.models.fixed_income_contract import FixedIncomeContract
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
+from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_write_service import (
@@ -39,7 +43,21 @@ CSV_TEMPLATE_HEADERS = [
     "fees",
     "currency",
     "notes",
+    "fixed_income_contract_key",
+    "fixed_income_product_type",
+    "fixed_income_display_name",
+    "fixed_income_issuer",
+    "fixed_income_indexer",
+    "fixed_income_rate_value",
+    "fixed_income_rate_unit",
+    "fixed_income_maturity_date",
+    "fixed_income_liquidity_type",
+    "fixed_income_grace_period_end",
+    "fixed_income_tax_exempt",
+    "fixed_income_currency",
 ]
+CSV_REQUIRED_HEADERS = CSV_TEMPLATE_HEADERS[:9]
+CSV_FIXED_INCOME_FIELDS = CSV_TEMPLATE_HEADERS[9:]
 CRYPTO_TICKER_ALIASES = {
     "BITCOIN": "BTC",
     "ETHEREUM": "ETH",
@@ -71,6 +89,7 @@ def generate_csv_template() -> str:
         "10.00",
         "BRL",
         "Compra inicial",
+        *([""] * len(CSV_FIXED_INCOME_FIELDS)),
     ])
     writer.writerow([
         "VALE3",
@@ -82,6 +101,7 @@ def generate_csv_template() -> str:
         "5.00",
         "BRL",
         "",
+        *([""] * len(CSV_FIXED_INCOME_FIELDS)),
     ])
     writer.writerow([
         "IVVB11",
@@ -93,6 +113,7 @@ def generate_csv_template() -> str:
         "0.00",
         "BRL",
         "ETF S&P500",
+        *([""] * len(CSV_FIXED_INCOME_FIELDS)),
     ])
 
     return output.getvalue()
@@ -314,7 +335,7 @@ async def _validate_writer_preflight(
             continue
 
         try:
-            await require_financially_certified_crypto_asset(db, ticker)
+            await require_catalog_crypto_asset(db, ticker)
         except CryptoTransactionEligibilityError as exc:
             row.add_error(str(exc))
 
@@ -399,7 +420,7 @@ async def parse_csv_content(
             global_errors.append("CSV file is empty or invalid")
             return rows, global_errors
 
-        missing_headers = set(CSV_TEMPLATE_HEADERS) - set(csv_reader.fieldnames)
+        missing_headers = set(CSV_REQUIRED_HEADERS) - set(csv_reader.fieldnames)
         if missing_headers:
             global_errors.append(f"Missing required headers: {', '.join(missing_headers)}")
             return rows, global_errors
@@ -425,6 +446,7 @@ async def parse_csv_content(
             fees_str = raw_row.get("fees", "0").strip()
             currency = raw_row.get("currency", "BRL").strip().upper()
             raw_row["currency"] = currency
+            _parse_fixed_income_contract_row(csv_row)
             if not raw_ticker.strip():
                 csv_row.add_error("ticker is required")
             elif asset_type == AssetType.TESOURO_DIRETO.value and ticker is None:
@@ -489,7 +511,111 @@ async def parse_csv_content(
         global_errors.append(f"Error parsing CSV: {e!s}")
         logger.error("CSV parse error: %s", sanitize_log_value(e))
 
+    _validate_fixed_income_contract_groups(rows)
     return rows, global_errors
+
+
+def _parse_optional_bool(value: str) -> bool | None:
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized in {"true", "1", "yes", "sim"}:
+        return True
+    if normalized in {"false", "0", "no", "nao", "não"}:
+        return False
+    raise ValueError("fixed_income_tax_exempt must be true or false")
+
+
+def _parse_fixed_income_contract_row(row: CSVRow) -> None:
+    data = row.data
+    key = (data.get("fixed_income_contract_key") or "").strip()
+    raw_fields = {
+        "product_type": (data.get("fixed_income_product_type") or "").strip(),
+        "display_name": (data.get("fixed_income_display_name") or "").strip(),
+        "issuer": (data.get("fixed_income_issuer") or "").strip(),
+        "indexer": (data.get("fixed_income_indexer") or "").strip(),
+        "rate_value": (data.get("fixed_income_rate_value") or "").strip(),
+        "rate_unit": (data.get("fixed_income_rate_unit") or "").strip(),
+        "maturity_date": (data.get("fixed_income_maturity_date") or "").strip(),
+        "liquidity_type": (data.get("fixed_income_liquidity_type") or "").strip(),
+        "grace_period_end": (data.get("fixed_income_grace_period_end") or "").strip(),
+        "tax_exempt": (data.get("fixed_income_tax_exempt") or "").strip(),
+        "currency": (data.get("fixed_income_currency") or "").strip(),
+    }
+    has_metadata = any(raw_fields.values())
+    data["fixed_income_contract_key"] = key or None
+    data["fixed_income_contract"] = None
+
+    if not key and not has_metadata:
+        return
+    if not key:
+        row.add_error("fixed_income_contract_key is required when contract metadata is present")
+        return
+    if not has_metadata:
+        row.add_error("fixed income contract metadata is required for the provided key")
+        return
+    if data.get("asset_type") != AssetType.RENDA_FIXA.value:
+        row.add_error("fixed income contract metadata can only be used with RENDA_FIXA")
+        return
+
+    payload: dict[str, Any] = {}
+    if raw_fields["display_name"]:
+        payload["display_name"] = raw_fields["display_name"]
+    if raw_fields["product_type"]:
+        payload["product_type"] = raw_fields["product_type"].upper()
+    if raw_fields["issuer"]:
+        payload["issuer"] = raw_fields["issuer"]
+    if raw_fields["indexer"]:
+        payload["indexer"] = raw_fields["indexer"].upper()
+    if raw_fields["rate_value"]:
+        try:
+            payload["rate_value"] = Decimal(raw_fields["rate_value"])
+        except InvalidOperation:
+            row.add_error("fixed_income_rate_value must be a valid decimal number")
+            return
+    if raw_fields["rate_unit"]:
+        payload["rate_unit"] = raw_fields["rate_unit"].upper()
+    for field in ("maturity_date", "grace_period_end"):
+        if raw_fields[field]:
+            try:
+                payload[field] = _parse_date(raw_fields[field])
+            except ValueError:
+                row.add_error(f"{field} must use YYYY-MM-DD")
+                return
+    if raw_fields["liquidity_type"]:
+        payload["liquidity_type"] = raw_fields["liquidity_type"].upper()
+    if raw_fields["tax_exempt"]:
+        try:
+            payload["tax_exempt"] = _parse_optional_bool(raw_fields["tax_exempt"])
+        except ValueError as exc:
+            row.add_error(str(exc))
+            return
+    if raw_fields["currency"]:
+        payload["currency"] = raw_fields["currency"].upper()
+
+    try:
+        data["fixed_income_contract"] = FixedIncomeContractCreate(**payload)
+    except ValidationError as exc:
+        for error in exc.errors():
+            field = ".".join(str(part) for part in error["loc"])
+            row.add_error(f"Invalid fixed income contract {field}: {error['msg']}")
+
+
+def _validate_fixed_income_contract_groups(rows: list[CSVRow]) -> None:
+    contracts: dict[str, tuple[Any, int]] = {}
+    for row in rows:
+        key = row.data.get("fixed_income_contract_key")
+        contract = row.data.get("fixed_income_contract")
+        if not key or contract is None or row.errors:
+            continue
+        terms = contract.model_dump(mode="python")
+        previous = contracts.get(key)
+        if previous is None:
+            contracts[key] = (terms, row.row_num)
+        elif previous[0] != terms:
+            row.add_error(
+                f"fixed income contract key '{key}' has inconsistent metadata"
+            )
 
 
 def _parse_date(date_str: str) -> DateType:
@@ -588,6 +714,7 @@ async def import_csv_transactions(
         return result
 
     created_transactions = []
+    fixed_income_contract_ids: dict[str, int] = {}
     creation_failed = False
 
     for csv_row in rows:
@@ -617,9 +744,28 @@ async def import_csv_transactions(
                     date=parsed_date,
                     currency=currency,
                     notes=notes if notes else None,
+                    fixed_income_contract_id=(
+                        fixed_income_contract_ids.get(
+                            csv_row.data.get("fixed_income_contract_key") or ""
+                        )
+                    ),
+                    fixed_income_contract=(
+                        None
+                        if csv_row.data.get("fixed_income_contract_key")
+                        in fixed_income_contract_ids
+                        else csv_row.data.get("fixed_income_contract")
+                    ),
                 ),
                 flush=True,
             )
+            contract_key = csv_row.data.get("fixed_income_contract_key")
+            if contract_key and contract_key not in fixed_income_contract_ids:
+                contract_id = transaction.fixed_income_contract_id
+                if contract_id is None:
+                    raise TransactionWriteError(
+                        "Contrato de Renda Fixa nao foi associado ao lancamento"
+                    )
+                fixed_income_contract_ids[contract_key] = contract_id
             created_transactions.append(transaction)
 
             result["rows"].append({
@@ -682,3 +828,73 @@ async def import_csv_transactions(
         result["success"] = result["error_count"] == 0
 
     return result
+
+
+async def export_transactions_csv(db: AsyncSession, portfolio_id: int) -> str:
+    """Export one portfolio's ledger and linked contract metadata as CSV."""
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=CSV_TEMPLATE_HEADERS)
+    writer.writeheader()
+    result = await db.execute(
+        select(Transaction, FixedIncomeContract)
+        .outerjoin(Transaction.fixed_income_contract)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date, Transaction.id)
+    )
+
+    contract_keys: dict[int, str] = {}
+    for transaction, contract in result.all():
+        row: dict[str, Any] = {
+            "ticker": transaction.ticker,
+            "asset_type": transaction.asset_type,
+            "operation": (
+                transaction.operation.value
+                if isinstance(transaction.operation, OperationType)
+                else str(transaction.operation)
+            ),
+            "quantity": str(transaction.quantity),
+            "price": str(transaction.price),
+            "date": transaction.date.isoformat(),
+            "fees": str(transaction.fees),
+            "currency": transaction.currency,
+            "notes": transaction.notes or "",
+        }
+        for field in CSV_FIXED_INCOME_FIELDS:
+            row[field] = ""
+
+        if contract is not None:
+            key = contract_keys.setdefault(
+                contract.id, f"FIXED_INCOME_CONTRACT_{len(contract_keys) + 1}"
+            )
+            row.update({
+                "fixed_income_contract_key": key,
+                "fixed_income_product_type": contract.product_type,
+                "fixed_income_display_name": contract.display_name,
+                "fixed_income_issuer": contract.issuer or "",
+                "fixed_income_indexer": contract.indexer or "",
+                "fixed_income_rate_value": (
+                    str(contract.rate_value) if contract.rate_value is not None else ""
+                ),
+                "fixed_income_rate_unit": contract.rate_unit or "",
+                "fixed_income_maturity_date": (
+                    contract.maturity_date.isoformat()
+                    if contract.maturity_date is not None
+                    else ""
+                ),
+                "fixed_income_liquidity_type": contract.liquidity_type or "",
+                "fixed_income_grace_period_end": (
+                    contract.grace_period_end.isoformat()
+                    if contract.grace_period_end is not None
+                    else ""
+                ),
+                "fixed_income_tax_exempt": (
+                    "true"
+                    if contract.tax_exempt is True
+                    else "false"
+                    if contract.tax_exempt is False
+                    else ""
+                ),
+                "fixed_income_currency": contract.currency,
+            })
+        writer.writerow(row)
+    return output.getvalue()

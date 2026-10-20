@@ -2,7 +2,8 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark,
   Settings, Wallet, PanelLeftClose, PanelLeftOpen,
-  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, Target,
+  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, Target, Calculator,
+  Wrench,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -37,6 +38,7 @@ export default function Sidebar() {
   const [description,  setDescription]  = useState('')
   const [createdName,  setCreatedName]  = useState<string | null>(null)
   const [error,        setError]        = useState<string | null>(null)
+  const [toolsOpen, setToolsOpen] = useState(false)
 
   const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -58,6 +60,11 @@ export default function Sidebar() {
   }, [sidebarOpen])
 
   const selected = portfolios.find(p => p.id === selectedPortfolioId)
+  const isToolsRoute = location.pathname.startsWith('/carteira/ferramentas/')
+
+  useEffect(() => {
+    if (isToolsRoute) setToolsOpen(true)
+  }, [isToolsRoute])
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Informe um nome.'); return }
@@ -207,7 +214,43 @@ export default function Sidebar() {
       )}
 
       <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
-        {NAV_ITEMS.map(item => <NavItem key={item.to} {...item} />)}
+        {NAV_ITEMS.slice(0, 6).map(item => <NavItem key={item.to} {...item} />)}
+        <div>
+          <button
+            type="button"
+            aria-expanded={toolsOpen || isToolsRoute}
+            aria-label="Ferramentas"
+            title={sidebarCollapsed ? 'Ferramentas' : undefined}
+            className="flex w-full items-center rounded-lg font-medium transition-all"
+            style={{
+              padding: sidebarCollapsed ? '9px' : '9px 12px',
+              gap: sidebarCollapsed ? 0 : 10,
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              fontSize: 'var(--text-sm)',
+              color: isToolsRoute ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              background: isToolsRoute ? 'oklch(from var(--color-primary) l c h / 0.11)' : 'transparent',
+            }}
+            onClick={() => {
+              if (sidebarCollapsed) {
+                toggleSidebarCollapsed()
+                setToolsOpen(true)
+              } else {
+                setToolsOpen(open => !open)
+              }
+            }}
+          >
+            <Wrench size={16} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            {!sidebarCollapsed && <span className="flex-1 truncate text-left">Ferramentas</span>}
+            {!sidebarCollapsed && <ChevronDown size={14} style={{ transform: toolsOpen || isToolsRoute ? 'rotate(180deg)' : undefined, transition: 'transform 180ms ease' }} />}
+          </button>
+          {(toolsOpen || isToolsRoute) && !sidebarCollapsed && (
+            <div className="ml-3 flex flex-col gap-0.5 border-l pl-2" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.09)' }}>
+              <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" />
+              <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" />
+            </div>
+          )}
+        </div>
+        {NAV_ITEMS.slice(6).map(item => <NavItem key={item.to} {...item} />)}
       </nav>
 
       <button

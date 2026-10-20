@@ -2,7 +2,171 @@
 
 Todas as mudanças relevantes do projeto são documentadas aqui. O histórico detalhado anterior permanece preservado no Git e nos changelogs datados em `docs/changelog/`.
 
-## [Unreleased] — branch `stable-15jun`
+## [Unreleased] - branch `stable-15jun`
+
+### 17/10/2026 - contratos de Renda Fixa (#355), validacao isolada
+
+- Adicionados metadados portfolio-scoped, GET/POST da API e associacao nullable
+  em `transactions`; o ledger segue como fonte unica do lifecycle.
+- Writer valida ownership e classe; FK composta no PostgreSQL impede ligacao
+  entre carteiras. Sem backfill ou alteracao de registros existentes.
+- Os 18 testes focados passaram; migration `20261017_fixed_income_contracts`
+  aplicada na stack sintetica, com `alembic current` em `head`. Teste PostgreSQL
+  transacional confirmou rejeicao cross-portfolio e rollback com contagens zero.
+- Imagens de teste backend/frontend atualizadas; digests e identidade em
+  `docs/USER_TEST_STACK.md`. `/health=200`; `/ready=503` esperado sem dataset e
+  certificacao reais. API de contratos ainda nao foi conectada ao formulario.
+
+### 17/10/2026 - inventario de taxonomia de Renda Fixa (#355)
+
+- Mapeados schema, writer canonico, API, formulario, CSV, valuation e
+  consumidores de snapshots/TWR; resultado em
+  `docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`.
+- Confirmado que metadados contratuais ainda vivem em `notes` e que a antiga
+  tabela de projecao foi removida por migration irreversivel. Nenhum banco,
+  schema, dado financeiro ou runtime foi alterado. Registradas proposta
+  preliminar e revisao dos caminhos de escrita; a FK nullable parece compativel
+  se ownership/classe forem validados e os caminhos legados forem preservados.
+  A auditoria read-only em `sgi-usertest` confirmou identidade sintetica e
+  encontrou zero transacoes; implementar apos preparar massa sintetica e
+  validar em banco descartavel.
+
+### 17/10/2026 - simulador de rendimentos (#359, frente A)
+
+- Adicionada calculadora de juros compostos com aporte inicial/mensal, taxa
+  efetiva anual e prazo, gráfico e evolução anual.
+- A projeção é isolada: sem API, persistência, provider ou efeito na carteira.
+- Premissas e limites estão em `docs/TOOLS_CALCULATORS.md`; calculadora de
+  Renda Fixa permanece pendente. Typecheck, build de produção e quatro testes
+  determinísticos passaram; rota e asset retornaram HTTP 200 na stack
+  `sgi-usertest`. Validação visual desktop/mobile segue pendente por
+  indisponibilidade do navegador integrado. Digests, SHA base e limites de
+  certificação estão em `docs/USER_TEST_STACK.md`; `sig-v2` permaneceu parado.
+
+### 17/10/2026 - stack isolada de testes assistidos
+
+- Adicionada stack Compose `sgi-usertest`, com banco e artefatos proprios,
+  frontend limitado a loopback e sem carregar o `.env` principal.
+- Documentada a atualizacao da imagem a cada alteracao para testes assistidos;
+  certificacao real deixa de bloquear iteracoes de desenvolvimento, enquanto
+  `/ready` permanece fail-closed no runtime de dados reais.
+- Imagens construidas e stack iniciada com Alembic, banco, Redis e `/health`
+  saudaveis; frontend responde em loopback. `/ready` continua 503 nessa
+  identidade sintetica e nao e gate da rodada assistida. O projeto `sig-v2` e
+  seus volumes permaneceram intactos.
+
+### 17/10/2026 - evidencia oficial de elegibilidade de cupons (#149)
+
+- regulamento B3 do Tesouro Direto, item 95, define elegibilidade como título
+  disponível na conta na manhã do pagamento antes de depósitos/transferências;
+- itens 97–101 atribuem repasse e impostos ao Agente de Custódia, que consulta
+  posições, movimentações e preços de aquisição; o CSV agregado não dá
+  posição por carteira nem componente tributável universal por unidade;
+- permanece necessário obter posição/custódia por conta na manhã do pagamento
+  e base tributável/IRRF por lote, sem inferir do bruto;
+- promoção/certificação de runtime para dados reais fica separada do trabalho
+  de desenvolvimento. Fontes e limites em
+  `docs/TREASURY_CASH_EVENT_SOURCE_AUDIT.md`; sem escrita ou promoção.
+
+### 17/10/2026 - GOV-07 correlacao do backlog
+
+- inventario GitHub consultado: 22 Issues abertas, nenhuma PR aberta; #83 ja
+  consta fechada apos o ensaio HTTP administrativo;
+- as Issues abertas foram agrupadas por residual concreto: #408 CodeQL, #149
+  evidencias de cupons, #370 evidencia KLBN11, #272 DDL controlado, providers/
+  bootstrap, backlog de produto e OCI;
+- #353 ja esta implementada no `AppLayout` com testes unitarios de navegacao;
+  faltam validacoes desktop/mobile previstas na Issue, portanto segue aberta
+  como validacao P2, sem bloquear jornada critica;
+- nao foi encontrada Issue aberta claramente duplicada ou sem destino. A ponta
+  remota de `stable-15jun` nao foi confirmada: conector mostra sete commits a
+  frente de `main`, mas nao retorna o SHA; `git ls-remote` falhou por rede;
+- GOV-07 foi correlacionada para o snapshot local, mas #293 permanece aberta
+  ate publicar/reconciliar o snapshot documental. Sem mudanca de runtime.
+
+### 17/10/2026 - inventario estatico #272
+
+- revisao read-only encontrou uso ativo de `event_date`, `ratio`,
+  `brapi_event_id`, `raw_data`, `applied_at` e `portfolio_id` no fluxo de troca
+  de ticker por carteira e/ou em fallbacks controlados do leitor;
+- a contração não é uma limpeza isolada: exige primeiro migrar esse consumidor,
+  preservar idempotência e então medir dados na base alvo antes de DDL;
+- inventário e referências registrados em
+  `docs/CORPORATE_EVENTS_LEGACY_COLUMN_INVENTORY.md`. Nenhum banco, schema,
+  migration ou projeção foi alterado.
+
+### 17/10/2026 - revisão de segurança #408
+
+- Issue remota aberta; PRs #413/#419 e CI são citadas como concluídas;
+- comentário da Issue informa deep scan CodeQL/Trivy verde em `stable-15jun`,
+  mas o corpo ainda marca CodeQL pós-correção como pendente e condiciona o
+  fechamento à propagação/global dos alertas;
+- workflow `.github/workflows/security-deep-scan.yml` permite execução manual
+  e agendada e também executa Trivy da imagem backend. A consulta disponível
+  lista apenas execuções associadas a PR, sem expor execução manual/schedule
+  ou alertas CodeQL. A evidência remota não pôde ser reconciliada neste bloco;
+- #408 permanece aberta. Não houve nova execução do scan nem alteração runtime.
+
+
+### 17/10/2026 - Issue #83 concluida
+
+- ensaio administrativo integrado de backup, download autenticado e restore em bancos PostgreSQL descartaveis;
+- autenticacao SuperAdmin, auditoria e status persistido verificados; marcador da origem permaneceu intacto e foi restaurado no alvo vazio;
+- roteiro e limites operacionais registrados em `docs/ADMIN_BACKUP_RESTORE_REHEARSAL.md`; Issue #83 fechada no GitHub;
+- nenhum banco ou volume operacional foi usado; #408 e GOV-07/#293 permanecem como proximos gates separados.
+
+### 17/10/2026 - recuperacao dos gates backend
+
+- a persistencia estrita rejeita colecoes com linhas BRAPI e Yahoo simultaneas, reforcando a regra de fallback explicito; fixtures de eventos corporativos foram alinhadas a prioridade B3 para ativos listados;
+- scanners AST passaram a tolerar BOM UTF-8; o adapter B3 teve anotacoes locais ajustadas para mypy e `goals_service.py` recebeu o espacamento exigido pelo flake8;
+- backend: 2.401 testes passaram e 5 foram skipped; flake8, mypy (411 arquivos), Architecture Doctor (6/6), migrations frescas em PostgreSQL 16 e drift gate passaram;
+- o entrypoint agora aplica o head runtime seguro `20261016_corp_ev_effective_date`; testes focados do alvo/migration passaram (10/10);
+- imagens backend e frontend do candidato foram construidas e implantadas; backend, PostgreSQL e Redis estao saudaveis, readiness assistida retornou `GO_ASSISTED` e `/ready` segue 503 por divergencia do evento anterior;
+- backup v3 pos-migration teve zero escritas na origem; restore isolado reconciliou sem divergencias; proof e dry-run #384 foram gerados sem promover a identidade.
+
+### 16/10/2026 - rebaseline documental e runtime observado
+
+- correção da baseline: `stable-15jun` está em
+  `b37661921e3a8455f45c8b676b28955d6ad3d0ea`, 7 commits à frente e 0 atrás de
+  `main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`); não havia PR aberta;
+- inventário GitHub: 453 Issues, 23 abertas, 430 fechadas;
+- antes desta rebaseline, o working tree continha 15 arquivos modificados e
+  cinco itens não rastreados; esta entrada registra o estado sem incluir os
+  artefatos no candidato;
+- runtime observado: `/health=200`; `/ready=503` por `runtime_identity_error`,
+  com `ready_for_real_data=false`; APP SHA diverge do checkout e dataset está
+  sem referência;
+- a CLI de readiness assistida não concluiu e não produziu relatório;
+- `docs/DEVELOPMENT_BASELINE_2026-10-16.md` passa a concentrar a fotografia e o
+  mapa. A promoção de 06/10 permanece histórica e não certifica o runtime atual.
+
+### 16/10/2026 - B3 como fonte prioritária para proventos e eventos
+
+- alinhada a política local para usar B3 como autoridade de ativos listados,
+  com BRAPI complementar e Yahoo como fallback explícito;
+- adapter Listed Companies cobre proventos e eventos B3 para ações/BDRs;
+- `effective_date` passa a aceitar nulo para eventos sem sessão efetiva
+  comprovada; `lastDatePrior` permanece evidência de direito, não data efetiva;
+- a lacuna NIKE34 fica delimitada a carga de dividendos B3 por ativo e análise
+  fail-closed do grupamento/fração antes de qualquer projeção.
+
+### Histórico 16/10/2026 - rebaseline de segurança, backup administrativo e continuidade
+
+- PR #425 sincronizou `main` com `stable-15jun`; a árvore comum naquele momento
+  estava no SHA `8e4e243416014024964031793dbb7b15bcd3c39d`;
+- PR #413 integrou a sanitização dos logs e #419 acrescentou regressões; CI
+  passou, mas a confirmação CodeQL pós-correção permanece pendente;
+- PR #418 completou o hardening administrativo da #83: reautenticação,
+  AuditLog, status persistido, download autenticado e retenção configurável;
+- PR #412 publicou a resolução explícita de frações pendentes de eventos
+  corporativos; caixa só é projetado quando a evidência de liquidação está
+  presente, mantendo a #370 fail-closed para KLBN11;
+- Issues #408, #83 e #293 foram rebaselined com os resíduos e gates atuais;
+- README, ROADMAP, arquitetura, readiness, continuidade, governança e status
+  de eventos corporativos foram atualizados;
+- a identidade certificada em 06/10/2026 continua histórica. O estado posterior
+  do runtime está registrado na entrada mais recente deste changelog e no mapa
+  de baseline.
 
 ### 11/10/2026 - #149 auditoria oficial de cupons do Tesouro
 
@@ -442,3 +606,62 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 ## Histórico
 
 O detalhamento de sanitização arquitetural, segurança, BRAPI/COTAHIST, Proventos, TWR, dependências, OCI e demais microblocos anteriores a este rebaseline permanece disponível no histórico Git e nos documentos datados. A partir deste ponto, este arquivo prioriza marcos de release e governança para evitar que microcommits históricos sejam interpretados como estado operacional atual.
+
+
+## 2026-10-17 — Issue #355: integracao do contrato de Renda Fixa
+
+O formulario de transacoes agora cria e associa o contrato estruturado no mesmo fluxo transacional da aplicacao/resgate; edicao mantem o vinculo e os valores contabeis originais. A selecao de contratos existentes e o caminho legado sem contrato continuam disponiveis. CSV antigo permanece aceito sem inferir vinculo nem criar contratos automaticamente. Testes focados do frontend (16), typecheck e quatro testes backend do fluxo/API/CSV passaram. A atualizacao da imagem de testes e os limites de prontidao estao registrados em `docs/USER_TEST_STACK.md`.
+
+
+## 2026-10-18 - Issue #355: CSV com contratos estruturados
+
+O modelo CSV agora inclui campos opcionais de contrato de Renda Fixa e a chave `fixed_income_contract_key` para agrupar varias transacoes no mesmo contrato. O dry-run valida taxonomia, datas, taxa e consistencia entre linhas; a importacao cria um contrato por chave no mesmo lote atomico. Nova exportacao autenticada por carteira permite round-trip sem transportar IDs internos. O formato antigo de nove colunas continua aceito. Validacao: 82 testes backend focados, 7 testes do modal, typecheck e Flake8 sem erros fora dos avisos legados de comprimento/linhas em branco. Runtime e digests em `docs/USER_TEST_STACK.md`.
+
+## 2026-10-18 - Contratos transparentes e prefill por instrumento
+
+Contrato equivalente agora e reutilizado automaticamente dentro da mesma
+carteira quando todos os termos tipados e o nome coincidem; o formulario nao
+expoe IDs/seletor de contrato na criacao normal. Atalhos do resumo preenchem os
+termos quando existe correspondencia unica. O atalho de Tesouro preenche
+vencimento conhecido e continua resolvendo indexador/taxa/PU via catalogo e
+cotacao persistida. Sem migracao ou alteracao do ledger.
+
+Imagem implementada na stack `sgi-usertest` apos recuperacao automatica do
+Docker; runtime e limites registrados em `docs/USER_TEST_STACK.md`.
+
+Validacao subsequente: 12 testes backend do servico passaram; typecheck passou.
+Teste frontend foi iniciado, mas o Vitest ficou sem progresso e foi encerrado,
+sem resultado. A imagem foi reconstruida e aplicada; browser integrado nao
+estava disponivel para checagem visual.
+
+## 2026-10-18 - Isolamento do agrupamento de contratos RF
+
+Adicionada regressao confirmando que contratos com termos e nome equivalentes
+continuam separados entre carteiras. Os 13 testes focados do servico passaram
+em SQLite em memoria. O runtime de testes foi atualizado; digests e escopo em
+`docs/USER_TEST_STACK.md`. A valida��o visual segue pendente de navegador.
+
+A imagem backend apos o teste de isolamento por carteira esta ativa e saudavel
+(`sha256:700171073da7ac0fff016e3f64627f19dc0a72ff0aaf6ea90667c63d367e7708`).
+Base de teste permaneceu vazia; `/health=200`, `/ready=503` e frontend 200.
+
+A normalizacao de identidade dos contratos RF foi ajustada: espacos repetidos
+sao colapsados nos campos display_name/issuer e a comparacao do emissor ignora
+caixa. A regressao focada dos 13 testes passou; imagem e runtime atualizados
+conforme `docs/USER_TEST_STACK.md`.
+
+Digest final backend para o bloco de normalizacao:
+`sha256:93053a6fb003b46b84beaea359235033deb051f4cde3654904e436aaef1cba58`.
+
+A governanca local da #355 foi alinhada ao estado corrente e identifica que o
+criterio remoto de seletor explicito ainda precisa ser atualizado. Nenhuma
+atualizacao foi publicada no GitHub neste bloco.
+
+## 2026-10-18 - Stack completa atualizada para testes assistidos
+
+Frontend e backend atuais foram aplicados em `sgi-usertest`. A interface e o
+bundle respondem HTTP 200; OpenAPI expoe contratos RF e exportacao CSV. DB,
+Redis e volumes preservados; ledger e contratos vazios. `/ready=503` e esperado
+para identidade sintetica e nao indica certificacao real. Vitest de prefill e
+revisao visual integrada continuam pendentes; detalhes e digests em
+`docs/USER_TEST_STACK.md`.

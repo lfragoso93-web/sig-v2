@@ -12,8 +12,27 @@ export interface Transaction {
   fees: number
   date: string
   currency: string
-  notes?: string
+  notes?: string | null
+  fixed_income_contract_id?: number | null
 }
+
+export interface FixedIncomeContract {
+  id: number
+  portfolio_id: number
+  display_name: string
+  product_type: string
+  issuer?: string | null
+  indexer?: string | null
+  rate_value?: number | string | null
+  rate_unit?: string | null
+  maturity_date?: string | null
+  liquidity_type?: string | null
+  grace_period_end?: string | null
+  tax_exempt?: boolean | null
+  currency: string
+}
+
+export type FixedIncomeContractCreate = Omit<FixedIncomeContract, 'id' | 'portfolio_id'>
 
 export interface PagedTransactions {
   items:     Transaction[]
@@ -34,7 +53,9 @@ export interface TransactionCreate {
   date: string
   currency?: string
   fx_rate?: number
-  notes?: string
+  notes?: string | null
+  fixed_income_contract_id?: number | null
+  fixed_income_contract?: FixedIncomeContractCreate | null
 }
 
 export type TransactionUpdate = Partial<TransactionCreate>
@@ -53,6 +74,7 @@ const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
 
 function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
   qc.invalidateQueries({ queryKey: ['transactions',         portfolioId] })
+  qc.invalidateQueries({ queryKey: ['fixed-income-contracts', portfolioId] })
   qc.invalidateQueries({ queryKey: ['portfolio-summary',    portfolioId] })
   qc.invalidateQueries({ queryKey: ['positions',            portfolioId] })
   qc.invalidateQueries({ queryKey: ['asset-distribution',   portfolioId] })
@@ -87,6 +109,16 @@ export function useTransactions(
     },
     enabled: !!portfolioId,
     placeholderData: prev => prev,
+  })
+}
+
+export function useFixedIncomeContracts(portfolioId: number | null, enabled = true) {
+  return useQuery<FixedIncomeContract[]>({
+    queryKey: ['fixed-income-contracts', portfolioId],
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/fixed-income-contracts`)
+      .then(r => r.data),
+    enabled: !!portfolioId && enabled,
   })
 }
 

@@ -189,7 +189,20 @@ export default function Transacoes() {
   const totalVendas = transactions.filter(t => t.operation === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
 
   function handleEdit(t: Transaction) {
-    openTransactionModal({ tab: assetTypeToTab(t.asset_type), ticker: t.ticker, assetName: t.notes?.split(' - ')[0] ?? '', transactionId: t.id, operation: t.operation, quantity: t.quantity, price: t.price, fees: t.fees, date: t.date, notes: t.notes, currency: t.currency })
+    openTransactionModal({
+      tab: assetTypeToTab(t.asset_type),
+      ticker: t.ticker,
+      assetName: t.notes?.split(' - ')[0] ?? '',
+      transactionId: t.id,
+      fixedIncomeContractId: t.fixed_income_contract_id,
+      operation: t.operation,
+      quantity: t.quantity,
+      price: t.price,
+      fees: t.fees,
+      date: t.date,
+      notes: t.notes,
+      currency: t.currency,
+    })
   }
 
   async function handleDelete(id: number) {

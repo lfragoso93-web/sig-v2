@@ -112,7 +112,7 @@ async def test_aalr3_rejects_concurrent_brapi_yahoo_rows(
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -162,7 +162,7 @@ async def test_aeri3_rejects_yahoo_value_after_brapi_coverage() -> None:
         sources=(brapi, yahoo),
     )
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -229,7 +229,7 @@ async def test_abev3_yahoo_aggregate_is_rejected_after_brapi_coverage(
         sources=sources,
     )
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -262,7 +262,7 @@ async def test_aggregate_marker_does_not_hide_single_type_conflict() -> None:
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -292,7 +292,7 @@ async def test_precision_contract_does_not_hide_material_value_conflict() -> Non
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -325,7 +325,7 @@ async def test_distinct_ex_dates_remain_distinct_events() -> None:
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -356,7 +356,7 @@ async def test_declared_precision_below_six_decimals_remains_blocking() -> None:
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -694,7 +694,7 @@ async def test_abev3_partial_yahoo_component_is_rejected_after_brapi_total(
         sources=sources,
     )
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.add.assert_not_called()
@@ -756,7 +756,7 @@ async def test_absorbed_component_policy_keeps_arbitrary_value_blocking(
         sources=(brapi, yahoo),
     )
 
-    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo so pode atuar como fallback"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()

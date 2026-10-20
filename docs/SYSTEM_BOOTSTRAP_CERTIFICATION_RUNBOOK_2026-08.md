@@ -179,9 +179,10 @@ Gate operacional dedicado; execução real somente após autorização explícit
 Objetivo: carregar eventos corporativos globais para tipos suportados.
 
 Política de fonte:
-- BRAPI primária para eventos expostos por contrato estruturado, como bonificações e subscrições;
-- Yahoo complementar/fallback para splits/grupamentos enquanto a BRAPI não expuser contrato estruturado/documentado equivalente;
-- nunca inferir split apenas por gap de preço.
+- B3 prioritária para eventos corporativos de ativos listados quando houver cobertura estruturada;
+- BRAPI complementar somente para fatos não publicados pela B3;
+- Yahoo fallback identificado apenas quando a B3 não tiver cobertura do emissor;
+- nunca inferir split apenas por gap de preço nem substituir resposta B3 válida.
 
 Aprovação:
 - somente `ACAO`, `BDR` e `ETF_NACIONAL` processados;

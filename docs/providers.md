@@ -33,6 +33,30 @@ Snapshots e KPIs
 | Fonte pública complementar | Fallback para alguns títulos ou indicadores quando a fonte dedicada não cobre |
 | Fontes macroeconômicas | CDI, Selic, IPCA, IGP-M e câmbio |
 
+### B3 Listed Companies
+
+O adaptador `app.integrations.b3_listed_companies` consulta os endpoints
+estruturados usados pelo portal público da B3. Para BDRs, `GetListedSupplementBDR`
+fornece proventos e eventos do emissor; para ações nacionais,
+`GetListedSupplementCompany` identifica o emissor e `GetListedCashDividends`
+fornece as linhas paginadas. O adaptador valida emissor, paginação e datas,
+decodifica a resposta JSON encapsulada observada no portal e mantém a proveniência
+dos campos originais.
+
+Para ações ON/PN, `typeStock` precisa corresponder à classe do ticker antes de
+aceitar o evento. BRAPI e Yahoo não são misturados nem substituem uma resposta
+oficial B3 válida para ativos listados. Estas rotas são um detalhe operacional
+do portal e podem mudar sem contrato B2B estável; falhas devem permanecer
+explícitas.
+
+Para eventos corporativos, cada linha precisa pertencer ao ISIN do ativo; o
+endpoint do emissor pode retornar classes diferentes. `factor` de bonificação
+e desdobramento é percentual de aumento de ações e deve virar multiplicador
+`1 + factor / 100`; grupamento já usa multiplicador direto. Subscrição é direito
+e não aumenta a quantidade. `lastDatePrior` é o último dia com direito e não
+substitui a data efetiva do primeiro pregão seguinte, que exige calendário B3.
+Tipos sem regra de projeção e payloads inválidos falham fechados.
+
 ---
 
 ## Estratégia por classe
@@ -45,7 +69,7 @@ Snapshots e KPIs
 | FII | Rota dedicada, janela explícita quando a documentação não oferece histórico máximo |
 | Stock | Fonte internacional, fallback controlado com histórico máximo |
 | ETF internacional | Fonte internacional, fallback controlado com histórico máximo |
-| Cripto | Roteamento definitivo em revisão |
+| Cripto | BRAPI principal; fallback historico Yahoo USD + PTAX documentado |
 | Tesouro Direto | Serviço dedicado, fora do pipeline genérico |
 | Renda Fixa | Motor interno, sem cotação externa genérica |
 
@@ -171,3 +195,5 @@ Evitar um warning por linha quando o problema é repetitivo.
 - Uso em lote da rota histórica quando a fonte suportar múltiplos símbolos.
 - Roteamento definitivo de cripto após validação da cobertura atual.
 - Consumo de Tesouro nos snapshots por meio do histórico dedicado.
+
+A completude do historico de mercado e separada da elegibilidade para registrar uma operacao: compras/vendas manuais e CSV aceitam somente tickers CRIPTO ja presentes no catalogo persistido. Status de cobertura continuam explicitos para valuation e readiness.

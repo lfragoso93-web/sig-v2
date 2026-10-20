@@ -50,7 +50,7 @@ def _executable_string_literals(source: str) -> list[str]:
 
 
 def test_initial_migration_preserves_legacy_monthly_irpf_tables() -> None:
-    source = _INITIAL_SCHEMA.read_text(encoding="utf-8")
+    source = _INITIAL_SCHEMA.read_text(encoding="utf-8-sig")
 
     for table in _LEGACY_TABLES:
         assert f"CREATE TABLE IF NOT EXISTS {table}" in source
@@ -64,7 +64,7 @@ def test_current_runtime_has_no_legacy_monthly_table_consumers() -> None:
         for path in sorted(directory.rglob("*.py")):
             if path.stem.startswith(_ALLOWED_INVENTORY_MODULE_PREFIXES):
                 continue
-            source = path.read_text(encoding="utf-8")
+            source = path.read_text(encoding="utf-8-sig")
             executable_literals = _executable_string_literals(source)
             executable_source = "\n".join(executable_literals)
             for table in _LEGACY_TABLES:
@@ -81,16 +81,16 @@ def test_inventory_references_are_restricted_to_pre_prod_audit_modules() -> None
 
     services_dir = _APP_ROOT / "services"
     for path in sorted(services_dir.rglob("*.py")):
-        source = path.read_text(encoding="utf-8").lower()
+        source = path.read_text(encoding="utf-8-sig").lower()
         if not any(table in source for table in _LEGACY_TABLES):
             continue
         if path.stem.startswith(_ALLOWED_INVENTORY_MODULE_PREFIXES):
             continue
         if path.name == "user_service.py":
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"))
             if not any(
                 table in literal
-                for literal in _executable_string_literals(path.read_text(encoding="utf-8"))
+                for literal in _executable_string_literals(path.read_text(encoding="utf-8-sig"))
                 for table in _LEGACY_TABLES
             ):
                 continue

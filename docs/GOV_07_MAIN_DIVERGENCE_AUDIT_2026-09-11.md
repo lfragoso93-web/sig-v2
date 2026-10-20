@@ -2,6 +2,18 @@
 
 Data: 2026-09-11
 
+## Reconsulta — 16/10/2026
+
+Esta auditoria detalhada permanece um retrato de 11/09. A comparação GitHub
+atualizada mostra `stable-15jun` em
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, 7 commits à frente e 0 atrás de
+`main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`). O working tree agora tem
+alterações não commitadas e não está pronto para promoção. Não usar a contagem
+de arquivos/commits do relatório histórico como inventário atual. A correlação
+de código, testes, Issues e documentos segue pendente na #293/GOV-07.
+
+O snapshot vivo está em `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
 ## Objetivo
 
 Registrar o delta acumulado de promoção exposto pela PR draft #362 antes de qualquer tentativa de merge para `main`, separando evolução canônica, gates de certificação, migrations, documentação, frontend e dívida residual.

@@ -4,7 +4,21 @@ Issue: #384
 
 Branch obrigatória: `stable-15jun`
 
-Última atualização: 06/10/2026
+Última atualização do procedimento: 06/10/2026
+
+## Observação operacional mais recente — 16/10/2026
+
+O runtime local foi consultado em modo read-only. Backend, PostgreSQL e Redis
+estavam saudáveis; `/health=200`. `/ready=503` retornou
+`runtime_identity_error` e `ready_for_real_data=false`. O container declara
+`ENVIRONMENT=testing`, branch `stable-15jun`, um SHA diferente do checkout e
+`REAL_DATASET_REFERENCE` vazio. A CLI de readiness assistida não produziu
+relatório nesta observação.
+
+Não houve novo backup v3, restauração isolada, certification proof nem dry-run
+da CLI #384 para essa identidade. A promoção de 06/10 abaixo é histórica e não
+se transfere ao runtime atual. A fotografia completa está em
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 ## Estado e objetivo
 

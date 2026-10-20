@@ -4,6 +4,11 @@
 **Branch:** `stable-15jun`  
 **Atualizado em:** 12 de julho de 2026
 
+> Esta é uma fotografia da implementação consultada em 12/07/2026. A Issue
+> #130 ainda constava aberta no inventário de 16/10/2026; este documento não é
+> uma nova auditoria do código após essa data. Use o estado da Issue e o mapa em
+> `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para planejar o próximo bloco.
+
 ## Objetivo
 
 Registrar o estado atual da integração antes da migração incremental para contratos v2 tipados. Este documento é interno e não deve expor credenciais, payloads sensíveis ou detalhes em respostas públicas.

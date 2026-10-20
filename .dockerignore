@@ -24,3 +24,5 @@ backend/test-tmp/
 backend/pytest-cache-files-*/
 backend/review-temp/
 artifacts/
+.tmp-candidate-*/
+.tmp-candidate-*.tar

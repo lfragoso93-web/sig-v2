@@ -7,6 +7,15 @@ import AssetDetailDrawer from './AssetDetailDrawer'
 
 const mocks = vi.hoisted(() => ({
   corporateLifecycle: [] as CorporateLifecycleEvent[],
+  dividends: [] as Array<{
+    id: number
+    portfolio_id: number
+    ticker: string
+    type: string
+    amount: number
+    payment_date: string
+    date: string
+  }>,
 }))
 
 vi.mock('@/hooks/useAssetDetail', () => ({
@@ -19,7 +28,7 @@ vi.mock('@/hooks/useTransactions', () => ({
 }))
 
 vi.mock('@/hooks/useDividends', () => ({
-  useDividends: () => ({ data: [] }),
+  useDividends: () => ({ data: mocks.dividends }),
 }))
 
 vi.mock('recharts', () => ({
@@ -48,8 +57,28 @@ const asset = {
 } as PositionGroup['positions'][number]
 
 describe('AssetDetailDrawer corporate lifecycle', () => {
+  it('renders portfolio dividends in the asset detail', () => {
+    mocks.dividends = [{
+      id: 7,
+      portfolio_id: 15,
+      ticker: 'NIKE34',
+      type: 'DIVIDENDO',
+      amount: 10,
+      payment_date: '2026-10-01',
+      date: '2026-09-20',
+    }]
+
+    render(<AssetDetailDrawer asset={asset} portfolioId={15} onClose={vi.fn()} />)
+
+    expect(screen.getByText('Proventos (1)')).toBeTruthy()
+    expect(screen.getByText('DIVIDENDO')).toBeTruthy()
+    expect(screen.getByText('01/10/2026')).toBeTruthy()
+    expect(screen.getAllByText(/R\$\s*10,00/)).toHaveLength(2)
+  })
+
   beforeEach(() => {
     mocks.corporateLifecycle = []
+    mocks.dividends = []
   })
 
   it('mostra a verdade econômica da venda da fração', () => {

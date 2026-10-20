@@ -54,12 +54,10 @@ contrato v2.
 
 ## Coleta e persistência
 
-- BRAPI é autoritativa quando possui cobertura válida;
-- Yahoo histórico é fallback-only e só roda quando BRAPI declara ausência real
-  de cobertura para o ativo;
-- Yahoo nunca reconcilia nem sobrescreve o mesmo escopo já coberto por BRAPI;
-- a persistência rejeita defensivamente coleções que tragam linhas
-  normalizadas de BRAPI e Yahoo no mesmo ativo;
+- B3 e a fonte oficial autoritativa para acoes, BDRs, ETFs nacionais e FIIs;
+- BRAPI e Yahoo nao substituem fatos oficiais B3 nem transformam resposta valida sem eventos em ausencia de cobertura;
+- Yahoo historico so atua como fallback quando a politica do ativo permite e existe ausencia explicita de cobertura; ativos listados na B3 nao recebem fallback quando a B3 nao cobre o emissor;
+- a persistencia bloqueia colecoes com linhas normalizadas simultaneas de BRAPI e Yahoo, ou de B3 e fontes secundarias;
 - valores históricos do Yahoo são revertidos à escala da Data Ex somente por
   fatores positivos de split/grupamento publicados após o evento; valor do
   provedor e fator acumulado permanecem no payload normalizado;

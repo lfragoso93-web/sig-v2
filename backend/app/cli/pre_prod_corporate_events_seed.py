@@ -65,27 +65,36 @@ async def _main() -> None:
         ).scalars().all()
 
         for asset in assets:
+            ticker = str(asset.ticker)
+            asset_type = str(asset.asset_type)
+            # A dry-run keeps all staged rows in one outer transaction and rolls
+            # them back once at the end. Rolling back per asset expires every
+            # ORM instance in the session; the next iteration then attempts
+            # async lazy I/O while building the report.
             try:
                 created = await sync_corporate_events_for_asset(db, asset)
                 if args.execute:
                     await db.commit()
                     report["database_writes_executed"] += len(created)
-                else:
-                    await db.rollback()
                 report["assets_processed"] += 1
                 report["events_created"] += len(created)
                 report["assets"].append(
                     {
-                        "ticker": asset.ticker,
-                        "asset_type": str(asset.asset_type),
+                        "ticker": ticker,
+                        "asset_type": asset_type,
                         "created": len(created),
                     }
                 )
             except Exception as exc:
-                await db.rollback()
+                if args.execute:
+                    await db.rollback()
                 report["errors"].append(
-                    {"ticker": asset.ticker, "error": str(exc)}
+                    {"ticker": ticker, "error": str(exc)}
                 )
+                break
+
+        if not args.execute:
+            await db.rollback()
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

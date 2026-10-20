@@ -8,7 +8,7 @@ def test_runtime_startup_uses_explicit_validated_migration_target() -> None:
 
     assert "alembic upgrade heads" not in script
     assert (
-        'RUNTIME_MIGRATION_TARGET="20261016_admin_backup_operations"'
+        'RUNTIME_MIGRATION_TARGET="${RUNTIME_MIGRATION_TARGET:-20261019_corp_event_legs}"'
         in script
     )
     assert 'alembic upgrade "${RUNTIME_MIGRATION_TARGET}"' in script

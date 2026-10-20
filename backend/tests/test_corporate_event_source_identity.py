@@ -43,7 +43,7 @@ def _brapi_payload() -> dict[str, object]:
 
 
 async def _empty_yahoo(symbol: str) -> list[tuple[date, float]]:
-    assert symbol == "TEST3.SA"
+    assert symbol == "TEST3"
     return []
 
 
@@ -55,7 +55,7 @@ async def test_sync_persists_and_deduplicates_by_canonical_source_identity(
         ticker="TEST3",
         brapi_ticker="TEST3",
         name="Ativo de teste",
-        asset_type=AssetType.ACAO.value,
+        asset_type=AssetType.STOCK.value,
     )
     db.add(asset)
     await db.flush()
@@ -114,7 +114,7 @@ async def test_sync_does_not_use_legacy_brapi_alias_as_canonical_identity(
         ticker="TEST3",
         brapi_ticker="TEST3",
         name="Ativo de teste",
-        asset_type=AssetType.ACAO.value,
+        asset_type=AssetType.STOCK.value,
     )
     db.add(asset)
     await db.flush()
@@ -164,7 +164,7 @@ async def test_sync_uses_yahoo_only_when_brapi_is_unavailable(
         ticker="TEST3",
         brapi_ticker="TEST3",
         name="Ativo de teste",
-        asset_type=AssetType.ACAO.value,
+        asset_type=AssetType.STOCK.value,
     )
     db.add(asset)
     await db.flush()
@@ -173,7 +173,7 @@ async def test_sync_uses_yahoo_only_when_brapi_is_unavailable(
         raise CorporateActionCollectionError(f"{ticker}/brapi: indisponivel")
 
     async def yahoo_fallback(symbol: str) -> list[tuple[date, float]]:
-        assert symbol == "TEST3.SA"
+        assert symbol == "TEST3"
         return [(date(2026, 2, 1), 0.5)]
 
     created = await sync_corporate_events_for_asset(
@@ -198,7 +198,7 @@ async def test_sync_uses_yahoo_as_separate_source_when_brapi_returns_valid_empty
         ticker="TEST3",
         brapi_ticker="TEST3",
         name="Ativo de teste",
-        asset_type=AssetType.ACAO.value,
+        asset_type=AssetType.STOCK.value,
     )
     db.add(asset)
     await db.flush()
@@ -208,7 +208,7 @@ async def test_sync_uses_yahoo_as_separate_source_when_brapi_returns_valid_empty
         return {"results": []}
 
     async def yahoo_supplement(symbol: str) -> list[tuple[date, float]]:
-        assert symbol == "TEST3.SA"
+        assert symbol == "TEST3"
         return [(date(2026, 2, 1), 0.5)]
 
     created = await sync_corporate_events_for_asset(
@@ -227,11 +227,11 @@ async def test_sync_uses_yahoo_as_separate_source_when_brapi_returns_valid_empty
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("asset_type", "ticker", "expected_yahoo_symbol"),
+    ("asset_type", "ticker", "expected_yahoo_symbol", "expected_source"),
     [
-        (AssetType.FII.value, "TEST11", "TEST11.SA"),
-        (AssetType.STOCK.value, "AAPL", "AAPL"),
-        (AssetType.ETF_INTERNACIONAL.value, "VOO", "VOO"),
+        (AssetType.FII.value, "TEST11", "TEST11.SA", "b3"),
+        (AssetType.STOCK.value, "AAPL", "AAPL", "yahoo"),
+        (AssetType.ETF_INTERNACIONAL.value, "VOO", "VOO", "yahoo"),
     ],
 )
 async def test_sync_supports_fii_and_international_securities(
@@ -239,6 +239,7 @@ async def test_sync_supports_fii_and_international_securities(
     asset_type: str,
     ticker: str,
     expected_yahoo_symbol: str,
+    expected_source: str,
 ) -> None:
     asset = Asset(
         ticker=ticker,
@@ -257,17 +258,38 @@ async def test_sync_supports_fii_and_international_securities(
         assert symbol == expected_yahoo_symbol
         return [(date(2026, 2, 1), 0.5)]
 
+    async def b3_fetcher(requested_ticker: str, requested_type: str):
+        assert requested_ticker == ticker
+        assert requested_type == asset_type
+        return {
+            "stockDividends": [
+                {
+                    "label": "DESDOBRAMENTO",
+                    "factor": "100",
+                    "lastDatePrior": "2026-02-01",
+                    "isinCode": "BRTEST11ALQ0",
+                }
+            ],
+            "subscriptions": [],
+        }
+
     created = await sync_corporate_events_for_asset(
         db,
         asset,
         brapi_fetcher=empty_brapi,
         yahoo_fetcher=yahoo_supplement,
+        b3_fetcher=b3_fetcher,
     )
 
     assert len(created) == 1
     assert created[0].ticker == ticker
-    assert created[0].source_provider == "yahoo"
-    assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
+    assert created[0].source_provider == expected_source
+    assert created[0].event_date == date(2026, 2, 1)
+    if expected_source == "b3":
+        assert created[0].effective_date is None
+        assert Decimal(str(created[0].quantity_factor)) == Decimal("2")
+    else:
+        assert Decimal(str(created[0].quantity_factor)) == Decimal("0.5")
 
 
 @pytest.mark.asyncio
@@ -278,7 +300,7 @@ async def test_sync_does_not_fallback_on_invalid_brapi_payload(
         ticker="TEST3",
         brapi_ticker="TEST3",
         name="Ativo de teste",
-        asset_type=AssetType.ACAO.value,
+        asset_type=AssetType.STOCK.value,
     )
     db.add(asset)
     await db.flush()

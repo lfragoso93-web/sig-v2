@@ -28,6 +28,7 @@ _STORAGE_VALUE_QUANTUM = Decimal("0.00000001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
 _SOURCE_PRECEDENCE = {
+    "b3": -1,
     "brapi": 0,
     "yfinance_history": 1,
 }
@@ -81,7 +82,7 @@ def _storage_value(value: Decimal | None) -> Decimal | None:
     return value.quantize(_STORAGE_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
 
 
-def _reject_concurrent_brapi_yahoo_rows(
+def _reject_concurrent_authoritative_and_fallback_rows(
     collections: tuple[StrictDividendAssetCollection, ...],
 ) -> None:
     for collection in collections:
@@ -92,9 +93,17 @@ def _reject_concurrent_brapi_yahoo_rows(
         }
         if {"brapi", "yfinance_history"}.issubset(row_sources):
             raise DividendsSeedPersistenceError(
-                "coleção de proventos mistura linhas normalizadas de BRAPI e Yahoo: "
+                "Yahoo so pode atuar como fallback apos ausencia BRAPI; "
+                "nao misture linhas de cobertura BRAPI e Yahoo: "
+                f"{collection.ticker}/{collection.asset_type}"
+            )
+        if "b3" in row_sources and row_sources.intersection(
+            {"brapi", "yfinance_history"}
+        ):
+            raise DividendsSeedPersistenceError(
+                "colecao de proventos mistura linhas oficiais B3 e fallback: "
                 f"{collection.ticker}/{collection.asset_type}; "
-                "Yahoo é permitido apenas como fallback após BRAPI sem cobertura"
+                "nao misture fatos oficiais e de fallback"
             )
 
 
@@ -396,7 +405,7 @@ async def persist_asset_dividends_strict(
     scopes = {(item.ticker, item.asset_type) for item in collections}
     if not scopes:
         return DividendsSeedPersistenceResult(created=0, updated=0, unchanged=0)
-    _reject_concurrent_brapi_yahoo_rows(collections)
+    _reject_concurrent_authoritative_and_fallback_rows(collections)
 
     asset_result = await db.execute(
         select(Asset).where(tuple_(Asset.ticker, Asset.asset_type).in_(sorted(scopes)))
@@ -527,8 +536,10 @@ async def persist_asset_dividends_strict(
                     if current is None:
                         setattr(stored, field, incoming)
                         changed = True
-                if source == "brapi" and stored.source != "brapi":
-                    stored.source = "brapi"
+                if _SOURCE_PRECEDENCE.get(source, 99) < _SOURCE_PRECEDENCE.get(
+                    stored.source, 99
+                ):
+                    stored.source = source
                     changed = True
                 if changed:
                     updated += 1

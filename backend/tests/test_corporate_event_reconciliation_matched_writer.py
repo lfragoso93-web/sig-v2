@@ -118,6 +118,88 @@ async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_matched_writer_persists_b3_effective_date_from_evidence(db) -> None:
+    asset = Asset(
+        ticker="NIKE34",
+        name="Nike BDR",
+        asset_type="BDR",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+    event = await _create_event(
+        db,
+        asset=asset,
+        source_provider="b3",
+        source_event_id="b3:nike34:reverse-split",
+    )
+    event.event_date = date(2026, 10, 9)
+    event.record_date = date(2026, 10, 9)
+    event.effective_date = None
+    event.quantity_factor = Decimal("0.2")
+    event.ratio = Decimal("0.2")
+
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+        evidence_reference="b3:NIKE34:action+calendar:2026-10-13",
+        fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+        effective_date=date(2026, 10, 13),
+    )
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(event.id,),
+        canonical_event_id=event.id,
+        reason="data efetiva do B3 resolvida pela proxima sessao aberta",
+        match_resolution_evidence=evidence,
+    )
+
+    assert event.effective_date == date(2026, 10, 13)
+    assert event.reconciliation_status == "MATCHED"
+    assert event.requires_review is False
+    persisted = await db.scalar(
+        select(CorporateEventReconciliationEvidence).where(
+            CorporateEventReconciliationEvidence.corporate_event_id == event.id
+        )
+    )
+    assert persisted is not None
+    assert persisted.fractional_policy == "PENDING_SETTLEMENT"
+    assert persisted.fractional_quantity is None
+    assert persisted.effective_date == date(2026, 10, 13)
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_rejects_b3_without_effective_date(db) -> None:
+    asset = Asset(
+        ticker="NIKE34",
+        name="Nike BDR",
+        asset_type="BDR",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+    event = await _create_event(
+        db,
+        asset=asset,
+        source_provider="b3",
+        source_event_id="b3:nike34:undated",
+    )
+    event.effective_date = None
+
+    with pytest.raises(ValueError, match="exige evidencia efetiva"):
+        await execute_corporate_event_matched_reconciliation(
+            db,
+            event_ids=(event.id,),
+            canonical_event_id=event.id,
+            reason="sem data efetiva",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+                evidence_reference="b3:NIKE34",
+                fractional_policy=FractionalResolutionPolicy.PENDING_SETTLEMENT,
+            ),
+        )
+
+
+@pytest.mark.asyncio
 async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
     asset = Asset(
         ticker="ABEV3",

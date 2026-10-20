@@ -1,6 +1,36 @@
 # Gate de readiness para testes assistidos
 
-Atualizado em 06/10/2026.
+## Runtime de validacao vigente — 18/10/2026
+
+Os usuarios testam a imagem publicada na stack existente `sig-v2` pelo
+Cloudflare Tunnel. Nao iniciar nem manter `sgi-usertest` como ambiente paralelo.
+O procedimento de rebuild e validacao esta em
+`docs/USER_VALIDATION_RUNBOOK.md`.
+
+O relatorio `user_test_readiness` e diagnostico assistido; nao promove nem
+certifica a imagem. `/ready` segue fail-closed quando o runtime opera sobre o
+dataset real. Qualquer rotina de release deve preservar essa distincao e nunca
+reutilizar um evento de certificacao de outra identidade.
+
+Atualizado em 16/10/2026.
+
+## Rebaseline do checkout e runtime — 16/10/2026
+
+O evento de promoção histórico pertence à identidade runtime
+`3ab054f61e34f440dddf93c170259958243d58af`; não é evidência para o checkout ou
+container atual. O HEAD publicado de `stable-15jun` é
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, com alterações locais ainda não
+consolidadas.
+
+O container ativo declara ambiente `testing`, branch `stable-15jun`, SHA que não
+corresponde ao checkout e `REAL_DATASET_REFERENCE` vazio. `/health` respondeu
+200 com PostgreSQL e Redis saudáveis; `/ready` respondeu 503 com
+`runtime_identity_error`. A execução read-only de `user_test_readiness` em
+16/10 BRT retornou `GO_ASSISTED`, sem blockers/warnings e com zero writes. Esse
+resultado permite testes acompanhados com dados controlados na imagem ativa;
+não valida o checkout local nem libera dados reais.
+
+Registro detalhado: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 ## Objetivo
 
@@ -21,6 +51,14 @@ como `status=GO`: a promoção usou evidência própria
 
 - Docker: `docker compose run --rm backend python -m app.cli.user_test_readiness`
 - SuperAdmin: `GET /api/v1/admin/bootstrap/user-test-readiness`
+
+### Imagem Docker usada nos testes (politica anterior)
+
+O procedimento acima descreve a politica anterior de usar a imagem ativa
+compartilhada. Desde 17/10, testes assistidos de desenvolvimento usam a stack
+isolada documentada em `docs/USER_TEST_STACK.md`; identidade e saude ainda devem
+ser conferidas, mas essa iteracao nao exige certificacao de dados reais. Um
+ambiente que acesse dados reais continua sujeito ao gate operacional proprio.
 
 ## Evidencia registrada
 

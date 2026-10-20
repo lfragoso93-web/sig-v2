@@ -4,6 +4,16 @@
 
 Atualizado em 06/10/2026 para separar bootstrap técnico, `GO_ASSISTED` e certificação persistente para dados reais.
 
+## Rebaseline de runtime — 16/10/2026
+
+O estado `GO_ASSISTED` e `/ready=200` descrito na seção "Estado atual" abaixo
+é evidência de 06/10/2026, não a situação do container atual. Na inspeção de
+16/10, o backend respondeu `/health=200`, mas `/ready=503` por
+`runtime_identity_error`; a identidade diverge do checkout e a referência do
+dataset está vazia. A revisão Alembic ativa é `20261016_corp_eff_null (head)`.
+Não executar bootstrap, seeds ou rebuilds como parte da atualização de imagem.
+Consulte `docs/DEVELOPMENT_BASELINE_2026-10-16.md` antes de operar.
+
 ## Objetivo
 
 Evitar que estágios de carga sejam executados fora de ordem, sobrescrevam dados certificados ou misturem fontes com responsabilidades diferentes.
@@ -89,8 +99,8 @@ Tabela canônica: `asset_dividends`.
 
 - direitos pertencem ao ativo e são projetados para carteira sob demanda;
 - nenhuma materialização por carteira;
-- BRAPI é authoritative quando possui cobertura válida;
-- Yahoo é fallback de cobertura, não concorrente do mesmo evento;
+- B3 eh a fonte oficial prioritaria para proventos de ativos listados na B3;
+- BRAPI/Yahoo ficam limitadas a fallback expl?cito, sem misturar fatos de fontes;
 - valores usam normalização canônica/`Decimal` compatível com `Numeric(18, 8)`.
 
 A certificação assistida já comprovou seed `portfolio-scoped` e idempotência. O gate #226 aceitou essa estratégia como suficiente para a promoção controlada; global controlado só deve ocorrer se #216/#158 identificarem necessidade material nova.
@@ -193,8 +203,9 @@ Não deve:
 | Tesouro | fonte oficial | contrato dedicado | catálogo/preços |
 | Benchmarks | fontes oficiais | fallback governado | séries/taxas |
 | Câmbio | fonte canônica vigente | fallback governado | FX |
-| Proventos | BRAPI | Yahoo fallback-only | `asset_dividends` |
-| Eventos corporativos | provider canônico | fallback explícito | `corporate_events` |
+| Proventos B3 | B3 | BRAPI/Yahoo como fallback explicito e separado | `asset_dividends` |
+| Proventos internacionais | fonte configurada por classe | fallback governado | `asset_dividends` |
+| Eventos corporativos B3 | B3 | fallback expl?cito e separado | `corporate_events` |
 | Transações | entrada do usuário | resolução por catálogo | `transactions` |
 | Posições | cálculo interno | — | derivados |
 | Snapshots/TWR | cálculo interno | — | snapshots |

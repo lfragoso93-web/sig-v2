@@ -35,4 +35,4 @@ def test_calendar_migration_precedes_the_explicit_runtime_target() -> None:
     assert migration.revision == "20261009_market_calendar"
     assert migration.down_revision == "20261008_treasury_instruments"
     assert 'down_revision: str = "20261009_market_calendar"' in config_migration
-    assert 'RUNTIME_MIGRATION_TARGET="20261016_admin_backup_operations"' in entrypoint
+    assert 'RUNTIME_MIGRATION_TARGET="${RUNTIME_MIGRATION_TARGET:-20261019_corp_event_legs}"' in entrypoint

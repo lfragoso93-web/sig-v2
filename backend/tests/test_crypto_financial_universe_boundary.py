@@ -44,9 +44,9 @@ def test_catalog_is_fail_closed_for_crypto() -> None:
         ROOT / "app" / "services" / "asset_catalog_query_service.py"
     ).read_text(encoding="utf-8")
 
-    assert "CRYPTO_TOP100_UNIVERSE_KEY" in source
-    assert "FINANCIALLY_CERTIFIED_CRYPTO_STATUSES" in source
-    assert "candidate_membership" in source
+    assert "CRYPTO_SYNTHETIC_CERTIFICATION_PROVIDER" in source
+    assert "_user_selectable_catalog_predicate" in source
+    assert "candidate_membership" not in source
     assert FINANCIALLY_CERTIFIED_CRYPTO_STATUSES == {
         "HISTORY_START_EXHAUSTED",
         "HISTORY_START_SHALLOW_VERIFIED",

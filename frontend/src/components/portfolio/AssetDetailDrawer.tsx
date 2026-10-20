@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useAssetCorporateLifecycle, useAssetDetail } from '@/hooks/useAssetDetail'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useDividends } from '@/hooks/useDividends'
+import { formatReferenceDate } from '@/utils/portfolioSummary'
 import { formatBRL } from '@/utils/format'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
@@ -396,7 +397,7 @@ export default function AssetDetailDrawer({ asset, portfolioId, onClose }: Asset
                         {div.type}
                       </div>
                       <div style={{ color: 'var(--color-text-muted)' }}>
-                        {new Date(div.payment_date).toLocaleDateString('pt-BR')}
+                        {formatReferenceDate(div.payment_date) ?? '-'}
                       </div>
                     </div>
                     <div style={{ fontWeight: 600, color: 'var(--color-success)', textAlign: 'right' }}>

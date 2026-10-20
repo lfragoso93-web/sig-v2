@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-10
 
+Operational rebaseline 2026-10-16: the local runtime now reports
+`/health=200`, `/ready=503` with `runtime_identity_error`, and no dataset
+reference; assisted readiness is undetermined for that image. The GO_ASSISTED
+and real-data states below are historical recorded evidence and do not describe
+the currently running image. See `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
 ## Current operational contract
 
 OCI is the homologation target for a SHA already developed and certified locally. It is not the primary development environment and must not become a place for permanent code fixes.

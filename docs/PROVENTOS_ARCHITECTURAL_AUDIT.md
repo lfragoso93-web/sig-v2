@@ -25,6 +25,21 @@ A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS
 
 A implementação usa uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas da persistência global e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
 
+## Autoridade oficial B3 (16/10/2026)
+
+Para acoes, BDRs, ETFs nacionais e FIIs, a B3 eh a fonte oficial prioritaria de
+proventos e eventos corporativos. BRAPI/Yahoo nao podem substituir ou sobrescrever
+fatos oficiais; qualquer contingencia deve permanecer identificada e separada.
+O adapter estruturado da B3 foi integrado localmente ao coletor do seed e possui
+testes de contrato. A execucao contra o banco permanece condicionada ao SHA
+validado, backup, dry-run escopado e janela registrada; esta integracao nao
+autoriza carga global.
+
+No checkpoint operacional de 16/10, o backend ativo reportava SHA diferente do
+checkout e dataset sem referência. Portanto, a presença do adapter no branch não
+comprova que a imagem ativa o contém nem autoriza seed real. Consulte
+`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
+
 ## Arquitetura vigente
 
 | Camada | Responsabilidade | Componentes principais |
@@ -164,6 +179,10 @@ bordas da viewport e acessível por hover, foco, teclado e toque. `Esc`, saída 
 não interativos.
 
 ### Evidências finais
+
+Os itens abaixo registram a fotografia funcional da auditoria de 19/07/2026;
+não descrevem a árvore Git nem o runtime observados em 16/10/2026. A rebaseline
+operacional atual está em `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 - Backend: 78 testes aprovados.
 - Frontend: 48 testes aprovados.

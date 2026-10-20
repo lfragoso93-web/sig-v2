@@ -1,8 +1,52 @@
 # Validacao assistida com usuarios - SGI v2
 
+## Runtime de testes atual — 18/10/2026
+
+O unico runtime de validacao com usuarios e a stack existente `sig-v2`, servida
+por Cloudflare Tunnel em `https://sgi.lfconsultoria.dpdns.org`. Nao iniciar nem
+atualizar `sgi-usertest` em paralelo. Toda alteracao validada por usuarios deve
+ser incorporada a imagem desta stack.
+
+Na raiz do repositorio, confira a configuracao sem imprimir segredos e atualize
+somente backend/frontend da stack existente:
+
+```powershell
+$env:APP_COMMIT_SHA = (git rev-parse HEAD).Trim()
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build backend frontend
+```
+
+O `.env` local deve conter tokens validos dos provedores e
+`CLOUDFLARE_TUNNEL_TOKEN`; `VITE_API_URL` deve ficar vazio para usar o proxy
+Nginx `/api` -> backend. Nunca registrar valores desses segredos na documentacao
+ou em logs compartilhados. Nao executar `down -v`, remover volumes ou recriar o
+banco durante a atualizacao. O Cloudflare Tunnel continua apontando para
+`http://frontend:80`.
+
+Apos cada atualizacao, confira `ps`, `/health`, migration Alembic, API e a URL
+publica; registre SHA e digests efetivamente ativos. O runtime contem dados
+persistidos: mantenha backup consistente e preserve `/ready` fail-closed para
+uso com dados reais. `GO_ASSISTED` e diagnostico e nao certifica uma imagem.
+
+`docs/USER_TEST_STACK.md` e apenas registro historico da stack isolada anterior;
+nao e o procedimento vigente.
+
 Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
+
+## Rebaseline operacional — 17/10/2026
+
+As imagens do candidato local foram implantadas; backend, PostgreSQL e Redis
+estão saudáveis. `/health=200`, `/ready=503` por divergência do evento anterior.
+`user_test_readiness` retornou `GO_ASSISTED`, sem blockers/warnings e com zero
+escritas. Backup v3 pós-migration, restore isolado e dry-run #384 passaram sem
+promoção; o plano aguarda autorização explícita.
+
+Não reutilizar como estado atual as respostas e contagens registradas nas
+seções históricas abaixo. Antes da próxima rodada, confirmar candidato limpo,
+imagem/SHA, readiness assistida, gates sintéticos e identidade de runtime.
+Registro vivo: `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
 
 > Rebaseline em 06/10/2026: #158, #269 e #227 foram fechadas e a PR #362 foi
 > promovida. As evidencias datadas permanecem validas como historico, mas
@@ -845,3 +889,20 @@ Bloco UX/Transacoes - taxa do Tesouro e venda canonica:
 - validacao frontend: `npm run typecheck`;
 - validacao frontend: `npx vitest run hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `5 passed`;
 - validacao frontend: `npm run build`.
+
+
+## CSV com metadados de contrato de Renda Fixa - 18/10/2026
+
+O CSV pode incluir as colunas opcionais `fixed_income_*` documentadas em
+`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`. A chave `fixed_income_contract_key`
+agrupa linhas do mesmo arquivo e deve ser repetida somente quando os termos do
+contrato forem identicos. O importador valida essa consistencia no dry-run e
+cria os contratos junto com o lote de transacoes; qualquer erro bloqueia ou
+reverte o lote inteiro. Nao usar `notes` ou ticker para inferir contratos.
+
+Arquivos legados com as nove colunas originais continuam aceitos sem associacao
+automatica. `GET /api/v1/portfolios/{portfolio_id}/export-csv` requer autenticacao
+e ownership da carteira; a chave exportada e local ao arquivo e nao exp?e IDs
+internos. Esta extensao foi validada somente com massa sintetica em
+`sgi-usertest`; as regras existentes deste runbook para CSV real permanecem
+inalteradas.

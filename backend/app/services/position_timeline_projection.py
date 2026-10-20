@@ -207,11 +207,6 @@ def project_position_timeline(
 
         if resolution is not None:
             if resolution.policy == FractionalResolutionPolicy.PENDING_SETTLEMENT:
-                fractional_quantity = resolution.fractional_quantity
-                if fractional_quantity is None or fractional_quantity <= 0:
-                    raise ValueError(
-                        "PENDING_SETTLEMENT exige fractional_quantity positiva"
-                    )
                 if (
                     resolution.settlement_price is not None
                     or str(resolution.cash_treatment or "").strip()
@@ -219,30 +214,71 @@ def project_position_timeline(
                     raise ValueError(
                         "PENDING_SETTLEMENT nao aceita valor ou tratamento de caixa"
                     )
-                whole_quantity = projected_quantity.to_integral_value(
-                    rounding="ROUND_FLOOR"
-                )
-                projected_fraction = projected_quantity - whole_quantity
-                if fractional_quantity != projected_fraction:
-                    raise ValueError(
-                        "PENDING_SETTLEMENT fractional_quantity diverge da fracao projetada"
+                ledger_basis = str(resolution.ledger_basis or "").upper()
+                if ledger_basis == "ADJUSTED_POST_EVENT":
+                    # The ledger already reflects the issuer/exchange quantity
+                    # adjustment. Preserve its tradable units and keep the
+                    # unresolved residue as a separate pending item.
+                    whole_quantity = quantity
+                    projected_fraction = Decimal(0)
+                    fractional_quantity = resolution.fractional_quantity
+                    if fractional_quantity is None or fractional_quantity <= 0:
+                        raise ValueError(
+                            "ADJUSTED_POST_EVENT exige quantidade fracionaria evidenciada"
+                        )
+                    if fractional_quantity > quantity:
+                        raise ValueError(
+                            "ADJUSTED_POST_EVENT fractional_quantity invalida"
+                        )
+                    if fractional_quantity != fractional_quantity.to_integral_value():
+                        raise ValueError(
+                            "ADJUSTED_POST_EVENT fractional_quantity deve ser inteira"
+                        )
+                else:
+                    whole_quantity = projected_quantity.to_integral_value(
+                        rounding="ROUND_FLOOR"
                     )
-                fractional_cost_ratio = fractional_quantity / projected_quantity
-                fractional_cost_brl = total_cost * fractional_cost_ratio
-                fractional_cost_original = (
-                    total_cost_original_currency * fractional_cost_ratio
-                )
-                pending_corporate_action_fractions.append(
-                    PendingCorporateActionFraction(
-                        source_event_id=action.source_event_id,
-                        event_date=action.event_date,
-                        fractional_quantity=fractional_quantity,
-                        cost_basis_brl=fractional_cost_brl,
-                        cost_basis_original_currency=fractional_cost_original,
+                    projected_fraction = projected_quantity - whole_quantity
+                    # Residue belongs to each portfolio ledger, not to the global
+                    # event. Derive it here when reconciliation evidence only
+                    # declares that settlement is pending.
+                    fractional_quantity = (
+                        resolution.fractional_quantity
+                        if resolution.fractional_quantity is not None
+                        else projected_fraction
                     )
-                )
-                total_cost -= fractional_cost_brl
-                total_cost_original_currency -= fractional_cost_original
+                    if fractional_quantity < 0:
+                        raise ValueError(
+                            "PENDING_SETTLEMENT fractional_quantity nao pode ser negativa"
+                        )
+                    if fractional_quantity != projected_fraction:
+                        raise ValueError(
+                            "PENDING_SETTLEMENT fractional_quantity diverge da fracao projetada"
+                        )
+                if fractional_quantity > 0:
+                    if resolution.fraction_is_post_event_quantity:
+                        fractional_cost_brl = Decimal(0)
+                        fractional_cost_original = Decimal(0)
+                    else:
+                        fractional_cost_ratio = (
+                            fractional_quantity / projected_quantity
+                        )
+                        fractional_cost_brl = total_cost * fractional_cost_ratio
+                        fractional_cost_original = (
+                            total_cost_original_currency * fractional_cost_ratio
+                        )
+                    pending_corporate_action_fractions.append(
+                        PendingCorporateActionFraction(
+                            source_event_id=action.source_event_id,
+                            event_date=action.event_date,
+                            fractional_quantity=fractional_quantity,
+                            cost_basis_brl=fractional_cost_brl,
+                            cost_basis_original_currency=fractional_cost_original,
+                        )
+                    )
+                    if not resolution.fraction_is_post_event_quantity:
+                        total_cost -= fractional_cost_brl
+                        total_cost_original_currency -= fractional_cost_original
                 projected_quantity = whole_quantity
             elif resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
                 fractional_quantity = resolution.fractional_quantity

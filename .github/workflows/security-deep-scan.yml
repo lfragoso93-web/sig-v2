@@ -1,8 +1,11 @@
 name: Security deep scan
 
 # Scan profundo e economico para GitHub Free.
-# Nao roda em push nem em pull_request: somente semanal ou manual.
+# Roda em PRs para main, semanalmente ou sob demanda.
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: ["main"]
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:

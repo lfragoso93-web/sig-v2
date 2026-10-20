@@ -25,7 +25,7 @@ def test_application_does_not_import_removed_audit_modules() -> None:
     offenders: list[str] = []
 
     for path in APP_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         for node in ast.walk(tree):
             modules = (
                 {node.module}
@@ -45,7 +45,7 @@ def test_runtime_layers_do_not_import_legacy_dividend_model() -> None:
 
     for directory in ("cli", "routers", "schemas", "services"):
         for path in (APP_ROOT / directory).rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"))
             if any(
                 isinstance(node, ast.ImportFrom)
                 and node.module == "app.models.dividend"

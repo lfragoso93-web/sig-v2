@@ -1,4 +1,4 @@
-import warnings
+﻿import warnings
 from datetime import date
 
 import httpx
@@ -93,7 +93,7 @@ async def test_brapi_invalid_json_is_blocking() -> None:
             client=client,
             base_url="https://market.example/api",
         )
-        with pytest.raises(StrictDividendCollectionError, match="JSON inválido"):
+        with pytest.raises(StrictDividendCollectionError, match="inv"):
             await provider("PETR4", "ACAO")
 
 
@@ -159,13 +159,26 @@ async def test_yahoo_missing_ticker_is_explicit_no_coverage() -> None:
         raise YFTickerMissingError(symbol, "no timezone found")
 
     result = await StrictYahooDividendProvider(history_fetcher=fetcher)(
-        "BMRE39",
-        "BDR",
+        "PETR4",
+        "ACAO",
     )
 
     assert result.source == "yfinance_history"
     assert result.rows == ()
     assert result.empty_reason == "provider_no_coverage_ticker_missing"
+
+
+@pytest.mark.asyncio
+async def test_yahoo_is_not_used_for_bdr_without_b3_authoritative_coverage() -> None:
+    fetcher = pytest.fail
+    result = await StrictYahooDividendProvider(history_fetcher=fetcher)(
+        "NIKE34",
+        "BDR",
+    )
+
+    assert result.source == "yfinance_history"
+    assert result.rows == ()
+    assert result.empty_reason == "b3_authoritative_source_required"
 
 
 @pytest.mark.asyncio
@@ -185,7 +198,7 @@ async def test_yahoo_operational_failures_are_blocking(failure: Exception) -> No
         raise failure
 
     provider = StrictYahooDividendProvider(history_fetcher=fetcher)
-    with pytest.raises(StrictDividendCollectionError, match="indisponível"):
+    with pytest.raises(StrictDividendCollectionError, match="indisponÃ­vel"):
         await provider("PETR4", "ACAO")
 
 

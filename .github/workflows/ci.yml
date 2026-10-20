@@ -2,8 +2,8 @@ name: SIG v2 CI/CD
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
-# • push main        → quality + security + build + publish + scan-published
-# • pull_request     → quality + security + audit (sem build Docker)
+# • push main        → quality + security + build + publish + scans
+# • pull_request     → quality + security + audit + Docker build/scan
 # • workflow_dispatch→ execução manual
 #
 # paths-ignore: commits que alteram apenas docs/markdown não consomem minutos.
@@ -148,6 +148,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   trivy-repository-scan:
+    # Scans de seguranca somente na promocao para main.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     name: Dependency, secret and IaC scan – Trivy filesystem
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -164,6 +166,25 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: "1"
+
+      - name: Trivy filesystem scan – complete SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-repository.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Publish Trivy filesystem results
+        if: always() && hashFiles('trivy-repository.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-repository.sarif
 
   audit-python:
     name: Dependency audit – Python (pip-audit)
@@ -234,7 +255,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: [backend-quality, dockerfile-lint-backend, secrets-scan, trivy-repository-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -283,7 +304,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: [frontend-quality, dockerfile-lint-frontend, secrets-scan, trivy-repository-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -308,3 +329,21 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: "1"
+
+      - name: Trivy frontend image scan – complete SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: sig-v2-frontend:ci-${{ github.sha }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Publish Trivy frontend image results
+        if: always() && hashFiles('trivy-frontend.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-frontend.sarif

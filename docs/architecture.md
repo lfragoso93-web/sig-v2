@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 11/10/2026.
+> Last updated: 18/10/2026.
 
 ## Objetivo
 
@@ -95,6 +95,12 @@ Eventos pertencem ao ativo em `corporate_events`. Transações históricas não 
 Eventos complexos podem permanecer `UNRECONCILED` até tratamento canônico.
 Eventos materiais precisam estar reconciliados ou formalizados como `CONFLICT`
 fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência.
+O contrato para incorporações, cisões com ativos destino e resgates está em
+[`CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md`](CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md).
+O classificador B3 e o projetor puro para transformacoes nao monetarias
+estao implementados em memoria, sem persistencia ou integracao financeira;
+os candidatos reais continuam fora do efeito financeiro. O processador
+portfolio-scoped de troca de ticker nao deve ser reutilizado como substituto.
 
 ## Renda Fixa e Tesouro
 
@@ -120,10 +126,23 @@ fail-closed no dataset aprovado; conflito não autoriza `MATCHED` sem evidência
   tratados como fluxos externos e oracles para resgate parcial e múltiplas
   aplicações por produto/indexador.
 
-A #149 permanece aberta somente para evidência factual de cupons/amortizações
-do Tesouro e para certificar operacionalmente uma nova identidade runtime. A
-ausência de PU, benchmark ou calendário não deve ser mascarada por retorno
-simples, evento inferido ou fallback rotulado como TWR.
+Novos contratos recebem o tratamento fiscal a partir de `product_type`; a API
+normaliza `tax_exempt` e nao aceita escolha manual como regra canonica. CDB,
+RDB, LC, debenture comum, Letra Financeira e Outro sao tributaveis pela tabela
+regressiva; LCI, LCA, LIG, CRI, CRA e debenture incentivada sao classificados
+como isentos, sujeitos aos requisitos legais da emissao e do titular. A tela de
+lancamento pede o nome completo do titulo (incluindo emissor), indexador e taxa;
+emissor deixa de ser campo separado. Liquidez diaria limpa e oculta vencimento
+e carencia. Contratos legados preservam emissor armazenado e podem ser
+reutilizados quando o nome informado identifica esse emissor.
+
+A #149 permanece aberta para evidência por conta/carteira da posição de custódia
+na manhã de pagamento e para base tributável/IRRF por lote. A regra oficial de
+elegibilidade foi identificada; detalhes em
+`docs/TREASURY_CASH_EVENT_SOURCE_AUDIT.md`. Certificação de identidade runtime
+é gate de promoção operacional para dados reais, separada do desenvolvimento
+da Issue. Ausência de PU, benchmark ou calendário não deve ser mascarada por
+retorno simples, evento inferido ou fallback rotulado como TWR.
 
 ## IRPF
 
@@ -159,6 +178,14 @@ Deve ser determinístico, DB-first e consumir contratos financeiros existentes s
 ### IA #361
 
 Somente depois do Analysis Engine. IA é camada explicativa sobre DTO estruturado; não calcula números financeiros e não acessa banco/provider de forma irrestrita.
+
+## Ferramentas de simulacao
+
+As ferramentas da #359 sao simulacoes isoladas, sem leitura ou escrita da
+carteira. A comparacao de Renda Fixa calcula o tratamento tributario pelo tipo
+de produto usando a mesma taxonomia exibida no cadastro; a isencao pressupoe
+emissao e titular elegiveis. Taxas e premissas sao informadas pelo usuario. As
+formulas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
 
 ## Asset Detail
 
@@ -197,9 +224,16 @@ ready_for_real_data=true
 /ready=200
 ```
 
+Esse registro é histórico e vinculado à identidade certificada em 06/10/2026.
+Na inspeção de 16/10/2026, o checkout publicado era
+`b37661921e3a8455f45c8b676b28955d6ad3d0ea`, enquanto o runtime `testing`
+reportava uma identidade diferente e dataset vazio. `/health=200` e `/ready=503`
+com `runtime_identity_error`; não considerar o checkout atual certificado.
+Ver `docs/DEVELOPMENT_BASELINE_2026-10-16.md` para a fotografia completa.
+
 `GO_ASSISTED` não implica `/ready=200` e não satisfaz o contrato de promoção da
-#384. O `/ready=200` atual existe porque houve evidência própria com `status=GO`
-e um evento `PROMOTE` persistido para a identidade exata.
+#384. `/ready=200` só é válido quando há evidência própria com `status=GO` e um
+evento `PROMOTE` persistido para a identidade runtime exata.
 
 A decisão histórica da #227 e a promoção arquitetural da PR #362 já foram
 concluídas. A fronteira corrente é persistente e append-only:
@@ -244,19 +278,20 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
 ## Ordem arquitetural corrente
 
-1. preservar a certificação vigente enquanto sua identidade continuar exata;
-2. preservar os contratos concluídos da Epic #344: Doctor, Agent Skills,
-   Certification Proof, runtime determinístico, Access Context e Reliable
-   Async;
-3. executar hygiene e upgrades Dependabot priorizados em blocos independentes;
-4. congelar nova baseline técnica sem promover automaticamente uma nova
-   identidade de runtime;
-5. tratar #365 antes de qualquer migration ampla de #364;
-6. manter OCI/#284 como backlog futuro até retomada explícita.
+1. confirmar os findings da #408 com uma execução CodeQL posterior à correção
+   integrada pela #413 e aos testes da #419;
+2. validar o ciclo de backup e restore apenas em banco isolado para fechar o
+   escopo residual da #83;
+3. concluir GOV-07 da #293 e alinhar Issues/documentação com o código atual;
+4. depois, selecionar uma única entrega de produto pós-GO;
+5. manter OCI/#284 como backlog futuro até retomada explícita.
+
+As Issues #365 e #364 foram fechadas em 08/10/2026; não fazem mais parte da
+sequência corrente. A higiene de dependências priorizada também foi integrada.
 
 ## Backlog pós-GO por padrão
 
-- #149 — evidência factual de cupons/amortizações e certificação da nova identidade;
+- #149 — posição elegível por carteira e tributação por lote de cupons/amortizações;
 - #351/#90/#58 — UX/detalhe de ativo;
 - #355–#359 — features auxiliares;
 - #246/#360 — Metas + Analysis Engine;
@@ -264,3 +299,14 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 - #97 — OAuth.
 
 #352 foi fechada apos validacao manual do seletor `Tipo de ativo` no modal de lancamento. #354 foi fechada após alinhamento da política de senha frontend/backend e só deve reabrir com regressão comprovada.
+
+
+## Lancamentos de cripto e historico de mercado
+
+A compra/venda manual ou importada pode ser registrada para ativo CRIPTO
+presente no catalogo persistido. A completude do historico de precos nao e uma
+pre-condicao para persistir o fato do usuario: `HISTORY_END_UNAVAILABLE` e
+outros status continuam informando cobertura incompleta a valuation, serie
+historica e readiness, sem serem promovidos a cobertura completa nem usados
+para inventar precos. Tickers fora do catalogo continuam bloqueados; fixtures
+sinteticas exigem proveniencia de certificacao propria.

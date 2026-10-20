@@ -168,26 +168,26 @@ async def test_rejects_missing_catalog_asset_without_creating_it() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rejects_concurrent_brapi_yahoo_normalized_rows() -> None:
+@pytest.mark.asyncio
+async def test_rejects_concurrent_b3_and_fallback_rows() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
-    first = _collection(value=1.25, source="brapi")
-    second = _collection(value=1.25, source="yfinance_history")
+    b3 = _collection(value=1.25, source="b3")
+    fallback = _collection(value=1.25, source="yfinance_history")
     combined = StrictDividendAssetCollection(
         ticker="PETR4",
         asset_type="ACAO",
-        sources=(first.sources[0], second.sources[0]),
+        sources=(b3.sources[0], fallback.sources[0]),
     )
     db = _db(assets=[asset])
 
     with pytest.raises(
         DividendsSeedPersistenceError,
-        match="Yahoo é permitido apenas como fallback",
+        match="nao misture fatos oficiais e de fallback",
     ):
         await persist_asset_dividends_strict(db=db, collections=(combined,))
 
+    db.add.assert_not_called()
     db.flush.assert_not_awaited()
-    db.commit.assert_not_awaited()
-    db.rollback.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -26,13 +26,14 @@ from app.services.portfolio_asset_corporate_lifecycle_service import (
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
+    require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_service import list_transactions_paginated
 from app.services.transaction_write_service import (
     TransactionWriteError,
     create_transaction_record,
+    resolve_fixed_income_contract_for_write,
 )
 
 log = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ async def _validate_crypto_transaction_asset(
         return
 
     try:
-        await require_financially_certified_crypto_asset(db, ticker)
+        await require_catalog_crypto_asset(db, ticker)
     except CryptoTransactionEligibilityError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -296,6 +297,38 @@ async def update_transaction(
     tx_date = payload.date if payload.date is not None else tx.date
     currency = payload.currency if payload.currency is not None else tx.currency
     notes = payload.notes if "notes" in payload.model_fields_set else tx.notes
+    fixed_income_contract_id = (
+        payload.fixed_income_contract_id
+        if "fixed_income_contract_id" in payload.model_fields_set
+        else tx.fixed_income_contract_id
+    )
+    contract_payload = (
+        payload.fixed_income_contract
+        if "fixed_income_contract" in payload.model_fields_set
+        else None
+    )
+    if (
+        "fixed_income_contract_id" in payload.model_fields_set
+        and fixed_income_contract_id is not None
+        and contract_payload is not None
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Informe um contrato existente ou novos metadados, nao ambos",
+        )
+
+    if asset_type != "RENDA_FIXA":
+        if (
+            "fixed_income_contract_id" in payload.model_fields_set
+            and fixed_income_contract_id is not None
+        ) or contract_payload is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Contrato de Renda Fixa so pode ser associado a transacao RENDA_FIXA",
+            )
+        fixed_income_contract_id = None
+    elif contract_payload is not None:
+        fixed_income_contract_id = None
 
     await _validate_crypto_transaction_asset(db, ticker, asset_type)
 
@@ -309,6 +342,20 @@ async def update_transaction(
             exclude_tx_id=transaction_id,
         )
 
+    if asset_type == "RENDA_FIXA" and (
+        contract_payload is not None or fixed_income_contract_id is not None
+    ):
+        try:
+            fixed_income_contract_id = await resolve_fixed_income_contract_for_write(
+                db,
+                portfolio_id=portfolio_id,
+                asset_type=asset_type,
+                contract_id=fixed_income_contract_id,
+                contract_payload=contract_payload,
+            )
+        except TransactionWriteError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     invalidate_from = min(tx.date, tx_date)
 
     tx.ticker = ticker
@@ -320,6 +367,7 @@ async def update_transaction(
     tx.date = tx_date
     tx.currency = currency
     tx.notes = notes
+    tx.fixed_income_contract_id = fixed_income_contract_id
 
     await db.commit()
     await db.refresh(tx)

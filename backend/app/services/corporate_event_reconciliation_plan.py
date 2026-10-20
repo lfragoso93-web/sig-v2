@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
@@ -56,9 +57,10 @@ class CorporateEventMatchResolutionEvidence:
     ledger_basis: CorporateEventLedgerBasis | None = None
     ledger_transformation_reference: str | None = None
     ledger_quantity_factor: str | None = None
+    effective_date: date | None = None
 
     def to_dict(self) -> dict[str, str | None]:
-        return {
+        payload = {
             "evidence_type": self.evidence_type.value,
             "evidence_reference": self.evidence_reference,
             "fractional_policy": self.fractional_policy.value,
@@ -71,6 +73,9 @@ class CorporateEventMatchResolutionEvidence:
             "ledger_transformation_reference": self.ledger_transformation_reference,
             "ledger_quantity_factor": self.ledger_quantity_factor,
         }
+        if self.effective_date is not None:
+            payload["effective_date"] = self.effective_date.isoformat()
+        return payload
 
 
 @dataclass(frozen=True)
@@ -189,18 +194,36 @@ def validate_match_resolution_evidence(
         return
 
     if evidence.fractional_policy == FractionalResolutionPolicy.PENDING_SETTLEMENT:
-        if not has_fraction:
-            raise ValueError("PENDING_SETTLEMENT exige quantidade fracionaria")
-        try:
-            fractional_quantity = Decimal(str(evidence.fractional_quantity))
-        except (InvalidOperation, ValueError):
-            raise ValueError(
-                "PENDING_SETTLEMENT exige quantidade fracionaria decimal"
-            ) from None
-        if not fractional_quantity.is_finite() or fractional_quantity <= 0:
-            raise ValueError(
-                "PENDING_SETTLEMENT exige quantidade fracionaria positiva"
-            )
+        if evidence.ledger_basis == CorporateEventLedgerBasis.ADJUSTED_POST_EVENT:
+            if not has_fraction:
+                raise ValueError(
+                    "ADJUSTED_POST_EVENT exige quantidade fracionaria por carteira"
+                )
+            try:
+                adjusted_fraction = Decimal(str(evidence.fractional_quantity))
+            except (InvalidOperation, ValueError):
+                raise ValueError(
+                    "ADJUSTED_POST_EVENT exige quantidade fracionaria inteira"
+                ) from None
+            if (
+                not adjusted_fraction.is_finite()
+                or adjusted_fraction <= 0
+                or adjusted_fraction != adjusted_fraction.to_integral_value()
+            ):
+                raise ValueError(
+                    "ADJUSTED_POST_EVENT exige quantidade fracionaria inteira"
+                )
+        if has_fraction:
+            try:
+                fractional_quantity = Decimal(str(evidence.fractional_quantity))
+            except (InvalidOperation, ValueError):
+                raise ValueError(
+                    "PENDING_SETTLEMENT exige quantidade fracionaria decimal"
+                ) from None
+            if not fractional_quantity.is_finite() or fractional_quantity <= 0:
+                raise ValueError(
+                    "PENDING_SETTLEMENT exige quantidade fracionaria positiva"
+                )
         if evidence.fractional_settlement_price or evidence.cash_treatment:
             raise ValueError(
                 "PENDING_SETTLEMENT nao aceita preco ou tratamento de caixa"
@@ -363,7 +386,11 @@ def build_reconciliation_dry_run_report(
 
     return CorporateEventReconciliationDryRunReport(
         schema_version=(
-            "corporate-event-reconciliation-dry-run.v2"
+            (
+                "corporate-event-reconciliation-dry-run.v3"
+                if match_resolution_evidence.effective_date is not None
+                else "corporate-event-reconciliation-dry-run.v2"
+            )
             if match_resolution_evidence is not None
             else "corporate-event-reconciliation-dry-run.v1"
         ),

@@ -2,6 +2,11 @@
 
 > Última atualização: 14/07/2026
 
+> Fotografia do fluxo de histórico consultada em 14/07/2026. O runtime foi
+> reobservado em 16/10/2026 e está descrito em
+> `docs/DEVELOPMENT_BASELINE_2026-10-16.md`; este documento define contratos do
+> domínio e não atesta a imagem ativa nem a cobertura de dados atual.
+
 Este documento descreve como o SGI v2 coleta, valida, persiste e consome histórico de preços.
 
 ---
