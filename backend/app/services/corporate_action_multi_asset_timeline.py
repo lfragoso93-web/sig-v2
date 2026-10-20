@@ -59,7 +59,7 @@ def _project_one_component_bonus(
 ) -> tuple[tuple[tuple[str, str, Decimal, Decimal], ...], tuple[ComponentBonusCashRight, ...]]:
     source_event_id = action.source_event_id
     record_date = date.fromisoformat(str(spec["record_date"]))
-    _credit_date = date.fromisoformat(str(spec["credit_date"]))
+    date.fromisoformat(str(spec["credit_date"]))
     settlement_date = date.fromisoformat(str(spec["settlement_date"]))
     bonus_factor = _decimal(spec["bonus_factor"], field="bonus_factor")
     bonus_cost_per_share = _decimal(

@@ -428,7 +428,7 @@ Correcao do registro anterior: a frase de que a imagem backend "sera atualizada"
 
 ### Stack completa para testes assistidos - 18/10/2026
 
-Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, checagens e limites em `docs/USER_TEST_STACK.md`. Frontend e bundle retornam 200, rotas de contratos de Renda Fixa e exportacao CSV estao registradas na especificacao OpenAPI, banco/volumes permanecem preservados e sem transacoes/contratos/eventos de certificacao. Pronta para testes assistidos por usuarios; `/ready=503` e esperado e nao ha certificacao de dados reais. A verificacao visual do agente e Vitest de prefill seguem pendentes.
+Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, checagens e limites em `docs/USER_TEST_STACK.md`. Frontend e bundle retornam 200, rotas de contratos de Renda Fixa e exportacao CSV estao registradas na especificacao de rotas, banco de dados e volumes permanecem preservados e sem transacoes/contratos/eventos de certificacao. Pronta para testes assistidos por usuarios; `/ready=503` e esperado e nao ha certificacao de dados reais. A verificacao visual do agente e Vitest de prefill seguem pendentes.
 
 
 ## Atualizacao de execucao - UX fiscal e carencia de Renda Fixa - 18/10/2026
