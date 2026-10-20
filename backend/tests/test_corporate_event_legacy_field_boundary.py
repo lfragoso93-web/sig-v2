@@ -7,11 +7,15 @@ from pathlib import Path
 _SERVICES = Path(__file__).resolve().parents[1] / "app" / "services"
 _ALLOWED_COMPATIBILITY_MODULES = {
     "corporate_action_position_reader.py",
+    "corporate_event_ledger_preflight.py",
     "corporate_event_legacy_backfill_plan_service.py",
     "corporate_event_legacy_dry_run_service.py",
     "corporate_event_legacy_inventory_service.py",
+    "corporate_event_reconciliation_dry_run_service.py",
     "corporate_event_semantic_repair.py",
     "corporate_event_service.py",
+    "portfolio_asset_corporate_lifecycle_service.py",
+    "portfolio_corporate_rights_service.py",
     "ticker_change_event_service.py",
     "ticker_change_processor.py",
 }
