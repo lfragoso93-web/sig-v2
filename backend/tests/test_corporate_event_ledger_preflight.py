@@ -205,7 +205,7 @@ async def test_nike34_grouping_preflight_exposes_fractional_residue(
     )
 
     payload = report.to_dict()
-    assert payload["schema_version"] == "corporate-event-ledger-preflight.v2"
+    assert payload["schema_version"] == "corporate-event-ledger-preflight.v3"
     assert payload["dry_run"] is True
     assert payload["database_writes_executed"] == 0
     assert payload["ready_for_execution"] is False
@@ -314,10 +314,15 @@ async def test_corporate_event_preflight_report_is_versioned_and_read_only(
     report = await build_corporate_event_ledger_preflight_report(db, event)
 
     assert report.to_dict() == {
-        "schema_version": "corporate-event-ledger-preflight.v2",
+        "schema_version": "corporate-event-ledger-preflight.v3",
         "dry_run": True,
         "database_writes_executed": 0,
         "ready_for_execution": False,
+        "projection_scope": "ADVISORY_FACTOR_ONLY",
+        "projection_note": (
+            "Acoes anteriores elegiveis foram projetadas; o fator do evento-alvo "
+            "e aplicado sem resolver sua politica de fracao, custo ou caixa."
+        ),
         "event_id": event.id,
         "event_type": "GRUPAMENTO",
         "quantity_factor": "0.02",
@@ -331,9 +336,11 @@ async def test_corporate_event_preflight_report_is_versioned_and_read_only(
         "buy_quantity": "300.00000000",
         "sell_quantity": "0",
         "net_quantity": "300.00000000",
+        "pre_event_projected_quantity": "300.00000000",
         "projected_net_quantity": "6.0000000000",
         "projected_whole_quantity": "6",
         "projected_fractional_quantity": "0E-10",
+        "component_bonus_projection": None,
     }
 
 

@@ -36,6 +36,7 @@ class PositionMovement:
     asset_type: str = ""
     currency: str = "BRL"
     unit_price_original_currency: Decimal | None = None
+    corporate_action_event_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ class PositionTimelineProjection:
     pending_corporate_action_fractions: tuple[
         PendingCorporateActionFraction, ...
     ] = ()
+    component_bonus_cash_rights: tuple[object, ...] = ()
 
     @property
     def average_price(self) -> Decimal:
@@ -149,6 +151,11 @@ def project_position_timeline(
             continue
 
         if isinstance(item, PositionMovement):
+            if (
+                item.corporate_action_event_id
+                and item.corporate_action_event_id not in applied
+            ):
+                applied.append(item.corporate_action_event_id)
             if item.kind == PositionMovementKind.BUY:
                 quantity += item.quantity
                 total_cost += item.quantity * item.unit_price + item.fees

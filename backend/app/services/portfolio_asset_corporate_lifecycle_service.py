@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext
 from app.core.clock import SYSTEM_CLOCK, Clock
+from app.models.corporate_event import CorporateEvent
 from app.models.transaction import Transaction
 from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.corporate_action_position_reader import (
@@ -186,3 +187,68 @@ async def load_portfolio_pending_corporate_fractions(
         )
     ]
     return sorted(pending, key=lambda item: (item["event_date"], item["ticker"]))
+
+
+async def load_upcoming_portfolio_corporate_events(
+    db: AsyncSession,
+    *,
+    access: PortfolioAccessContext,
+    clock: Clock = SYSTEM_CLOCK,
+) -> list[dict[str, Any]]:
+    """List confirmed future events for assets currently held by the portfolio."""
+
+    await get_accessible_portfolio(
+        db,
+        access,
+        required_permission=READ_PORTFOLIO_CORPORATE_LIFECYCLE,
+    )
+    portfolio_id = access.portfolio_id
+    result = await db.execute(
+        select(Transaction)
+        .where(
+            Transaction.portfolio_id == portfolio_id,
+        )
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    transactions = list(result.scalars().all())
+    if not transactions:
+        return []
+
+    tickers = sorted({str(tx.ticker).strip().upper() for tx in transactions})
+    actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
+    projections = project_transaction_timelines(
+        transactions=transactions,
+        actions_by_ticker=actions_by_ticker,
+        target_date=clock.today(),
+    )
+    held_tickers = sorted(
+        ticker
+        for ticker, (projection, _asset_type, _is_usd) in projections.items()
+        if projection.quantity > 0
+    )
+    if not held_tickers:
+        return []
+
+    events_result = await db.execute(
+        select(CorporateEvent)
+        .where(
+            CorporateEvent.portfolio_id.is_(None),
+            func.upper(func.trim(CorporateEvent.ticker)).in_(held_tickers),
+            CorporateEvent.effective_date >= clock.today(),
+            CorporateEvent.reconciliation_status == "MATCHED",
+            CorporateEvent.is_canonical.is_(True),
+            CorporateEvent.requires_review.is_(False),
+            func.upper(func.trim(CorporateEvent.status)) != _IGNORED_EVENT_STATUS,
+        )
+        .order_by(CorporateEvent.effective_date, CorporateEvent.ticker, CorporateEvent.id)
+    )
+    return [
+        {
+            "event_id": int(event.id),
+            "ticker": str(event.ticker).strip().upper(),
+            "event_type": _normalized_text(event.event_type),
+            "event_date": event.effective_date,
+            "description": event.description,
+        }
+        for event in events_result.scalars().all()
+    ]

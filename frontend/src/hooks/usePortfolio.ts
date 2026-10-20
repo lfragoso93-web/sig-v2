@@ -64,6 +64,51 @@ export interface PendingCorporateFraction {
   message: string
 }
 
+export interface PortfolioCorporateRight {
+  event_id: number
+  source_event_id: string
+  ticker: string
+  event_type: string
+  record_date: string
+  settlement_date: string
+  base_position: number
+  settlement_status: 'PENDING' | 'AVAILABLE'
+  components: Array<{
+    component: string
+    bonus_quantity: number
+    whole_quantity: number
+    fractional_quantity: number
+    whole_units_formed: number
+    component_shares_in_units: number
+    residual_whole_quantity: number
+    settlement_price_brl: number
+    gross_amount_brl: number
+    attributed_cost_brl: number
+    fractional_cost_basis_brl: number
+    estimated_fractional_result_brl: number
+  }>
+  gross_amount_brl: number
+  calculated_gross_amount_brl: number
+  bonus_cost_per_share_brl: number
+  attributed_bonus_cost_brl: number
+  fractional_cost_basis_brl: number
+  estimated_fractional_result_brl: number
+  cash_status: 'CALCULATED_NOT_CONFIRMED'
+  cash_treatment: string
+}
+
+export function usePortfolioCorporateRights(portfolioId: number) {
+  return useQuery<PortfolioCorporateRight[]>({
+    queryKey: ['portfolio-corporate-rights', portfolioId],
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/corporate-events/rights`)
+      .then(response => response.data),
+    enabled: portfolioId > 0,
+    retry: false,
+    staleTime: 60 * 1000,
+  })
+}
+
 export function usePendingCorporateFractions(portfolioId: number) {
   return useQuery<PendingCorporateFraction[]>({
     queryKey: ['portfolio-pending-corporate-fractions', portfolioId],

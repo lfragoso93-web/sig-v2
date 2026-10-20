@@ -107,3 +107,22 @@ def test_jcp_exposes_gross_tax_and_net_amounts() -> None:
 def test_invalid_history_is_not_silently_clamped_to_zero() -> None:
     with pytest.raises(ValueError, match="cannot be negative"):
         historical_position([movement(2, "sell", "1")], date(2026, 1, 9))
+
+
+def test_oversold_or_negative_historical_position_returns_no_position_entitlement() -> None:
+    result = calculate_dividend_entitlement(
+        event(),
+        [movement(2, "sell", "10")],
+    )
+    assert result.reason is EntitlementReason.NO_POSITION
+    assert result.gross_amount == Decimal("0")
+    assert not result.is_eligible
+
+
+def test_same_day_buy_and_sell_orders_buy_first() -> None:
+    result = calculate_dividend_entitlement(
+        event(record_date=date(2026, 1, 5)),
+        [movement(2, "sell", "5"), movement(2, "buy", "10")],
+    )
+    assert result.is_eligible
+    assert result.eligible_quantity == Decimal("5")

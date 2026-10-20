@@ -71,13 +71,15 @@ class FixedIncomeContractCreate(BaseModel):
         if (self.rate_value is None) != (self.rate_unit is None):
             raise ValueError("rate_value and rate_unit must be provided together")
 
-        expected_unit = {
-            "CDI": "PERCENT_OF_INDEXER",
-            "SELIC": "PERCENT_OF_INDEXER",
-            "PREFIXADO": "ANNUAL_PERCENT",
-            "IPCA_PLUS": "ANNUAL_SPREAD_PERCENT",
-            "IGPM_PLUS": "ANNUAL_SPREAD_PERCENT",
-        }.get(self.indexer)
+        expected_unit = None
+        if self.indexer is not None:
+            expected_unit = {
+                "CDI": "PERCENT_OF_INDEXER",
+                "SELIC": "PERCENT_OF_INDEXER",
+                "PREFIXADO": "ANNUAL_PERCENT",
+                "IPCA_PLUS": "ANNUAL_SPREAD_PERCENT",
+                "IGPM_PLUS": "ANNUAL_SPREAD_PERCENT",
+            }.get(self.indexer)
         if expected_unit and self.rate_unit and self.rate_unit != expected_unit:
             raise ValueError("rate_unit does not match the selected indexer")
         return self

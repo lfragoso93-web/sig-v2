@@ -1,6 +1,15 @@
 # Roadmap - SGI v2
 
-> Ultima atualizacao: 18/10/2026.
+> Ultima atualizacao: 19/10/2026.
+
+## Rebaseline de segurança e continuidade — 19/10/2026
+
+- Checkout `stable-15jun` e remoto estão no SHA `a517e8871e42142cc77943d08f59bcc0d3a6946e`; a branch está 41 commits à frente e 0 atrás de `main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`).
+- O deep scan executado hoje passou CodeQL para Python/TypeScript e Trivy da imagem backend em `main`, não no SHA estável. O `gh` local está sem autenticação válida e a integração GitHub não oferece dispatch nem consulta de alertas Code Scanning. #408 permanece aberta até haver evidência de scanner/alertas para a identidade correta.
+- CI manual de `main` falhou em Gitleaks por uma fingerprint histórica de texto documental detectada como `generic-api-key`. A PR draft #433 adicionou a exceção exata; sua CI completa, incluindo Gitleaks, passou. A atualização textual local em `stable-15jun` também foi mantida.
+- PRs abertas #426–#432 são Dependabot, todas para `main`. Em branches das próprias PRs, #427 atualizou o teste de contrato para SQLAlchemy 2.1.4 e #430 reteve TypeScript 6.0.3, compatível com `typescript-eslint`; as duas CIs completas passaram e os PRs continuam abertos, sem merge. PR draft #433 adiciona somente a fingerprint histórica Gitleaks em `.gitleaksignore`; sua CI passou os gates completos no SHA `5fc214738eb5fe430c9a3c970e2e6ec6cd0f424c`. Não transplantar bumps automaticamente para `stable-15jun`.
+- Próximos blocos: (1) executar deep scan em `stable-15jun` com autorização GitHub válida e reconciliar alertas da #408; (2) revisar a PR #433 e decidir sua integração; (3) acompanhar/revisar os PRs #427 e #430, agora verdes; (4) continuar integração segura dos eventos complexos da #370; (5) validar visualmente #355/#359 e alinhar o critério remoto da #355.
+- Docker local não autorizou acesso à API; nenhum estado do runtime foi confirmado nesta auditoria. Não houve deploy, mudança financeira ou certificação.
 
 ## Proximo bloco ativo - fechar experiencia de Renda Fixa e priorizar ferramentas
 
@@ -419,7 +428,7 @@ Correcao do registro anterior: a frase de que a imagem backend "sera atualizada"
 
 ### Stack completa para testes assistidos - 18/10/2026
 
-Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, checagens e limites em `docs/USER_TEST_STACK.md`. Frontend e bundle retornam 200, rotas de contratos RF e exportacao CSV estao presentes na OpenAPI, banco/volumes permanecem preservados e sem transacoes/contratos/eventos de certificacao. Pronta para testes assistidos por usuarios; `/ready=503` e esperado e nao ha certificacao de dados reais. A verificacao visual do agente e Vitest de prefill seguem pendentes.
+Backend e frontend atuais aplicados em `sgi-usertest`. Digests, identidade, checagens e limites em `docs/USER_TEST_STACK.md`. Frontend e bundle retornam 200, rotas de contratos de Renda Fixa e exportacao CSV estao registradas na especificacao da API, banco/volumes permanecem preservados e sem transacoes/contratos/eventos de certificacao. Pronta para testes assistidos por usuarios; `/ready=503` e esperado e nao ha certificacao de dados reais. A verificacao visual do agente e Vitest de prefill seguem pendentes.
 
 
 ## Atualizacao de execucao - UX fiscal e carencia de Renda Fixa - 18/10/2026
@@ -489,3 +498,5 @@ commit `a32b5885f939c236b7e97fecaec4fbbc3209d005`, digest
 Runtime read-only confirmou BTC no catalogo, busca e preflight CSV sem erros;
 `/health=200`, servicos saudaveis. Proximo: obter relatorio do dry-run/amostra
 anonimizada para falhas CSV de outros tipos de ativo.
+
+Atualizacao do proximo bloco #370 (19/10/2026): integrar a projecao multiativo coordenadamente em posicoes, custo/realizado, snapshots/TWR, resumo e IRPF. Eventos incompletos seguem fora da projecao e KLBN11 aguarda evidencia externa. O contrato de integracao e a divergencia de runtime estao registrados em docs/CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md.

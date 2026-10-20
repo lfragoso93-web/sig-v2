@@ -1,6 +1,45 @@
 # Governança de Issues — SGI v2
 
-Atualizado em 16/10/2026.
+Atualizado em 19/10/2026.
+
+## Snapshot GitHub e segurança — 19/10/2026
+
+- `stable-15jun` está em `a517e8871e42142cc77943d08f59bcc0d3a6946e`, igual a
+  `origin/stable-15jun`. A branch está 41 commits à frente e 0 atrás de `main`
+  (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`).
+- Há 22 Issues abertas e oito PRs abertas. As PRs Dependabot #426–#432 apontam
+  para `main`; a PR draft #433 também aponta para `main` e trata somente a
+  fingerprint histórica do falso positivo Gitleaks. Nenhuma PR aberta tem como
+  destino `stable-15jun`.
+- A CI manual de `main` no SHA `4948b6b` passou backend, frontend, Dockerfile e
+  Trivy filesystem; falhou em Gitleaks por um finding `generic-api-key` em texto
+  documental histórico de `ROADMAP.md`. Pip-audit, npm-audit e scans de imagens
+  foram ignorados pelo encadeamento de jobs após a falha de segredos. A frase
+  foi reescrita no checkout estável e a fingerprint exata foi adicionada em
+  PR #433; a CI dessa PR passou Gitleaks e os demais gates completos. A PR
+  permanece draft para revisão.
+- Os PRs #430 (build-tools frontend) e #427 (SQLAlchemy stack backend) têm CI
+  inicialmente falhando. Em branches das próprias PRs, #427 atualizou as
+  expectativas do teste de contrato para SQLAlchemy 2.1.4; #430 manteve
+  TypeScript 6.0.3 dentro do peer range de `typescript-eslint`, preservando os
+  outros bumps do grupo. As CIs completas passaram nos SHAs
+  `6b7baead2a54b287047df258da5fe4ba0a8b8b20` (#427) e
+  `3958c38892a9edbe9bb8c9929d87420bc20f306d` (#430). Ambas seguem abertas e
+  não foram integradas.
+- O deep scan de 19/10 concluiu CodeQL Python, CodeQL TypeScript e Trivy da
+  imagem backend com sucesso em `main`/`4948b6b`. A integração disponível não
+  permite consultar alertas Code Scanning nem disparar `workflow_dispatch`;
+  portanto não há evidência nova para `stable-15jun`. Docker local também está
+  inacessível por permissão negada e o runtime não foi consultado.
+- A PR draft #433 contém somente a exceção de fingerprint que a execução de
+  Gitleaks identificou no histórico. CI do SHA
+  `5fc214738eb5fe430c9a3c970e2e6ec6cd0f424c` passou backend (lint, mypy,
+  migration gate e testes), frontend (lint/typecheck/build), Gitleaks, Trivy
+  filesystem, Hadolint, npm audit e pip-audit. O PR permanece draft e não foi
+  integrado.
+
+Este snapshot substitui contagens, SHAs e estados antigos nos snapshots abaixo.
+Não fecha Issues nem promove certificação.
 
 ## Snapshot GitHub — 16/10/2026
 
@@ -178,6 +217,22 @@ aberta foi identificada como duplicada ou sem destino/documentação:
 - #293: governança; #353 permanece P2 e não bloqueia jornada crítica;
 - #83 não faz mais parte do inventário aberto.
 
+## Correlação das entregas de 18–19/10/2026
+
+- #370 continua aberta: a classificação, projeção não monetária e persistência
+  aditiva das pernas de destino foram implementadas sem resolver o conflito
+  factual de KLBN11 nem aplicar eventos reais. A migration publicada criou a
+  tabela vazia e preservou as contagens observadas; o próximo bloco técnico é
+  persistência atômica/idempotente de resoluções evidenciadas e integração com
+  gate fail-closed.
+- #355 e #359 avançaram conforme registrado nos blocos de entrega abaixo; ambas
+  ainda precisam de validação visual desktop/mobile. #355 também requer alinhar
+  seu critério remoto antigo de seleção explícita de contrato.
+- A correção de elegibilidade de transações cripto e CSV foi publicada em
+  `a32b5885`; cobertura histórica incompleta segue explícita e não foi resolvida
+  por dados inventados. Falhas de importação de outras classes aguardam amostra
+  anonimizada e relatório de dry-run.
+
 O mapa foi validado contra os contratos e artefatos atuais no checkout local
 `stable-15jun` (`5c4ad3906475316294196a826ff140cb3e4bf950`). O conector GitHub
 confirma `stable-15jun` sete commits à frente e zero atrás de `main`, mas não
@@ -239,3 +294,25 @@ Antes de fechar a Issue, atualizar esse criterio para associacao transparente,
 marcar os criterios demonstrados e deixar a validacao visual como pendencia. O
 tracker remoto nao foi alterado porque este bloco priorizou a implementacao e
 alinhamento local; nenhuma conclusao remota foi publicada.
+
+Atualizacao 19/10/2026: para #370, o proximo incremento e integrar a projecao multiativo coordenadamente em posicoes, custo/realizado, snapshots/TWR, resumo e IRPF. O gate de elegibilidade permanece fail-closed; KLBN11 depende de evidencia externa de custodia. Fronteira tecnica registrada em CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md.
+
+### Atualizacao da Issue #370 - regra de direitos por carteira - 20/10/2026
+
+Decisao de produto confirmada: para bonificacao com fracao leiloada, o direito
+bruto do usuario deve ser calculado pelo SGI a partir da quantidade elegivel em
+sua carteira na data-base, da regra oficial por componente e dos precos
+publicados do leilao. Nao exigir comprovante individual de venda/credito para
+calcular esse direito; marcar o valor como calculado e nao confirmado ate haver
+evidencia de pagamento individual. O fato de a BRAPI registrar a bonificacao
+com valor zero nao substitui os dados oficiais do emissor sobre leilao e preco.
+
+Isso separa tres gates da #370: (1) apurar e informar o direito derivado por
+carteira; (2) integrar a transformacao multiativo na timeline financeira,
+incluindo posicao, custo/realizado, snapshots/TWR, resumo e IRPF; (3) confirmar
+pagamento individual somente quando houver evidencia do custodiante. O primeiro
+gate tem contrato e servico de leitura locais, mas os eventos KLBN11 ainda nao
+passam pelo gate canonico `MATCHED`; o segundo segue pendente e por isso a
+projecao ticker-only continua bloqueada. O terceiro nao pode ser inferido do
+preco oficial do leilao. Atualizar o criterio remoto da Issue antes de fecha-la,
+pois o texto atual ainda condiciona a decisao a comprovante de custodiante.

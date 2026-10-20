@@ -76,8 +76,9 @@ export const useAppStore = create<AppState>()(
       name: 'sig-app',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        theme:            state.theme,
-        sidebarCollapsed: state.sidebarCollapsed,
+        theme:               state.theme,
+        selectedPortfolioId: state.selectedPortfolioId,
+        sidebarCollapsed:    state.sidebarCollapsed,
       }),
     }
   )

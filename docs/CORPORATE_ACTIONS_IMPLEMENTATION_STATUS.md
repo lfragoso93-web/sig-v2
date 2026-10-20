@@ -200,3 +200,9 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - fluxo líquido aportado é um contrato de caixa e não deve ser alterado por split, grupamento ou bonificação;
 - vendas reduzem o fluxo pelo valor líquido de taxas, inclusive quando convertidas pelo câmbio salvo;
 - adaptadores de posição e snapshot são exclusivamente read-only.
+
+## Integracao financeira multiativo KLBN11 - 20/10/2026
+
+Implementacao local na `stable-15jun`: a timeline compartilhada expande a bonificacao por componente sem criar ou alterar `transactions`. Units formadas e acoes residuais carregam o custo atribuido publicado pelo emissor; fracoes leiloadas aparecem como direitos por carteira, sem caixa recebido ou resultado realizado presumidos. Resumo, posicao, snapshots/TWR, lifecycle, realizado e IRPF consomem a projecao comum. A tela de eventos informa eventos futuros e a tela de direitos mostra custo atribuido e resultado estimado.
+
+Validacao focada: 111 testes backend passaram; typecheck e teste focalizado da tela passaram anteriormente neste bloco. Eventos locais 81/82 continuam `CONFLICT`, pois nao foi executado preflight contra o banco/catalogo atual nem escrita MATCHED. O contrato de settlement tem que estar em `raw_metadata`, sua referencia deve coincidir com evidencia oficial e os ISINs devem resolver no catalogo. Esse estado de codigo nao e deploy nem certificacao do runtime; a issue #370 permanece aberta ate o preflight read-only e a decisao operacional documentada.

@@ -1,12 +1,14 @@
 """Pure calculation of portfolio entitlements from global dividend events."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
 
+logger = logging.getLogger(__name__)
 
 ZERO = Decimal("0")
 JCP_NET_FACTOR = Decimal("0.85")
@@ -62,7 +64,13 @@ def historical_position(
 ) -> Decimal:
     """Return the position at end of ``reference_date`` without hiding oversells."""
     position = ZERO
-    for movement in sorted(movements, key=lambda item: item.transaction_date):
+    for movement in sorted(
+        movements,
+        key=lambda item: (
+            item.transaction_date,
+            0 if item.operation.lower().strip() == "buy" else 1,
+        ),
+    ):
         if movement.transaction_date > reference_date:
             break
         quantity = Decimal(movement.quantity)
@@ -109,7 +117,19 @@ def calculate_dividend_entitlement(
             currency,
         )
 
-    quantity = historical_position(movements, event.record_date)
+    try:
+        quantity = historical_position(movements, event.record_date)
+    except ValueError as exc:
+        logger.warning(
+            "historical_position failed for event_id=%s record_date=%s: %s",
+            event.event_id,
+            event.record_date,
+            exc,
+        )
+        return _empty_entitlement(
+            event, EntitlementReason.NO_POSITION, event.record_date, currency
+        )
+
     if quantity == ZERO:
         return _empty_entitlement(
             event, EntitlementReason.NO_POSITION, event.record_date, currency

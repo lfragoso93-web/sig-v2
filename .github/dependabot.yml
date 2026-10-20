@@ -7,6 +7,7 @@ updates:
   # ── Backend Python (pip) ────────────────────────────────────────────────────
   - package-ecosystem: "pip"
     directory: "/backend"
+    target-branch: "stable-15jun"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -44,6 +45,7 @@ updates:
   # ── Frontend Node.js (npm) ───────────────────────────────────────────────────
   - package-ecosystem: "npm"
     directory: "/frontend"
+    target-branch: "stable-15jun"
     schedule:
       interval: "weekly"
       day: "monday"

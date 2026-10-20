@@ -5,6 +5,7 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import BottomNav from './BottomNav'
 import AddTransactionModal from '@/components/modals/AddTransactionModal'
+import UpcomingCorporateEventNotice from '@/components/portfolio/UpcomingCorporateEventNotice'
 import { findAnchorElement, resolveScrollRestoration } from '@/utils/scrollRestoration'
 
 export default function AppLayout() {
@@ -99,6 +100,8 @@ export default function AppLayout() {
       {transactionModal.open && (
         <AddTransactionModal onClose={closeTransactionModal} />
       )}
+
+      <UpcomingCorporateEventNotice />
     </div>
   )
 }

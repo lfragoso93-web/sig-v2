@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -14,6 +15,9 @@ from app.services.position_timeline_projection import (
     PositionMovementKind,
     PositionTimelineProjection,
     project_position_timeline,
+)
+from app.services.corporate_action_multi_asset_timeline import (
+    expand_component_bonus_movements,
 )
 
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
@@ -68,10 +72,11 @@ def project_transaction_timelines(
 ) -> dict[str, tuple[PositionTimelineProjection, str, bool]]:
     """Projeta todas as linhas temporais, inclusive posições já encerradas."""
 
+    transaction_list = list(transactions)
     movements_by_ticker: dict[str, list[PositionMovement]] = defaultdict(list)
     metadata: dict[str, tuple[str, bool]] = {}
 
-    for tx in transactions:
+    for tx in transaction_list:
         ticker = str(tx.ticker).strip().upper()
         asset_type = _asset_type_value(tx.asset_type)
         is_usd = (
@@ -81,13 +86,30 @@ def project_transaction_timelines(
         movements_by_ticker[ticker].append(_movement_from_transaction(tx))
         metadata[ticker] = (asset_type, is_usd)
 
+    bonus_cash_rights = expand_component_bonus_movements(
+        movements_by_ticker=movements_by_ticker,
+        metadata_by_ticker=metadata,
+        actions_by_ticker=actions_by_ticker,
+        target_date=target_date,
+    )
+
     projected: dict[str, tuple[PositionTimelineProjection, str, bool]] = {}
     for ticker, movements in movements_by_ticker.items():
+        ticker_actions = tuple(
+            action
+            for action in actions_by_ticker.get(ticker, ())
+            if action.component_bonus is None
+        )
         result = project_position_timeline(
             movements=movements,
-            actions=actions_by_ticker.get(ticker, ()),
+            actions=ticker_actions,
             through_date=target_date,
         )
+        if ticker in bonus_cash_rights:
+            result = replace(
+                result,
+                component_bonus_cash_rights=bonus_cash_rights[ticker],
+            )
         asset_type, is_usd = metadata[ticker]
         projected[ticker] = (result, asset_type, is_usd)
 

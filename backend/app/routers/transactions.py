@@ -18,11 +18,17 @@ from app.schemas.transaction import (
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
+    UpcomingCorporateEventOut,
+    PortfolioCorporateRightOut,
 )
 from app.services.portfolio_asset_corporate_lifecycle_service import (
     READ_PORTFOLIO_CORPORATE_LIFECYCLE,
     load_portfolio_asset_corporate_lifecycle,
     load_portfolio_pending_corporate_fractions,
+    load_upcoming_portfolio_corporate_events,
+)
+from app.services.portfolio_corporate_rights_service import (
+    load_portfolio_corporate_rights,
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
@@ -191,6 +197,49 @@ async def list_portfolio_pending_corporate_fractions(
             db,
             access=access,
         )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/upcoming",
+    response_model=list[UpcomingCorporateEventOut],
+)
+async def list_portfolio_upcoming_corporate_events(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_upcoming_portfolio_corporate_events(
+            db,
+            access=access,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/rights",
+    response_model=list[PortfolioCorporateRightOut],
+)
+async def list_portfolio_corporate_rights(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_portfolio_corporate_rights(db, access=access)
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
