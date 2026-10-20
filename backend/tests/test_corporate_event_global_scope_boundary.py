@@ -11,6 +11,8 @@ _ALLOWED_PORTFOLIO_SCOPE_MODULES = {
     "corporate_action_position_reader.py",
     "corporate_event_ledger_preflight.py",
     "corporate_event_service.py",
+    "portfolio_asset_corporate_lifecycle_service.py",
+    "portfolio_corporate_rights_service.py",
     "ticker_change_event_service.py",
     "ticker_change_processor.py",
 }
