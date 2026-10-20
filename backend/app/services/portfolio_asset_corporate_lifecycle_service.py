@@ -23,6 +23,12 @@ from app.services.snapshot_position_projection import (
 )
 
 READ_PORTFOLIO_CORPORATE_LIFECYCLE = "portfolio:corporate-lifecycle:read"
+_IGNORED_EVENT_STATUS = "IGNORADO"
+
+
+def _normalized_text(value: object) -> str:
+    raw = value.value if hasattr(value, "value") else value
+    return str(raw or "").strip()
 
 
 def _lifecycle_items(
