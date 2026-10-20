@@ -465,6 +465,41 @@ async def test_matched_writer_accepts_klbn11_cash_settlement_contract(db) -> Non
         source_event_id="brapi:klbn11",
     )
     brapi.event_type = "BONIFICACAO"
+    brapi.record_date = date(2025, 12, 17)
+    brapi.payment_date = date(2026, 2, 24)
+    brapi.raw_metadata = {
+        "fractional_component_settlement": {
+            "model": "COMPONENT_BONUS_FRACTIONS_V1",
+            "evidence_reference": "issuer:klbn:bonus-and-auction:2025",
+            "record_date": "2025-12-17",
+            "credit_date": "2025-12-22",
+            "settlement_date": "2026-02-24",
+            "bonus_factor": "0.01",
+            "bonus_cost_per_share_brl": "12.94564988922",
+            "unit_ticker": "KLBN11",
+            "unit_asset_type": "ACAO",
+            "unit_isin_code": "BRKLBNCDAM18",
+            "unit_composition": {"ON": "1", "PN": "4"},
+            "components": [
+                {
+                    "component": "ON",
+                    "ticker": "KLBN3",
+                    "asset_type": "ACAO",
+                    "isin_code": "BRKLBNACNOR0",
+                    "units_per_position": "1",
+                    "settlement_price_brl": "3.942352337",
+                },
+                {
+                    "component": "PN",
+                    "ticker": "KLBN4",
+                    "asset_type": "ACAO",
+                    "isin_code": "BRKLBNACNPR7",
+                    "units_per_position": "4",
+                    "settlement_price_brl": "3.942611212",
+                },
+            ],
+        }
+    }
     yahoo = await _create_event(
         db,
         asset=asset,
@@ -480,8 +515,8 @@ async def test_matched_writer_accepts_klbn11_cash_settlement_contract(db) -> Non
         canonical_event_id=brapi.id,
         reason="fracao de Unit liquidada em leilao",
         match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
-            evidence_reference="broker-note:KLBN11:2025-12",
+            evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT,
+            evidence_reference="issuer:klbn:bonus-and-auction:2025",
             fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
             fractional_quantity="0.10",
             fractional_settlement_price="4.00",
