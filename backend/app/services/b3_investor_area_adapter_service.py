@@ -13,7 +13,6 @@ import io
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Optional
 
 from app.models.asset import AssetType
 

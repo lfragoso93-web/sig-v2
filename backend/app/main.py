@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, Response
 from slowapi import _rate_limit_exceeded_handler
@@ -174,6 +175,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(SecurityHeadersMiddleware)
 
 PREFIX = "/api/v1"
