@@ -10,6 +10,7 @@ forma explícita para testes/uso isolado, mas o default acompanha esse contrato.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 import httpx
 
@@ -51,7 +52,8 @@ def _parse_history(payload: object) -> list[tuple[datetime, float]]:
     if not isinstance(results, list) or not results:
         return []
     item = results[0] if isinstance(results[0], dict) else {}
-    data_dict = item.get("data") if isinstance(item.get("data"), dict) else {}
+    raw_data = item.get("data")
+    data_dict: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
     history = (
         item.get("historicalDataPrice")
         or data_dict.get("historicalDataPrice")

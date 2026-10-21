@@ -22,7 +22,7 @@ import logging
 import re
 import unicodedata
 from datetime import date, datetime, timezone
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import httpx
 
@@ -492,7 +492,8 @@ async def fetch_treasury_history(
                 symbol = _symbol_from_item(item)
                 if not symbol:
                     continue
-                data_dict = item.get("data") if isinstance(item.get("data"), dict) else {}
+                raw_data = item.get("data")
+                data_dict: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
                 raw_history = (
                     item.get("historicalDataPrice")
                     or data_dict.get("historicalDataPrice")
