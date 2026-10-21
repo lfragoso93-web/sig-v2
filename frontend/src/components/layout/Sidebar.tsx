@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark, PieChart,
   Settings, Wallet, PanelLeftClose, PanelLeftOpen,
   Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, Target, Calculator,
   Wrench,
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/carteira/transacoes',     icon: ArrowLeftRight,  label: 'Transações'    },
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
   { to: '/carteira/metas',          icon: Target,          label: 'Metas'         },
+  { to: '/carteira/analise',        icon: PieChart,        label: 'Análise'       },
   { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
   { to: '/carteira/configuracoes',  icon: Settings,        label: 'Configurações' },
 ]
