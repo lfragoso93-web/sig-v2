@@ -44,14 +44,34 @@ interface AppState {
   toggleSidebarCollapsed: () => void
 }
 
+function getInitialPersistedState(): {
+  theme?: 'dark' | 'light'
+  selectedPortfolioId?: number | null
+  sidebarCollapsed?: boolean
+} {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return {}
+    const raw = window.localStorage.getItem('sig-app')
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return (parsed && typeof parsed === 'object' && parsed.state) ? parsed.state : {}
+  } catch {
+    return {}
+  }
+}
+
+const initialPersisted = getInitialPersistedState()
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      theme: 'dark',
-      selectedPortfolioId: null,
+      theme: initialPersisted.theme ?? 'dark',
+      selectedPortfolioId: typeof initialPersisted.selectedPortfolioId === 'number'
+        ? initialPersisted.selectedPortfolioId
+        : null,
       transactionModal: { open: false },
       sidebarOpen: false,
-      sidebarCollapsed: false,
+      sidebarCollapsed: initialPersisted.sidebarCollapsed ?? false,
 
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme)

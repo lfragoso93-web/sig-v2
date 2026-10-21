@@ -53,6 +53,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
   const [preview, setPreview] = useState<string[][]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportingPositions, setIsExportingPositions] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
   const [rowFilter, setRowFilter] = useState<RowFilter>(null)
@@ -193,6 +194,29 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
       setError('Erro ao exportar transações: ' + getApiValidationErrorMessage(err, 'Erro desconhecido'))
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleExportPositions = async () => {
+    setIsExportingPositions(true)
+    setError('')
+    try {
+      const response = await api.get(`/portfolios/${portfolioId}/export-positions-csv`, {
+        responseType: 'blob',
+      })
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `portfolio_${portfolioId}_positions.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Erro ao exportar posições: ' + getApiValidationErrorMessage(err, 'Erro desconhecido'))
+    } finally {
+      setIsExportingPositions(false)
     }
   }
 
@@ -348,6 +372,9 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
                 </button>
                 <button onClick={handleExportTransactions} disabled={isExporting} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-primary) l c h / 0.35)', background: 'transparent', color: 'var(--color-primary)', cursor: isExporting ? 'wait' : 'pointer', opacity: isExporting ? 0.7 : 1 }}>
                   <Download size={14} /> {isExporting ? 'Exportando...' : 'Exportar transações da carteira'}
+                </button>
+                <button onClick={handleExportPositions} disabled={isExportingPositions} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-primary) l c h / 0.35)', background: 'transparent', color: 'var(--color-primary)', cursor: isExportingPositions ? 'wait' : 'pointer', opacity: isExportingPositions ? 0.7 : 1 }}>
+                  <Download size={14} /> {isExportingPositions ? 'Exportando...' : 'Exportar posições da carteira'}
                 </button>
               </div>
             </div>

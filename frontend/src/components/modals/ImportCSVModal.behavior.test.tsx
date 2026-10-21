@@ -63,6 +63,27 @@ describe('ImportCSVModal behavior', () => {
     vi.unstubAllGlobals()
   })
 
+  it('downloads an authenticated portfolio positions export as a blob', async () => {
+    const createObjectURL = vi.fn(() => 'blob:positions')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    mocks.get.mockResolvedValue({ data: new Blob(['csv']) })
+
+    render(<ImportCSVModal portfolioId={5} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar posições da carteira' }))
+
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith(
+      '/portfolios/5/export-positions-csv',
+      { responseType: 'blob' },
+    ))
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    expect(click).toHaveBeenCalledOnce()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:positions')
+    click.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
   it('blocks real import when dry-run returns warnings', async () => {
     mocks.post.mockResolvedValueOnce({
       data: {
