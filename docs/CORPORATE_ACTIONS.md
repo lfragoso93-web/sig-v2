@@ -452,3 +452,18 @@ para `projected_net_quantity`; o schema passa a
 preflight ticker-only. `projection_scope=ADVISORY_FACTOR_ONLY` deixa claro que
 a fracao, custo e caixa do evento-alvo ainda nao foram resolvidos; esse
 resultado nao libera reconciliacao nem aplicacao financeira.
+
+
+## Conclusão da Reconciliação AMOB3 e KLBN11 — 21/10/2026 (Fechamento Issue #370)
+
+A auditoria direta via conector oficial B3 (`B3ListedCompaniesClient`) contra os endpoints públicos estruturados da B3 dirimiu as divergências históricas dos provedores terceiros (BRAPI e Yahoo Finance), formalizando a reconciliação canônica primária:
+
+1. **AMOB3:**
+   - **B3 Oficial:** Confirmado grupamento de fator $0{,}02$ (1:50), data-com (`lastDatePrior`) 28/05/2025 e data efetiva (ex-date) 29/05/2025.
+   - **Ledger:** 300 cotas brutas convertidas em 6 cotas pós-grupamento, alienadas integralmente em 13/04/2026, com zero resíduo fracionário. Evento canônico (ID 13) ratificado.
+
+2. **KLBN11:**
+   - **B3 Oficial:** Comprovado que o evento foi BONIFICAÇÃO (descartando o equívoco de classificação do Yahoo como split/desdobramento), com percentual de 1% (fator $1{,}01$, razão 1 nova unit para cada 100 detidas), data-com (`lastDatePrior`) 17/12/2025 e data efetiva 18/12/2025.
+   - **Ledger:** O investidor detinha 10 units inteiras, posteriormente alienadas em 06/01/2026. A fração teórica residual de 0,10 unit seguiu o regulamento B3 de leilão coletivo de sobras e liquidação financeira em conta corrente, dispensando mutação artificial de transações no ledger.
+
+A Issue #370 foi formalmente concluída e fechada em conformidade com as regras de governança canônica.
