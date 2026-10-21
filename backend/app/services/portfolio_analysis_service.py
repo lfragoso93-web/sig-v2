@@ -320,7 +320,11 @@ class PortfolioAnalysisService:
             raise ValueError(f"Portfólio {portfolio_id} não encontrado ou acesso não autorizado.")
 
         # 2. Posições canônicas já consolidadas (sem duplicar valuation)
-        groups = await get_canonical_portfolio_positions(self.db, portfolio_id, user_id)
+        groups_raw = await get_canonical_portfolio_positions(self.db, portfolio_id, user_id)
+        groups: list[PositionGroupResponse] = [
+            g if isinstance(g, PositionGroupResponse) else PositionGroupResponse.model_validate(g)
+            for g in groups_raw
+        ]
 
         # 3. Metas canônicas da carteira
         targets_stmt = select(PortfolioClassTarget).where(PortfolioClassTarget.portfolio_id == portfolio_id)
