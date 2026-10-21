@@ -25,6 +25,7 @@ from app.schemas.portfolio import (
 from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
+from app.schemas.asset_portfolio_insight import AssetPortfolioInsightResponse
 from app.services import csv_import_service
 from app.services.canonical_positions_service import (
     export_canonical_positions_csv,
@@ -184,6 +185,23 @@ async def portfolio_positions(
     current_user: User = Depends(get_current_user),
 ):
     return await get_canonical_portfolio_positions(db, portfolio_id, current_user.id)
+
+
+@router.get(
+    "/{portfolio_id}/assets/{ticker}/insights",
+    response_model=AssetPortfolioInsightResponse,
+)
+async def get_asset_portfolio_insights(
+    portfolio_id: int,
+    ticker: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna correlacao da posicao com a carteira e insights de IA (Issue #58)."""
+    from app.services.asset_portfolio_insight_service import asset_portfolio_insight_service
+    return await asset_portfolio_insight_service.get_insight(
+        db, portfolio_id, current_user.id, ticker
+    )
 
 
 @router.get("/{portfolio_id}/asset-distribution")
