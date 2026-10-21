@@ -4,7 +4,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,10 +23,15 @@ class ProviderConfiguration(Base, TimestampMixin):
     """Configuração dinâmica de provedor editável por SuperAdmin."""
 
     __tablename__ = "provider_configurations"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_id", name="uq_provider_configurations_provider_id"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     provider_id: Mapped[str] = mapped_column(
-        String(50), unique=True, index=True, nullable=False
+        String(50), index=True, nullable=False
     )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False

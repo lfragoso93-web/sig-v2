@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("provider_id", name="uq_provider_configurations_provider_id"),
     )
     op.create_index("ix_provider_configurations_id", _TABLE, ["id"], unique=False)
-    op.create_index("ix_provider_configurations_provider_id", _TABLE, ["provider_id"], unique=True)
+    op.create_index("ix_provider_configurations_provider_id", _TABLE, ["provider_id"], unique=False)
 
 
 def downgrade() -> None:
