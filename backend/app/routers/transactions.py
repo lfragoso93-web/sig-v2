@@ -160,7 +160,7 @@ async def list_transactions(
     operation: Optional[str] = Query(None),
     date_from: Optional[DateType] = Query(None),
     date_to: Optional[DateType] = Query(None),
-    sort: Optional[str] = Query("desc", regex="^(asc|desc)$"),
+    sort: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

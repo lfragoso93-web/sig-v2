@@ -7,6 +7,7 @@ from fastapi import (
     File,
     Response,
     UploadFile,
+    Query,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -225,6 +226,7 @@ async def import_portfolio_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     dry_run: bool = True,
+    source: str = Query("auto", description="Origem do arquivo CSV: auto, canonical ou b3"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -235,6 +237,7 @@ async def import_portfolio_csv(
         user_id=current_user.id,
         file=file,
         dry_run=dry_run,
+        source=source,
     )
     if dry_run:
         result = await enrich_csv_dry_run_with_ticker_resolution(result)

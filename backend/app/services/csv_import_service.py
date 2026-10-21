@@ -28,6 +28,10 @@ from app.services.transaction_write_service import (
     add_transaction_record,
 )
 from app.services.treasury_catalog_service import resolve_treasury_symbol
+from app.services.b3_investor_area_adapter_service import (
+    adapt_b3_investor_csv_to_canonical,
+    is_b3_csv_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +165,7 @@ async def import_transactions_csv(
     user_id: int,
     file: Any,
     dry_run: bool = True,
+    source: str = "auto",
 ) -> dict[str, Any]:
     """Entrada usada pelo endpoint multipart de importação.
 
@@ -180,13 +185,37 @@ async def import_transactions_csv(
             "global_errors": [str(exc)],
         }
 
+    adapter_format = None
+    skipped_records = None
+    if source == "b3" or (source == "auto" and is_b3_csv_content(content)):
+        b3_result = adapt_b3_investor_csv_to_canonical(content)
+        if not b3_result.success and b3_result.errors:
+            return {
+                "success": False,
+                "imported_count": 0,
+                "skipped_count": 0,
+                "error_count": len(b3_result.errors),
+                "rows": [],
+                "global_errors": b3_result.errors,
+                "adapter_format": b3_result.format_detected,
+                "skipped_records": [item.to_dict() for item in b3_result.skipped_items],
+            }
+        content = b3_result.canonical_csv
+        adapter_format = b3_result.format_detected
+        skipped_records = [item.to_dict() for item in b3_result.skipped_items]
+
     if not dry_run:
-        return await import_csv_transactions(
+        result = await import_csv_transactions(
             content=content,
             portfolio_id=portfolio_id,
             user_id=user_id,
             db=db,
         )
+        if adapter_format:
+            result["adapter_format"] = adapter_format
+        if skipped_records is not None:
+            result["skipped_records"] = skipped_records
+        return result
 
     portfolio_result = await db.execute(
         select(Portfolio).where(
@@ -240,6 +269,8 @@ async def import_transactions_csv(
         "error_count": error_count,
         "rows": response_rows,
         "global_errors": global_errors,
+        "adapter_format": adapter_format,
+        "skipped_records": skipped_records,
     }
 
 
