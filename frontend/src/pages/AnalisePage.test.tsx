@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AnalisePage from './AnalisePage'
 import type { PortfolioConsolidatedAnalysisResponse } from '@/hooks/usePortfolioAnalysis'
+import type { PortfolioAiAnalysisResponse } from '@/hooks/usePortfolioAiAnalysis'
 
 const mockAnalysis: PortfolioConsolidatedAnalysisResponse = {
   portfolio_id: 15,
@@ -82,17 +84,17 @@ const mockAnalysis: PortfolioConsolidatedAnalysisResponse = {
           weight_in_class_pct: 28.5,
           weight_in_portfolio_pct: 20.0,
         },
-        hhi_score: 1800.0,
-        risk_level: 'low',
-        risk_label: 'Baixo',
-        status_message: 'Classe bem distribuída entre 5 ativos.',
+        hhi_score: 2200.0,
+        risk_level: 'balanced',
+        risk_label: 'Equilibrado',
+        status_message: 'Distribuição equilibrada entre os fundos.',
       },
       income: {
         is_applicable: true,
-        total_proventos: 4500.0,
-        weighted_dy_pct: 6.4,
+        total_proventos: 4200.0,
+        weighted_dy_pct: 7.2,
         top_income_asset: 'HGLG11',
-        status_label: 'R$ 4.500,00 recebidos',
+        status_label: 'R$ 4.200,00 recebidos',
       },
       fixed_income: {
         is_applicable: false,
@@ -111,9 +113,53 @@ const mockAnalysis: PortfolioConsolidatedAnalysisResponse = {
   },
 }
 
+const mockAiData: PortfolioAiAnalysisResponse = {
+  portfolio_id: 15,
+  portfolio_name: 'Carteira Principal',
+  reference_date: '2026-10-21',
+  overall_health_score: 85,
+  posture_label: 'Equilibrada com foco em proventos',
+  posture_summary: 'A carteira alinha geração de fluxo recorrente com potencial de valorização.',
+  executive_summary: 'Carteira com patrimônio de R$ 100.000,00 e bom score de governança.',
+  key_strengths: [
+    'Diversificação em 2 classes de ativos com proventos ativos.',
+    'Concentração controlada em FIIs.',
+  ],
+  attention_points: [
+    'Concentração moderada de PETR4 na classe Ações.',
+  ],
+  rebalancing_strategy: 'Priorizar novos aportes na classe Ações para fechar o gap de 10%.',
+  contribution_scenarios: [
+    {
+      amount: 5000.0,
+      description: 'Aporte de R$ 5.000,00',
+      priority_class: 'Ações',
+      estimated_gap_reduction: 'Reduz o déficit de Ações em 50%',
+    },
+  ],
+  metadata: {
+    provider: 'sgi-audit-explainer-v1',
+    model: 'deterministic-rule-engine',
+    is_mock_or_deterministic: true,
+    execution_time_ms: 12.5,
+    disclaimer: 'Análise gerada por IA baseada estritamente nas métricas determinísticas.',
+  },
+}
+
 vi.mock('@/store/appStore', () => ({
-  useAppStore: () => ({
-    selectedPortfolioId: 15,
+  useAppStore: (selector?: (state: any) => any) => {
+    const state = {
+      selectedPortfolioId: 15,
+      setSelectedPortfolioId: vi.fn(),
+    }
+    return selector ? selector(state) : state
+  },
+}))
+
+vi.mock('@/hooks/usePortfolios', () => ({
+  usePortfolios: () => ({
+    data: [{ id: 15, name: 'Carteira Principal' }],
+    isLoading: false,
   }),
 }))
 
@@ -130,26 +176,60 @@ vi.mock('@/hooks/usePortfolioAnalysis', async () => {
   }
 })
 
-describe('AnalisePage determinismo e diagnósticos por classe (Issue #360)', () => {
-  it('renders overall health score and rebalance metrics', () => {
-    render(
+vi.mock('@/hooks/usePortfolioAiAnalysis', async () => {
+  const actual = await vi.importActual<object>('@/hooks/usePortfolioAiAnalysis')
+  return {
+    ...actual,
+    usePortfolioAiAnalysis: () => ({
+      data: mockAiData,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+    useSimulateContribution: () => ({
+      mutate: vi.fn(),
+      data: null,
+      isPending: false,
+    }),
+    useAskPortfolioAi: () => ({
+      mutate: vi.fn(),
+      data: null,
+      isPending: false,
+    }),
+  }
+})
+
+function renderWithProviders() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <AnalisePage />
-      </MemoryRouter>,
-    )
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
 
-    expect(screen.getByText('Análise de Carteira')).toBeDefined()
+describe('AnalisePage determinismo e inteligência artificial (Issues #360 e #361)', () => {
+  it('renders overall health score and AI executive summary tab', () => {
+    renderWithProviders()
+
+    expect(screen.getByText(/Análise de Carteira/i)).toBeDefined()
     expect(screen.getByText('85/100')).toBeDefined()
-    expect(screen.getByText('Carteira Principal · Diagnóstico determinístico por classe de ativos e rebalanceamento')).toBeDefined()
-    expect(screen.getByText('Oportunidades de Rebalanceamento Identificadas')).toBeDefined()
+    expect(screen.getByText(/Diagnóstico determinístico por classe/i)).toBeDefined()
+    expect(screen.getByText('Síntese Executiva & Postura Estratégica')).toBeDefined()
+    expect(screen.getByText('Equilibrada com foco em proventos')).toBeDefined()
+    expect(screen.getByText('Pontos Fortes Observados')).toBeDefined()
+    expect(screen.getByText('Simulador Inteligente de Próximo Aporte')).toBeDefined()
   })
 
-  it('renders class breakdown cards with actions and findings', () => {
-    render(
-      <MemoryRouter>
-        <AnalisePage />
-      </MemoryRouter>,
-    )
+  it('renders class breakdown cards when switching to classes tab', () => {
+    renderWithProviders()
+
+    const classesTabBtn = screen.getByRole('button', { name: /Detalhamento por Classes/i })
+    fireEvent.click(classesTabBtn)
 
     expect(screen.getAllByText('Ações').length).toBeGreaterThan(0)
     expect(screen.getAllByText('FIIs').length).toBeGreaterThan(0)

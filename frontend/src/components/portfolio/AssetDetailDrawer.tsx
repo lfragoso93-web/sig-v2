@@ -84,15 +84,14 @@ export default function AssetDetailDrawer({
   portfolioId,
   onClose,
 }: AssetDetailDrawerProps) {
-  const activeTicker = asset?.ticker ?? ticker
-  if (!activeTicker) return null
+  const activeTicker = asset?.ticker ?? ticker ?? null
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
   const [historyDays, setHistoryDays] = useState(90)
 
   const { data: assetDetail, isLoading: _loadingDetail } = useAssetDetail(activeTicker, historyDays)
   const { data: variationDetail } = useAssetDetail(activeTicker, 365)
-  const { data: txData } = useTransactions(portfolioId, { ticker: activeTicker })
+  const { data: txData } = useTransactions(portfolioId, { ticker: activeTicker ?? undefined })
   const { data: corporateLifecycle = [] } = useAssetCorporateLifecycle(portfolioId, activeTicker)
   const { data: dividends } = useDividends(portfolioId)
   const { data: enrichment } = useAssetEnrichment(activeTicker, asset?.asset_type)
@@ -128,6 +127,8 @@ export default function AssetDetailDrawer({
   const aiInsights = portfolioInsight?.ai_insights
   const fii = enrichment?.fii_indicators
   const stock = enrichment?.stock_fundamentals
+
+  if (!activeTicker) return null
 
   return (
     <div

@@ -224,11 +224,13 @@ export default function RentabilidadePage() {
         </div>
       </div>
 
-      <AssetDetailDrawer
-        ticker={selectedTicker}
-        portfolioId={portfolioId}
-        onClose={() => setSelectedTicker(null)}
-      />
+      {selectedTicker && (
+        <AssetDetailDrawer
+          ticker={selectedTicker}
+          portfolioId={portfolioId}
+          onClose={() => setSelectedTicker(null)}
+        />
+      )}
     </div>
   )
 }

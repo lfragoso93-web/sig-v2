@@ -757,11 +757,8 @@ export default function PositionTable({ groups, portfolioId }: Props) {
           <ClassTable key={group.label} group={group} portfolioId={portfolioId} onAssetClick={setSelectedAsset} />
         ))}
       </div>
-      <AssetDetailDrawer
-        asset={selectedAsset}
-        portfolioId={portfolioId}
-        onClose={() => setSelectedAsset(null)}
-      />
+      {selectedAsset && (<AssetDetailDrawer asset={selectedAsset} portfolioId={portfolioId} onClose={() => setSelectedAsset(null)} />)}
     </>
   )
 }
+
