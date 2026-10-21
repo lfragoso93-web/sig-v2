@@ -340,18 +340,18 @@ export default function AnalisePage() {
           label="Score de Alocação"
           value={`${score}/100`}
           valueColor={scoreColor}
-          subtext={`Classificação: ${healthLabel(score)}`}
+          subLabel={`Classificação: ${healthLabel(score)}`}
         />
         <KpiCard
           label="Patrimônio Analisado"
           value={formatBRL(analysis.total_value)}
-          subtext={`${analysis.classes_analyzed_count} classes ativas`}
+          subLabel={`${analysis.classes_analyzed_count} classes ativas`}
         />
         <KpiCard
           label="Classes com Desvio"
           value={analysis.rebalance_priority_classes.length.toString()}
           valueColor={analysis.rebalance_priority_classes.length > 0 ? 'var(--color-warning)' : 'var(--color-success)'}
-          subtext={
+          subLabel={
             analysis.rebalance_priority_classes.length > 0
               ? `${analysis.rebalance_priority_classes.join(', ')}`
               : 'Nenhuma classe crítica'
@@ -360,7 +360,7 @@ export default function AnalisePage() {
         <KpiCard
           label="Maior Divergência"
           value={analysis.max_divergence_class ?? 'Nenhuma'}
-          subtext="Prioridade máxima de rebalanceamento"
+          subLabel="Prioridade máxima de rebalanceamento"
         />
       </div>
 
