@@ -102,7 +102,7 @@ async def suggest_assets_from_catalog(
         key = (asset.ticker, str(asset.asset_type))
         if key in seen:
             continue
-        seen.add(key)
+        seen |= {key}
         name = asset.name or asset.ticker
         if alias_ticker and normalized in alias_ticker.upper() and alias_ticker.upper() != asset.ticker.upper():
             name = f"{name} (antigo {alias_ticker})"
