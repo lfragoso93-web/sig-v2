@@ -28,7 +28,6 @@ from app.services.corporate_event_ledger_preflight import (
 from app.services.corporate_action_position_reader import (
     _component_bonus_projection_spec,
 )
-import json
 
 
 def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:

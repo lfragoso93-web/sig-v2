@@ -1,6 +1,5 @@
 """Persistencia de trocas simples de ticker e aliases historicos."""
 
-import json
 from datetime import date
 from decimal import Decimal
 
@@ -76,8 +75,7 @@ async def register_ticker_change(
     )
     event_result = await db.execute(
         select(CorporateEvent).where(
-            (CorporateEvent.source_event_id == event_key)
-            | (CorporateEvent.brapi_event_id == event_key)
+            CorporateEvent.source_event_id == event_key
         )
     )
     event = event_result.scalar_one_or_none()
@@ -95,11 +93,7 @@ async def register_ticker_change(
         ticker=resolution.requested_ticker,
         event_type=CorporateEventType.TICKER_CHANGE,
         status=CorporateEventStatus.PENDENTE,
-        event_date=resolution.effective_date,
-        ratio=Decimal(1),
         description=f"Ticker alterado para {resolution.current_ticker}",
-        brapi_event_id=event_key,
-        raw_data=json.dumps(payload_dict),
         raw_metadata=payload_dict,
         reconciliation_status="UNRECONCILED",
         requires_review=True,

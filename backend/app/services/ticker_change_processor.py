@@ -79,9 +79,9 @@ async def apply_ticker_change_event(
         return False
 
     payload = event.raw_metadata if isinstance(event.raw_metadata, dict) else {}
-    if not payload and event.raw_data:
+    if not payload and getattr(event, "raw_data", None):
         try:
-            payload = json.loads(event.raw_data)
+            payload = json.loads(getattr(event, "raw_data", None))
         except (TypeError, ValueError):
             payload = {}
 
@@ -102,7 +102,7 @@ async def apply_ticker_change_event(
         event.applied_at = datetime.utcnow()
         return False
 
-    effective_date = event.effective_date or event.event_date
+    effective_date = event.effective_date or getattr(event, "event_date", None)
     tx_result = await db.execute(
         select(Transaction)
         .where(

@@ -292,7 +292,7 @@ async def _persist_actions(
                 f"{action.kind.value} global coletado de {action.source} "
                 f"(fator {action.quantity_factor})"
             ),
-            # Espelhos obrigatÃ³rios de schema legado; sem uso funcional.
+            # Espelhos obrigatórios de schema legado; sem uso funcional.
             event_date=action.event_date,
             ratio=action.quantity_factor,
         )
