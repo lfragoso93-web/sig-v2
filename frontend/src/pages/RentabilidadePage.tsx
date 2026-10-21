@@ -11,6 +11,7 @@ import RentabilidadeChart from '@/components/charts/RentabilidadeChart'
 import EmptyState from '@/components/ui/EmptyState'
 import { TrendingUp } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
+import AssetDetailDrawer from '@/components/portfolio/AssetDetailDrawer'
 
 function safeNum(v: unknown): number {
   const n = Number(v)
@@ -125,7 +126,7 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
   )
 }
 
-function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
+function AtivoRow({ ativo, onTickerClick }: { ativo: RentabilidadeAtivo; onTickerClick?: (ticker: string) => void }) {
   const unrealizedPnl = safeNum(ativo.unrealized_pnl)
   const unrealizedPct = safeNum(ativo.unrealized_pct)
   const realizedPnl = safeNum(ativo.realized_pnl)
@@ -137,7 +138,14 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
 
   return (
     <tr className="border-b" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.06)' }}>
-      <td className="py-3 pr-3"><div className="flex flex-col"><span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{ativo.ticker}</span><span className="text-[10px] truncate max-w-[180px]" style={{ color: 'var(--color-text-faint)' }}>{ativo.name}</span></div></td>
+      <td className="py-3 pr-3"><div className="flex flex-col"><button
+            type="button"
+            onClick={() => onTickerClick?.(ativo.ticker)}
+            className="text-xs font-semibold hover:underline cursor-pointer text-left"
+            style={{ color: 'var(--color-text)', background: 'none', border: 'none', padding: 0 }}
+          >
+            {ativo.ticker}
+          </button><span className="text-[10px] truncate max-w-[180px]" style={{ color: 'var(--color-text-faint)' }}>{ativo.name}</span></div></td>
       <td className="py-3 pr-3 text-right"><span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{ativo.is_open ? quantity.toLocaleString('pt-BR') : '—'}</span></td>
       <td className="py-3 pr-3 text-right"><span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{ativo.is_open ? formatBRL(avgPrice) : '—'}</span></td>
       <td className="py-3 pr-3 text-right"><span className="text-xs tabular-nums" style={{ color: 'var(--color-text)' }}>{ativo.is_open ? formatBRL(currentValue) : '—'}</span></td>
@@ -152,6 +160,7 @@ export default function RentabilidadePage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [showZeradas, setShowZeradas] = useState(false)
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null)
 
   const { data: kpis, isLoading: loadingKpis } = useRentabilidadeKpis(portfolioId)
   const { data: ativos, isLoading: loadingAtivos } = useRentabilidadeAtivos(portfolioId)
@@ -209,11 +218,17 @@ export default function RentabilidadePage() {
             <div className="flex items-center gap-2 flex-wrap"><select value={assetTypeFilter} onChange={e => setAssetTypeFilter(e.target.value)} className="input text-xs" style={{ width: 220 }}>{ASSET_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select><button onClick={() => setShowZeradas(v => !v)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: showZeradas ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'var(--color-surface-offset)', color: showZeradas ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>Posições zeradas</button></div>
           </div>
           <div className="p-4 table-responsive">
-            {loadingAtivos ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : ativosFiltrados.length === 0 ? <p className="text-xs py-4 text-center" style={{ color: 'var(--color-text-faint)' }}>Nenhum ativo encontrado</p> : <table className="w-full min-w-[920px]"><thead><tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.08)' }}>{['Ativo', 'Qtd', 'P.M.', 'Val. atual', 'Resultado n.r.', 'Resultado real.', 'Resultado total'].map(h => <th key={h} className={`pb-2 text-xs font-medium ${h === 'Ativo' ? 'text-left' : 'text-right'} ${h !== 'Resultado total' ? 'pr-3' : ''}`} style={{ color: 'var(--color-text-faint)' }}>{h}</th>)}</tr></thead><tbody>{ativosFiltrados.map(a => <AtivoRow key={a.ticker} ativo={a} />)}</tbody></table>}
+            {loadingAtivos ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : ativosFiltrados.length === 0 ? <p className="text-xs py-4 text-center" style={{ color: 'var(--color-text-faint)' }}>Nenhum ativo encontrado</p> : <table className="w-full min-w-[920px]"><thead><tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.08)' }}>{['Ativo', 'Qtd', 'P.M.', 'Val. atual', 'Resultado n.r.', 'Resultado real.', 'Resultado total'].map(h => <th key={h} className={`pb-2 text-xs font-medium ${h === 'Ativo' ? 'text-left' : 'text-right'} ${h !== 'Resultado total' ? 'pr-3' : ''}`} style={{ color: 'var(--color-text-faint)' }}>{h}</th>)}</tr></thead><tbody>{ativosFiltrados.map(a => <AtivoRow key={a.ticker} ativo={a} onTickerClick={setSelectedTicker} />)}</tbody></table>}
             {ativosFiltrados.length > 0 && <p className="text-[10px] mt-3 text-right" style={{ color: 'var(--color-text-faint)' }}>{ativosFiltrados.length} ativo{ativosFiltrados.length !== 1 ? 's' : ''}{!showZeradas && (ativos ?? []).some(a => !a.is_open) && <> · <button onClick={() => setShowZeradas(true)} style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>ver posições zeradas</button></>}</p>}
           </div>
         </div>
       </div>
+
+      <AssetDetailDrawer
+        ticker={selectedTicker}
+        portfolioId={portfolioId}
+        onClose={() => setSelectedTicker(null)}
+      />
     </div>
   )
 }

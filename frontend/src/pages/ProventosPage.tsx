@@ -13,6 +13,7 @@ import MeusProventosTable from '@/components/proventos/MeusProventosTable'
 import EmptyState from '@/components/ui/EmptyState'
 import { DollarSign } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
+import AssetDetailDrawer from '@/components/portfolio/AssetDetailDrawer'
 
 const ASSET_TYPE_OPTIONS = [
   { label: 'Todos os ativos', value: '' },
@@ -46,6 +47,7 @@ export default function ProventosPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [yearFilter, setYearFilter] = useState<number | undefined>(undefined)
   const [page, setPage] = useState(1)
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null)
 
   useEffect(() => {
     setPage(1)
@@ -175,7 +177,7 @@ export default function ProventosPage() {
               </div>
             </div>
             <div className="p-4 proventos-table-wrap">
-              {loadingLista ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : listaError ? <p role="alert" className="text-xs p-4" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>Não foi possível carregar os eventos.</p> : <MeusProventosTable data={lista?.items ?? []} />}
+              {loadingLista ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : listaError ? <p role="alert" className="text-xs p-4" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>Não foi possível carregar os eventos.</p> : <MeusProventosTable data={lista?.items ?? []} onTickerClick={setSelectedTicker} />}
               {totalItems > 0 && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
                   <span>Exibindo {firstItem}-{lastItem} de {totalItems} eventos</span>
@@ -190,6 +192,12 @@ export default function ProventosPage() {
           </div>
         </div>
       </div>
+
+      <AssetDetailDrawer
+        ticker={selectedTicker}
+        portfolioId={portfolioId}
+        onClose={() => setSelectedTicker(null)}
+      />
     </div>
   )
 }

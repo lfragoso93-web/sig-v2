@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AssetPortfolioInsightResponse, AssetEnrichment } from '@/hooks/useAssetDetail'
+import type { AssetPortfolioInsightResponse } from '@/hooks/useAssetDetail'
 import AssetDetailDrawer from './AssetDetailDrawer'
 
 const mockInsight: AssetPortfolioInsightResponse = {

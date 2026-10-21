@@ -162,7 +162,7 @@ async def add_transaction_record(
         )
         alias_result = await db.execute(alias_stmt)
         resolved_alias = alias_result.scalar_one_or_none()
-        if resolved_alias:
+        if isinstance(resolved_alias, str) and resolved_alias.strip():
             ticker = resolved_alias.strip().upper()
     try:
         operation = OperationType(payload.operation)

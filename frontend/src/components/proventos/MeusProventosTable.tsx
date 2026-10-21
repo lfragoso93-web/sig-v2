@@ -51,7 +51,7 @@ function StatusBadge({ status }: { status: ProventoStatus }) {
   )
 }
 
-function ProventoCard({ item }: { item: ProventoItem }) {
+function ProventoCard({ item, onTickerClick }: { item: ProventoItem; onTickerClick?: (ticker: string) => void }) {
   const typeLabel = DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type
   const cash = item.is_cash
   return (
@@ -61,7 +61,14 @@ function ProventoCard({ item }: { item: ProventoItem }) {
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-bold text-sm" style={cellText}>{item.ticker}</span>
+          <button
+            type="button"
+            onClick={() => onTickerClick?.(item.ticker)}
+            className="font-bold text-sm hover:underline cursor-pointer text-left"
+            style={{ ...cellText, background: 'none', border: 'none', padding: 0 }}
+          >
+            {item.ticker}
+          </button>
           <span
             className="px-1.5 py-0.5 rounded text-[9px] font-medium"
             style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
@@ -106,13 +113,13 @@ function ProventoCard({ item }: { item: ProventoItem }) {
   )
 }
 
-export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
+export default function MeusProventosTable({ data, onTickerClick }: { data: ProventoItem[]; onTickerClick?: (ticker: string) => void }) {
   if (!data.length) return <p className="text-xs p-4" style={cellMuted}>Sem eventos no período.</p>
 
   return (
     <>
       <div className="flex flex-col gap-2 md:hidden">
-        {data.map(item => <ProventoCard key={item.id} item={item} />)}
+        {data.map(item => <ProventoCard key={item.id} item={item} onTickerClick={onTickerClick} />)}
       </div>
 
       <div className="hidden md:block overflow-x-auto">
@@ -134,7 +141,16 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
                   style={{ borderBottom: '1px solid var(--color-divider)' }}
                   title={item.remarks || undefined}
                 >
-                  <td className="px-3 py-2 pl-4"><span className="font-semibold" style={cellText}>{item.ticker}</span></td>
+                  <td className="px-3 py-2 pl-4">
+                    <button
+                      type="button"
+                      onClick={() => onTickerClick?.(item.ticker)}
+                      className="font-semibold hover:underline cursor-pointer text-left"
+                      style={{ ...cellText, background: 'none', border: 'none', padding: 0 }}
+                    >
+                      {item.ticker}
+                    </button>
+                  </td>
                   <td className="px-3 py-2">
                     <span
                       className="px-1.5 py-0.5 rounded text-[9px] font-medium"

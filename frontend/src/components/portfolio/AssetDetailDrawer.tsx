@@ -90,7 +90,7 @@ export default function AssetDetailDrawer({
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
   const [historyDays, setHistoryDays] = useState(90)
 
-  const { data: assetDetail, isLoading: loadingDetail } = useAssetDetail(activeTicker, historyDays)
+  const { data: assetDetail, isLoading: _loadingDetail } = useAssetDetail(activeTicker, historyDays)
   const { data: variationDetail } = useAssetDetail(activeTicker, 365)
   const { data: txData } = useTransactions(portfolioId, { ticker: activeTicker })
   const { data: corporateLifecycle = [] } = useAssetCorporateLifecycle(portfolioId, activeTicker)
