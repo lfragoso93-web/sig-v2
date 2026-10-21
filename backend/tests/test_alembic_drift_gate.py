@@ -18,8 +18,8 @@ class _UnknownOperation:
     pass
 
 
-def test_allowed_drift_is_restricted_to_goals() -> None:
-    assert ALLOWED_DRIFT_TABLES == frozenset({"goals"})
+def test_allowed_drift_is_empty() -> None:
+    assert ALLOWED_DRIFT_TABLES == frozenset()
 
 
 def test_no_operations_means_no_drift() -> None:
@@ -31,7 +31,7 @@ def test_no_operations_means_no_drift() -> None:
     assert inspection.unknown_operations == ()
 
 
-def test_goals_only_drift_is_allowed() -> None:
+def test_table_drift_is_not_allowed_when_whitelist_empty() -> None:
     inspection = inspect_upgrade_operations(
         (
             _Operation(
@@ -42,12 +42,12 @@ def test_goals_only_drift_is_allowed() -> None:
     )
 
     assert inspection.has_drift is True
-    assert inspection.is_allowed is True
+    assert inspection.is_allowed is False
     assert inspection.tables == frozenset({"goals"})
     assert inspection.unknown_operations == ()
 
 
-def test_any_other_table_blocks_the_exception() -> None:
+def test_any_table_drift_blocks() -> None:
     inspection = inspect_upgrade_operations(
         (
             _Operation(table_name="goals", ops=[_Operation()]),

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Calendar,
+  ArrowRight,
+  BarChart3,
   Check,
   Edit3,
   Flag,
   HandCoins,
   Loader2,
+  PieChart,
   Plus,
+  Sliders,
   Target,
   Trash2,
   TrendingUp,
@@ -25,6 +29,7 @@ import {
   Goal,
   GoalCreate,
 } from '@/hooks/useGoals'
+import { useClassTargets, ClassTargetRow } from '@/hooks/useClassTargets'
 import EmptyState from '@/components/ui/EmptyState'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 
@@ -199,48 +204,50 @@ function GoalModal({
       return
     }
 
-    await onSave({
-      portfolio_id: portfolioId,
-      goal_type: form.goal_type,
-      name: form.name.trim(),
-      target_value: targetValue,
-      current_value: isManualCurrent ? currentValue : 0,
-      monthly_contribution: monthlyContribution,
-      target_date: form.target_date || null,
-      description: form.description.trim() || undefined,
-    })
+    try {
+      await onSave({
+        portfolio_id: portfolioId,
+        goal_type: form.goal_type,
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        target_value: targetValue,
+        current_value: isManualCurrent ? currentValue : 0,
+        monthly_contribution: monthlyContribution,
+        target_date: form.target_date || null,
+      })
+    } catch (saveError: any) {
+      setError(saveError?.response?.data?.detail ?? 'Falha ao salvar a meta.')
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Fechar"
-        className="absolute inset-0 bg-black/60"
-        onClick={onClose}
-      />
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={editGoal ? 'Editar meta' : 'Nova meta'}
-        className="relative w-full max-w-2xl overflow-hidden rounded-lg border shadow-2xl"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
         style={{
           background: 'var(--color-surface)',
-          borderColor: 'var(--color-border)',
-          color: 'var(--color-text)',
+          border: '1px solid var(--color-border)',
         }}
       >
-        <div className="flex items-start justify-between gap-4 border-b px-5 py-4" style={{ borderColor: 'var(--color-divider)' }}>
-          <div className="flex items-start gap-3">
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: `${typeMeta.color}1f`, color: typeMeta.color }}
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${typeMeta.color} 15%, transparent)`,
+                color: typeMeta.color,
+              }}
             >
-              <TypeIcon size={18} />
-            </span>
+              <TypeIcon size={20} />
+            </div>
             <div>
-              <h2 className="text-base font-semibold">{editGoal ? 'Editar meta' : 'Nova meta'}</h2>
-              <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              <h2 className="text-base font-bold text-[var(--color-text)]">
+                {editGoal ? 'Editar Meta' : 'Nova Meta'}
+              </h2>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 {typeMeta.hint}
               </p>
             </div>
@@ -248,146 +255,272 @@ function GoalModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+            className="rounded-lg p-1.5 transition-colors hover:bg-[var(--color-surface-offset)]"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            <X size={17} />
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="max-h-[78vh] overflow-y-auto px-5 py-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(Object.keys(GOAL_TYPE_META) as GoalType[]).map(goalType => {
-              const meta = GOAL_TYPE_META[goalType]
-              const Icon = meta.icon
-              const active = form.goal_type === goalType
-              return (
-                <button
-                  key={goalType}
-                  type="button"
-                  onClick={() => set('goal_type', goalType)}
-                  className="flex min-h-16 items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors"
-                  style={{
-                    background: active ? `${meta.color}14` : 'var(--color-surface-offset)',
-                    borderColor: active ? `${meta.color}73` : 'var(--color-border)',
-                    color: active ? meta.color : 'var(--color-text)',
-                  }}
-                >
-                  <Icon size={18} />
-                  <span>
-                    <span className="block text-sm font-semibold">{meta.label}</span>
-                    <span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                      {meta.hint}
-                    </span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <Field label="Nome da meta">
-                <input
-                  required
-                  className="input w-full"
-                  value={form.name}
-                  onChange={event => set('name', event.target.value)}
-                  placeholder="Ex: Patrimônio de R$ 1.000.000"
-                />
-              </Field>
+        <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
+          {!editGoal && (
+            <div>
+              <span className="text-xs font-semibold block mb-2" style={{ color: 'var(--color-text-muted)' }}>
+                Tipo da Meta
+              </span>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(Object.keys(GOAL_TYPE_META) as GoalType[]).map(type => {
+                  const meta = GOAL_TYPE_META[type]
+                  const Icon = meta.icon
+                  const active = form.goal_type === type
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => set('goal_type', type)}
+                      className="flex flex-col items-center gap-1.5 rounded-xl p-3 text-center transition-all"
+                      style={{
+                        background: active
+                          ? `color-mix(in srgb, ${meta.color} 12%, var(--color-surface-offset))`
+                          : 'var(--color-surface-offset)',
+                        border: active
+                          ? `1.5px solid ${meta.color}`
+                          : '1px solid var(--color-border)',
+                        color: active ? meta.color : 'var(--color-text-muted)',
+                      }}
+                    >
+                      <Icon size={18} />
+                      <span className="text-xs font-semibold">{meta.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+          )}
 
+          <Field label="Nome da Meta">
+            <input
+              type="text"
+              className="input text-sm"
+              placeholder="Ex: R$ 500k de patrimônio"
+              value={form.name}
+              onChange={event => set('name', event.target.value)}
+              required
+            />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
-              label={
-                form.goal_type === 'RENTABILIDADE'
-                  ? 'Rentabilidade alvo (%)'
-                  : form.goal_type === 'PROVENTOS'
-                    ? 'Renda mensal alvo (R$)'
-                    : 'Valor alvo (R$)'
-              }
+              label={form.goal_type === 'RENTABILIDADE' ? 'Rentabilidade Alvo (%)' : 'Valor Alvo (R$)'}
+              hint="Objetivo principal a ser alcançado"
             >
               <input
-                required
-                inputMode="decimal"
-                className="input w-full"
+                type="text"
+                className="input text-sm"
+                placeholder={form.goal_type === 'RENTABILIDADE' ? 'Ex: 15' : 'Ex: 500000'}
                 value={form.target_value}
                 onChange={event => set('target_value', event.target.value)}
-                placeholder={form.goal_type === 'RENTABILIDADE' ? '15' : '1000000'}
+                required
               />
             </Field>
 
+            {isManualCurrent ? (
+              <Field label="Valor Atual (R$)" hint="Atualizado manualmente para metas livres">
+                <input
+                  type="text"
+                  className="input text-sm"
+                  placeholder="Ex: 50000"
+                  value={form.current_value}
+                  onChange={event => set('current_value', event.target.value)}
+                  required
+                />
+              </Field>
+            ) : (
+              <Field label="Valor Atual" hint="Sincronizado automaticamente com a carteira">
+                <input
+                  type="text"
+                  className="input text-sm opacity-60"
+                  value="Automático (tempo real)"
+                  disabled
+                />
+              </Field>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
-              label="Valor atual"
-              hint={isManualCurrent ? 'Obrigatório para metas livres.' : 'Calculado automaticamente pela carteira.'}
+              label="Aporte Mensal Estimado (R$)"
+              hint="Usado para projetar a data de conclusão"
             >
               <input
-                inputMode="decimal"
-                className="input w-full disabled:opacity-60"
-                value={form.current_value}
-                onChange={event => set('current_value', event.target.value)}
-                placeholder={isManualCurrent ? '0' : 'Automático'}
-                disabled={!isManualCurrent}
-              />
-            </Field>
-
-            <Field label="Aporte mensal projetado (R$)" hint="Usado apenas para estimar a data de conclusão.">
-              <input
-                inputMode="decimal"
-                className="input w-full"
+                type="text"
+                className="input text-sm"
+                placeholder="Ex: 2500"
                 value={form.monthly_contribution}
                 onChange={event => set('monthly_contribution', event.target.value)}
-                placeholder="2000"
               />
             </Field>
 
-            <Field label="Data alvo" hint="Opcional.">
+            <Field label="Data Limite (Opcional)" hint="Prazo desejado para conclusão">
               <input
                 type="date"
-                className="input w-full"
+                className="input text-sm"
                 value={form.target_date}
                 onChange={event => set('target_date', event.target.value)}
               />
             </Field>
-
-            <div className="md:col-span-2">
-              <Field label="Descrição">
-                <textarea
-                  className="input min-h-24 w-full resize-y py-3"
-                  value={form.description}
-                  onChange={event => set('description', event.target.value)}
-                  placeholder="Observações, motivação ou critério de acompanhamento."
-                />
-              </Field>
-            </div>
           </div>
 
+          <Field label="Descrição (Opcional)">
+            <textarea
+              className="input text-sm"
+              rows={2}
+              placeholder="Notas adicionais sobre a estratégia para atingir esta meta"
+              value={form.description}
+              onChange={event => set('description', event.target.value)}
+            />
+          </Field>
+
           {error && (
-            <div
-              role="alert"
-              className="mt-4 rounded-lg border px-3 py-2 text-sm"
-              style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                borderColor: 'rgba(239, 68, 68, 0.35)',
-                color: 'var(--color-error)',
-              }}
-            >
+            <div className="rounded-lg p-2.5 text-xs font-medium" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
               {error}
             </div>
           )}
 
-          <div className="mt-5 flex justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--color-divider)' }}>
-            <button type="button" onClick={onClose} className="btn">
+          <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-border)]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="btn btn-secondary text-xs"
+            >
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="btn btn-primary disabled:opacity-60">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              Salvar meta
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn btn-primary text-xs flex items-center gap-1.5"
+            >
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {editGoal ? 'Salvar Alterações' : 'Criar Meta'}
             </button>
           </div>
         </form>
-      </section>
+      </div>
     </div>
+  )
+}
+
+function ClassTargetsSection({
+  portfolioId: _portfolioId,
+  classTargets,
+  isLoading,
+}: {
+  portfolioId: number
+  classTargets: ClassTargetRow[]
+  isLoading: boolean
+}) {
+  const hasTargets = classTargets.some(r => Number(r.target_pct) > 0)
+
+  return (
+    <section className="card p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--color-border)]">
+        <div>
+          <div className="flex items-center gap-2">
+            <PieChart size={18} className="text-[var(--color-primary)]" />
+            <h2 className="text-base font-semibold text-[var(--color-text)]">
+              Alocação Alvo por Classe de Ativo
+            </h2>
+          </div>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+            Metas de distribuição percentual da carteira por categoria de ativo.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/carteira/analise"
+            className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+          >
+            <BarChart3 size={14} />
+            Análise & Rebalanceamento
+            <ArrowRight size={14} />
+          </Link>
+          <Link
+            to="/carteira/configuracoes"
+            className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            title="Ajustar percentuais na tela de configurações"
+          >
+            <Sliders size={14} />
+            Configurar
+          </Link>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="py-4 text-center text-xs text-[var(--color-text-muted)]">
+          Carregando metas de alocação...
+        </div>
+      ) : !hasTargets ? (
+        <div className="py-4 text-center">
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Nenhuma meta de distribuição configurada para esta carteira.
+          </p>
+          <p className="text-xs text-[var(--color-text-faint)] mt-1">
+            Defina os percentuais por classe para habilitar o cálculo de desvios e sugestões de rebalanceamento.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {classTargets.map(target => {
+            const current = Number(target.current_pct || 0)
+            const targetP = Number(target.target_pct || 0)
+            const delta = Number(target.delta_pct || 0)
+            return (
+              <div
+                key={target.asset_type}
+                className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-offset)] flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-xs text-[var(--color-text)] flex items-center gap-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full inline-block"
+                      style={{ backgroundColor: target.color || 'var(--color-primary)' }}
+                    />
+                    {target.label || target.asset_type}
+                  </span>
+                  <span
+                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                      Math.abs(delta) < 1
+                        ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                        : delta > 0
+                        ? 'bg-[var(--color-blue)]/10 text-[var(--color-blue)]'
+                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
+                    }`}
+                  >
+                    {delta > 0 ? `+${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`}
+                  </span>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-[var(--color-text-muted)] mb-1">
+                    <span>Atual: <strong>{current.toFixed(1)}%</strong></span>
+                    <span>Alvo: <strong>{targetP.toFixed(1)}%</strong></span>
+                  </div>
+                  <div className="w-full bg-[var(--color-border)] rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-1.5 rounded-full"
+                      style={{
+                        width: `${Math.min(targetP > 0 ? (current / targetP) * 100 : 0, 100)}%`,
+                        backgroundColor: target.color || 'var(--color-primary)',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -402,108 +535,125 @@ function GoalCard({
   onDelete: (id: number) => void
   deleting: boolean
 }) {
-  const type = goal.goal_type as GoalType
-  const meta = GOAL_TYPE_META[type] ?? GOAL_TYPE_META.LIVRE
+  const meta = GOAL_TYPE_META[goal.goal_type]
   const Icon = meta.icon
-  const progress = Math.min(Math.max(goal.progress_pct, 0), 100)
-  const remaining = Math.max(goal.target_value - goal.current_value, 0)
 
   return (
-    <article className="card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: `${meta.color}1f`, color: meta.color }}
-          >
-            <Icon size={19} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              {goal.name}
+    <article
+      className="card flex flex-col justify-between p-5 transition-all hover:border-[var(--color-border-hover)]"
+      style={{
+        borderLeft: `4px solid ${meta.color}`,
+      }}
+    >
+      <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+                color: meta.color,
+              }}
+            >
+              <Icon size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold" style={{ color: meta.color }}>
+                {meta.label}
+              </span>
+              <h3 className="text-sm font-bold text-[var(--color-text)] line-clamp-1">
+                {goal.name}
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onEdit(goal)}
+              className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-offset)] hover:text-[var(--color-text)]"
+              title="Editar"
+            >
+              <Edit3 size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(goal.id)}
+              disabled={deleting}
+              className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-offset)] hover:text-[var(--color-error)]"
+              title="Excluir"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-baseline justify-between">
+          <div>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Atual
+            </span>
+            <p className="text-lg font-bold text-[var(--color-text)]">
+              {formatGoalValue(goal.goal_type, goal.current_value)}
             </p>
-            <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {meta.label}
+          </div>
+          <div className="text-right">
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Alvo
+            </span>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+              {formatGoalValue(goal.goal_type, goal.target_value)}
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <button
-            type="button"
-            onClick={() => onEdit(goal)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-            style={{ color: 'var(--color-text-muted)' }}
-            title="Editar meta"
-          >
-            <Edit3 size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(goal.id)}
-            disabled={deleting}
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50"
-            style={{ color: 'var(--color-error)' }}
-            title="Excluir meta"
-          >
-            {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-          </button>
-        </div>
-      </div>
 
-      <div className="mt-4">
-        <div className="mb-1 flex justify-between text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          <span>Progresso</span>
-          <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
-            {progress.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
-          </span>
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span style={{ color: 'var(--color-text-muted)' }}>Progresso</span>
+            <span className="font-bold" style={{ color: meta.color }}>
+              {formatPct(goal.progress_pct)}
+            </span>
+          </div>
+          <div className="w-full bg-[var(--color-border)] rounded-full h-2 overflow-hidden">
+            <div
+              className="h-2 rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.min(goal.progress_pct, 100)}%`,
+                backgroundColor: meta.color,
+              }}
+            />
+          </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--color-surface-offset)' }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${progress}%`, background: meta.color }}
-          />
-        </div>
-      </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Atual</p>
-          <p className="mt-0.5 font-semibold tabular-nums">{formatGoalValue(type, goal.current_value)}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl p-2.5 text-xs" style={{ background: 'var(--color-surface-offset)' }}>
+          <div>
+            <span style={{ color: 'var(--color-text-muted)' }}>Prazo Estimado</span>
+            <p className="mt-0.5 font-semibold text-[var(--color-text)]">
+              {goal.is_completed ? (
+                <span className="flex items-center gap-1 text-[var(--color-success)]">
+                  <Check size={12} /> Concluída
+                </span>
+              ) : goal.months_to_goal != null ? (
+                `${goal.months_to_goal} meses`
+              ) : (
+                '-'
+              )}
+            </p>
+          </div>
+          <div>
+            <span style={{ color: 'var(--color-text-muted)' }}>Previsão / Alvo</span>
+            <p className="mt-0.5 font-semibold text-[var(--color-text)]">
+              {formatDate(goal.projected_date ?? goal.target_date)}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Alvo</p>
-          <p className="mt-0.5 font-semibold tabular-nums">{formatGoalValue(type, goal.target_value)}</p>
-        </div>
-        <div>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Falta</p>
-          <p className="mt-0.5 font-semibold tabular-nums">{formatGoalValue(type, remaining)}</p>
-        </div>
-        <div>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Previsão</p>
-          <p className="mt-0.5 font-semibold">{formatDate(goal.projected_date ?? goal.target_date)}</p>
-        </div>
-      </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-        {goal.monthly_contribution != null && (
-          <span className="inline-flex items-center gap-1 rounded-full border px-2 py-1" style={{ borderColor: 'var(--color-border)' }}>
-            <Calendar size={12} />
-            {formatBRL(goal.monthly_contribution)}/mês
-          </span>
-        )}
-        {goal.is_completed && (
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-1" style={{ background: 'rgba(34, 197, 94, 0.12)', color: 'var(--color-success)' }}>
-            <Check size={12} />
-            Concluída
-          </span>
+        {goal.description && (
+          <p className="mt-3 line-clamp-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            {goal.description}
+          </p>
         )}
       </div>
-
-      {goal.description && (
-        <p className="mt-3 line-clamp-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {goal.description}
-        </p>
-      )}
     </article>
   )
 }
@@ -511,6 +661,7 @@ function GoalCard({
 export default function MetasPage() {
   const selectedPortfolioId = useAppStore(state => state.selectedPortfolioId)
   const { data: goals = [], isLoading, isError } = useGoals(selectedPortfolioId)
+  const { data: classTargets = [], isLoading: isLoadingTargets } = useClassTargets(selectedPortfolioId)
   const createGoal = useCreateGoal()
   const updateGoal = useUpdateGoal()
   const deleteGoal = useDeleteGoal()
@@ -578,7 +729,7 @@ export default function MetasPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Metas</h1>
-          <p className="page-subtitle">Acompanhe objetivos de patrimônio, renda, rentabilidade e metas livres.</p>
+          <p className="page-subtitle">Acompanhe objetivos de patrimônio, renda, rentabilidade e alocação por classe.</p>
         </div>
         <button type="button" onClick={openCreate} className="btn btn-primary">
           <Plus size={16} />
@@ -604,6 +755,12 @@ export default function MetasPage() {
           <p className="kpi-value">{goals.length}</p>
         </div>
       </div>
+
+      <ClassTargetsSection
+        portfolioId={selectedPortfolioId}
+        classTargets={classTargets}
+        isLoading={isLoadingTargets}
+      />
 
       {isError && (
         <div className="card p-4 text-sm" style={{ color: 'var(--color-error)' }}>
