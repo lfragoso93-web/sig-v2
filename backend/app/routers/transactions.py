@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.transaction import (
     CorporateLifecycleEventOut,
     PagedTransactions,
+    TransactionClassSummary,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
@@ -35,7 +36,10 @@ from app.services.crypto_transaction_eligibility_service import (
     require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
-from app.services.transaction_service import list_transactions_paginated
+from app.services.transaction_service import (
+    list_portfolio_transaction_classes,
+    list_transactions_paginated,
+)
 from app.services.transaction_write_service import (
     TransactionWriteError,
     create_transaction_record,
@@ -151,10 +155,12 @@ async def list_transactions(
     portfolio_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    asset_type: Optional[str] = Query(None),
     ticker: Optional[str] = Query(None),
     operation: Optional[str] = Query(None),
     date_from: Optional[DateType] = Query(None),
     date_to: Optional[DateType] = Query(None),
+    sort: Optional[str] = Query("desc", regex="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -171,11 +177,26 @@ async def list_transactions(
         portfolio_id=portfolio_id,
         page=page,
         page_size=page_size,
+        asset_type=asset_type,
         ticker=ticker,
         operation=operation,
         date_from=date_from,
         date_to=date_to,
+        sort=sort or "desc",
     )
+
+
+@router.get(
+    "/{portfolio_id}/transactions/classes",
+    response_model=list[TransactionClassSummary],
+)
+async def list_transaction_classes(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_portfolio(portfolio_id, current_user, db)
+    return await list_portfolio_transaction_classes(db, portfolio_id)
 
 
 @router.get(

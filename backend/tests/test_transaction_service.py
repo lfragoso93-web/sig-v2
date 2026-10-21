@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.services.transaction_service import (
+    list_portfolio_transaction_classes,
     list_transactions_paginated,
 )
 from app.models.transaction import OperationType
@@ -116,6 +117,75 @@ async def test_list_transactions_paginated_pagination():
     assert result["total"] == 100
     assert result["page"] == 2
     assert result["page_size"] == 25
+
+
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_with_asset_type_filter():
+    db = AsyncMock(spec=AsyncSession)
+
+    mock_tx = MagicMock()
+    mock_tx.id = 1
+    mock_tx.ticker = "KNRI11"
+    mock_tx.asset_type = "FII"
+
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 1
+
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = [mock_tx]
+
+    db.execute.side_effect = [count_result, fetch_result]
+
+    result = await list_transactions_paginated(
+        db,
+        portfolio_id=1,
+        asset_type="FII",
+    )
+
+    assert result["total"] == 1
+    assert len(result["items"]) == 1
+    assert result["items"][0].asset_type == "FII"
+
+
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_with_sort():
+    db = AsyncMock(spec=AsyncSession)
+
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = []
+
+    db.execute.side_effect = [count_result, fetch_result]
+
+    result = await list_transactions_paginated(
+        db,
+        portfolio_id=1,
+        sort="asc",
+    )
+
+    assert result["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_portfolio_transaction_classes():
+    db = AsyncMock(spec=AsyncSession)
+
+    query_result = MagicMock()
+    query_result.all.return_value = [
+        ("ACAO", 25),
+        ("FII", 10),
+        ("RENDA_FIXA", 4),
+    ]
+    db.execute.return_value = query_result
+
+    classes = await list_portfolio_transaction_classes(db, portfolio_id=1)
+
+    assert len(classes) == 3
+    assert classes[0] == {"asset_type": "ACAO", "label": "Ações", "count": 25}
+    assert classes[1] == {"asset_type": "FII", "label": "FIIs", "count": 10}
+    assert classes[2] == {"asset_type": "RENDA_FIXA", "label": "Renda Fixa", "count": 4}
 
 
 @pytest.mark.asyncio

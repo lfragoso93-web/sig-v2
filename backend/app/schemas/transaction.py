@@ -112,6 +112,14 @@ class TransactionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TransactionClassSummary(BaseModel):
+    asset_type: str
+    label: str
+    count: int
+
+    model_config = {"from_attributes": True}
+
+
 class PagedTransactions(BaseModel):
     items:     List[TransactionOut]
     total:     int
