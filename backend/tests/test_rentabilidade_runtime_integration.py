@@ -8,6 +8,15 @@ from app.services.rentabilidade_cache_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _reset_cache_globals():
+    cache_module._redis_client = None
+    cache_module._redis_unavailable_until = 0.0
+    yield
+    cache_module._redis_client = None
+    cache_module._redis_unavailable_until = 0.0
+
+
 @pytest.mark.asyncio
 async def test_cache_invalidation_logs_failure_and_continues(
     caplog,
