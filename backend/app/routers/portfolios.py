@@ -5,6 +5,7 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
+    HTTPException,
     Response,
     UploadFile,
     Query,
@@ -26,6 +27,7 @@ from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliation
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.schemas.asset_portfolio_insight import AssetPortfolioInsightResponse
+from app.schemas.portfolio_analysis import PortfolioConsolidatedAnalysisResponse
 from app.services import csv_import_service
 from app.services.canonical_positions_service import (
     export_canonical_positions_csv,
@@ -202,6 +204,26 @@ async def get_asset_portfolio_insights(
     return await asset_portfolio_insight_service.get_insight(
         db, portfolio_id, current_user.id, ticker
     )
+
+
+@router.get(
+    "/{portfolio_id}/analysis",
+    response_model=PortfolioConsolidatedAnalysisResponse,
+    summary="Análise determinística e diagnósticos de alocação por classe (Issue #360)",
+)
+async def get_portfolio_analysis(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna análise determinística por classe de ativos e diagnósticos de rebalanceamento."""
+    from app.services.portfolio_analysis_service import PortfolioAnalysisService
+
+    service = PortfolioAnalysisService(db)
+    try:
+        return await service.get_portfolio_analysis(portfolio_id, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/{portfolio_id}/asset-distribution")
