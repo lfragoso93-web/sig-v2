@@ -151,7 +151,7 @@ def _require_event_contract(event: CorporateEvent) -> dict[str, Any]:
             raise CorporateEventSemanticRepairError(
                 f"evento {event_id}: ISIN B3 ausente ou divergente"
             )
-        if event.record_date is None or event.record_date != event.event_date:
+        if event.record_date is None or (event.effective_date and event.record_date != event.effective_date):
             raise CorporateEventSemanticRepairError(
                 f"evento {event_id}: record_date B3 divergente do evento"
             )

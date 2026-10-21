@@ -186,7 +186,7 @@ def _effective_date(event: CorporateEvent) -> date:
     value = event.effective_date
     source_provider = _normalized_text(event.source_provider).lower()
     if value is None and source_provider in {"", _LEGACY_SOURCE_PROVIDER}:
-        value = event.event_date
+        value = getattr(event, "event_date", None)
     if value is None:
         raise ValueError(f"evento corporativo {event.id!r} sem data efetiva")
     return value
@@ -197,7 +197,7 @@ def _quantity_factor(event: CorporateEvent) -> Decimal:
 
     value = event.quantity_factor
     if value is None:
-        value = event.ratio
+        value = getattr(event, "ratio", None)
     if value is None:
         raise ValueError(
             f"evento corporativo {event.id!r} sem fator de quantidade"
@@ -211,7 +211,7 @@ def _source_identity(event: CorporateEvent) -> tuple[str, str]:
     source = str(event.source_provider or "catalog")
     source_event_id = str(
         event.source_event_id
-        or event.brapi_event_id
+        or getattr(event, "brapi_event_id", None)
         or f"corporate-event:{event.id}"
     )
     return source, source_event_id
@@ -222,10 +222,11 @@ def _raw_payload(event: CorporateEvent) -> dict[str, Any]:
 
     if isinstance(event.raw_metadata, dict):
         return dict(event.raw_metadata)
-    if not event.raw_data:
+    raw_data = getattr(event, "raw_data", None)
+    if not raw_data:
         return {}
     try:
-        parsed = json.loads(event.raw_data)
+        parsed = json.loads(raw_data)
     except (TypeError, ValueError):
         return {}
     if not isinstance(parsed, dict):

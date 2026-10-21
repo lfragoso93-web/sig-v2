@@ -31,7 +31,6 @@ def _source_event_id(event: CorporateEvent) -> str:
     source = str(event.source_provider or "catalog")
     source_id = str(
         event.source_event_id
-        or event.brapi_event_id
         or f"corporate-event:{event.id}"
     )
     return f"{source}:{source_id}"
@@ -40,16 +39,7 @@ def _source_event_id(event: CorporateEvent) -> str:
 def _event_payload(event: CorporateEvent) -> dict[str, Any]:
     if isinstance(event.raw_metadata, dict):
         return event.raw_metadata
-    if not event.raw_data:
-        return {}
-    try:
-        parsed = json.loads(event.raw_data)
-    except (TypeError, ValueError):
-        return {}
-    if not isinstance(parsed, dict):
-        return {}
-    provider_payload = parsed.get("provider_payload")
-    return provider_payload if isinstance(provider_payload, dict) else parsed
+    return {}
 
 
 def _component_settlement(event: CorporateEvent) -> dict[str, Any] | None:

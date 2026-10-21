@@ -348,7 +348,6 @@ async def read_corporate_event_ledger_preflight(
     actions = await load_global_corporate_actions_by_ticker(db, [ticker])
     event_source_id = str(
         event.source_event_id
-        or event.brapi_event_id
         or f"corporate-event:{event.id}"
     )
     prior_actions = tuple(

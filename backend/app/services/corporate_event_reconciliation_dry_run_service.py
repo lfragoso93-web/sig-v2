@@ -33,14 +33,6 @@ import json
 
 def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:
     payload = event.raw_metadata if isinstance(event.raw_metadata, dict) else {}
-    if not payload and event.raw_data:
-        try:
-            parsed = json.loads(event.raw_data)
-        except (TypeError, ValueError):
-            parsed = {}
-        if isinstance(parsed, dict):
-            provider_payload = parsed.get("provider_payload")
-            payload = provider_payload if isinstance(provider_payload, dict) else parsed
     settlement = payload.get("fractional_component_settlement")
     projection_reference = None
     if isinstance(settlement, dict):
