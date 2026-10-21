@@ -17,7 +17,7 @@ function PortfolioSelector() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
-  const selected = portfolios.find(p => p.id === selectedPortfolioId)
+  const selected = portfolios.find(p => Number(p.id) === Number(selectedPortfolioId))
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -35,7 +35,7 @@ function PortfolioSelector() {
       return
     }
 
-    const isValid = selectedPortfolioId !== null && portfolios.some(p => p.id === selectedPortfolioId)
+    const isValid = selectedPortfolioId !== null && portfolios.some(p => Number(p.id) === Number(selectedPortfolioId))
     if (!isValid) {
       setSelectedPortfolio(portfolios[0].id)
     }
@@ -157,7 +157,7 @@ function PortfolioSelector() {
             }}
           >
             {portfolios.map(p => {
-              const isSelected = p.id === selectedPortfolioId
+              const isSelected = Number(p.id) === Number(selectedPortfolioId)
               const isDeleting = deletePortfolio.isPending && deletePortfolio.variables === p.id
 
               return (

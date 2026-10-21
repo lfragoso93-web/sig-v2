@@ -44,6 +44,12 @@ interface AppState {
   toggleSidebarCollapsed: () => void
 }
 
+function parsePortfolioId(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isInteger(num) && num > 0 ? num : null
+}
+
 function getInitialPersistedState(): {
   theme?: 'dark' | 'light'
   selectedPortfolioId?: number | null
@@ -54,7 +60,11 @@ function getInitialPersistedState(): {
     const raw = window.localStorage.getItem('sig-app')
     if (!raw) return {}
     const parsed = JSON.parse(raw)
-    return (parsed && typeof parsed === 'object' && parsed.state) ? parsed.state : {}
+    const state = (parsed && typeof parsed === 'object' && parsed.state) ? parsed.state : {}
+    return {
+      ...state,
+      selectedPortfolioId: parsePortfolioId(state.selectedPortfolioId),
+    }
   } catch {
     return {}
   }
@@ -66,9 +76,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       theme: initialPersisted.theme ?? 'dark',
-      selectedPortfolioId: typeof initialPersisted.selectedPortfolioId === 'number'
-        ? initialPersisted.selectedPortfolioId
-        : null,
+      selectedPortfolioId: parsePortfolioId(initialPersisted.selectedPortfolioId),
       transactionModal: { open: false },
       sidebarOpen: false,
       sidebarCollapsed: initialPersisted.sidebarCollapsed ?? false,
@@ -77,9 +85,9 @@ export const useAppStore = create<AppState>()(
         document.documentElement.setAttribute('data-theme', theme)
         set({ theme })
       },
-      setSelectedPortfolio:   (id) => set({ selectedPortfolioId: id }),
-      setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
-      selectPortfolio:        (id) => set({ selectedPortfolioId: id }),
+      setSelectedPortfolio:   (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
+      setSelectedPortfolioId: (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
+      selectPortfolio:        (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
       clearSelectedPortfolio: ()  => set({ selectedPortfolioId: null }),
 
       openTransactionModal: (prefill) =>

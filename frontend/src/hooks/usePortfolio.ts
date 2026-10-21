@@ -307,7 +307,7 @@ export const usePortfolioSummary = usePortfolioSummaryData
 export function usePortfolioList() {
   return useQuery<PortfolioListItem[]>({
     queryKey: PORTFOLIOS_QUERY_KEY,
-    queryFn: () => api.get('/portfolios').then(r => r.data),
+    queryFn: () => api.get('/portfolios/').then(r => r.data),
     staleTime: 30_000,
   })
 }

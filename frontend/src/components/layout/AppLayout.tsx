@@ -6,6 +6,7 @@ import Topbar from './Topbar'
 import BottomNav from './BottomNav'
 import AddTransactionModal from '@/components/modals/AddTransactionModal'
 import UpcomingCorporateEventNotice from '@/components/portfolio/UpcomingCorporateEventNotice'
+import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { findAnchorElement, resolveScrollRestoration } from '@/utils/scrollRestoration'
 
 export default function AppLayout() {
@@ -91,7 +92,9 @@ export default function AppLayout() {
           }}
           className="lg:pb-0 pb-[calc(60px+env(safe-area-inset-bottom,0px))]"
         >
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
 

@@ -36,4 +36,15 @@ describe('appStore portfolio persistence', () => {
     useAppStore.getState().selectPortfolio(202)
     expect(useAppStore.getState().selectedPortfolioId).toBe(202)
   })
+
+  it('coerces string ids to positive integers safely', () => {
+    useAppStore.getState().setSelectedPortfolio('55' as unknown as number)
+    expect(useAppStore.getState().selectedPortfolioId).toBe(55)
+
+    useAppStore.getState().setSelectedPortfolio('invalid' as unknown as number)
+    expect(useAppStore.getState().selectedPortfolioId).toBeNull()
+
+    useAppStore.getState().setSelectedPortfolio(-1)
+    expect(useAppStore.getState().selectedPortfolioId).toBeNull()
+  })
 })
