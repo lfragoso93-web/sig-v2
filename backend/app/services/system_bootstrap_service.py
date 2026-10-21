@@ -15,6 +15,10 @@ from datetime import date, datetime, timezone
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
 )
+from app.services.system_bootstrap_stages import (
+    CANONICAL_BOOTSTRAP_STAGES,
+    BootstrapStageDefinition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +53,19 @@ class B3BootstrapWindow:
     cutoff_date: date
 
 
-def _resolve_b3_bootstrap_window(settings: object, today: date) -> B3BootstrapWindow:
-    start_year = getattr(settings, "B3_BOOTSTRAP_START_YEAR", None) or today.year
+def _resolve_b3_bootstrap_window(
+    settings: object, today: date
+) -> B3BootstrapWindow:
+    start_year = (
+        getattr(settings, "B3_BOOTSTRAP_START_YEAR", None) or today.year
+    )
     end_year = today.year
     cutoff_date = today
 
     if start_year > end_year:
-        raise ValueError("B3_BOOTSTRAP_START_YEAR não pode ser posterior ao ano atual")
+        raise ValueError(
+            "B3_BOOTSTRAP_START_YEAR não pode ser posterior ao ano atual"
+        )
 
     return B3BootstrapWindow(
         start_year=start_year,
@@ -84,8 +94,9 @@ async def _bootstrap_asset_catalog() -> str:
     async with AsyncSessionLocal() as db:
         seed = await run_asset_seed(db)
     return (
-        f"brapi_enrichment_and_crypto created={seed.created} updated={seed.updated} "
-        f"skipped={seed.skipped} errors={seed.errors}"
+        f"brapi_enrichment_and_crypto created={seed.created} "
+        f"updated={seed.updated} skipped={seed.skipped} "
+        f"errors={seed.errors}"
     )
 
 
@@ -137,9 +148,10 @@ async def _bootstrap_treasury_reconciliation() -> str:
     async with AsyncSessionLocal() as db:
         result = await reconcile_treasury_transactions(db)
     return (
-        f"scanned={result.scanned} updated_transactions={result.updated_transactions} "
-        f"created_assets={result.created_assets} unresolved={result.unresolved} "
-        f"errors={result.errors}"
+        f"scanned={result.scanned} "
+        f"updated_transactions={result.updated_transactions} "
+        f"created_assets={result.created_assets} "
+        f"unresolved={result.unresolved} errors={result.errors}"
     )
 
 
@@ -181,7 +193,9 @@ async def _bootstrap_asset_price_history() -> str:
 
 async def _bootstrap_benchmarks() -> str:
     from app.core.database import AsyncSessionLocal
-    from app.services.benchmark_rate_service import import_missing_benchmark_history
+    from app.services.benchmark_rate_service import (
+        import_missing_benchmark_history,
+    )
 
     async with AsyncSessionLocal() as db:
         result = await import_missing_benchmark_history(db)
@@ -192,6 +206,7 @@ async def run_system_bootstrap(
     *,
     commit_sha: str | None = None,
     startup_delay_seconds: float = 0.0,
+    stages: list[str] | tuple[str, ...] | None = None,
 ) -> SystemBootstrapReport:
     """Executa as etapas de bootstrap atualmente integradas.
 
@@ -207,10 +222,14 @@ async def run_system_bootstrap(
     from app.services.system_bootstrap_dividends_stage import (
         run_system_bootstrap_dividends_stage,
     )
-    from app.services.system_bootstrap_fx_stage import run_system_bootstrap_fx_stage
+    from app.services.system_bootstrap_fx_stage import (
+        run_system_bootstrap_fx_stage,
+    )
     from app.services.system_readiness_service import (
         mark_bootstrap_finished,
         mark_bootstrap_running,
+        mark_stage_finished,
+        mark_stage_running,
     )
 
     context = build_system_bootstrap_execution_context(commit_sha=commit_sha)
@@ -222,6 +241,8 @@ async def run_system_bootstrap(
     mark_bootstrap_running(
         schema_version=BOOTSTRAP_SCHEMA_VERSION,
         started_at=started.isoformat(),
+        commit_sha=commit_sha,
+        stages=list(stages) if stages else None,
     )
 
     operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
@@ -243,10 +264,21 @@ async def run_system_bootstrap(
         ),
     )
 
-    stages: list[BootstrapStageResult] = []
-    for name, operation in operations:
+    is_selective = bool(stages)
+    if stages:
+        stage_set = set(stages)
+        selected_operations = tuple(
+            op for op in operations if op[0] in stage_set
+        )
+    else:
+        selected_operations = operations
+
+    stage_results: list[BootstrapStageResult] = []
+    for name, operation in selected_operations:
+        mark_stage_running(name)
         result = await _run_stage(name, operation)
-        stages.append(result)
+        mark_stage_finished(name, ok=result.ok, detail=result.detail)
+        stage_results.append(result)
         if not result.ok:
             break
 
@@ -255,8 +287,15 @@ async def run_system_bootstrap(
         schema_version=BOOTSTRAP_SCHEMA_VERSION,
         started_at=started.isoformat(),
         finished_at=finished.isoformat(),
-        ok=len(stages) == len(operations) and all(stage.ok for stage in stages),
-        stages=tuple(stages),
+        ok=(
+            len(stage_results) == len(selected_operations)
+            and all(s.ok for s in stage_results)
+        ),
+        stages=tuple(stage_results),
     )
-    mark_bootstrap_finished(report, certified_for_real_data=False)
+    mark_bootstrap_finished(
+        report,
+        certified_for_real_data=False,
+        is_selective=is_selective,
+    )
     return report
