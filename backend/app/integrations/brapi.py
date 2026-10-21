@@ -306,6 +306,33 @@ def _parse_history_rows(
 
 # ── Validação de tickers ────────────────────────────────────────────────────────────────────
 
+def _extract_historical_prices(first: dict) -> list[dict]:
+    """Extrai historicalDataPrice considerando payload plano ou aninhado em data."""
+    if not isinstance(first, dict):
+        return []
+    history = first.get("historicalDataPrice")
+    if not history and isinstance(first.get("data"), dict):
+        history = first["data"].get("historicalDataPrice")
+    if isinstance(history, list):
+        return history
+    return []
+
+
+def _extract_regular_market_price(first: dict) -> Optional[float]:
+    """Extrai regularMarketPrice considerando payload plano ou aninhado em data."""
+    if not isinstance(first, dict):
+        return None
+    price = first.get("regularMarketPrice")
+    if price is None and isinstance(first.get("data"), dict):
+        price = first["data"].get("regularMarketPrice")
+    if price is not None:
+        try:
+            return float(price)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 async def fetch_valid_brapi_tickers(
     tickers: list[str],
     asset_type: Optional[str] = None,
@@ -887,7 +914,7 @@ async def fetch_price_history(
             data    = resp.json()
             results = data.get("results") or data.get("stocks") or []
             if results:
-                history = results[0].get("historicalDataPrice") or []
+                history = _extract_historical_prices(results[0])
                 if history:
                     return _parse_history_rows(history, ticker, f"v2/stocks {date_from} a {date_to}")
     except Exception as e:
@@ -911,10 +938,10 @@ async def fetch_price_history(
                 logger.warning("[market_data] sem resultados para %s (%s a %s)", ticker, date_from, date_to)
                 return []
 
-            history = results[0].get("historicalDataPrice", [])
+            history = _extract_historical_prices(results[0])
             if not history:
-                price = results[0].get("regularMarketPrice")
-                if price:
+                price = _extract_regular_market_price(results[0])
+                if price is not None:
                     now = datetime.now(timezone.utc).replace(
                         hour=18, minute=0, second=0, microsecond=0
                     )
@@ -948,10 +975,10 @@ async def fetch_price_history_full(
                 logger.warning("[market_data] price_history_full: sem resultados para %s", ticker)
                 return []
 
-            history = results[0].get("historicalDataPrice", [])
+            history = _extract_historical_prices(results[0])
             if not history:
-                price = results[0].get("regularMarketPrice")
-                if price:
+                price = _extract_regular_market_price(results[0])
+                if price is not None:
                     now = datetime.now(timezone.utc).replace(
                         hour=18, minute=0, second=0, microsecond=0
                     )
@@ -996,10 +1023,10 @@ async def fetch_stocks_historical_v2(
                 logger.warning("[market_data] fetch_stocks_historical_v2: sem resultados para %s", ticker)
                 return []
 
-            history = results[0].get("historicalDataPrice") or []
+            history = _extract_historical_prices(results[0])
             if not history:
-                price = results[0].get("regularMarketPrice")
-                if price:
+                price = _extract_regular_market_price(results[0])
+                if price is not None:
                     now = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
                     return [(now, float(price))]
                 return []
@@ -1041,10 +1068,10 @@ async def fetch_fii_historical_v2(
                 logger.warning("[market_data] fetch_fii_historical_v2: sem resultados para %s", ticker)
                 return []
 
-            history = results[0].get("historicalDataPrice") or []
+            history = _extract_historical_prices(results[0])
             if not history:
-                price = results[0].get("regularMarketPrice")
-                if price:
+                price = _extract_regular_market_price(results[0])
+                if price is not None:
                     now = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
                     return [(now, float(price))]
                 return []

@@ -492,10 +492,13 @@ async def fetch_treasury_history(
                 symbol = _symbol_from_item(item)
                 if not symbol:
                     continue
+                data_dict = item.get("data") if isinstance(item.get("data"), dict) else {}
                 raw_history = (
                     item.get("historicalDataPrice")
+                    or data_dict.get("historicalDataPrice")
                     or item.get("history")
-                    or item.get("data")
+                    or data_dict.get("history")
+                    or (item.get("data") if isinstance(item.get("data"), list) else None)
                     or item.get("prices")
                     or []
                 )

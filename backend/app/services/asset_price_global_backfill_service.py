@@ -98,7 +98,10 @@ async def run_global_asset_price_backfill(
             for item in scoped_coverage
             if item.needs_sync
             and item.asset_id is not None
-            and item.asset_type not in _DEDICATED_BOOTSTRAP_PRICE_TYPES
+            and (
+                item.asset_type not in _DEDICATED_BOOTSTRAP_PRICE_TYPES
+                or normalized_tickers is not None
+            )
         ]
         results = await _sync_candidates(candidates, concurrency=concurrency)
         payload = {
