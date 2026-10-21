@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useAssetDetail', () => ({
   useAssetDetail: () => ({ data: undefined, isLoading: false }),
   useAssetCorporateLifecycle: () => ({ data: mocks.corporateLifecycle }),
+  useAssetEnrichment: () => ({ data: undefined, isLoading: false }),
+  useAssetPortfolioInsights: () => ({ data: undefined, isLoading: false }),
 }))
 
 vi.mock('@/hooks/useTransactions', () => ({
