@@ -103,6 +103,7 @@ class NormalizedCorporateAction:
     quantity_factor: Decimal
     raw_payload: dict[str, Any]
     fractional_resolution: FractionalResolution | None = None
+    component_bonus: dict[str, Any] | None = None
 
     @property
     def automatically_affects_quantity(self) -> bool:

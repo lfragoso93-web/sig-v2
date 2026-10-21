@@ -74,6 +74,8 @@ class CSVImportResponse(BaseModel):
     error_count: int
     rows: list[CSVRowValidation] = []
     global_errors: list[str] = []
+    adapter_format: Optional[str] = None
+    skipped_records: Optional[list[dict]] = None
 
 
 class ClassTargetRead(BaseModel):

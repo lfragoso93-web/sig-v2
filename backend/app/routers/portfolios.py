@@ -7,6 +7,7 @@ from fastapi import (
     File,
     Response,
     UploadFile,
+    Query,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,10 @@ from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliation
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services import csv_import_service
-from app.services.canonical_positions_service import get_canonical_portfolio_positions
+from app.services.canonical_positions_service import (
+    export_canonical_positions_csv,
+    get_canonical_portfolio_positions,
+)
 from app.services.class_target_service import get_targets_with_current
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
@@ -222,6 +226,7 @@ async def import_portfolio_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     dry_run: bool = True,
+    source: str = Query("auto", description="Origem do arquivo CSV: auto, canonical ou b3"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -232,6 +237,7 @@ async def import_portfolio_csv(
         user_id=current_user.id,
         file=file,
         dry_run=dry_run,
+        source=source,
     )
     if dry_run:
         result = await enrich_csv_dry_run_with_ticker_resolution(result)
@@ -260,6 +266,27 @@ async def export_portfolio_csv(
         headers={
             "Content-Disposition": (
                 f'attachment; filename="portfolio_{portfolio_id}_transactions.csv"'
+            )
+        },
+    )
+
+
+@router.get("/{portfolio_id}/positions/export-csv", tags=["positions", "export"])
+@router.get("/{portfolio_id}/export-positions-csv", tags=["positions", "export"])
+async def export_portfolio_positions_csv(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await get_portfolio(db, portfolio_id, current_user.id)
+    groups = await get_canonical_portfolio_positions(db, portfolio_id, current_user.id)
+    csv_content = export_canonical_positions_csv(groups)
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="portfolio_{portfolio_id}_positions.csv"'
             )
         },
     )

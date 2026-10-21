@@ -25,6 +25,10 @@ from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_re
 from app.services.ticker_change_event_service import register_ticker_change
 from app.services.ticker_change_processor import apply_pending_ticker_changes
 from app.services.ticker_resolution_service import ResolvedTicker
+from app.services.b3_investor_area_adapter_service import (
+    adapt_b3_investor_csv_to_canonical,
+    is_b3_csv_content,
+)
 
 
 def generate_csv_template() -> str:
@@ -150,6 +154,7 @@ async def import_transactions_csv(
     user_id: int,
     file: Any,
     dry_run: bool = True,
+    source: str = "auto",
 ) -> dict[str, Any]:
     try:
         content = await _read_upload_text(file)
@@ -163,12 +168,36 @@ async def import_transactions_csv(
             "global_errors": [str(exc)],
         }
 
+    adapter_format = None
+    skipped_records = None
+    if source == "b3" or (source == "auto" and is_b3_csv_content(content)):
+        b3_result = adapt_b3_investor_csv_to_canonical(content)
+        if not b3_result.success and b3_result.errors:
+            return {
+                "success": False,
+                "imported_count": 0,
+                "skipped_count": 0,
+                "error_count": len(b3_result.errors),
+                "rows": [],
+                "global_errors": b3_result.errors,
+                "adapter_format": b3_result.format_detected,
+                "skipped_records": [item.to_dict() for item in b3_result.skipped_items],
+            }
+        content = b3_result.canonical_csv
+        adapter_format = b3_result.format_detected
+        skipped_records = [item.to_dict() for item in b3_result.skipped_items]
+
     validation = await _build_dry_run_result(
         content,
         portfolio_id=portfolio_id,
         user_id=user_id,
         db=db,
     )
+    if adapter_format:
+        validation["adapter_format"] = adapter_format
+    if skipped_records is not None:
+        validation["skipped_records"] = skipped_records
+
     if dry_run or not validation.get("success"):
         return validation
 
@@ -183,6 +212,11 @@ async def import_transactions_csv(
         user_id=user_id,
         db=db,
     )
+    if adapter_format:
+        result["adapter_format"] = adapter_format
+    if skipped_records is not None:
+        result["skipped_records"] = skipped_records
+
     if result.get("success"):
         await apply_pending_ticker_changes(db, portfolio_id)
         await db.commit()

@@ -203,3 +203,24 @@ mutacao de eventos, ledger ou snapshots. Backup pre-DDL: run
 `d3184896487a4929ef679c79cf44c96354b1aca0b0202f23f03ac16aa5093580`.
 `/health=200`. `/ready=503` permanece esperado, pois a certificacao foi
 removida como gate de desenvolvimento.
+
+
+## Fronteira para integracao financeira - 19/10/2026
+
+A persistencia e o projetor puro ainda nao alimentam as leituras financeiras. O leitor atual agrega uma timeline por ticker, enquanto uma cisao pode criar posicoes em varios ativos. A integracao deve ocorrer no contrato compartilhado de projecao para manter Resumo, custo, realizado, snapshots/TWR e IRPF consistentes.
+
+Gate de carregamento: exigir evento global, MATCHED, canonico, sem revisao, com effective_date e evidencia MATCHED compativel; resolver origem e destinos pelo ISIN unico; validar asset_id contra o ISIN; exigir pernas, fatores positivos, referencias de evidencia, soma exata das alocacoes igual a 1, sem caixa e tipo incorporacao/cisao. Aplicar politica de fracao por carteira; qualquer ausencia ou divergencia mantem evento fora da projecao.
+
+A saida compartilhada precisa representar saldos por identidade de ativo (asset/ISIN/ticker), quantidade, custo BRL e moeda original, eventos aplicados e fracoes pendentes. Incorporacao encerra a origem; cisao conserva a parcela residual e cria cada destino. Compra/venda posterior intercala pela data efetiva sem alterar transactions.
+
+Sequencia: (1) resolver asset por ISIN de modo unico; (2) generalizar o projetor temporal para saida multiativo e movimentos intercalados, conservando custos; (3) migrar em conjunto posicao, custo/PM, realizado, snapshots/TWR, lifecycle, resumo e IRPF, sem descartar destinos em adaptadores ticker-only; (4) manter resgate monetario separado ate contrato de caixa/realizacao/tributacao; (5) validar em isolamento antes de qualquer dry-run por carteira. Nenhum snapshot ou runtime deve ser rebuildado nesta integracao.
+
+Runtime observado em modo read-only em 19/10/2026: branch stable-15jun, commit a32b5885f939c236b7e97fecaec4fbbc3209d005, ambiente production, Alembic 20261019_corp_event_legs (head), /health=200, /ready=503 e certified_for_real_data=false. Checkout local a517e8871e42142cc77943d08f59bcc0d3a6946e. A divergencia de SHA impediu rebuild, migration, deploy e escrita financeira.
+
+## Direitos por bonificacao e avisos de eventos - 19/10/2026
+
+Direitos financeiros de bonificacoes com fracoes devem ser derivados por carteira a partir da posicao de transactions na record_date; nao exigir comprovante de credito individual nem criar transacao historica. Para KLBN11, usar a composicao oficial da Unit (1 ON + 4 PN) e a bonificacao de 1% por especie. As fracoes remanescentes foram leiloadas e o produto liquido fica disponivel proporcionalmente aos titulares em 24/02/2026. O comunicado informa venda de 79.949 ON a R$ 3,942352337 e 156.296 PN a R$ 3,942611212. Separar quantidades ON/PN antes de converter o provento proporcional e manter a precisao publicada ate uma regra de arredondamento final, documentada e aplicada uma unica vez.
+
+Fontes oficiais: https://ri.klabin.com.br/para-o-investidor/perguntas-frequentes/, https://api.mziq.com/mzfilemanager/v2/d/1c41fa99-ac6c-e90c-c8d4-e59fbf62ad6f?origin=1 e https://api.mziq.com/mzfilemanager/v2/d/1c41fa99-efe7-4e72-81dd-5b571f5aa376/4c7d2a8f-0e01-a99f-c100-6f7e2737a216?origin=2.
+
+A aplicacao deve informar o usuario em modal sobre cada evento corporativo futuro confirmado associado a ativo com posicao atual na carteira selecionada. Exibir ticker, tipo, data efetiva e descricao oficial disponivel. A dispensa vale pela sessao do usuario e por evento. A consulta e restrita por autorizacao da carteira e inclui somente evento global reconciliado como MATCHED, canonico, sem revisao e nao ignorado; conflitos e cadastros incompletos nao sao apresentados como fatos confirmados. Compras feitas hoje contam para determinar a posicao atual. O aviso e informativo e nao altera ledger, direitos ou snapshots.

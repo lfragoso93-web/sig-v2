@@ -87,6 +87,49 @@ def _calc_current_quantity(
 
 
 # ---------------------------------------------------------------------------
+ASSET_TYPE_LABELS: dict[str, str] = {
+    "ACAO": "Ações",
+    "ACAO_NACIONAL": "Ações",
+    "FII": "FIIs",
+    "ETF_NACIONAL": "ETFs Nacionais",
+    "ETF_BR": "ETFs Nacionais",
+    "ETF_INTERNACIONAL": "ETFs Internacionais",
+    "ETF_INT": "ETFs Internacionais",
+    "STOCK": "Stocks",
+    "BDR": "BDRs",
+    "TESOURO_DIRETO": "Tesouro Direto",
+    "TESOURO": "Tesouro Direto",
+    "RENDA_FIXA": "Renda Fixa",
+    "CRIPTO": "Criptomoedas",
+}
+
+
+async def list_portfolio_transaction_classes(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[dict]:
+    """Retorna as classes que possuem transações na carteira com suas contagens."""
+    query = (
+        select(Transaction.asset_type, func.count(Transaction.id))
+        .where(Transaction.portfolio_id == portfolio_id)
+        .group_by(Transaction.asset_type)
+        .order_by(Transaction.asset_type.asc())
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        {
+            "asset_type": str(row[0]),
+            "label": ASSET_TYPE_LABELS.get(
+                str(row[0]).upper(),
+                str(row[0]).replace("_", " ").title(),
+            ),
+            "count": int(row[1]),
+        }
+        for row in rows
+    ]
+
+
 # Listagem paginada async (usada pelos routers)
 # ---------------------------------------------------------------------------
 
@@ -95,10 +138,12 @@ async def list_transactions_paginated(
     portfolio_id: int,
     page: int = 1,
     page_size: int = 50,
+    asset_type: Optional[str] = None,
     ticker: Optional[str] = None,
     operation: Optional[str] = None,
     date_from: Optional[DateType] = None,
     date_to: Optional[DateType] = None,
+    sort: str = "desc",
 ) -> dict:
     """
     Lista transacoes de uma carteira com paginacao e filtros opcionais.
@@ -121,6 +166,11 @@ async def list_transactions_paginated(
         .select_from(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
     )
+
+    if asset_type:
+        at = asset_type.strip().upper()
+        base = base.where(func.upper(Transaction.asset_type) == at)
+        count_base = count_base.where(func.upper(Transaction.asset_type) == at)
 
     if ticker:
         t = ticker.strip().upper()
@@ -146,7 +196,9 @@ async def list_transactions_paginated(
     total_result = await db.execute(count_base)
     total = total_result.scalar_one()
 
-    base = base.order_by(Transaction.date.desc()).offset((page - 1) * page_size).limit(page_size)
+    order = Transaction.date.asc() if sort == "asc" else Transaction.date.desc()
+    tie_breaker = Transaction.id.asc() if sort == "asc" else Transaction.id.desc()
+    base = base.order_by(order, tie_breaker).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(base)
     items = list(result.scalars().all())
 

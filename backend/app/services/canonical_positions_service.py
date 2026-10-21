@@ -6,6 +6,8 @@ mantém a validação FastAPI/Pydantic como gate de deriva arquitetural.
 """
 from __future__ import annotations
 
+import csv
+import io
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -142,3 +144,46 @@ async def get_canonical_portfolio_positions(
         )
 
     return canonical_groups
+
+
+CSV_POSITIONS_HEADERS = [
+    "classe",
+    "ticker",
+    "nome",
+    "quantidade",
+    "preco_medio",
+    "preco_atual",
+    "valor_investido",
+    "valor_atual",
+    "lucro_prejuizo_valor",
+    "lucro_prejuizo_pct",
+    "alocacao_pct",
+    "proventos_recebidos",
+]
+
+
+def export_canonical_positions_csv(groups: list[dict]) -> str:
+    """Gera exportação canônica CSV das posições da carteira agrupadas por classe."""
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=CSV_POSITIONS_HEADERS)
+    writer.writeheader()
+
+    for group in groups:
+        classe = str(group.get("label") or "")
+        for pos in group.get("positions", []):
+            writer.writerow({
+                "classe": classe,
+                "ticker": str(pos.get("ticker") or ""),
+                "nome": str(pos.get("asset_label") or ""),
+                "quantidade": str(pos.get("quantity") or 0),
+                "preco_medio": str(pos.get("average_price_brl") or pos.get("average_price") or 0),
+                "preco_atual": str(pos.get("current_price_brl") or pos.get("current_price") or 0),
+                "valor_investido": str(pos.get("invested_value") or 0),
+                "valor_atual": str(pos.get("current_value") or 0),
+                "lucro_prejuizo_valor": str(pos.get("variation_value") or 0),
+                "lucro_prejuizo_pct": str(pos.get("variation_percent") or 0),
+                "alocacao_pct": str(pos.get("allocation_pct") or 0),
+                "proventos_recebidos": str(pos.get("proventos")) if pos.get("proventos") is not None else "0",
+            })
+
+    return output.getvalue()

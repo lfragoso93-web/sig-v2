@@ -5,6 +5,7 @@ import pytest
 from app.routers.portfolios import (
     _localize_csv_message,
     export_portfolio_csv,
+    export_portfolio_positions_csv,
     import_portfolio_csv,
 )
 from app.services.csv_import_service import import_transactions_csv
@@ -291,4 +292,36 @@ async def test_export_router_checks_portfolio_access_and_returns_download():
     assert response.body == b"ticker,asset_type\nCDB A,RENDA_FIXA\n"
     assert response.headers["content-disposition"] == (
         'attachment; filename="portfolio_5_transactions.csv"'
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_positions_router_checks_portfolio_access_and_returns_download():
+    db = AsyncMock(spec=AsyncSession)
+    user = SimpleNamespace(id=11)
+    mock_groups = [{"label": "Ações", "positions": []}]
+    with patch(
+        "app.routers.portfolios.get_portfolio",
+        new_callable=AsyncMock,
+    ) as get_portfolio, patch(
+        "app.routers.portfolios.get_canonical_portfolio_positions",
+        new_callable=AsyncMock,
+        return_value=mock_groups,
+    ) as get_positions, patch(
+        "app.routers.portfolios.export_canonical_positions_csv",
+        return_value="classe,ticker\n",
+    ) as export_csv:
+        response = await export_portfolio_positions_csv(
+            portfolio_id=5,
+            db=db,
+            current_user=user,
+        )
+
+    get_portfolio.assert_awaited_once_with(db, 5, 11)
+    get_positions.assert_awaited_once_with(db, 5, 11)
+    export_csv.assert_called_once_with(mock_groups)
+    assert response.media_type.startswith("text/csv")
+    assert response.body == b"classe,ticker\n"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="portfolio_5_positions.csv"'
     )

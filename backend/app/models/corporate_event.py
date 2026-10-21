@@ -84,11 +84,7 @@ class CorporateEvent(Base):
     status = Column(String, nullable=False, default="PENDENTE")
 
     # Contratos legados preservados temporariamente durante a migração incremental.
-    event_date = Column(Date, nullable=False)
-    ratio = Column(Numeric(20, 8), nullable=False)
     description = Column(String)
-    brapi_event_id = Column(String, nullable=True, unique=True)
-    raw_data = Column(String, nullable=True)
     applied_at = Column(DateTime, nullable=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True)
 
@@ -156,6 +152,44 @@ class CorporateEvent(Base):
         passive_deletes=True,
         order_by="CorporateEventDestinationLeg.destination_isin_code",
     )
+
+    # Aliases de compatibilidade transparente (não mapeados no banco).
+    _event_date = None
+    _ratio = None
+    _brapi_event_id = None
+    _raw_data = None
+
+    @property
+    def event_date(self):
+        return self._event_date if self._event_date is not None else self.effective_date
+
+    @event_date.setter
+    def event_date(self, value):
+        self._event_date = value
+
+    @property
+    def ratio(self):
+        return self._ratio if self._ratio is not None else self.quantity_factor
+
+    @ratio.setter
+    def ratio(self, value):
+        self._ratio = value
+
+    @property
+    def brapi_event_id(self):
+        return self._brapi_event_id
+
+    @brapi_event_id.setter
+    def brapi_event_id(self, value):
+        self._brapi_event_id = value
+
+    @property
+    def raw_data(self):
+        return self._raw_data
+
+    @raw_data.setter
+    def raw_data(self, value):
+        self._raw_data = value
 
 
 class CorporateEventDestinationLeg(Base):

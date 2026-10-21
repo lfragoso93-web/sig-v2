@@ -6,4 +6,4 @@ httpx==0.28.1
 flake8==7.4.1
 mypy==2.4.0
 types-passlib==1.7.7.20260211
-sqlalchemy[asyncio,mypy]==2.1.2
+sqlalchemy[asyncio,mypy]==2.1.4

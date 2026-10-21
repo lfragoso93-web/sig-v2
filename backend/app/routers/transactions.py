@@ -15,21 +15,31 @@ from app.models.user import User
 from app.schemas.transaction import (
     CorporateLifecycleEventOut,
     PagedTransactions,
+    TransactionClassSummary,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
+    UpcomingCorporateEventOut,
+    PortfolioCorporateRightOut,
 )
 from app.services.portfolio_asset_corporate_lifecycle_service import (
     READ_PORTFOLIO_CORPORATE_LIFECYCLE,
     load_portfolio_asset_corporate_lifecycle,
     load_portfolio_pending_corporate_fractions,
+    load_upcoming_portfolio_corporate_events,
+)
+from app.services.portfolio_corporate_rights_service import (
+    load_portfolio_corporate_rights,
 )
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
     require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
-from app.services.transaction_service import list_transactions_paginated
+from app.services.transaction_service import (
+    list_portfolio_transaction_classes,
+    list_transactions_paginated,
+)
 from app.services.transaction_write_service import (
     TransactionWriteError,
     create_transaction_record,
@@ -145,10 +155,12 @@ async def list_transactions(
     portfolio_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    asset_type: Optional[str] = Query(None),
     ticker: Optional[str] = Query(None),
     operation: Optional[str] = Query(None),
     date_from: Optional[DateType] = Query(None),
     date_to: Optional[DateType] = Query(None),
+    sort: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -165,11 +177,26 @@ async def list_transactions(
         portfolio_id=portfolio_id,
         page=page,
         page_size=page_size,
+        asset_type=asset_type,
         ticker=ticker,
         operation=operation,
         date_from=date_from,
         date_to=date_to,
+        sort=sort or "desc",
     )
+
+
+@router.get(
+    "/{portfolio_id}/transactions/classes",
+    response_model=list[TransactionClassSummary],
+)
+async def list_transaction_classes(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_portfolio(portfolio_id, current_user, db)
+    return await list_portfolio_transaction_classes(db, portfolio_id)
 
 
 @router.get(
@@ -191,6 +218,49 @@ async def list_portfolio_pending_corporate_fractions(
             db,
             access=access,
         )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/upcoming",
+    response_model=list[UpcomingCorporateEventOut],
+)
+async def list_portfolio_upcoming_corporate_events(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_upcoming_portfolio_corporate_events(
+            db,
+            access=access,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/rights",
+    response_model=list[PortfolioCorporateRightOut],
+)
+async def list_portfolio_corporate_rights(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await load_portfolio_corporate_rights(db, access=access)
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

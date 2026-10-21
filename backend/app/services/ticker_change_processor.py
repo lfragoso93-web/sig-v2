@@ -75,10 +75,16 @@ async def apply_ticker_change_event(
 ) -> bool:
     if event.event_type != CorporateEventType.TICKER_CHANGE:
         return False
-    if event.portfolio_id is None or not event.raw_data:
+    if event.portfolio_id is None:
         return False
 
-    payload = json.loads(event.raw_data)
+    payload = event.raw_metadata if isinstance(event.raw_metadata, dict) else {}
+    if not payload and getattr(event, "raw_data", None):
+        try:
+            payload = json.loads(getattr(event, "raw_data", None))
+        except (TypeError, ValueError):
+            payload = {}
+
     old_ticker = str(payload.get("old_ticker") or "").upper()
     new_ticker = str(payload.get("new_ticker") or "").upper()
     if not old_ticker or not new_ticker:
@@ -96,12 +102,13 @@ async def apply_ticker_change_event(
         event.applied_at = datetime.utcnow()
         return False
 
+    effective_date = event.effective_date or getattr(event, "event_date", None)
     tx_result = await db.execute(
         select(Transaction)
         .where(
             Transaction.portfolio_id == event.portfolio_id,
             Transaction.ticker == old_ticker,
-            Transaction.date < event.event_date,
+            Transaction.date < effective_date,
         )
         .order_by(Transaction.date, Transaction.id)
     )
@@ -119,7 +126,7 @@ async def apply_ticker_change_event(
         "quantity": position.quantity,
         "price": position.average_price,
         "fees": 0.0,
-        "date": event.event_date,
+        "date": effective_date,
         "currency": position.currency,
         "notes": marker,
     }

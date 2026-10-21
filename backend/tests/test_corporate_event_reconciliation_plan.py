@@ -273,33 +273,29 @@ def test_pending_settlement_rejects_any_unverified_cash_details() -> None:
         )
 
 
-def test_matched_cash_settlement_accepts_klbn11_fraction_contract() -> None:
-    report = build_reconciliation_dry_run_report(
-        (_ticker_evidence(12, "KLBN11"), _ticker_evidence(13, "KLBN11", "yahoo")),
-        decision=CorporateEventReconciliationDecision.MATCHED,
-        reason="fracao de Unit liquidada em leilao",
-        canonical_event_id=12,
-        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
-            evidence_reference="broker-note:KLBN11:2025-12",
-            fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
-            fractional_quantity="0.10",
-            fractional_settlement_price="4.00",
-            cash_treatment="UNIT_FRACTION_AUCTION",
-        ),
-    )
-
-    assert report.ok is True
-    assert report.decision == "MATCHED"
-    assert report.match_resolution_evidence is not None
-    assert (
-        report.match_resolution_evidence.fractional_policy
-        == FractionalResolutionPolicy.CASH_SETTLEMENT
-    )
+def test_matched_cash_settlement_keeps_klbn11_bonus_fail_closed() -> None:
+    with pytest.raises(ValueError, match="KLBN11 exige contrato multiativo completo"):
+        build_reconciliation_dry_run_report(
+            (
+                _ticker_evidence(12, "KLBN11"),
+                _ticker_evidence(13, "KLBN11", "yahoo"),
+            ),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="fracao de Unit liquidada em leilao",
+            canonical_event_id=12,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:KLBN11:2025-12",
+                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+                fractional_quantity="0.10",
+                fractional_settlement_price="4.00",
+                cash_treatment="UNIT_FRACTION_AUCTION",
+            ),
+        )
 
 
 def test_matched_no_fractional_residue_keeps_klbn11_fail_closed() -> None:
-    with pytest.raises(ValueError, match="KLBN11 exige contrato explicito"):
+    with pytest.raises(ValueError, match="KLBN11 exige contrato multiativo completo"):
         build_reconciliation_dry_run_report(
             (
                 _ticker_evidence(81, "KLBN11"),
@@ -314,6 +310,33 @@ def test_matched_no_fractional_residue_keeps_klbn11_fail_closed() -> None:
                 fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
             ),
         )
+
+
+def test_matched_klbn11_requires_and_accepts_complete_official_projection_ref() -> None:
+    report = build_reconciliation_dry_run_report(
+        (
+            CorporateEventEvidence(
+                event_id=81,
+                ticker="KLBN11",
+                event_type="BONIFICACAO",
+                source_provider="b3",
+                source_event_id="klbn:bonus:2025",
+                component_projection_reference="issuer:klbn:bonus-and-auction:2025",
+            ),
+            _ticker_evidence(82, "KLBN11", "yahoo"),
+        ),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="contrato multiativo oficial completo",
+        canonical_event_id=81,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT,
+            evidence_reference="issuer:klbn:bonus-and-auction:2025",
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ),
+    )
+
+    assert report.decision == "MATCHED"
+    assert report.event_ids == (81, 82)
 
 
 def test_matched_grouping_keeps_amob3_fail_closed_until_ledger_basis_contract() -> None:

@@ -30,7 +30,7 @@ export default function UserMenu() {
 
   if (!user) return null
 
-  const resolvedPortfolioId = portfolios.some(p => p.id === selectedPortfolioId)
+  const resolvedPortfolioId = portfolios.some(p => Number(p.id) === Number(selectedPortfolioId))
     ? selectedPortfolioId
     : (portfolios[0]?.id ?? null)
 

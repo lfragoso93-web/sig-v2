@@ -82,10 +82,10 @@ export default function ResumePage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
   const hasPortfolios = Boolean(portfolios?.length)
-  const validGlobalPortfolioId = hasPortfolios && portfolios!.some(p => p.id === globalPortfolioId)
+  const validGlobalPortfolioId = hasPortfolios && portfolios!.some(p => Number(p.id) === Number(globalPortfolioId))
     ? globalPortfolioId
     : null
-  const portfolioId: number | null = validGlobalPortfolioId ?? (portfolios?.[0]?.id ?? null)
+  const portfolioId: number | null = validGlobalPortfolioId ?? (portfolios?.[0]?.id ? Number(portfolios[0].id) : null)
 
   useEffect(() => {
     if (loadingPortfolios || !portfolios) return
@@ -101,8 +101,14 @@ export default function ResumePage() {
     data: summary,
     isLoading: loadingSummary,
     error: summaryError,
+    refetch: refetchSummary,
   } = usePortfolioSummaryData(portfolioId)
-  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
+  const {
+    data: positions,
+    isLoading: loadingPositions,
+    error: positionsError,
+    refetch: refetchPositions,
+  } = usePositions(portfolioId)
   const { data: classAvailability, isLoading: loadingClassAvailability } = useClassTwrAvailability(portfolioId)
 
   useEffect(() => {
@@ -181,7 +187,7 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : summaryContractError ? (
+        ) : summaryError ? (
           <div
             className="col-span-4 rounded-xl px-4 py-5 text-center"
             style={{
@@ -190,8 +196,29 @@ export default function ResumePage() {
               background: 'oklch(from var(--color-error) l c h / 0.08)',
             }}
           >
-            <p className="text-sm font-semibold">Contrato financeiro inválido. Os KPIs foram ocultados.</p>
-            <p className="text-xs mt-1">{summaryError.message}</p>
+            <p className="text-sm font-semibold">
+              {summaryContractError
+                ? 'Contrato financeiro inválido. Os KPIs foram ocultados.'
+                : 'Não foi possível carregar o resumo da carteira.'}
+            </p>
+            <p className="text-xs mt-1">
+              {summaryError instanceof Error ? summaryError.message : 'Os dados podem estar sendo recalculados.'}
+            </p>
+            {!summaryContractError && (
+              <button
+                type="button"
+                onClick={() => refetchSummary()}
+                className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{
+                  background: 'oklch(from var(--color-error) l c h / 0.15)',
+                  color: 'var(--color-error)',
+                  border: '1px solid oklch(from var(--color-error) l c h / 0.3)',
+                  cursor: 'pointer',
+                }}
+              >
+                Tentar novamente
+              </button>
+            )}
           </div>
         ) : summary && metrics ? (
           <>
@@ -299,6 +326,24 @@ export default function ResumePage() {
       {loadingPositions || !portfolioId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />)}
+        </div>
+      ) : positionsError ? (
+        <div className="card p-6 text-center">
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-error)' }}>
+            Não foi possível carregar as posições da carteira.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetchPositions()}
+            className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold"
+            style={{
+              background: 'var(--color-surface-offset)',
+              border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+              cursor: 'pointer',
+            }}
+          >
+            Tentar novamente
+          </button>
         </div>
       ) : positions && positions.length > 0 ? (
         <PositionTable groups={positions} portfolioId={portfolioId} />

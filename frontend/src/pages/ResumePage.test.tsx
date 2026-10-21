@@ -267,4 +267,22 @@ describe('ResumePage position states', () => {
     expect(screen.getByText(/PETR4, VALE3/)).toBeTruthy()
     expect(screen.getByText(/valor investido é usado como referência/)).toBeTruthy()
   })
+
+  it('exibe alerta e botão de retry quando o resumo falha por erro de rede ou servidor', () => {
+    const refetch = vi.fn()
+    mocks.usePortfolioSummaryData.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('Erro 500 do servidor'),
+      refetch,
+    })
+
+    render(<ResumePage />)
+
+    expect(screen.getByText('Não foi possível carregar o resumo da carteira.')).toBeDefined()
+    expect(screen.getByText('Erro 500 do servidor')).toBeDefined()
+    const retryBtn = screen.getByRole('button', { name: /Tentar novamente/i })
+    fireEvent.click(retryBtn)
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
 })

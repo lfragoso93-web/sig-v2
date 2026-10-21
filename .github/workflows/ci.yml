@@ -130,6 +130,10 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
+      - name: Unit and component tests (vitest)
+        working-directory: frontend
+        run: npm test -- run
+
       - name: Build
         working-directory: frontend
         run: npm run build

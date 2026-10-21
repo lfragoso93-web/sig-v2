@@ -7,9 +7,10 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import Asset
 from app.models.corporate_event import CorporateEvent
 from app.models.corporate_event_reconciliation_evidence import (
     CorporateEventReconciliationEvidence,
@@ -59,13 +60,133 @@ def _is_projection_eligible(event: CorporateEvent) -> bool:
     )
 
 
+def _component_bonus_projection_spec(
+    event: CorporateEvent,
+    evidence: CorporateEventReconciliationEvidence | None,
+) -> dict[str, Any] | None:
+    """Accept only the complete, issuer-referenced multi-asset contract."""
+
+    if (
+        _normalized_text(event.ticker).upper() != "KLBN11"
+        or _normalized_text(event.event_type).upper() != "BONIFICACAO"
+        or evidence is None
+        or _normalized_text(evidence.decision).upper() != _MATCHED_RECONCILIATION_STATUS
+        or _normalized_text(evidence.evidence_type).upper()
+        not in {"OFFICIAL_ISSUER_DOCUMENT", "OFFICIAL_EXCHANGE_DOCUMENT"}
+    ):
+        return None
+    payload = _raw_payload(event)
+    settlement = payload.get("fractional_component_settlement")
+    if not isinstance(settlement, dict):
+        return None
+    if (
+        settlement.get("model") != "COMPONENT_BONUS_FRACTIONS_V1"
+        or str(settlement.get("evidence_reference", "")).strip()
+        != str(evidence.evidence_reference or "").strip()
+    ):
+        return None
+    required = (
+        "record_date",
+        "credit_date",
+        "settlement_date",
+        "bonus_factor",
+        "bonus_cost_per_share_brl",
+        "unit_ticker",
+        "unit_asset_type",
+        "unit_isin_code",
+        "unit_composition",
+        "components",
+    )
+    if any(settlement.get(key) is None for key in required):
+        return None
+    if event.record_date is None or event.payment_date is None:
+        return None
+    components = settlement.get("components")
+    composition = settlement.get("unit_composition")
+    if not isinstance(components, list) or not isinstance(composition, dict):
+        return None
+    try:
+        if str(settlement["record_date"]) != event.record_date.isoformat():
+            return None
+        if str(settlement["settlement_date"]) != event.payment_date.isoformat():
+            return None
+        if date.fromisoformat(str(settlement["credit_date"])) < event.record_date:
+            return None
+        if Decimal(str(settlement["bonus_factor"])) != Decimal("0.01"):
+            return None
+        if Decimal(str(settlement["bonus_cost_per_share_brl"])) != Decimal(
+            "12.94564988922"
+        ):
+            return None
+        if (
+            date.fromisoformat(str(settlement["record_date"]))
+            != date(2025, 12, 17)
+            or date.fromisoformat(str(settlement["credit_date"]))
+            != date(2025, 12, 22)
+            or date.fromisoformat(str(settlement["settlement_date"]))
+            != date(2026, 2, 24)
+        ):
+            return None
+        component_names = set()
+        for item in components:
+            if not isinstance(item, dict):
+                return None
+            name = str(item.get("component", "")).strip().upper()
+            if not name or name in component_names:
+                return None
+            component_names.add(name)
+            if any(
+                not str(item.get(key, "")).strip()
+                for key in (
+                    "ticker",
+                    "asset_type",
+                    "isin_code",
+                    "units_per_position",
+                    "settlement_price_brl",
+                )
+            ):
+                return None
+        if component_names != {str(key).strip().upper() for key in composition}:
+            return None
+        if {
+            str(key).strip().upper(): Decimal(str(value))
+            for key, value in composition.items()
+        } != {"ON": Decimal(1), "PN": Decimal(4)}:
+            return None
+        if str(settlement["unit_ticker"]).strip().upper() != "KLBN11":
+            return None
+        if str(settlement["unit_asset_type"]).strip().upper() != "ACAO":
+            return None
+        component_by_name = {
+            str(item["component"]).strip().upper(): item
+            for item in components
+        }
+        official_component_facts = {
+            "ON": ("KLBN3", Decimal("1"), Decimal("3.942352337")),
+            "PN": ("KLBN4", Decimal("4"), Decimal("3.942611212")),
+        }
+        for name, (ticker, units, settlement_price) in official_component_facts.items():
+            item = component_by_name.get(name, {})
+            if (
+                str(item.get("ticker", "")).strip().upper() != ticker
+                or str(item.get("asset_type", "")).strip().upper() != "ACAO"
+                or Decimal(str(item.get("units_per_position"))) != units
+                or Decimal(str(item.get("settlement_price_brl")))
+                != settlement_price
+            ):
+                return None
+    except (ArithmeticError, TypeError, ValueError):
+        return None
+    return dict(settlement)
+
+
 def _effective_date(event: CorporateEvent) -> date:
     """Require the canonical effective date; legacy mirrors are not evidence."""
 
     value = event.effective_date
     source_provider = _normalized_text(event.source_provider).lower()
     if value is None and source_provider in {"", _LEGACY_SOURCE_PROVIDER}:
-        value = event.event_date
+        value = getattr(event, "event_date", None)
     if value is None:
         raise ValueError(f"evento corporativo {event.id!r} sem data efetiva")
     return value
@@ -76,7 +197,7 @@ def _quantity_factor(event: CorporateEvent) -> Decimal:
 
     value = event.quantity_factor
     if value is None:
-        value = event.ratio
+        value = getattr(event, "ratio", None)
     if value is None:
         raise ValueError(
             f"evento corporativo {event.id!r} sem fator de quantidade"
@@ -90,7 +211,7 @@ def _source_identity(event: CorporateEvent) -> tuple[str, str]:
     source = str(event.source_provider or "catalog")
     source_event_id = str(
         event.source_event_id
-        or event.brapi_event_id
+        or getattr(event, "brapi_event_id", None)
         or f"corporate-event:{event.id}"
     )
     return source, source_event_id
@@ -101,10 +222,11 @@ def _raw_payload(event: CorporateEvent) -> dict[str, Any]:
 
     if isinstance(event.raw_metadata, dict):
         return dict(event.raw_metadata)
-    if not event.raw_data:
+    raw_data = getattr(event, "raw_data", None)
+    if not raw_data:
         return {}
     try:
-        parsed = json.loads(event.raw_data)
+        parsed = json.loads(raw_data)
     except (TypeError, ValueError):
         return {}
     if not isinstance(parsed, dict):
@@ -221,10 +343,72 @@ async def load_global_corporate_actions_by_ticker(
         )
     )
 
+    rows = result.all()
+    configured: dict[int, dict[str, Any]] = {}
+    identity_tickers: set[str] = set()
+    for event, evidence in rows:
+        spec = _component_bonus_projection_spec(event, evidence)
+        if spec is None:
+            continue
+        configured[int(event.id)] = spec
+        identity_tickers.add(str(spec["unit_ticker"]).strip().upper())
+        for component in spec["components"]:
+            identity_tickers.add(str(component["ticker"]).strip().upper())
+
+    catalog_by_identity: dict[tuple[str, str], str | None] = {}
+    if identity_tickers:
+        asset_result = await db.execute(
+            select(Asset).where(
+                func.upper(func.trim(Asset.ticker)).in_(identity_tickers)
+            )
+        )
+        for asset in asset_result.scalars().all():
+            catalog_by_identity[
+                (
+                    str(asset.ticker).strip().upper(),
+                    _normalized_text(asset.asset_type).upper(),
+                )
+            ] = str(asset.isin_code or "").strip().upper() or None
+
     actions: dict[str, list[NormalizedCorporateAction]] = {}
-    for event, evidence in result.all():
+    for event, evidence in rows:
         if not _is_projection_eligible(event):
             continue
+
+        component_bonus = configured.get(int(event.id))
+        if (
+            _normalized_text(event.ticker).upper() == "KLBN11"
+            and _normalized_text(event.event_type).upper() == "BONIFICACAO"
+            and component_bonus is None
+        ):
+            # Never send a KLBN11 bonus through the homogeneous ticker factor.
+            continue
+        if component_bonus is not None:
+            expected_unit = (
+                str(component_bonus["unit_ticker"]).strip().upper(),
+                str(component_bonus["unit_asset_type"]).strip().upper(),
+            )
+            if catalog_by_identity.get(expected_unit) != str(
+                component_bonus["unit_isin_code"]
+            ).strip().upper():
+                continue
+            if (
+                event.isin_code
+                and str(event.isin_code).strip().upper()
+                != str(component_bonus["unit_isin_code"]).strip().upper()
+            ):
+                continue
+            if any(
+                catalog_by_identity.get(
+                    (
+                        str(component["ticker"]).strip().upper(),
+                        str(component["asset_type"]).strip().upper(),
+                    )
+                )
+                != str(component["isin_code"]).strip().upper()
+                for component in component_bonus["components"]
+            ):
+                continue
 
         kind = _SUPPORTED_KINDS.get(str(event.event_type).upper())
         if kind is None:
@@ -241,7 +425,12 @@ async def load_global_corporate_actions_by_ticker(
                 kind=kind,
                 quantity_factor=_quantity_factor(event),
                 raw_payload=_raw_payload(event),
-                fractional_resolution=_fractional_resolution(event, evidence),
+                fractional_resolution=(
+                    None
+                    if component_bonus is not None
+                    else _fractional_resolution(event, evidence)
+                ),
+                component_bonus=component_bonus,
             )
         )
 

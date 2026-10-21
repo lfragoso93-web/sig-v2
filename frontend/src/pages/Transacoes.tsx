@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Search, Trash2, Pencil, ChevronDown, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
+  useTransactionClasses,
   useDeleteTransaction,
   type Transaction,
 } from '@/hooks/useTransactions'
@@ -136,6 +137,145 @@ function Pagination({ page, pages, onPrev, onNext }: { page: number; pages: numb
   )
 }
 
+interface ClassSectionProps {
+  portfolioId: number
+  assetType: string
+  label: string
+  globalSearch: string
+  opFilter: 'todos' | 'buy' | 'sell'
+  onEdit: (t: Transaction) => void
+  onDelete: (id: number) => void
+}
+
+function ClassSection({
+  portfolioId,
+  assetType,
+  label,
+  globalSearch,
+  opFilter,
+  onEdit,
+  onDelete,
+}: ClassSectionProps) {
+  const [open, setOpen] = useState(true)
+  const [groupSearch, setGroupSearch] = useState('')
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [globalSearch, opFilter, groupSearch])
+
+  const activeTicker = (groupSearch.trim() || globalSearch.trim()) || undefined
+
+  const { data: paged, isLoading } = useTransactions(portfolioId, {
+    asset_type: assetType,
+    page,
+    page_size: 15,
+    ticker: activeTicker,
+    operation: opFilter !== 'todos' ? opFilter : undefined,
+  })
+
+  const items = paged?.items ?? []
+  const total = paged?.total ?? 0
+  const pages = paged?.pages ?? 1
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      data-testid={`class-section-${assetType}`}
+      style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
+    >
+      <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-divider)' }}>
+        <button
+          type="button"
+          className="flex items-center gap-2 text-left"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+        >
+          <ChevronDown
+            size={14}
+            className="transition-transform"
+            style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }}
+          />
+          <span className="text-xs font-semibold">{label}</span>
+          <span className="text-xs text-muted">· {total} registro{total !== 1 ? 's' : ''}</span>
+        </button>
+        <input
+          className="input input-xs w-32"
+          placeholder="Buscar no grupo…"
+          value={groupSearch}
+          onChange={e => setGroupSearch(e.target.value)}
+        />
+      </div>
+
+      {open && (
+        <>
+          {isLoading ? (
+            <div className="p-4 flex flex-col gap-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton h-8 w-full rounded" />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-xs text-center py-6 text-muted">
+              Nenhuma transação encontrada para este filtro no grupo {label}.
+            </p>
+          ) : (
+            <div className="p-3">
+              {/* Mobile cards */}
+              <div className="flex flex-col gap-2 md:hidden">
+                {items.map(t => (
+                  <TransactionCard
+                    key={t.id}
+                    t={t}
+                    onDelete={() => onDelete(t.id)}
+                    onEdit={() => onEdit(t)}
+                  />
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block table-responsive">
+                <table className="positions-table">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Ativo</th>
+                      <th>Tipo</th>
+                      <th className="text-center">Op.</th>
+                      <th className="text-right">Qtd</th>
+                      <th className="text-right">Preço unit.</th>
+                      <th className="text-right">Taxas</th>
+                      <th className="text-right">Total</th>
+                      <th style={{ width: '4rem' }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(t => (
+                      <TransactionRow
+                        key={t.id}
+                        t={t}
+                        onDelete={() => onDelete(t.id)}
+                        onEdit={() => onEdit(t)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                page={page}
+                pages={pages}
+                onPrev={() => setPage(p => Math.max(1, p - 1))}
+                onNext={() => setPage(p => Math.min(pages, p + 1))}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Transacoes() {
   const { selectedPortfolioId, openTransactionModal } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
@@ -143,50 +283,33 @@ export default function Transacoes() {
 
   const [search, setSearch]     = useState(() => searchParams.get('ticker') ?? '')
   const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
-  const [page, setPage]         = useState(1)
 
-  function handleSearchChange(v: string) { setSearch(v); setPage(1) }
-  function handleOpChange(v: 'todos' | 'buy' | 'sell') { setOpFilter(v); setPage(1) }
+  const { data: classSummaries = [], isLoading: loadingClasses } = useTransactionClasses(selectedPortfolioId)
 
-  const { data: paged, isLoading } = useTransactions(selectedPortfolioId, {
-    page,
-    page_size: 50,
-    ticker:    search    || undefined,
+  // Consultar resumo global para o gráfico de evolução e totais
+  const { data: globalPaged, isLoading: loadingGlobal } = useTransactions(selectedPortfolioId, {
+    page: 1,
+    page_size: 100,
+    ticker:    search || undefined,
     operation: opFilter !== 'todos' ? opFilter : undefined,
   })
 
-  const transactions = paged?.items    ?? []
-  const totalRecords = paged?.total    ?? 0
-  const totalPages   = paged?.pages    ?? 1
+  const globalTransactions = globalPaged?.items ?? []
+  const totalRecords = globalPaged?.total ?? 0
   const deleteTransaction = useDeleteTransaction()
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const [openGroups, setOpenGroups]       = useState<Record<string, boolean>>({})
-  const [groupSearch, setGroupSearch]     = useState<Record<string, string>>({})
-
-  function toggleGroup(assetType: string) { setOpenGroups(prev => ({ ...prev, [assetType]: !(prev[assetType] ?? true) })) }
-  function isGroupOpen(assetType: string) { return openGroups[assetType] ?? true }
-  function handleGroupSearchChange(assetType: string, value: string) {
-    setGroupSearch(prev => ({ ...prev, [assetType]: value }))
-    setOpenGroups(prev => ({ ...prev, [assetType]: true }))
-  }
 
   useEffect(() => {
     const ticker = searchParams.get('ticker')
-    if (ticker) { setSearch(ticker); setPage(1) }
+    if (ticker) { setSearch(ticker) }
   }, [searchParams])
 
-  const groupedByType = useMemo(() => {
-    const groups: Record<string, Transaction[]> = {}
-    for (const t of transactions) {
-      const key = t.asset_type ?? 'SEM_TIPO'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(t)
-    }
-    return groups
-  }, [transactions])
-
-  const totalCompras = transactions.filter(t => t.operation === 'buy').reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
-  const totalVendas = transactions.filter(t => t.operation === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
+  const totalCompras = globalTransactions
+    .filter(t => t.operation === 'buy')
+    .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
+  const totalVendas = globalTransactions
+    .filter(t => t.operation === 'sell')
+    .reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
 
   function handleEdit(t: Transaction) {
     openTransactionModal({
@@ -238,77 +361,71 @@ export default function Transacoes() {
 
       <div className="card p-4">
         <div className="flex items-center gap-2 mb-3"><BarChart2 size={16} className="text-brand-400" /><span className="section-card-title">Consolidação de aportes</span></div>
-        <div className="h-56"><TransactionsBarChart transactions={transactions} /></div>
+        <div className="h-56"><TransactionsBarChart transactions={globalTransactions} /></div>
       </div>
 
       <div className="filter-bar">
         <div className="relative" style={{ width: 'min(220px, 100%)' }}>
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-          <input className="input" placeholder="Buscar ticker…" value={search} onChange={e => handleSearchChange(e.target.value)} style={{ fontSize: 13, paddingLeft: 36, paddingRight: search ? 28 : 12, height: 38 }} />
-          {search && <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-faint)' }} onClick={() => handleSearchChange('')} title="Limpar filtro">×</button>}
+          <input className="input" placeholder="Buscar ticker…" value={search} onChange={e => setSearch(e.target.value)} style={{ fontSize: 13, paddingLeft: 36, paddingRight: search ? 28 : 12, height: 38 }} />
+          {search && <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-faint)' }} onClick={() => setSearch('')} title="Limpar filtro">×</button>}
         </div>
 
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
           {(['todos', 'buy', 'sell'] as const).map(op => (
-            <button key={op} onClick={() => handleOpChange(op)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: opFilter === op ? 'var(--color-surface)' : 'transparent', color: opFilter === op ? 'var(--color-text)' : 'var(--color-text-muted)', boxShadow: opFilter === op ? 'var(--shadow-sm)' : 'none', minHeight: 32 }}>
+            <button key={op} onClick={() => setOpFilter(op)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: opFilter === op ? 'var(--color-surface)' : 'transparent', color: opFilter === op ? 'var(--color-text)' : 'var(--color-text-muted)', boxShadow: opFilter === op ? 'var(--shadow-sm)' : 'none', minHeight: 32 }}>
               {op === 'todos' ? 'Todos' : op === 'buy' ? 'Compras' : 'Vendas'}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        {isLoading ? (
-          <div className="p-4 flex flex-col gap-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded" />)}</div>
-        ) : transactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-sm font-medium mb-1">Nenhuma transação encontrada</p><p className="text-xs text-muted">{totalRecords === 0 ? 'Registre sua primeira transação.' : 'Tente ajustar os filtros.'}</p></div>
+      <div className="flex flex-col gap-4">
+        {loadingClasses || loadingGlobal ? (
+          <div className="card p-4 flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton h-12 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : classSummaries.length === 0 && totalRecords === 0 ? (
+          <div className="card p-12 flex flex-col items-center justify-center text-center">
+            <p className="text-sm font-medium mb-1">Nenhuma transação encontrada</p>
+            <p className="text-xs text-muted">Registre sua primeira transação para acompanhar seu histórico.</p>
+          </div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 p-3 md:hidden">
-              {Object.entries(groupedByType).map(([assetType, list]) => {
-                const query = (groupSearch[assetType] ?? '').toLowerCase()
-                const groupList = query ? list.filter(t => t.ticker.toLowerCase().includes(query)) : list
-                const open = isGroupOpen(assetType)
-                return (
-                  <div key={assetType} className="flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
-                    <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid var(--color-divider)' }}>
-                      <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}>
-                        <ChevronDown size={14} className="transition-transform" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }} />
-                        <span className="text-xs font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span>
-                        <span className="text-[11px] text-muted">· {groupList.length} de {list.length}</span>
-                      </button>
-                      <input className="input input-xs w-24" placeholder="Buscar..." value={groupSearch[assetType] ?? ''} onChange={e => handleGroupSearchChange(assetType, e.target.value)} />
-                    </div>
-                    {open && <div className="flex flex-col gap-2 p-3">{groupList.length === 0 ? <p className="text-xs text-center py-4 text-muted">Nenhum ticker encontrado neste grupo.</p> : groupList.map(t => <TransactionCard key={t.id} t={t} onDelete={() => setConfirmDelete(t.id)} onEdit={() => handleEdit(t)} />)}</div>}
-                  </div>
-                )
-              })}
-              <div className="flex justify-between text-xs pt-2 text-muted" style={{ borderTop: '1px solid var(--color-divider)' }}><span>{totalRecords} transação(ões)</span><span><span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>{' · '}<span style={{ color: 'var(--color-notification)' }}>V: {formatBRL(totalVendas)}</span></span></div>
-              <Pagination page={page} pages={totalPages} onPrev={() => setPage(p => Math.max(1, p - 1))} onNext={() => setPage(p => Math.min(totalPages, p + 1))} />
-            </div>
+            {classSummaries.map(cls => (
+              <ClassSection
+                key={cls.asset_type}
+                portfolioId={selectedPortfolioId}
+                assetType={cls.asset_type}
+                label={cls.label || ASSET_TYPE_LABEL[cls.asset_type] || cls.asset_type}
+                globalSearch={search}
+                opFilter={opFilter}
+                onEdit={handleEdit}
+                onDelete={id => setConfirmDelete(id)}
+              />
+            ))}
 
-            <div className="hidden md:flex flex-col gap-4 p-3">
-              {Object.entries(groupedByType).map(([assetType, list]) => {
-                const query = (groupSearch[assetType] ?? '').toLowerCase()
-                const groupList = query ? list.filter(t => t.ticker.toLowerCase().includes(query)) : list
-                const open = isGroupOpen(assetType)
-                return (
-                  <div key={assetType} className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
-                    <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-divider)' }}>
-                      <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}><ChevronDown size={14} className="transition-transform" style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }} /><span className="text-xs font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span><span className="text-xs text-muted">· {groupList.length} de {list.length}</span></button>
-                      <input className="input input-xs w-32" placeholder="Buscar ticker..." value={groupSearch[assetType] ?? ''} onChange={e => handleGroupSearchChange(assetType, e.target.value)} />
-                    </div>
-                    {open && (groupList.length === 0 ? <p className="text-xs text-center py-6 text-muted">Nenhum ticker encontrado neste grupo.</p> : <div className="table-responsive"><table className="positions-table"><thead><tr><th>Data</th><th>Ativo</th><th>Tipo</th><th className="text-center">Op.</th><th className="text-right">Qtd</th><th className="text-right">Preço unit.</th><th className="text-right">Taxas</th><th className="text-right">Total</th><th style={{ width: '4rem' }} /></tr></thead><tbody>{groupList.map(t => <TransactionRow key={t.id} t={t} onDelete={() => setConfirmDelete(t.id)} onEdit={() => handleEdit(t)} />)}</tbody></table></div>)}
-                  </div>
-                )
-              })}
-              <div className="flex justify-between items-center text-xs pr-1 pb-1 text-muted"><Pagination page={page} pages={totalPages} onPrev={() => setPage(p => Math.max(1, p - 1))} onNext={() => setPage(p => Math.min(totalPages, p + 1))} /><span><span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>{' · '}<span style={{ color: 'var(--color-notification)' }}>V: {formatBRL(totalVendas)}</span></span></div>
+            <div className="flex justify-between items-center text-xs px-2 py-1 text-muted">
+              <span>{totalRecords} transação(ões) no total</span>
+              <span>
+                <span style={{ color: 'var(--color-success)' }}>Compras: {formatBRL(totalCompras)}</span>
+                {' · '}
+                <span style={{ color: 'var(--color-notification)' }}>Vendas: {formatBRL(totalVendas)}</span>
+              </span>
             </div>
           </>
         )}
       </div>
 
-      {confirmDelete !== null && <ConfirmDeleteModal onCancel={() => setConfirmDelete(null)} onConfirm={() => handleDelete(confirmDelete)} loading={deleteTransaction.isPending} />}
+      {confirmDelete !== null && (
+        <ConfirmDeleteModal
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => handleDelete(confirmDelete)}
+          loading={deleteTransaction.isPending}
+        />
+      )}
     </div>
   )
 }

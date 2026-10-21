@@ -63,10 +63,12 @@ export type TransactionUpdate = Partial<TransactionCreate>
 export interface TransactionFilters {
   page?:       number
   page_size?:  number
+  asset_type?: string
   ticker?:     string
   operation?:  'buy' | 'sell' | null
   date_from?:  string | null
   date_to?:    string | null
+  sort?:       'asc' | 'desc'
 }
 
 const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
@@ -74,6 +76,7 @@ const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
 
 function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
   qc.invalidateQueries({ queryKey: ['transactions',         portfolioId] })
+  qc.invalidateQueries({ queryKey: ['transaction-classes',  portfolioId] })
   qc.invalidateQueries({ queryKey: ['fixed-income-contracts', portfolioId] })
   qc.invalidateQueries({ queryKey: ['portfolio-summary',    portfolioId] })
   qc.invalidateQueries({ queryKey: ['positions',            portfolioId] })
@@ -99,16 +102,34 @@ export function useTransactions(
         page:      filters.page      ?? 1,
         page_size: filters.page_size ?? 50,
       }
+      if (filters.asset_type) params.asset_type = filters.asset_type
       if (filters.ticker)     params.ticker    = filters.ticker
       if (filters.operation)  params.operation = filters.operation
       if (filters.date_from)  params.date_from = filters.date_from
       if (filters.date_to)    params.date_to   = filters.date_to
+      if (filters.sort)       params.sort      = filters.sort
       return api
         .get(`/portfolios/${portfolioId}/transactions`, { params })
         .then(r => r.data)
     },
     enabled: !!portfolioId,
     placeholderData: prev => prev,
+  })
+}
+
+export interface TransactionClassSummary {
+  asset_type: string
+  label: string
+  count: number
+}
+
+export function useTransactionClasses(portfolioId: number | null) {
+  return useQuery<TransactionClassSummary[]>({
+    queryKey: ['transaction-classes', portfolioId],
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/transactions/classes`)
+      .then(r => r.data),
+    enabled: !!portfolioId,
   })
 }
 

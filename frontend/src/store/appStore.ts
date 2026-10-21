@@ -44,22 +44,50 @@ interface AppState {
   toggleSidebarCollapsed: () => void
 }
 
+function parsePortfolioId(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isInteger(num) && num > 0 ? num : null
+}
+
+function getInitialPersistedState(): {
+  theme?: 'dark' | 'light'
+  selectedPortfolioId?: number | null
+  sidebarCollapsed?: boolean
+} {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return {}
+    const raw = window.localStorage.getItem('sig-app')
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    const state = (parsed && typeof parsed === 'object' && parsed.state) ? parsed.state : {}
+    return {
+      ...state,
+      selectedPortfolioId: parsePortfolioId(state.selectedPortfolioId),
+    }
+  } catch {
+    return {}
+  }
+}
+
+const initialPersisted = getInitialPersistedState()
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      theme: 'dark',
-      selectedPortfolioId: null,
+      theme: initialPersisted.theme ?? 'dark',
+      selectedPortfolioId: parsePortfolioId(initialPersisted.selectedPortfolioId),
       transactionModal: { open: false },
       sidebarOpen: false,
-      sidebarCollapsed: false,
+      sidebarCollapsed: initialPersisted.sidebarCollapsed ?? false,
 
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme)
         set({ theme })
       },
-      setSelectedPortfolio:   (id) => set({ selectedPortfolioId: id }),
-      setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
-      selectPortfolio:        (id) => set({ selectedPortfolioId: id }),
+      setSelectedPortfolio:   (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
+      setSelectedPortfolioId: (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
+      selectPortfolio:        (id) => set({ selectedPortfolioId: parsePortfolioId(id) }),
       clearSelectedPortfolio: ()  => set({ selectedPortfolioId: null }),
 
       openTransactionModal: (prefill) =>
@@ -76,8 +104,9 @@ export const useAppStore = create<AppState>()(
       name: 'sig-app',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        theme:            state.theme,
-        sidebarCollapsed: state.sidebarCollapsed,
+        theme:               state.theme,
+        selectedPortfolioId: state.selectedPortfolioId,
+        sidebarCollapsed:    state.sidebarCollapsed,
       }),
     }
   )

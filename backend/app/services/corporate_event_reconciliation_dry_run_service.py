@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,15 +25,31 @@ from app.services.corporate_event_reconciliation_plan import (
 from app.services.corporate_event_ledger_preflight import (
     build_corporate_event_ledger_preflight_report,
 )
+from app.services.corporate_action_position_reader import (
+    _component_bonus_projection_spec,
+)
 
 
 def evidence_from_event(event: CorporateEvent) -> CorporateEventEvidence:
+    payload = event.raw_metadata if isinstance(event.raw_metadata, dict) else {}
+    settlement = payload.get("fractional_component_settlement")
+    projection_reference = None
+    if isinstance(settlement, dict):
+        ref = str(settlement.get("evidence_reference", "")).strip()
+        probe = SimpleNamespace(
+            decision="MATCHED",
+            evidence_type="OFFICIAL_ISSUER_DOCUMENT",
+            evidence_reference=ref,
+        )
+        if ref and _component_bonus_projection_spec(event, probe) is not None:
+            projection_reference = ref
     return CorporateEventEvidence(
         event_id=int(event.id),
         ticker=str(event.ticker),
         event_type=str(event.event_type),
         source_provider=str(event.source_provider),
         source_event_id=event.source_event_id,
+        component_projection_reference=projection_reference,
     )
 
 
@@ -198,6 +215,18 @@ async def build_corporate_event_reconciliation_dry_run(
         portfolio_id=ledger_preflight_portfolio_id,
         effective_date=(
             match_resolution_evidence.effective_date
+            if match_resolution_evidence is not None
+            and ledger_event.id == canonical_event_id
+            else None
+        ),
+        component_bonus_evidence_type=(
+            match_resolution_evidence.evidence_type.value
+            if match_resolution_evidence is not None
+            and ledger_event.id == canonical_event_id
+            else None
+        ),
+        component_bonus_evidence_reference=(
+            match_resolution_evidence.evidence_reference
             if match_resolution_evidence is not None
             and ledger_event.id == canonical_event_id
             else None

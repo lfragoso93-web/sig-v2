@@ -23,6 +23,13 @@ interface ValidationRow {
   quantity?: number
 }
 
+interface SkippedRecord {
+  line_number: number
+  raw_ticker: string
+  movement_type: string
+  reason: string
+}
+
 interface ImportResult {
   success: boolean
   imported_count: number
@@ -30,6 +37,8 @@ interface ImportResult {
   error_count: number
   rows: ValidationRow[]
   global_errors: string[]
+  adapter_format?: string | null
+  skipped_records?: SkippedRecord[] | null
 }
 
 const REQUIRED_COLUMNS = ['ticker', 'asset_type', 'operation', 'quantity', 'price', 'date', 'fees', 'currency', 'notes']
@@ -53,6 +62,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
   const [preview, setPreview] = useState<string[][]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportingPositions, setIsExportingPositions] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
   const [rowFilter, setRowFilter] = useState<RowFilter>(null)
@@ -193,6 +203,29 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
       setError('Erro ao exportar transações: ' + getApiValidationErrorMessage(err, 'Erro desconhecido'))
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleExportPositions = async () => {
+    setIsExportingPositions(true)
+    setError('')
+    try {
+      const response = await api.get(`/portfolios/${portfolioId}/export-positions-csv`, {
+        responseType: 'blob',
+      })
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `portfolio_${portfolioId}_positions.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Erro ao exportar posições: ' + getApiValidationErrorMessage(err, 'Erro desconhecido'))
+    } finally {
+      setIsExportingPositions(false)
     }
   }
 
@@ -337,7 +370,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
               </div>
               <input id="file-input" type="file" accept=".csv" onChange={handleFileSelect} style={{ display: 'none' }} />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                Colunas obrigatórias: <strong>{REQUIRED_COLUMNS.join(', ')}</strong>. Operações aceitas: <strong>buy</strong> e <strong>sell</strong>. Data em <strong>YYYY-MM-DD</strong>.
+                Formatos suportados: <strong>Modelo canônico SGI v2</strong> ({REQUIRED_COLUMNS.join(', ')}) ou <strong>Área do Investidor B3</strong> (arquivos de Negociação e Movimentação com detecção automática).
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 Para Renda Fixa, os campos de contrato são opcionais. Repita a mesma <strong>fixed_income_contract_key</strong> nas aplicações vinculadas ao mesmo contrato; arquivos antigos continuam aceitos.
@@ -348,6 +381,9 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
                 </button>
                 <button onClick={handleExportTransactions} disabled={isExporting} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-primary) l c h / 0.35)', background: 'transparent', color: 'var(--color-primary)', cursor: isExporting ? 'wait' : 'pointer', opacity: isExporting ? 0.7 : 1 }}>
                   <Download size={14} /> {isExporting ? 'Exportando...' : 'Exportar transações da carteira'}
+                </button>
+                <button onClick={handleExportPositions} disabled={isExportingPositions} style={{ ...buttonStyle, display: 'flex', alignItems: 'center', gap: '0.375rem', border: '1px solid oklch(from var(--color-primary) l c h / 0.35)', background: 'transparent', color: 'var(--color-primary)', cursor: isExportingPositions ? 'wait' : 'pointer', opacity: isExportingPositions ? 0.7 : 1 }}>
+                  <Download size={14} /> {isExportingPositions ? 'Exportando...' : 'Exportar posições da carteira'}
                 </button>
               </div>
             </div>
@@ -373,6 +409,18 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
 
               {result && (
                 <section onClick={() => setRowFilter(null)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {result.adapter_format && (
+                    <div style={{ padding: '0.625rem 0.875rem', borderRadius: 'var(--radius-md)', background: 'oklch(from var(--color-primary) l c h / 0.1)', border: '1px solid oklch(from var(--color-primary) l c h / 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-primary)' }}>
+                      <span>
+                        Formato B3 reconhecido: <strong>{result.adapter_format === 'b3_negociacao_v1' ? 'Negociação' : 'Movimentação'}</strong>
+                      </span>
+                      {result.skipped_records && result.skipped_records.length > 0 && (
+                        <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                          {result.skipped_records.length} evento(s) corporativo(s)/provento(s) segregado(s)
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.75rem' }}>
                     {renderFilterCard('valid', 'Válidas', counts.valid, 'var(--color-success)')}
                     {renderFilterCard('warning', 'Avisos', counts.warning, 'var(--color-warning)')}

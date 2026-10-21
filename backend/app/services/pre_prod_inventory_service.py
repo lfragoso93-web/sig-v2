@@ -81,6 +81,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "export_before_cleanup",
         "Eventos podem conter estado aplicado, vínculo com carteira e dados brutos não integralmente reproduzíveis.",
     ),
+    "corporate_event_destination_legs": (
+        "export_before_cleanup",
+        "Pernas de destino de eventos corporativos multilote/cisão.",
+    ),
     "corporate_event_reconciliation_evidence": (
         "preserved",
         "Evidencia operacional de reconciliacao de eventos corporativos; deve acompanhar o estado auditado dos eventos.",

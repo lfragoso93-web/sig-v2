@@ -112,6 +112,14 @@ class TransactionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TransactionClassSummary(BaseModel):
+    asset_type: str
+    label: str
+    count: int
+
+    model_config = {"from_attributes": True}
+
+
 class PagedTransactions(BaseModel):
     items:     List[TransactionOut]
     total:     int
@@ -134,3 +142,47 @@ class CorporateLifecycleEventOut(BaseModel):
     realized_pnl_brl: Optional[Decimal] = None
     cash_treatment: Optional[str] = None
     message: Optional[str] = None
+
+
+class UpcomingCorporateEventOut(BaseModel):
+    event_id: int
+    ticker: str
+    event_type: str
+    event_date: DateType
+    description: Optional[str] = None
+
+
+class CorporateActionComponentRightOut(BaseModel):
+    component: str
+    bonus_quantity: Decimal
+    whole_quantity: Decimal
+    fractional_quantity: Decimal
+    whole_units_formed: Decimal
+    component_shares_in_units: Decimal
+    residual_whole_quantity: Decimal
+    settlement_price_brl: Decimal
+    gross_amount_brl: Decimal
+    attributed_cost_brl: Decimal
+    fractional_cost_basis_brl: Decimal
+    estimated_fractional_result_brl: Decimal
+
+
+class PortfolioCorporateRightOut(BaseModel):
+    event_id: int
+    source_event_id: str
+    ticker: str
+    event_type: str
+    record_date: DateType
+    settlement_date: DateType
+    base_position: Decimal
+    settlement_status: Literal["PENDING", "AVAILABLE"]
+    components: List[CorporateActionComponentRightOut]
+    gross_amount_brl: Decimal
+    calculated_gross_amount_brl: Decimal
+    bonus_cost_per_share_brl: Decimal
+    attributed_bonus_cost_brl: Decimal
+    fractional_cost_basis_brl: Decimal
+    estimated_fractional_result_brl: Decimal
+    cash_status: Literal["CALCULATED_NOT_CONFIRMED"]
+    cash_treatment: str
+    evidence_reference: str

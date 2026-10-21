@@ -34,6 +34,7 @@ class CorporateEventEvidence:
     event_type: str
     source_provider: str
     source_event_id: str | None
+    component_projection_reference: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ class CorporateEventMatchResolutionEvidence:
     ledger_quantity_factor: str | None = None
     effective_date: date | None = None
 
-    def to_dict(self) -> dict[str, str | None]:
+    def to_dict(self) -> dict[str, Any]:
         payload = {
             "evidence_type": self.evidence_type.value,
             "evidence_reference": self.evidence_reference,
@@ -241,19 +242,40 @@ def validate_match_resolution_evidence(
 def _reject_unsupported_klbn11_unit_reconciliation(
     evidences: tuple[CorporateEventEvidence, ...],
     evidence: CorporateEventMatchResolutionEvidence,
+    *,
+    canonical_event_id: int,
 ) -> None:
-    unit_quantity_changing_types = {"BONIFICACAO", "DESDOBRAMENTO"}
+    unit_quantity_changing_types = {"BONIFICACAO"}
     has_klbn11_unit_event = any(
         item.ticker.strip().upper() == "KLBN11"
         and item.event_type.strip().upper() in unit_quantity_changing_types
         for item in evidences
     )
-    if has_klbn11_unit_event:
-        if evidence.fractional_policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
-            return
+    if not has_klbn11_unit_event:
+        return
+    canonical_evidence = next(
+        (item for item in evidences if item.event_id == canonical_event_id),
+        None,
+    )
+    projection_ready = (
+        canonical_evidence is not None
+        and canonical_evidence.ticker.strip().upper() == "KLBN11"
+        and canonical_evidence.event_type.strip().upper()
+        in unit_quantity_changing_types
+        and canonical_evidence.component_projection_reference
+        == evidence.evidence_reference
+    )
+    if (
+        not projection_ready
+        or evidence.evidence_type
+        not in {
+            CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT,
+            CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+        }
+    ):
         raise ValueError(
-            "MATCHED para KLBN11 exige contrato explicito de Unit composta, "
-            "fracao/residuo e tratamento de caixa"
+            "MATCHED para KLBN11 exige contrato multiativo completo e "
+            "referencia compativel da evidencia oficial"
         )
 
 
@@ -371,6 +393,7 @@ def build_reconciliation_dry_run_report(
         _reject_unsupported_klbn11_unit_reconciliation(
             evidences,
             match_resolution_evidence,
+            canonical_event_id=canonical_event_id,
         )
         _reject_unsupported_adjusted_ledger_reapplication(
             evidences,

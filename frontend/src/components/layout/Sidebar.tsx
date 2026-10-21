@@ -59,7 +59,7 @@ export default function Sidebar() {
     }
   }, [sidebarOpen])
 
-  const selected = portfolios.find(p => p.id === selectedPortfolioId)
+  const selected = portfolios.find(p => Number(p.id) === Number(selectedPortfolioId))
   const isToolsRoute = location.pathname.startsWith('/carteira/ferramentas/')
 
   useEffect(() => {

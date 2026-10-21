@@ -104,6 +104,9 @@ def start_scheduler() -> None:
     )
     async def persist_daily_close_prices():
         """Persiste somente a cobertura de preço da data corrente."""
+        from sqlalchemy import func, select
+        from app.core.database import AsyncSessionLocal
+        from app.models.transaction import Transaction
         from app.services.asset_price_global_backfill_service import (
             run_global_asset_price_backfill,
         )
@@ -118,9 +121,18 @@ def start_scheduler() -> None:
 
             today = date.today()
             try:
+                async with AsyncSessionLocal() as db:
+                    tx_tickers = set(
+                        (
+                            await db.execute(
+                                select(func.upper(func.trim(Transaction.ticker))).distinct()
+                            )
+                        ).scalars().all()
+                    )
                 result = await run_global_asset_price_backfill(
                     required_to=today,
                     history_start=today,
+                    tickers=tx_tickers if tx_tickers else None,
                 )
                 logger.info(
                     "[scheduler] Fechamento diário de preços atualizado: %s",
