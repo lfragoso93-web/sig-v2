@@ -1001,6 +1001,12 @@ async def fetch_stocks_historical_v2(
 ) -> list[tuple[datetime, float]]:
     headers = _auth_headers()
     ticker_upper = ticker.upper()
+
+    from app.services.asset_coverage_service import asset_coverage_service, CAPABILITY_HISTORY
+    if not await asset_coverage_service.is_supported(ticker_upper, CAPABILITY_HISTORY):
+        logger.info("[market_data] Ticker %s ignorado para historico (cooldown de cobertura ativo)", ticker_upper)
+        return []
+
     params: dict = {"symbols": ticker_upper, "interval": "1d"}
     if date_from and date_to:
         params["startDate"] = date_from
@@ -1031,9 +1037,19 @@ async def fetch_stocks_historical_v2(
                     return [(now, float(price))]
                 return []
 
+            await asset_coverage_service.record_capability(ticker_upper, CAPABILITY_HISTORY, supported=True)
             return _parse_history_rows(history, ticker, f"v2/stocks range={range_}")
 
     except Exception as e:
+        if isinstance(e, httpx.HTTPStatusError):
+            if e.response.status_code == 404:
+                await asset_coverage_service.record_capability(
+                    ticker_upper, CAPABILITY_HISTORY, supported=False, error_code="404_NOT_FOUND"
+                )
+            elif e.response.status_code >= 500:
+                await asset_coverage_service.record_capability(
+                    ticker_upper, CAPABILITY_HISTORY, supported=False, error_code=f"{e.response.status_code}_SERVER_ERROR"
+                )
         logger.warning("[market_data] fetch_stocks_historical_v2 error for %s: %s", ticker, e)
         return []
 
@@ -1046,6 +1062,12 @@ async def fetch_fii_historical_v2(
 ) -> list[tuple[datetime, float]]:
     headers = _auth_headers()
     ticker_upper = ticker.upper()
+
+    from app.services.asset_coverage_service import asset_coverage_service, CAPABILITY_HISTORY
+    if not await asset_coverage_service.is_supported(ticker_upper, CAPABILITY_HISTORY):
+        logger.info("[market_data] Ticker %s ignorado para historico (cooldown de cobertura ativo)", ticker_upper)
+        return []
+
     params: dict = {"symbols": ticker_upper, "interval": "1d"}
     if date_from and date_to:
         params["startDate"] = date_from
@@ -1076,9 +1098,19 @@ async def fetch_fii_historical_v2(
                     return [(now, float(price))]
                 return []
 
+            await asset_coverage_service.record_capability(ticker_upper, CAPABILITY_HISTORY, supported=True)
             return _parse_history_rows(history, ticker, f"v2/fii range={range_}")
 
     except Exception as e:
+        if isinstance(e, httpx.HTTPStatusError):
+            if e.response.status_code == 404:
+                await asset_coverage_service.record_capability(
+                    ticker_upper, CAPABILITY_HISTORY, supported=False, error_code="404_NOT_FOUND"
+                )
+            elif e.response.status_code >= 500:
+                await asset_coverage_service.record_capability(
+                    ticker_upper, CAPABILITY_HISTORY, supported=False, error_code=f"{e.response.status_code}_SERVER_ERROR"
+                )
         logger.warning("[market_data] fetch_fii_historical_v2 error for %s: %s", ticker, e)
         return []
 

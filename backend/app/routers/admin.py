@@ -892,3 +892,32 @@ async def admin_cleanup_audit_logs(
     Restrito a SuperAdmins.
     """
     return await AuditLogService.cleanup_audit_logs(db, days_to_keep, dry_run)
+
+
+# -----------------------------------------------------------------------------
+# Cobertura de mercado por ativo (Issue #130 - Bloco 2)
+# -----------------------------------------------------------------------------
+
+@router.get("/coverage", response_model=list[dict])
+async def list_asset_coverage(
+    limit: int = Query(100, ge=1, le=500),
+    status: str | None = Query(None),
+    _: User = Depends(require_superadmin),
+):
+    """Diagnóstico protegido de cobertura de endpoints de mercado por ativo."""
+    from app.services.asset_coverage_service import asset_coverage_service
+    reports = await asset_coverage_service.list_all_coverages(limit=limit)
+    if status:
+        reports = [r for r in reports if r.status.upper() == status.upper()]
+    return [r.to_dict() for r in reports]
+
+
+@router.post("/coverage/clear", response_model=dict)
+async def clear_asset_coverage(
+    ticker: str | None = Query(None),
+    _: User = Depends(require_superadmin),
+):
+    """Limpa cache de cobertura de um ticker ou de todos os ativos."""
+    from app.services.asset_coverage_service import asset_coverage_service
+    cleared = await asset_coverage_service.clear_coverage(ticker=ticker)
+    return {"status": "ok", "cleared_count": cleared}
