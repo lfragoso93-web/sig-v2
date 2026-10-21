@@ -21,6 +21,7 @@ from app.core.scheduler import start_scheduler
 from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     admin,
+    admin_providers,
     assets,
     auth,
     class_targets,
@@ -184,6 +185,7 @@ app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags
 app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
 app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
 app.include_router(admin_bootstrap_router, prefix=f"{PREFIX}/admin",        tags=["admin-bootstrap"])
+app.include_router(admin_providers.router, prefix=PREFIX,                   tags=["admin-providers"])
 
 app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
