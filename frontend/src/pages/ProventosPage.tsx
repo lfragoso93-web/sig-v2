@@ -193,11 +193,13 @@ export default function ProventosPage() {
         </div>
       </div>
 
-      <AssetDetailDrawer
-        ticker={selectedTicker}
-        portfolioId={portfolioId}
-        onClose={() => setSelectedTicker(null)}
-      />
+      {selectedTicker && (
+        <AssetDetailDrawer
+          ticker={selectedTicker}
+          portfolioId={portfolioId}
+          onClose={() => setSelectedTicker(null)}
+        />
+      )}
     </div>
   )
 }

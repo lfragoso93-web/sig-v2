@@ -450,11 +450,13 @@ export default function Transacoes() {
         />
       )}
 
-      <AssetDetailDrawer
-        ticker={selectedTicker}
-        portfolioId={selectedPortfolioId}
-        onClose={() => setSelectedTicker(null)}
-      />
+      {selectedTicker && (
+        <AssetDetailDrawer
+          ticker={selectedTicker}
+          portfolioId={selectedPortfolioId}
+          onClose={() => setSelectedTicker(null)}
+        />
+      )}
     </div>
   )
 }
