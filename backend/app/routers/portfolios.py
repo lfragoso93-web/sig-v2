@@ -6,9 +6,9 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Response,
     UploadFile,
-    Query,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.schemas.asset_portfolio_insight import AssetPortfolioInsightResponse
 from app.schemas.portfolio import (
     ClassTargetWithCurrent,
     CSVImportResponse,
@@ -23,11 +24,17 @@ from app.schemas.portfolio import (
     PortfolioResponse,
     PortfolioUpdate,
 )
+from app.schemas.portfolio_ai_analysis import (
+    AiQuestionRequest,
+    AiQuestionResponse,
+    ContributionSimulationRequest,
+    ContributionSimulationResponse,
+    PortfolioAiAnalysisResponse,
+)
+from app.schemas.portfolio_analysis import PortfolioConsolidatedAnalysisResponse
 from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
-from app.schemas.asset_portfolio_insight import AssetPortfolioInsightResponse
-from app.schemas.portfolio_analysis import PortfolioConsolidatedAnalysisResponse
 from app.services import csv_import_service
 from app.services.canonical_positions_service import (
     export_canonical_positions_csv,
@@ -164,7 +171,6 @@ async def delete_user_portfolio(
     current_user: User = Depends(get_current_user),
 ):
     await delete_portfolio_safely(db, portfolio_id, current_user.id)
-    return None
 
 
 @router.get("/{portfolio_id}/summary", response_model=PortfolioSummaryResponse)
@@ -200,7 +206,9 @@ async def get_asset_portfolio_insights(
     current_user: User = Depends(get_current_user),
 ):
     """Retorna correlacao da posicao com a carteira e insights de IA (Issue #58)."""
-    from app.services.asset_portfolio_insight_service import asset_portfolio_insight_service
+    from app.services.asset_portfolio_insight_service import (
+        asset_portfolio_insight_service,
+    )
     return await asset_portfolio_insight_service.get_insight(
         db, portfolio_id, current_user.id, ticker
     )
@@ -222,6 +230,68 @@ async def get_portfolio_analysis(
     service = PortfolioAnalysisService(db)
     try:
         return await service.get_portfolio_analysis(portfolio_id, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get(
+    "/{portfolio_id}/ai-analysis",
+    response_model=PortfolioAiAnalysisResponse,
+    summary="Camada de IA para análise explicável de carteiras e ativos (Issue #361)",
+)
+async def get_portfolio_ai_analysis(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna síntese explicativa em linguagem natural gerada por IA com base nas métricas determinísticas."""
+    from app.services.portfolio_ai_analysis_service import PortfolioAiAnalysisService
+
+    service = PortfolioAiAnalysisService(db)
+    try:
+        return await service.get_ai_analysis(portfolio_id, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post(
+    "/{portfolio_id}/ai-analysis/simulate-contribution",
+    response_model=ContributionSimulationResponse,
+    summary="Simulação inteligente de aporte e impacto no rebalanceamento (Issue #361)",
+)
+async def simulate_portfolio_contribution(
+    portfolio_id: int,
+    payload: ContributionSimulationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Simula a distribuição ótima de um novo aporte para acelerar o rebalanceamento da carteira."""
+    from app.services.portfolio_ai_analysis_service import PortfolioAiAnalysisService
+
+    service = PortfolioAiAnalysisService(db)
+    try:
+        return await service.simulate_contribution(portfolio_id, current_user.id, payload.contribution_amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post(
+    "/{portfolio_id}/ai-analysis/ask",
+    response_model=AiQuestionResponse,
+    summary="Q&A explicável ancorado estritamente nas métricas determinísticas (Issue #361)",
+)
+async def ask_portfolio_ai(
+    portfolio_id: int,
+    payload: AiQuestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Responde perguntas sobre diversificação, riscos e rebalanceamento ancoradas nos dados consolidados."""
+    from app.services.portfolio_ai_analysis_service import PortfolioAiAnalysisService
+
+    service = PortfolioAiAnalysisService(db)
+    try:
+        return await service.answer_ai_question(portfolio_id, current_user.id, payload.question)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

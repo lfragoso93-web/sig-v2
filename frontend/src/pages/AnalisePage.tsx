@@ -9,12 +9,22 @@ import {
   Layers,
   Info,
   RefreshCw,
+  Sparkles,
+  HelpCircle,
+  Send,
+  Calculator,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   usePortfolioAnalysis,
   type ClassAnalysisDetail,
 } from '@/hooks/usePortfolioAnalysis'
+import {
+  usePortfolioAiAnalysis,
+  useSimulateContribution,
+  useAskPortfolioAi,
+} from '@/hooks/usePortfolioAiAnalysis'
 import { formatBRL } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -44,6 +54,389 @@ function concentrationBadge(level: string): { bg: string; text: string; label: s
     default:
       return { bg: 'oklch(from var(--color-success) l c h / 0.12)', text: 'var(--color-success)', label: 'Baixo' }
   }
+}
+
+function PortfolioAiSection({ portfolioId }: { portfolioId: number }) {
+  const { data: aiData, isLoading, error } = usePortfolioAiAnalysis(portfolioId)
+  const simulateMutation = useSimulateContribution(portfolioId)
+  const askMutation = useAskPortfolioAi(portfolioId)
+
+  const [simAmount, setSimAmount] = useState('5000')
+  const [questionInput, setQuestionInput] = useState('')
+  const [qaList, setQaList] = useState<Array<{ q: string; a: string; metrics: string[] }>>([])
+
+  const handleSimulate = (amountToSim: number) => {
+    simulateMutation.mutate(amountToSim)
+  }
+
+  const handleAsk = (q: string) => {
+    if (!q.trim()) return
+    askMutation.mutate(q, {
+      onSuccess: res => {
+        setQaList(prev => [{ q, a: res.answer, metrics: res.key_metrics_referenced }, ...prev])
+        setQuestionInput('')
+      },
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="skeleton h-36 w-full rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="skeleton h-48 rounded-xl" />
+          <div className="skeleton h-48 rounded-xl" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !aiData) {
+    return (
+      <div className="card p-6 text-center text-xs text-muted flex flex-col items-center gap-2">
+        <AlertTriangle size={24} style={{ color: 'var(--color-warning)' }} />
+        <span>Não foi possível gerar a síntese explicativa de IA no momento.</span>
+      </div>
+    )
+  }
+
+  const quickQuestions = [
+    'Qual a classe mais prioritária para aportar?',
+    'Onde está meu maior risco de concentração?',
+    'Como melhorar meu score de alocação?',
+    'Como está o fluxo de dividendos?',
+  ]
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Executive Summary Card */}
+      <div
+        className="rounded-xl p-5 flex flex-col gap-4"
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{
+                background: 'oklch(from var(--color-primary) l c h / 0.12)',
+                color: 'var(--color-primary)',
+              }}
+            >
+              <Sparkles size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                Síntese Executiva & Postura Estratégica
+              </h2>
+              <span className="text-[11px] text-muted">{aiData.posture_label}</span>
+            </div>
+          </div>
+          <span
+            className="text-[10px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5"
+            style={{
+              background: 'oklch(from var(--color-primary) l c h / 0.1)',
+              color: 'var(--color-primary)',
+            }}
+          >
+            <ShieldCheck size={12} />
+            IA Auditável · Não-alucinação
+          </span>
+        </div>
+
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+          {aiData.executive_summary}
+        </p>
+
+        <p className="text-xs text-muted leading-relaxed italic">
+          {aiData.posture_summary}
+        </p>
+
+        {/* Strengths & Attention Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {/* Strengths */}
+          <div
+            className="rounded-lg p-3.5 flex flex-col gap-2"
+            style={{
+              background: 'oklch(from var(--color-success) l c h / 0.05)',
+              border: '1px solid oklch(from var(--color-success) l c h / 0.15)',
+            }}
+          >
+            <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-success)' }}>
+              <CheckCircle2 size={14} /> Pontos Fortes Observados
+            </span>
+            <ul className="flex flex-col gap-1.5">
+              {aiData.key_strengths.map((st, i) => (
+                <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--color-text)' }}>
+                  <span className="text-muted shrink-0">•</span>
+                  <span>{st}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Attention Points */}
+          <div
+            className="rounded-lg p-3.5 flex flex-col gap-2"
+            style={{
+              background: 'oklch(from var(--color-warning) l c h / 0.05)',
+              border: '1px solid oklch(from var(--color-warning) l c h / 0.15)',
+            }}
+          >
+            <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-warning)' }}>
+              <AlertTriangle size={14} /> Pontos de Atenção & Riscos
+            </span>
+            <ul className="flex flex-col gap-1.5">
+              {aiData.attention_points.map((pt, i) => (
+                <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--color-text)' }}>
+                  <span className="text-muted shrink-0">•</span>
+                  <span>{pt}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Rebalancing Strategy */}
+        <div
+          className="rounded-lg p-3 flex flex-col gap-1"
+          style={{
+            background: 'var(--color-surface-offset)',
+            border: '1px solid var(--color-divider)',
+          }}
+        >
+          <span className="text-xs font-semibold text-muted">Estratégia Recomendada de Rebalanceamento:</span>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+            {aiData.rebalancing_strategy}
+          </p>
+        </div>
+      </div>
+
+      {/* Contribution Simulator Widget */}
+      <div
+        className="rounded-xl p-5 flex flex-col gap-4"
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Calculator size={18} style={{ color: 'var(--color-primary)' }} />
+            <h3 className="text-sm font-semibold">Simulador Inteligente de Próximo Aporte</h3>
+          </div>
+          <span className="text-[11px] text-muted">
+            Otimiza a distribuição por déficit em relação às metas
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted">R$</span>
+            <input
+              type="number"
+              value={simAmount}
+              onChange={e => setSimAmount(e.target.value)}
+              className="input text-xs w-32 py-1 px-2"
+              placeholder="Ex: 5000"
+              min="1"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {[1000, 5000, 10000].map(val => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => {
+                  setSimAmount(val.toString())
+                  handleSimulate(val)
+                }}
+                className="btn btn-secondary text-[11px] py-1 px-2.5"
+              >
+                R$ {val.toLocaleString('pt-BR')}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            disabled={simulateMutation.isPending || !Number(simAmount)}
+            onClick={() => handleSimulate(Number(simAmount))}
+            className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 ml-auto"
+          >
+            {simulateMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : <Calculator size={14} />}
+            Simular Aporte
+          </button>
+        </div>
+
+        {/* Simulation Results */}
+        {simulateMutation.data && (
+          <div className="flex flex-col gap-3 pt-2">
+            <div
+              className="rounded-lg p-3 text-xs leading-relaxed"
+              style={{
+                background: 'oklch(from var(--color-primary) l c h / 0.08)',
+                border: '1px solid oklch(from var(--color-primary) l c h / 0.15)',
+              }}
+            >
+              <strong>Impacto do Aporte: </strong>
+              {simulateMutation.data.overall_impact_summary}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                    <th className="py-2 px-3 text-muted font-medium">Classe</th>
+                    <th className="py-2 px-3 text-muted font-medium text-right">Valor Atual</th>
+                    <th className="py-2 px-3 text-muted font-medium text-right">% Atual</th>
+                    <th className="py-2 px-3 text-muted font-medium text-right">Meta %</th>
+                    <th className="py-2 px-3 text-muted font-medium text-right font-semibold" style={{ color: 'var(--color-primary)' }}>Aporte Sugerido</th>
+                    <th className="py-2 px-3 text-muted font-medium text-right">% Projetada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simulateMutation.data.suggested_allocations.map(alloc => (
+                    <tr
+                      key={alloc.asset_type}
+                      style={{ borderBottom: '1px solid var(--color-divider)' }}
+                    >
+                      <td className="py-2.5 px-3 font-semibold">{alloc.label}</td>
+                      <td className="py-2.5 px-3 text-right">{formatBRL(alloc.current_value)}</td>
+                      <td className="py-2.5 px-3 text-right">{alloc.current_weight_pct.toFixed(1)}%</td>
+                      <td className="py-2.5 px-3 text-right text-muted">{alloc.target_weight_pct ? `${alloc.target_weight_pct.toFixed(1)}%` : '—'}</td>
+                      <td className="py-2.5 px-3 text-right font-bold" style={{ color: alloc.allocated_amount > 0 ? 'var(--color-success)' : 'var(--color-text-faint)' }}>
+                        {alloc.allocated_amount > 0 ? `+ ${formatBRL(alloc.allocated_amount)}` : 'R$ 0,00'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-medium">{alloc.projected_weight_pct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Interactive Q&A Widget */}
+      <div
+        className="rounded-xl p-5 flex flex-col gap-4"
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <HelpCircle size={18} style={{ color: 'var(--color-primary)' }} />
+            <h3 className="text-sm font-semibold">Perguntas Rápidas sobre a Carteira (Q&A)</h3>
+          </div>
+          <span className="text-[11px] text-muted">Respostas estritamente ancoradas nas métricas</span>
+        </div>
+
+        {/* Quick prompt pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {quickQuestions.map((q, i) => (
+            <button
+              key={i}
+              type="button"
+              disabled={askMutation.isPending}
+              onClick={() => handleAsk(q)}
+              className="text-[11px] py-1 px-3 rounded-full border transition-colors hover:border-primary"
+              style={{
+                background: 'var(--color-surface-offset)',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Input */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={questionInput}
+            onChange={e => setQuestionInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAsk(questionInput)}
+            placeholder="Faça uma pergunta sobre sua alocação, riscos ou proventos..."
+            className="input text-xs flex-1 py-1.5 px-3"
+            maxLength={200}
+          />
+          <button
+            type="button"
+            disabled={askMutation.isPending || !questionInput.trim()}
+            onClick={() => handleAsk(questionInput)}
+            className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0"
+          >
+            {askMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
+            Perguntar
+          </button>
+        </div>
+
+        {/* Q&A Stream / Responses */}
+        {qaList.length > 0 && (
+          <div className="flex flex-col gap-3 pt-2">
+            {qaList.map((item, idx) => (
+              <div
+                key={idx}
+                className="rounded-lg p-3.5 flex flex-col gap-2"
+                style={{
+                  background: 'var(--color-surface-offset)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
+                  <HelpCircle size={14} />
+                  <span>{item.q}</span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                  {item.a}
+                </p>
+                {item.metrics.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px] text-muted">
+                    <span>Métricas referenciadas:</span>
+                    {item.metrics.map(m => (
+                      <span
+                        key={m}
+                        className="px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-divider)' }}
+                      >
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Audit Telemetry & Governance Box */}
+      <div
+        className="rounded-xl p-3.5 flex items-center justify-between flex-wrap gap-2 text-[11px] text-muted"
+        style={{
+          background: 'var(--color-surface-offset)',
+          border: '1px solid var(--color-divider)',
+        }}
+      >
+        <span>
+          Motor: <strong>{aiData.metadata.provider}</strong> ({aiData.metadata.model}) · Resposta em {aiData.metadata.execution_time_ms}ms
+        </span>
+        <span className="italic">{aiData.metadata.disclaimer}</span>
+      </div>
+    </div>
+  )
 }
 
 function ClassAnalysisCard({ detail }: { detail: ClassAnalysisDetail }) {
@@ -316,6 +709,7 @@ export default function AnalisePage() {
     )
   }
 
+  const [activeTab, setActiveTab] = useState<'ai' | 'classes'>('ai')
   const score = analysis.overall_health_score
   const scoreColor = healthColor(score)
 
@@ -326,10 +720,10 @@ export default function AnalisePage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <PieChart size={24} style={{ color: 'var(--color-primary)' }} />
-            Análise de Carteira
+            Análise de Carteira & IA
           </h1>
           <p className="page-subtitle">
-            {analysis.portfolio_name} · Diagnóstico determinístico por classe de ativos e rebalanceamento
+            {analysis.portfolio_name} · Diagnóstico determinístico por classe, síntese explicativa e rebalanceamento
           </p>
         </div>
       </div>
@@ -364,50 +758,94 @@ export default function AnalisePage() {
         />
       </div>
 
-      {/* Rebalance Priority Alert */}
-      {analysis.rebalance_priority_classes.length > 0 && (
-        <div
-          className="rounded-xl p-4 flex items-start gap-3"
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-divider)' }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('ai')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            activeTab === 'ai'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-text'
+          }`}
           style={{
-            background: 'oklch(from var(--color-primary) l c h / 0.08)',
-            border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+            borderColor: activeTab === 'ai' ? 'var(--color-primary)' : 'transparent',
+            color: activeTab === 'ai' ? 'var(--color-primary)' : 'var(--color-text-faint)',
           }}
         >
-          <TrendingUp size={20} style={{ color: 'var(--color-primary)' }} className="shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-1">
-            <span className="font-semibold text-xs" style={{ color: 'var(--color-text)' }}>
-              Oportunidades de Rebalanceamento Identificadas
-            </span>
-            <p className="text-xs text-muted">
-              Para convergir à alocação estratégica de longo prazo, priorize aportes em: <strong>{analysis.rebalance_priority_classes.join(', ')}</strong>.
-            </p>
-          </div>
-        </div>
+          <Sparkles size={14} />
+          Diagnóstico com IA & Simulador de Aportes
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('classes')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            activeTab === 'classes'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-text'
+          }`}
+          style={{
+            borderColor: activeTab === 'classes' ? 'var(--color-primary)' : 'transparent',
+            color: activeTab === 'classes' ? 'var(--color-primary)' : 'var(--color-text-faint)',
+          }}
+        >
+          <Layers size={14} />
+          Detalhamento por Classes ({analysis.classes_analyzed_count})
+        </button>
+      </div>
+
+      {/* Tab 1: AI Diagnosis & Simulator */}
+      {activeTab === 'ai' && (
+        <PortfolioAiSection portfolioId={selectedPortfolioId} />
       )}
 
-      {/* Classes Breakdown */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Layers size={16} /> Diagnóstico Detalhado por Classe
-          </h2>
-          <span className="text-xs text-muted">
-            {analysis.classes_analyzed_count} classe{analysis.classes_analyzed_count !== 1 ? 's' : ''} avaliada{analysis.classes_analyzed_count !== 1 ? 's' : ''}
-          </span>
-        </div>
+      {/* Tab 2: Classes Breakdown */}
+      {activeTab === 'classes' && (
+        <div className="flex flex-col gap-4">
+          {/* Rebalance Priority Alert */}
+          {analysis.rebalance_priority_classes.length > 0 && (
+            <div
+              className="rounded-xl p-4 flex items-start gap-3"
+              style={{
+                background: 'oklch(from var(--color-primary) l c h / 0.08)',
+                border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+              }}
+            >
+              <TrendingUp size={20} style={{ color: 'var(--color-primary)' }} className="shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-xs" style={{ color: 'var(--color-text)' }}>
+                  Oportunidades de Rebalanceamento Identificadas
+                </span>
+                <p className="text-xs text-muted">
+                  Para convergir à alocação estratégica de longo prazo, priorize aportes em: <strong>{analysis.rebalance_priority_classes.join(', ')}</strong>.
+                </p>
+              </div>
+            </div>
+          )}
 
-        {analysis.classes.length === 0 ? (
-          <div className="card p-8 text-center text-xs text-muted">
-            Nenhuma classe de ativos encontrada com posições ativas.
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Layers size={16} /> Diagnóstico Detalhado por Classe
+            </h2>
+            <span className="text-xs text-muted">
+              {analysis.classes_analyzed_count} classe{analysis.classes_analyzed_count !== 1 ? 's' : ''} avaliada{analysis.classes_analyzed_count !== 1 ? 's' : ''}
+            </span>
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {analysis.classes.map(cls => (
-              <ClassAnalysisCard key={cls.asset_type} detail={cls} />
-            ))}
-          </div>
-        )}
-      </div>
+
+          {analysis.classes.length === 0 ? (
+            <div className="card p-8 text-center text-xs text-muted">
+              Nenhuma classe de ativos encontrada com posições ativas.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {analysis.classes.map(cls => (
+                <ClassAnalysisCard key={cls.asset_type} detail={cls} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Provenance Box */}
       <div
