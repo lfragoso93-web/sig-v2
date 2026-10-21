@@ -9,13 +9,14 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database, Server,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database, Server, Zap,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
 import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
 import BackupPanel from '@/components/admin/BackupPanel'
 import ProviderConfigPanel from '@/components/admin/ProviderConfigPanel'
+import BootstrapPanel from '@/components/admin/BootstrapPanel'
 import { isStrongPassword } from '@/utils/passwordPolicy'
 
 // ── Types ────────────────────────────────────────────
@@ -620,6 +621,7 @@ export default function AdminPanel() {
   const [openUsers,   setOpenUsers]   = useState(true)
   const [openConfigs,   setOpenConfigs]   = useState(false)
   const [openProviders, setOpenProviders] = useState(false)
+  const [openBootstrap, setOpenBootstrap] = useState(false)
   const [openAudit,     setOpenAudit]     = useState(false)
 
   return (
@@ -668,6 +670,16 @@ export default function AdminPanel() {
         {openProviders && (
           <div className="mt-3">
             <ProviderConfigPanel />
+          </div>
+        )}
+      </div>
+
+      {/* Central de Bootstrap */}
+      <div style={{ borderTop: '1px solid var(--color-divider)', paddingTop: 4 }}>
+        <SectionHeader icon={Zap} title="Central de Bootstrap" open={openBootstrap} onToggle={() => setOpenBootstrap(v => !v)} />
+        {openBootstrap && (
+          <div className="mt-3">
+            <BootstrapPanel />
           </div>
         )}
       </div>
