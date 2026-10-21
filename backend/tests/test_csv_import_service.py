@@ -605,8 +605,11 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
         asset_result = MagicMock()
         asset_result.scalar_one_or_none = MagicMock(return_value=None)
         
+        alias_result = MagicMock()
+        alias_result.scalar_one_or_none = MagicMock(return_value=None)
+
         db.execute = AsyncMock(
-            side_effect=[portfolio_result, existing_tx_result, coverage_result, asset_result]
+            side_effect=[portfolio_result, existing_tx_result, coverage_result, alias_result, asset_result]
         )
         db.commit = AsyncMock()
         db.add = MagicMock()

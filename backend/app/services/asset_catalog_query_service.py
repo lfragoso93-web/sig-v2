@@ -11,6 +11,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
+from app.models.asset_alias import AssetAlias
 from app.services.asset_universe_membership_service import (
     CRYPTO_SYNTHETIC_CERTIFICATION_PROVIDER,
 )
@@ -67,12 +68,17 @@ async def suggest_assets_from_catalog(
         return []
 
     like = f"%{normalized}%"
-    stmt = select(Asset).where(
-        or_(
-            func.upper(Asset.ticker).like(like),
-            func.upper(func.coalesce(Asset.name, "")).like(like),
-        ),
-        _user_selectable_catalog_predicate(),
+    stmt = (
+        select(Asset, AssetAlias.alias_ticker)
+        .outerjoin(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .where(
+            or_(
+                func.upper(Asset.ticker).like(like),
+                func.upper(func.coalesce(Asset.name, "")).like(like),
+                func.upper(AssetAlias.alias_ticker).like(like),
+            ),
+            _user_selectable_catalog_predicate(),
+        )
     )
 
     allowed_types = _normalize_filter(asset_type)
@@ -80,20 +86,34 @@ async def suggest_assets_from_catalog(
         stmt = stmt.where(Asset.asset_type.in_(allowed_types))
 
     stmt = stmt.order_by(
-        case((func.upper(Asset.ticker) == normalized, 0), else_=1),
+        case(
+            (func.upper(Asset.ticker) == normalized, 0),
+            (func.upper(func.coalesce(AssetAlias.alias_ticker, "")) == normalized, 1),
+            else_=2,
+        ),
         Asset.ticker,
     ).limit(max(1, min(limit, 50)))
 
     result = await db.execute(stmt)
-    assets = result.scalars().all()
-    return [
-        AssetCatalogSuggestion(
-            ticker=asset.ticker,
-            name=asset.name or asset.ticker,
-            asset_type=str(asset.asset_type),
+    rows = result.all()
+    seen: set[tuple[str, str]] = set()
+    suggestions: list[AssetCatalogSuggestion] = []
+    for asset, alias_ticker in rows:
+        key = (asset.ticker, str(asset.asset_type))
+        if key in seen:
+            continue
+        seen |= {key}
+        name = asset.name or asset.ticker
+        if alias_ticker and normalized in alias_ticker.upper() and alias_ticker.upper() != asset.ticker.upper():
+            name = f"{name} (antigo {alias_ticker})"
+        suggestions.append(
+            AssetCatalogSuggestion(
+                ticker=asset.ticker,
+                name=name,
+                asset_type=str(asset.asset_type),
+            )
         )
-        for asset in assets
-    ]
+    return suggestions
 
 
 async def list_treasury_from_catalog(

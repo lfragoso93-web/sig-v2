@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 import redis.asyncio as redis  # type: ignore[import-untyped]
 
@@ -9,29 +10,36 @@ from app.core.log_safety import sanitize_log_value
 logger = logging.getLogger(__name__)
 
 _redis_client: redis.Redis | None = None
+_redis_unavailable_until: float = 0.0
 
 
 async def get_redis() -> redis.Redis | None:
-    global _redis_client
-    if _redis_client is None:
-        try:
-            _redis_client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=0,
-                decode_responses=True,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-            )
-            await _redis_client.ping()
-            logger.info("Redis conectado com sucesso")
-        except Exception as exc:
-            logger.warning(
-                "Redis indisponivel - cache desativado: %s: %s",
-                type(exc).__name__,
-                sanitize_log_value(exc),
-            )
-            _redis_client = None
+    global _redis_client, _redis_unavailable_until
+    if _redis_client is not None:
+        return _redis_client
+
+    if time.time() < _redis_unavailable_until:
+        return None
+
+    try:
+        _redis_client = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=0,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+        await _redis_client.ping()
+        logger.info("Redis conectado com sucesso")
+    except Exception as exc:
+        logger.warning(
+            "Redis indisponivel - cache desativado: %s: %s",
+            type(exc).__name__,
+            sanitize_log_value(exc),
+        )
+        _redis_client = None
+        _redis_unavailable_until = time.time() + 60.0
     return _redis_client
 
 

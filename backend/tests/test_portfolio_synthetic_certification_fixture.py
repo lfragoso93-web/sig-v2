@@ -302,6 +302,11 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     execute_results.append(_price_coverage_result(fixture))
 
     for transaction in transactions:
+        if transaction["asset_type"] != "TESOURO_DIRETO":
+            alias_result = MagicMock()
+            alias_result.scalar_one_or_none.return_value = None
+            execute_results.append(alias_result)
+
         if transaction["operation"] == "sell":
             quantity_result = MagicMock()
             quantity_result.all.return_value = [

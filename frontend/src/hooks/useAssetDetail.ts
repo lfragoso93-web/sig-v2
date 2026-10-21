@@ -64,3 +64,99 @@ export function useAssetCorporateLifecycle(
     staleTime: 5 * 60 * 1000,
   })
 }
+
+export interface FIIIndicators {
+  pvp: number | null
+  dividend_yield: number | null
+  net_worth: number | null
+  share_holders: number | null
+  physical_vacancy: number | null
+  financial_vacancy: number | null
+  properties_count: number | null
+  segment: string | null
+}
+
+export interface StockFundamentals {
+  pe: number | null
+  pb: number | null
+  dividend_yield: number | null
+  eps: number | null
+  market_cap: number | null
+  net_revenue: number | null
+  net_income: number | null
+  ebitda: number | null
+  net_margin: number | null
+  roe: number | null
+  net_debt: number | null
+}
+
+export interface AssetEnrichment {
+  ticker: string
+  coverage_status: string
+  capabilities?: Record<string, boolean>
+  fii_indicators: FIIIndicators | null
+  stock_fundamentals: StockFundamentals | null
+}
+
+export interface AssetPortfolioPositionInsight {
+  is_held: boolean
+  quantity: number
+  average_price: number
+  invested_value: number
+  current_price: number
+  current_value: number
+  capital_gain_value: number
+  capital_gain_percent: number
+  dividends_received: number
+  total_return_value: number
+  total_return_percent: number
+  portfolio_weight_percent: number
+  class_weight_percent: number
+  class_name: string | null
+  class_label: string | null
+  class_current_allocation_percent: number
+  class_target_percent: number | null
+  yield_on_cost_percent: number | null
+}
+
+export interface AIAssetInsight {
+  concentration_level: 'LOW' | 'BALANCED' | 'WARNING' | 'HIGH'
+  concentration_message: string
+  income_assessment: string
+  rebalancing_guidance: string
+  strategic_role: string
+  explainable_summary: string
+}
+
+export interface AssetPortfolioInsightResponse {
+  ticker: string
+  portfolio_id: number
+  position: AssetPortfolioPositionInsight
+  enrichment: AssetEnrichment
+  ai_insights: AIAssetInsight
+}
+
+export function useAssetEnrichment(ticker: string | null, assetType?: string | null) {
+  return useQuery<AssetEnrichment>({
+    queryKey: ['asset-enrichment', ticker, assetType],
+    queryFn: () =>
+      api
+        .get(`/assets/${ticker}/enrichment`, { params: assetType ? { asset_type: assetType } : {} })
+        .then(r => r.data),
+    enabled: !!ticker,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+export function useAssetPortfolioInsights(portfolioId: number | null, ticker: string | null) {
+  return useQuery<AssetPortfolioInsightResponse>({
+    queryKey: ['asset-portfolio-insights', portfolioId, ticker],
+    queryFn: () =>
+      api.get(`/portfolios/${portfolioId}/assets/${ticker}/insights`).then(r => r.data),
+    enabled: !!portfolioId && !!ticker,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+

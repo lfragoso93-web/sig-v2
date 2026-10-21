@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.asset import Asset, AssetType
+from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services import csv_import_service
 from app.services.asset_catalog_query_service import (
@@ -418,6 +419,31 @@ async def get_ticker_quote(
         source=source,
         price_date=requested_date,
     )
+
+
+@router.get("/macro/{indicator}", response_model=list[dict])
+async def get_macro_series(
+    indicator: str,
+    _: User = Depends(get_current_user),
+):
+    """Retorna serie historica de indicador macroeconomico ou cambio (Issue #130 Bloco 7)."""
+    from app.services.asset_enrichment_service import asset_enrichment_service
+    points = await asset_enrichment_service.get_macro_series(indicator)
+    return [
+        {"indicator": p.name, "date": p.point_date.isoformat(), "value": p.value}
+        for p in points
+    ]
+
+
+@router.get("/{ticker}/enrichment", response_model=dict)
+async def get_asset_enrichment(
+    ticker: str,
+    asset_type: Optional[str] = Query(None),
+    _: User = Depends(get_current_user),
+):
+    """Retorna dados fundamentalistas/operacionais enriquecidos e status de cobertura (Issue #130)."""
+    from app.services.asset_enrichment_service import asset_enrichment_service
+    return await asset_enrichment_service.get_asset_enrichment(ticker, asset_type=asset_type)
 
 
 @router.get("/csv-template", tags=["csv-import"])

@@ -11,6 +11,7 @@ import {
 import { usePortfolios } from '@/hooks/usePortfolios'
 import { formatBRL, fmtMoney, formatDate, assetBadgeClass } from '@/utils/format'
 import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
+import AssetDetailDrawer from '@/components/portfolio/AssetDetailDrawer'
 
 function assetTypeToTab(assetType: string | null | undefined): string {
   if (!assetType) return 'acao'
@@ -48,8 +49,8 @@ function txCurrency(t: Transaction): string {
 }
 
 function TransactionCard({
-  t, onDelete, onEdit,
-}: { t: Transaction; onDelete: () => void; onEdit: () => void }) {
+  t, onDelete, onEdit, onTickerClick,
+}: { t: Transaction; onDelete: () => void; onEdit: () => void; onTickerClick?: (ticker: string) => void }) {
   const isBuy   = t.operation === 'buy'
   const fees    = t.fees ?? 0
   const total   = t.quantity * t.price + (isBuy ? fees : -fees)
@@ -61,7 +62,14 @@ function TransactionCard({
     <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-bold text-xs" style={{ color: 'var(--color-text)' }}>{t.ticker}</span>
+          <button
+            type="button"
+            onClick={() => onTickerClick?.(t.ticker)}
+            className="font-bold text-xs hover:underline cursor-pointer text-left"
+            style={{ color: 'var(--color-text)', background: 'none', border: 'none', padding: 0 }}
+          >
+            {t.ticker}
+          </button>
           <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: opBg, color: opColor }}>{isBuy ? 'Compra' : 'Venda'}</span>
           <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type ?? '—'}</span>
         </div>
@@ -83,8 +91,8 @@ function TransactionCard({
 }
 
 function TransactionRow({
-  t, onDelete, onEdit,
-}: { t: Transaction; onDelete: () => void; onEdit: () => void }) {
+  t, onDelete, onEdit, onTickerClick,
+}: { t: Transaction; onDelete: () => void; onEdit: () => void; onTickerClick?: (ticker: string) => void }) {
   const isBuy    = t.operation === 'buy'
   const fees     = t.fees ?? 0
   const total    = t.quantity * t.price + (isBuy ? fees : -fees)
@@ -92,7 +100,16 @@ function TransactionRow({
   return (
     <tr>
       <td className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatDate(t.date)}</td>
-      <td><span className="font-semibold text-xs">{t.ticker}</span></td>
+      <td>
+        <button
+          type="button"
+          onClick={() => onTickerClick?.(t.ticker)}
+          className="font-semibold text-xs hover:underline cursor-pointer text-left"
+          style={{ color: 'var(--color-text)', background: 'none', border: 'none', padding: 0 }}
+        >
+          {t.ticker}
+        </button>
+      </td>
       <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[10px]`}>{t.asset_type ?? '—'}</span></td>
       <td className="text-center">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: isBuy ? 'oklch(from var(--color-success) l c h / 0.12)' : 'oklch(from var(--color-notification) l c h / 0.12)', color: isBuy ? 'var(--color-success)' : 'var(--color-notification)' }}>{isBuy ? 'Compra' : 'Venda'}</span>
@@ -145,6 +162,7 @@ interface ClassSectionProps {
   opFilter: 'todos' | 'buy' | 'sell'
   onEdit: (t: Transaction) => void
   onDelete: (id: number) => void
+  onTickerClick?: (ticker: string) => void
 }
 
 function ClassSection({
@@ -155,6 +173,7 @@ function ClassSection({
   opFilter,
   onEdit,
   onDelete,
+  onTickerClick,
 }: ClassSectionProps) {
   const [open, setOpen] = useState(true)
   const [groupSearch, setGroupSearch] = useState('')
@@ -229,6 +248,7 @@ function ClassSection({
                     t={t}
                     onDelete={() => onDelete(t.id)}
                     onEdit={() => onEdit(t)}
+                    onTickerClick={onTickerClick}
                   />
                 ))}
               </div>
@@ -256,6 +276,7 @@ function ClassSection({
                         t={t}
                         onDelete={() => onDelete(t.id)}
                         onEdit={() => onEdit(t)}
+                        onTickerClick={onTickerClick}
                       />
                     ))}
                   </tbody>
@@ -283,6 +304,7 @@ export default function Transacoes() {
 
   const [search, setSearch]     = useState(() => searchParams.get('ticker') ?? '')
   const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null)
 
   const { data: classSummaries = [], isLoading: loadingClasses } = useTransactionClasses(selectedPortfolioId)
 
@@ -404,6 +426,7 @@ export default function Transacoes() {
                 opFilter={opFilter}
                 onEdit={handleEdit}
                 onDelete={id => setConfirmDelete(id)}
+                onTickerClick={setSelectedTicker}
               />
             ))}
 
@@ -426,6 +449,12 @@ export default function Transacoes() {
           loading={deleteTransaction.isPending}
         />
       )}
+
+      <AssetDetailDrawer
+        ticker={selectedTicker}
+        portfolioId={selectedPortfolioId}
+        onClose={() => setSelectedTicker(null)}
+      />
     </div>
   )
 }
