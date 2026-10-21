@@ -15,10 +15,19 @@ from datetime import date, datetime, timezone
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
 )
-from app.services.system_bootstrap_stages import (
-    CANONICAL_BOOTSTRAP_STAGES,  # noqa: F401
-    BootstrapStageDefinition,  # noqa: F401
+from app.services.system_bootstrap_stages import (  # noqa: F401
+    CANONICAL_BOOTSTRAP_STAGES,
+    BootstrapStageDefinition,
 )
+
+__all__ = [
+    "BOOTSTRAP_SCHEMA_VERSION",
+    "BootstrapStageDefinition",
+    "BootstrapStageResult",
+    "CANONICAL_BOOTSTRAP_STAGES",
+    "SystemBootstrapReport",
+    "run_system_bootstrap",
+]
 
 logger = logging.getLogger(__name__)
 
