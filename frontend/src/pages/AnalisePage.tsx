@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   PieChart,
   ArrowUpRight,
@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
+import { usePortfolios } from '@/hooks/usePortfolios'
 import {
   usePortfolioAnalysis,
   type ClassAnalysisDetail,
@@ -663,22 +664,29 @@ function ClassAnalysisCard({ detail }: { detail: ClassAnalysisDetail }) {
 }
 
 export default function AnalisePage() {
-  const { selectedPortfolioId } = useAppStore()
-  const { data: analysis, isLoading, error, refetch } = usePortfolioAnalysis(selectedPortfolioId)
+  const { data: portfolios = [], isLoading: loadingPortfolios } = usePortfolios()
+  const globalPortfolioId = useAppStore(state => state.selectedPortfolioId)
+  const setGlobal = useAppStore(state => state.setSelectedPortfolioId)
 
-  if (!selectedPortfolioId) {
-    return (
-      <div className="page-container">
-        <EmptyState
-          icon={PieChart}
-          title="Nenhuma carteira selecionada"
-          description="Selecione uma carteira na barra lateral para visualizar os diagnósticos e análises por classe."
-        />
-      </div>
-    )
-  }
+  const hasPortfolios = Boolean(portfolios && portfolios.length > 0)
+  const validGlobalPortfolioId = hasPortfolios && portfolios.some(p => Number(p.id) === Number(globalPortfolioId))
+    ? globalPortfolioId
+    : null
+  const portfolioId: number | null = validGlobalPortfolioId ?? (portfolios[0]?.id ? Number(portfolios[0].id) : (globalPortfolioId ? Number(globalPortfolioId) : null))
 
-  if (isLoading) {
+  const [activeTab, setActiveTab] = useState<'ai' | 'classes'>('ai')
+
+  useEffect(() => {
+    if (loadingPortfolios || !portfolios) return
+    if (portfolios.length === 0) return
+    if (globalPortfolioId !== portfolioId && portfolioId && typeof setGlobal === 'function') {
+      setGlobal(portfolioId)
+    }
+  }, [globalPortfolioId, loadingPortfolios, portfolioId, portfolios, setGlobal])
+
+  const { data: analysis, isLoading, error, refetch } = usePortfolioAnalysis(portfolioId)
+
+  if ((loadingPortfolios && !portfolioId) || (isLoading && !analysis)) {
     return (
       <div className="page-container flex flex-col gap-4">
         <div className="skeleton h-8 w-64 rounded" />
@@ -688,6 +696,18 @@ export default function AnalisePage() {
           ))}
         </div>
         <div className="skeleton h-48 w-full rounded-xl" />
+      </div>
+    )
+  }
+
+  if (!portfolioId) {
+    return (
+      <div className="page-container">
+        <EmptyState
+          icon={PieChart}
+          title="Nenhuma carteira selecionada"
+          description="Selecione uma carteira na barra superior para visualizar os diagnósticos e análises por classe."
+        />
       </div>
     )
   }
@@ -709,7 +729,6 @@ export default function AnalisePage() {
     )
   }
 
-  const [activeTab, setActiveTab] = useState<'ai' | 'classes'>('ai')
   const score = analysis.overall_health_score
   const scoreColor = healthColor(score)
 
@@ -797,7 +816,7 @@ export default function AnalisePage() {
 
       {/* Tab 1: AI Diagnosis & Simulator */}
       {activeTab === 'ai' && (
-        <PortfolioAiSection portfolioId={selectedPortfolioId} />
+        <PortfolioAiSection portfolioId={portfolioId} />
       )}
 
       {/* Tab 2: Classes Breakdown */}

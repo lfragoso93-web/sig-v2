@@ -147,8 +147,19 @@ const mockAiData: PortfolioAiAnalysisResponse = {
 }
 
 vi.mock('@/store/appStore', () => ({
-  useAppStore: () => ({
-    selectedPortfolioId: 15,
+  useAppStore: (selector?: (state: any) => any) => {
+    const state = {
+      selectedPortfolioId: 15,
+      setSelectedPortfolioId: vi.fn(),
+    }
+    return selector ? selector(state) : state
+  },
+}))
+
+vi.mock('@/hooks/usePortfolios', () => ({
+  usePortfolios: () => ({
+    data: [{ id: 15, name: 'Carteira Principal' }],
+    isLoading: false,
   }),
 }))
 
