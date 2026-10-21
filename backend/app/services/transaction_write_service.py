@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
+from app.models.asset_alias import AssetAlias
 from app.models.transaction import OperationType, Transaction
 from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
@@ -150,6 +151,19 @@ async def add_transaction_record(
         canonical_ticker = await resolve_treasury_symbol(db, payload.ticker)
         if canonical_ticker:
             ticker = canonical_ticker.strip().upper()
+    else:
+        alias_stmt = (
+            select(Asset.ticker)
+            .join(AssetAlias, AssetAlias.asset_id == Asset.id)
+            .where(
+                func.upper(AssetAlias.alias_ticker) == ticker,
+                AssetAlias.asset_type == asset_type,
+            )
+        )
+        alias_result = await db.execute(alias_stmt)
+        resolved_alias = alias_result.scalar_one_or_none()
+        if resolved_alias:
+            ticker = resolved_alias.strip().upper()
     try:
         operation = OperationType(payload.operation)
     except ValueError as exc:
