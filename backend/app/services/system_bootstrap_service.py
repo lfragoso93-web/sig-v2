@@ -16,8 +16,8 @@ from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
 )
 from app.services.system_bootstrap_stages import (
-    CANONICAL_BOOTSTRAP_STAGES,
-    BootstrapStageDefinition,
+    CANONICAL_BOOTSTRAP_STAGES,  # noqa: F401
+    BootstrapStageDefinition,  # noqa: F401
 )
 
 logger = logging.getLogger(__name__)
