@@ -1,8 +1,7 @@
-"""Gate temporário e fail-closed para deriva Alembic ↔ MetaData.
+"""Gate fail-closed para deteccao de deriva Alembic <-> MetaData.
 
-A única exceção arquitetural permitida é ``goals``, conforme Issues #241/#246.
-O módulo de Metas permanece bloqueado para redesenho conjunto com #57; este gate
-não torna o ORM atual canônico e não substitui uma futura migration do domínio.
+Garante que o MetaData do SQLAlchemy e o schema fisico do banco estejam 100%
+alinhados, sem tolerancia a drift (ALLOWED_DRIFT_TABLES = frozenset()).
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from app.core.database import Base
 import app.models  # noqa: F401  # registra todos os models no Base.metadata
 
 
-ALLOWED_DRIFT_TABLES = frozenset({"goals"})
+ALLOWED_DRIFT_TABLES: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -65,7 +64,7 @@ def _describe_leaf_operation(operation: Any, table_name: str | None) -> str:
 
 
 def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
-    """Classifica operações de autogenerate por tabela, falhando fechado no desconhecido."""
+    """Classifica operacoes de autogenerate por tabela, falhando fechado."""
 
     tables: set[str] = set()
     unknown_operations: list[str] = []
@@ -79,8 +78,9 @@ def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
             tables.add(str(table_name))
 
         if children:
+            next_table = str(table_name) if table_name else inherited_table
             for child in children:
-                visit(child, str(table_name) if table_name else inherited_table)
+                visit(child, next_table)
             return
 
         normalized_table = str(table_name) if table_name else None
@@ -101,13 +101,15 @@ def inspect_upgrade_operations(operations: Iterable[Any]) -> DriftInspection:
 
 
 def inspect_database_drift() -> DriftInspection:
-    """Executa autogenerate contra o banco configurado e classifica a deriva."""
+    """Executa autogenerate contra o banco configurado e classifica deriva."""
 
     engine = create_engine(settings.DATABASE_URL)
     try:
         with engine.connect() as connection:
             migration_context = MigrationContext.configure(connection)
-            migration_script = produce_migrations(migration_context, Base.metadata)
+            migration_script = produce_migrations(
+                migration_context, Base.metadata
+            )
             upgrade_ops = migration_script.upgrade_ops
             if upgrade_ops is None:
                 return DriftInspection(
@@ -129,8 +131,8 @@ def main() -> int:
     tables = ", ".join(sorted(inspection.tables)) or "<none>"
     if inspection.is_allowed:
         print(
-            "Alembic metadata drift gate: accepted temporary drift only in "
-            f"{tables} (tracked by #246/#57)."
+            "Alembic metadata drift gate: accepted temporary drift in "
+            f"{tables}."
         )
         return 0
 
@@ -144,7 +146,7 @@ def main() -> int:
             "Unclassified autogenerate operations: "
             + ", ".join(inspection.unknown_operations)
         )
-    print("Only the explicitly tracked temporary goals drift is allowed.")
+    print("Zero schema drift is permitted.")
     return 1
 
 

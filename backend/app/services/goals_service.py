@@ -1,5 +1,4 @@
-"""
-Service de metas financeiras com projeção automática de data.
+"""Service de metas financeiras com projeção automática de data.
 
 Tipos de meta:
   PATRIMONIO     - alvo = valor total do patrimônio desejado
@@ -43,7 +42,7 @@ def _calc_projection(
     if not target or target <= 0:
         return None, None
     if current >= target:
-        return 0.0, None   # já concluído
+        return 0.0, None  # já concluído
     if not monthly or monthly <= 0:
         return None, None  # sem aporte projetado
     months = (target - current) / monthly
@@ -57,13 +56,18 @@ def _enrich(goal: Goal, current_value: float | None = None) -> dict:
         if current_value is None
         else float(current_value)
     )
+    target_val = (
+        float(goal.target_value)
+        if goal.target_value is not None
+        else 0.0
+    )
     progress = 0.0
-    if goal.target_value and goal.target_value > 0:
-        progress = min(resolved_current_value / goal.target_value * 100, 100.0)
+    if target_val > 0:
+        progress = min(resolved_current_value / target_val * 100, 100.0)
 
     months_to_goal, projected_date = _calc_projection(
         resolved_current_value,
-        goal.target_value,
+        target_val,
         goal.monthly_contribution,
     )
 
@@ -72,16 +76,18 @@ def _enrich(goal: Goal, current_value: float | None = None) -> dict:
         "portfolio_id": goal.portfolio_id,
         "goal_type": goal.goal_type,
         "name": goal.name,
-        "target_value": goal.target_value,
+        "target_value": target_val,
         "current_value": resolved_current_value,
-        "base_value": goal.base_value or 0.0,
+        "base_value": float(goal.base_value or 0.0),
         "monthly_contribution": goal.monthly_contribution,
         "target_date": goal.target_date,
         "description": goal.description,
+        "is_active": bool(getattr(goal, "is_active", True)),
         "created_at": goal.created_at,
+        "updated_at": getattr(goal, "updated_at", None),
         "progress_pct": round(progress, 2),
         "is_completed": bool(
-            goal.target_value and resolved_current_value >= goal.target_value
+            target_val > 0 and resolved_current_value >= target_val
         ),
         "months_to_goal": months_to_goal,
         "projected_date": projected_date,
@@ -103,7 +109,7 @@ async def _get_patrimonio_atual(
 
 
 async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
-    """Return average monthly net BRL entitlements paid in the last 12 months."""
+    """Return average monthly net BRL entitlements paid in last 12 months."""
     today = date.today()
     cutoff_12m = today + relativedelta(months=-12)
     entitlements = await load_portfolio_dividend_entitlements(
@@ -124,8 +130,10 @@ async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
     return round(float(total_12m / Decimal("12")), 2)
 
 
-async def _get_rentabilidade_atual(db: AsyncSession, portfolio_id: int) -> float:
-    """Rentabilidade acumulada do portfólio (campo stored no snapshot mais recente)."""
+async def _get_rentabilidade_atual(
+    db: AsyncSession, portfolio_id: int
+) -> float:
+    """Rentabilidade acumulada do portfólio (snapshot mais recente)."""
     from app.models.portfolio_snapshot import PortfolioSnapshot
     result = await db.execute(
         select(PortfolioSnapshot)
@@ -146,7 +154,7 @@ async def _resolve_current_value(
     provided_current: float,
     user_id: int | None = None,
 ) -> float:
-    """Para tipos auto, busca o valor real da carteira; LIVRE usa o valor informado."""
+    """Para tipos auto, busca valor real; LIVRE usa valor informado."""
     if goal_type == "PATRIMONIO":
         if user_id is None:
             raise ValueError("user_id is required to resolve portfolio value")
@@ -192,7 +200,9 @@ async def get_goal(
     user_id: int,
 ) -> Optional[dict]:
     result = await db.execute(
-        select(Goal).where(Goal.id == goal_id, Goal.portfolio_id == portfolio_id)
+        select(Goal).where(
+            Goal.id == goal_id, Goal.portfolio_id == portfolio_id
+        )
     )
     goal = result.scalar_one_or_none()
     if goal is None:
@@ -207,7 +217,9 @@ async def get_goal(
     return _enrich(goal, current_value=current_value)
 
 
-async def create_goal(db: AsyncSession, data: GoalCreate, user_id: int) -> dict:
+async def create_goal(
+    db: AsyncSession, data: GoalCreate, user_id: int
+) -> dict:
     current = await _resolve_current_value(
         db,
         data.portfolio_id,
@@ -225,6 +237,7 @@ async def create_goal(db: AsyncSession, data: GoalCreate, user_id: int) -> dict:
         monthly_contribution=data.monthly_contribution,
         target_date=data.target_date,
         description=data.description,
+        is_active=data.is_active,
     )
     db.add(goal)
     await db.commit()
@@ -240,7 +253,9 @@ async def update_goal(
     user_id: int,
 ) -> Optional[dict]:
     result = await db.execute(
-        select(Goal).where(Goal.id == goal_id, Goal.portfolio_id == portfolio_id)
+        select(Goal).where(
+            Goal.id == goal_id, Goal.portfolio_id == portfolio_id
+        )
     )
     goal = result.scalar_one_or_none()
     if not goal:
@@ -261,9 +276,13 @@ async def update_goal(
     return _enrich(goal, current_value=current_value)
 
 
-async def delete_goal(db: AsyncSession, goal_id: int, portfolio_id: int) -> bool:
+async def delete_goal(
+    db: AsyncSession, goal_id: int, portfolio_id: int
+) -> bool:
     result = await db.execute(
-        select(Goal).where(Goal.id == goal_id, Goal.portfolio_id == portfolio_id)
+        select(Goal).where(
+            Goal.id == goal_id, Goal.portfolio_id == portfolio_id
+        )
     )
     goal = result.scalar_one_or_none()
     if not goal:

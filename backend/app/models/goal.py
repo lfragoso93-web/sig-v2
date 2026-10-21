@@ -1,37 +1,101 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
-import datetime
+
+if TYPE_CHECKING:
+    from app.models.portfolio import Portfolio
 
 
 class Goal(Base):
     __tablename__ = "goals"
 
-    id              = Column(Integer, primary_key=True, index=True)
-    portfolio_id    = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    portfolio_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # tipo da meta
     # PATRIMONIO | PROVENTOS | RENTABILIDADE | LIVRE
-    goal_type       = Column(String, nullable=False, default="LIVRE")
+    goal_type: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="LIVRE",
+        server_default="LIVRE",
+    )
 
-    name            = Column(String, nullable=False)
-    description     = Column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # valor alvo informado pelo usuário
-    target_value    = Column(Float, nullable=False)
-
-    # valor atual (snapshot no momento da criação; atualizado manualmente em LIVRE)
-    current_value   = Column(Float, default=0.0)
-
-    # valor base no momento da criação (usado para calcular progresso relativo)
-    base_value      = Column(Float, default=0.0)
-
-    # aporte mensal projetado pelo usuário (usado para calcular data projetada)
-    monthly_contribution = Column(Float, nullable=True)
+    target_value: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        nullable=False,
+    )
 
     # data alvo (opcional — informada manualmente ou calculada automaticamente)
-    target_date     = Column(DateTime, nullable=True)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    created_at      = Column(DateTime, default=datetime.datetime.utcnow)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
+    )
 
-    portfolio = relationship("Portfolio", back_populates="goals")
+    # valor atual (snapshot na criação; atualizado em LIVRE)
+    current_value: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+    )
+
+    # valor base na criação (calcula progresso relativo)
+    base_value: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+    )
+
+    # aporte mensal projetado pelo usuário (para calcular data projetada)
+    monthly_contribution: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=True,
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=True,
+    )
+
+    portfolio: Mapped["Portfolio"] = relationship(
+        "Portfolio",
+        back_populates="goals",
+    )
