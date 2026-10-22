@@ -64,7 +64,7 @@ def compute_totp(
 
     offset = digest[-1] & 0x0F
     code_int = (
-        struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+        struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
     )
     otp = code_int % (10 ** digits)
     return f"{otp:0{digits}d}"
@@ -123,7 +123,7 @@ def verify_and_consume_backup_code(
     code_hash = hash_backup_code(code)
     for i, h in enumerate(hashes):
         if hmac.compare_digest(h, code_hash):
-            updated_hashes = hashes[:i] + hashes[i + 1 :]
+            updated_hashes = hashes[:i] + hashes[i + 1:]
             return True, json.dumps(updated_hashes)
 
     return False, stored_json

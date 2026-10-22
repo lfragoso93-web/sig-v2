@@ -7,7 +7,7 @@ e vinculo seguro com contas preexistentes por e-mail verificado.
 import logging
 import secrets
 import urllib.parse
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from fastapi import HTTPException, status

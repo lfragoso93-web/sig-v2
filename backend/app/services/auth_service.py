@@ -7,7 +7,6 @@ autenticacao multi-fator (MFA TOTP) e recuperacao transacional de senhas.
 from datetime import timedelta
 import logging
 import secrets
-from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
