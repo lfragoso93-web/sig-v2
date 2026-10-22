@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import api from '@/services/api'
 import { getApiErrorDetail } from '@/utils/apiError'
 import { PASSWORD_POLICY_HELP, strongPasswordSchema } from '@/utils/passwordPolicy'
@@ -49,8 +49,13 @@ const errorStyle: React.CSSProperties = {
 }
 
 export default function EsqueceuSenha() {
-  const [step, setStep] = useState<'email' | 'reset' | 'done'>('email')
-  const [resetToken, setResetToken] = useState('')
+  const [searchParams] = useSearchParams()
+  const tokenFromUrl = searchParams.get('token')
+
+  const [step, setStep] = useState<'email' | 'reset' | 'done'>(
+    tokenFromUrl ? 'reset' : 'email'
+  )
+  const [resetToken, setResetToken] = useState(tokenFromUrl ?? '')
   const [emailSent, setEmailSent] = useState('')
 
   const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) })
@@ -116,7 +121,13 @@ export default function EsqueceuSenha() {
       <form onSubmit={resetForm.handleSubmit(onResetPassword)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ marginBottom: '0.25rem' }}>
           <h2 style={titleStyle}>Nova senha</h2>
-          <p style={subtitleStyle}>Defina uma nova senha para <strong>{emailSent}</strong>.</p>
+          <p style={subtitleStyle}>
+            {emailSent ? (
+              <>Defina uma nova senha para <strong>{emailSent}</strong>.</>
+            ) : (
+              'Defina uma nova senha segura para a sua conta.'
+            )}
+          </p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>

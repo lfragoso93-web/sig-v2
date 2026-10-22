@@ -1,77 +1,66 @@
+"""Rotas de autenticacao, seguranca, OAuth e MFA do SGI v2."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.core.security import (
-    create_access_token, create_refresh_token,
-    verify_password, decode_token,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
 )
 from app.core.token_blacklist import blacklist_token, is_blacklisted
+from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    GoogleCallbackRequest,
+    GoogleOAuthUrlResponse,
     LoginRequest,
     MessageResponse,
+    MfaDisableRequest,
+    MfaEnableRequest,
+    MfaSetupResponse,
+    MfaStatusResponse,
+    MfaVerifyRequest,
     RefreshRequest,
     ResetPasswordRequest,
     TokenResponse,
 )
 from app.schemas.user import UserCreate
-from app.services.auth_service import forgot_password, reset_password
-from app.services.user_service import get_user_by_email, get_user_by_id, create_user
+from app.services import auth_service
+from app.services.user_service import get_user_by_id
 
 router = APIRouter(tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(settings.LOGIN_RATE_LIMIT)
-async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """
-    Autenticacao por e-mail e senha.
-    Rate limit: LOGIN_RATE_LIMIT (default 10/minute) por IP.
-    Respostas 401/403 intencionalmente genericas para nao confirmar existencia de conta.
-
-    A verificacao de senha e feita por verify_password() em security.py, que ja
-    inclui fallback de compatibilidade para hashes legados gerados pelo passlib
-    (prefixos $2b$/$2y$). Nao e necessario nenhum tratamento adicional aqui.
-    """
-    user = await get_user_by_email(db, data.email)
-    if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais invalidas",
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta desativada. Entre em contato com o administrador.",
-        )
-
-    access_token  = create_access_token(subject=str(user.id))
-    refresh_token = create_refresh_token(subject=str(user.id))
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-    )
+async def login(
+    request: Request,
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Autenticacao por e-mail e senha com lockout e suporte a MFA."""
+    return await auth_service.login(db, data)
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(settings.REGISTER_RATE_LIMIT)
-async def register(request: Request, data: UserCreate, db: AsyncSession = Depends(get_db)):
-    """
-    Cadastro publico.
-    Rate limit: REGISTER_RATE_LIMIT (default 5/minute) por IP.
-    """
-    user = await create_user(db, data)
-    access_token  = create_access_token(subject=str(user.id))
-    refresh_token = create_refresh_token(subject=str(user.id))
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-    )
+async def register(
+    request: Request,
+    data: UserCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Cadastro publico com envio de e-mail de boas-vindas."""
+    return await auth_service.register_user(db, data)
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
@@ -81,13 +70,12 @@ async def request_password_reset(
     data: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Inicia recuperacao de senha sem revelar se o e-mail existe.
-    Enquanto nao ha provedor de e-mail configurado, retorna o token para o fluxo atual da UI.
-    """
-    reset_token = await forgot_password(db, data.email)
+    """Inicia recuperacao de senha e envia e-mail transacional."""
+    reset_token = await auth_service.forgot_password(db, data.email)
     return ForgotPasswordResponse(
-        message="Se o e-mail existir, as instrucoes de recuperacao serao enviadas.",
+        message=(
+            "Se o e-mail existir, as instrucoes de recuperacao serao enviadas."
+        ),
         reset_token=reset_token,
     )
 
@@ -100,17 +88,14 @@ async def confirm_password_reset(
     db: AsyncSession = Depends(get_db),
 ):
     """Redefine a senha usando token de recuperacao valido."""
-    await reset_password(db, data.token, data.new_password)
+    await auth_service.reset_password(db, data.token, data.new_password)
     await db.commit()
     return MessageResponse(message="Senha redefinida com sucesso")
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    """
-    Troca um refresh token valido por um novo par access + refresh.
-    O refresh token usado e invalidado imediatamente (rotation).
-    """
+    """Troca um refresh token valido por um novo par access + refresh."""
     payload = decode_token(data.refresh_token)
 
     if not payload or payload.get("type") != "refresh":
@@ -132,7 +117,6 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
             detail="Refresh token ja utilizado ou revogado.",
         )
 
-    # Invalida o token atual imediatamente (rotation — evita reuso)
     await blacklist_token(jti, payload["exp"])
 
     user = await get_user_by_id(db, int(payload["sub"]))
@@ -142,25 +126,108 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
             detail="Usuario nao encontrado ou inativo.",
         )
 
-    new_access  = create_access_token(subject=payload["sub"])
+    new_access = create_access_token(subject=payload["sub"])
     new_refresh = create_refresh_token(subject=payload["sub"])
     return TokenResponse(
         access_token=new_access,
         refresh_token=new_refresh,
         token_type="bearer",
+        mfa_required=False,
     )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(data: RefreshRequest):
-    """
-    Revoga o refresh token enviado.
-    O cliente deve descartar access + refresh tokens localmente.
-    Nao exige autenticacao — qualquer token valido pode ser revogado.
-    """
+    """Revoga o refresh token enviado."""
     payload = decode_token(data.refresh_token)
     if payload and payload.get("type") == "refresh":
         jti = payload.get("jti")
         if jti:
             await blacklist_token(jti, payload["exp"])
-    # Sempre retorna 204 — nao revela se o token era valido ou nao
+
+
+# ── Google OAuth 2.0 (Issue #97) ──────────────────────────────────────────
+
+
+@router.get("/google/url", response_model=GoogleOAuthUrlResponse)
+async def get_google_oauth_url():
+    """Retorna URL de autorizacao Google com protecao anti-CSRF."""
+    url, enabled = await auth_service.get_google_login_url()
+    return GoogleOAuthUrlResponse(url=url, enabled=enabled)
+
+
+@router.post("/google/callback", response_model=TokenResponse)
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
+async def google_callback(
+    request: Request,
+    data: GoogleCallbackRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Troca authorization code por sessao autenticada no SGI v2."""
+    tokens = await auth_service.handle_google_callback(
+        db, data.code, data.state
+    )
+    await db.commit()
+    return tokens
+
+
+# ── Autenticacao Multi-Fator (MFA TOTP) ───────────────────────────────────
+
+
+@router.post("/mfa/setup", response_model=MfaSetupResponse)
+async def mfa_setup(
+    current_user: User = Depends(get_current_user),
+):
+    """Gera segredo TOTP e codigos descartaveis para habilitacao do MFA."""
+    return await auth_service.setup_mfa(current_user)
+
+
+@router.post("/mfa/enable", response_model=MessageResponse)
+async def mfa_enable(
+    data: MfaEnableRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Ativa o segundo fator de autenticacao com validacao de codigo."""
+    await auth_service.enable_mfa(db, current_user, data)
+    await db.commit()
+    return MessageResponse(
+        message="Autenticacao de dois fatores ativada com sucesso."
+    )
+
+
+@router.post("/mfa/disable", response_model=MessageResponse)
+async def mfa_disable(
+    data: MfaDisableRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Desativa o MFA com confirmacao de codigo de seguranca."""
+    await auth_service.disable_mfa(db, current_user, data.code)
+    await db.commit()
+    return MessageResponse(
+        message="Autenticacao de dois fatores desativada com sucesso."
+    )
+
+
+@router.get("/mfa/status", response_model=MfaStatusResponse)
+async def mfa_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Informa se o usuario possui MFA ativado e o provedor de autenticacao."""
+    return auth_service.get_mfa_status(current_user)
+
+
+@router.post("/mfa/verify", response_model=TokenResponse)
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
+async def mfa_verify(
+    request: Request,
+    data: MfaVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Conclui o login verificando o codigo TOTP ou codigo de backup."""
+    tokens = await auth_service.verify_mfa_login(
+        db, data.mfa_token, data.code
+    )
+    await db.commit()
+    return tokens
