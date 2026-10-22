@@ -1,5 +1,5 @@
+from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
-
 from app.schemas.password_policy import validate_strong_password
 
 
@@ -18,7 +18,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ForgotPasswordResponse(BaseModel):
     message: str
-    reset_token: str | None = None
+    reset_token: Optional[str] = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -32,10 +32,48 @@ class ResetPasswordRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
 
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class GoogleOAuthUrlResponse(BaseModel):
+    url: str
+    enabled: bool
+
+
+class GoogleCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str
+    uri: str
+    backup_codes: list[str]
+
+
+class MfaEnableRequest(BaseModel):
+    secret: str
+    code: str
+    backup_codes: list[str]
+
+
+class MfaDisableRequest(BaseModel):
+    code: str
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str
+
+
+class MfaStatusResponse(BaseModel):
+    mfa_enabled: bool
+    auth_provider: str

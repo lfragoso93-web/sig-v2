@@ -10,6 +10,7 @@ import { useUpdateProfile, useChangePassword, useUpdateAvatar, useDeleteAccount 
 import AdminPanel from '@/components/admin/AdminPanel'
 import PasswordInput from '@/components/ui/PasswordInput'
 import DistribuicaoCarteira from '@/components/configuracoes/DistribuicaoCarteira'
+import MfaSecuritySection from '@/components/configuracoes/MfaSecuritySection'
 import { getApiErrorDetail } from '@/utils/apiError'
 import { getPasswordPolicyError } from '@/utils/passwordPolicy'
 
@@ -198,7 +199,13 @@ export default function Configuracoes() {
       <div className="page-header"><div><h1 className="page-title">Configurações</h1><p className="page-subtitle">Gerencie seu perfil e carteiras</p></div></div>
       <Tabs active={activeTab} onChange={setActiveTab} />
       <div className="settings-content">
-        {activeTab === 'conta' && <div className="flex flex-col gap-4"><SectionCard><ProfileSection /></SectionCard><PasswordSection /></div>}
+        {activeTab === 'conta' && (
+          <div className="flex flex-col gap-4">
+            <SectionCard><ProfileSection /></SectionCard>
+            <PasswordSection />
+            <MfaSecuritySection />
+          </div>
+        )}
         {activeTab === 'carteiras' && <SectionCard><CarteirasSection /></SectionCard>}
         {activeTab === 'distribuicao' && <SectionCard><DistribuicaoCarteira /></SectionCard>}
         {activeTab === 'avancado' && <div className="flex flex-col gap-4">{isSuperAdmin && <AdminPanel />}<DangerZone /></div>}

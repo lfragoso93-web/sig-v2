@@ -14,9 +14,10 @@ import ProtectedRoute, { OnboardingRoute } from '@/router/ProtectedRoute'
 import { LEGACY_PORTFOLIO_ROUTE_REDIRECTS } from '@/router/portfolioRoutes'
 
 // Pages auth
-import LoginPage    from '@/pages/auth/LoginPage'
-import RegisterPage from '@/pages/auth/RegisterPage'
-import EsqueceuSenha from '@/pages/EsqueceuSenha'
+import LoginPage          from '@/pages/auth/LoginPage'
+import RegisterPage       from '@/pages/auth/RegisterPage'
+import EsqueceuSenha       from '@/pages/EsqueceuSenha'
+import GoogleCallbackPage from '@/pages/auth/GoogleCallbackPage'
 
 // Pages app
 import Landing           from '@/pages/Landing'
@@ -82,6 +83,8 @@ const router = createBrowserRouter([
           { path: 'login',          element: <LoginPage /> },
           { path: 'registro',       element: <RegisterPage /> },
           { path: 'esqueceu-senha', element: <EsqueceuSenha /> },
+          { path: 'redefinir-senha', element: <EsqueceuSenha /> },
+          { path: 'google/callback', element: <GoogleCallbackPage /> },
         ],
       },
 

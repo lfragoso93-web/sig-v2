@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '@/contexts/AuthContext'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { getApiValidationErrorMessage } from '@/utils/apiError'
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
+import api from '@/services/api'
 
 const loginEmailSchema = z.string().trim().email('E-mail inválido')
 
@@ -16,9 +18,14 @@ export const loginSchema = z.object({
 type FormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, loginWithTokens } = useAuth()
   const [showPass, setShowPass] = useState(false)
   const [apiError, setApiError] = useState('')
+
+  // Estado para fluxo MFA (2FA TOTP)
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false)
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(loginSchema),
@@ -27,12 +34,138 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     setApiError('')
     try {
-      await login(data.email, data.password)
+      const res = await login(data.email, data.password)
+      if (res && res.mfa_required && res.mfa_token) {
+        setMfaToken(res.mfa_token)
+      }
     } catch (e: unknown) {
       setApiError(getApiValidationErrorMessage(e, 'Credenciais inválidas.'))
     }
   }
 
+  const handleVerifyMfa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mfaToken || !mfaCode.trim()) return
+    setApiError('')
+    setIsVerifyingMfa(true)
+    try {
+      const { data } = await api.post<{
+        access_token: string
+        refresh_token: string
+      }>('/auth/mfa/verify', {
+        mfa_token: mfaToken,
+        code: mfaCode.trim(),
+      })
+      await loginWithTokens(data.access_token, data.refresh_token)
+    } catch (err: unknown) {
+      setApiError(
+        getApiValidationErrorMessage(
+          err,
+          'Código de verificação incorreto ou expirado.'
+        )
+      )
+    } finally {
+      setIsVerifyingMfa(false)
+    }
+  }
+
+  // ── Tela do desafio de MFA ──────────────────────────────────────────────
+  if (mfaToken) {
+    return (
+      <form
+        onSubmit={handleVerifyMfa}
+        style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}
+      >
+        <div style={{ marginBottom: '0.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+            <ShieldCheck size={20} style={{ color: 'var(--color-primary)' }} />
+            <h2
+              style={{
+                fontSize: 'var(--text-lg)',
+                fontWeight: 650,
+                color: 'var(--color-text)',
+                margin: 0,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Verificação em Duas Etapas
+            </h2>
+          </div>
+          <p
+            style={{
+              fontSize: 'var(--text-xs)',
+              color: 'var(--color-text-muted)',
+              margin: '0.25rem 0 0',
+            }}
+          >
+            Insira o código de 6 dígitos gerado pelo seu app autenticador ou um código de recuperação.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>
+            Código de Verificação
+          </label>
+          <input
+            type="text"
+            autoFocus
+            autoComplete="one-time-code"
+            placeholder="000000"
+            maxLength={12}
+            className="input w-full text-center tracking-widest text-lg font-mono"
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value)}
+          />
+        </div>
+
+        {apiError && (
+          <div
+            style={{
+              fontSize: 'var(--text-xs)',
+              color: 'var(--color-notification)',
+              background: 'oklch(from var(--color-notification) l c h / 0.08)',
+              border: '1px solid oklch(from var(--color-notification) l c h / 0.2)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.5rem 0.75rem',
+            }}
+          >
+            {apiError}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isVerifyingMfa || !mfaCode.trim()}
+          className="btn btn-primary w-full"
+          style={{ fontWeight: 600, marginTop: '0.25rem' }}
+        >
+          {isVerifyingMfa ? 'Validando…' : 'Confirmar e Entrar'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMfaToken(null)
+            setMfaCode('')
+            setApiError('')
+          }}
+          className="btn btn-ghost w-full"
+          style={{
+            fontSize: 'var(--text-xs)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.375rem',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          <ArrowLeft size={14} /> Voltar para o login
+        </button>
+      </form>
+    )
+  }
+
+  // ── Tela padrão de login ────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
@@ -43,6 +176,15 @@ export default function LoginPage() {
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>
           Sistema de Gestão de Investimentos
         </p>
+      </div>
+
+      {/* Google OAuth (Issue #97) */}
+      <GoogleLoginButton onError={(msg) => setApiError(msg)} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.125rem 0' }}>
+        <div style={{ flex: 1, height: '1px', background: 'var(--color-divider)' }} />
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>ou</span>
+        <div style={{ flex: 1, height: '1px', background: 'var(--color-divider)' }} />
       </div>
 
       {/* E-mail */}

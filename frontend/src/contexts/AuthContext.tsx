@@ -20,7 +20,10 @@ interface AuthContextData {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ mfa_required?: boolean; mfa_token?: string } | void>
   loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -58,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Hidratação inicial: carrega usuário se há token salvo.
-  // NÃO navega aqui — o ProtectedRoute cuida do redirect para /welcome.
   useEffect(() => {
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
@@ -76,16 +78,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  // login via email+senha — navega para /welcome ou /carteira conforme onboarding
+  // login via email+senha — suporta desafio MFA ou login direto
   const login = async (email: string, password: string) => {
-    const { data: tokens } = await api.post<{
-      access_token: string
-      refresh_token: string
+    const { data: resp } = await api.post<{
+      access_token?: string
+      refresh_token?: string
+      mfa_required?: boolean
+      mfa_token?: string
     }>('/auth/login', { email, password })
-    await loginWithTokens(tokens.access_token, tokens.refresh_token)
+
+    if (resp.mfa_required && resp.mfa_token) {
+      return { mfa_required: true, mfa_token: resp.mfa_token }
+    }
+
+    if (resp.access_token && resp.refresh_token) {
+      await loginWithTokens(resp.access_token, resp.refresh_token)
+    }
   }
 
-  // login direto com tokens (usado pelo RegisterPage após /auth/register)
+  // login direto com tokens
   const loginWithTokens = async (accessToken: string, refreshToken: string) => {
     await resetUserScopedState()
     setUser(null)

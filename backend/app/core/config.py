@@ -62,6 +62,21 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
     SUPERADMIN_NAME: str = "Super Admin"
 
+    # SMTP / Brevo transactional emails
+    SMTP_HOST: str = "smtp-relay.brevo.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    EMAILS_FROM_EMAIL: str = "noreply@sgi.lfconsultoria.dpdns.org"
+    EMAILS_FROM_NAME: str = "SGI v2"
+    FRONTEND_URL: str = "https://sgi.lfconsultoria.dpdns.org"
+
+    # Google OAuth 2.0
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None
+
     @model_validator(mode="after")
     def resolve_provider_compatibility(self) -> "Settings":
         quotes_token = self.QUOTES_PROVIDER_TOKEN or self.BRAPI_TOKEN

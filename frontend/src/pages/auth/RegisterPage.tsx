@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { getApiValidationErrorMessage } from '@/utils/apiError'
 import { PASSWORD_POLICY_HELP, strongPasswordSchema } from '@/utils/passwordPolicy'
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
 
 const schema = z.object({
   name:          z.string().min(2, 'Informe seu nome'),
@@ -105,12 +106,12 @@ export default function RegisterPage() {
     }
   }
 
-  const fieldGap: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
+  const fieldGap: React.CSSProperties   = { display: 'flex', flexDirection: 'column', gap: '0.375rem' }
   const labelStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }
-  const errStyle: React.CSSProperties  = { fontSize: 'var(--text-xs)', color: 'var(--color-notification)', margin: 0 }
+  const errStyle: React.CSSProperties   = { fontSize: 'var(--text-xs)', color: 'var(--color-error, var(--color-notification))', margin: 0 }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
       <div style={{ marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 650, color: 'var(--color-text)', margin: 0, letterSpacing: '-0.01em' }}>
@@ -119,6 +120,15 @@ export default function RegisterPage() {
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>
           Preencha os dados para se cadastrar
         </p>
+      </div>
+
+      {/* Google OAuth (Issue #97) */}
+      <GoogleLoginButton label="Cadastrar com o Google" onError={(msg) => setApiError(msg)} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.125rem 0' }}>
+        <div style={{ flex: 1, height: '1px', background: 'var(--color-divider)' }} />
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>ou</span>
+        <div style={{ flex: 1, height: '1px', background: 'var(--color-divider)' }} />
       </div>
 
       {/* Nome */}
