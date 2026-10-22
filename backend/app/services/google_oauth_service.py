@@ -21,10 +21,11 @@ GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 STATE_TTL_SECONDS = 600  # 10 minutos
+_memory_oauth_states: set[str] = set()
 
 
 async def create_oauth_state() -> str:
-    """Gera e armazena um state aleatorio no Redis para prevencao de CSRF."""
+    """Gera e armazena um state aleatorio para prevencao de CSRF."""
     state = secrets.token_urlsafe(32)
     redis_client = await get_redis()
     if redis_client:
@@ -32,8 +33,10 @@ async def create_oauth_state() -> str:
             await redis_client.set(
                 f"oauth:state:{state}", "valid", ex=STATE_TTL_SECONDS
             )
+            return state
         except Exception as exc:
             logger.warning("Erro ao salvar state OAuth no Redis: %s", exc)
+    _memory_oauth_states.add(state)
     return state
 
 
@@ -42,20 +45,22 @@ async def verify_and_consume_oauth_state(state: str) -> bool:
     if not state:
         return False
     redis_client = await get_redis()
-    if not redis_client:
-        # Se Redis nao estiver disponivel em dev, tolera se state tiver formato
-        return len(state) >= 16
+    if redis_client:
+        try:
+            key = f"oauth:state:{state}"
+            exists = await redis_client.get(key)
+            if exists:
+                await redis_client.delete(key)
+                return True
+            return False
+        except Exception as exc:
+            logger.warning("Erro ao validar state OAuth no Redis: %s", exc)
+            return False
 
-    try:
-        key = f"oauth:state:{state}"
-        exists = await redis_client.get(key)
-        if exists:
-            await redis_client.delete(key)
-            return True
-        return False
-    except Exception as exc:
-        logger.warning("Erro ao validar state OAuth no Redis: %s", exc)
-        return False
+    if state in _memory_oauth_states:
+        _memory_oauth_states.remove(state)
+        return True
+    return False
 
 
 def get_google_auth_url(state: str) -> str:
