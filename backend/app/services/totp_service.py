@@ -9,11 +9,14 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import struct
 import time
 import urllib.parse
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def generate_totp_secret() -> str:
@@ -39,6 +42,37 @@ def get_totp_uri(secret: str, email: str, issuer: str = "SGI v2") -> str:
     }
     query = urllib.parse.urlencode(params)
     return f"otpauth://totp/{urllib.parse.quote(label)}?{query}"
+
+
+def generate_qr_code_data_uri(content: str, size: int = 200) -> str:
+    """Gera um QR Code SVG em formato Data URI compativel com <img>."""
+    try:
+        from reportlab.graphics import renderSVG
+        from reportlab.graphics.barcode import qr
+        from reportlab.graphics.shapes import Drawing, Rect
+        from reportlab.lib import colors
+
+        widget = qr.QrCodeWidget(content)
+        widget.barWidth = size
+        widget.barHeight = size
+        widget.barBorder = 4
+        drawing = Drawing(size, size)
+        bg = Rect(
+            0,
+            0,
+            size,
+            size,
+            fillColor=colors.white,
+            strokeColor=colors.white,
+        )
+        drawing.add(bg)
+        drawing.add(widget)
+        svg_str = renderSVG.drawToString(drawing)
+        b64 = base64.b64encode(svg_str.encode("utf-8")).decode("ascii")
+        return f"data:image/svg+xml;base64,{b64}"
+    except Exception as exc:
+        logger.warning("Falha ao gerar QR code data URI: %s", exc)
+        return ""
 
 
 def compute_totp(

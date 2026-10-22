@@ -19,6 +19,7 @@ interface MfaStatus {
 interface MfaSetupData {
   secret: string
   uri: string
+  qr_code?: string
   backup_codes: string[]
 }
 
@@ -225,32 +226,57 @@ export default function MfaSecuritySection() {
               }}
             >
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                1. Chave Secreta de Configuração
+                1. Escaneie o QR Code no seu Aplicativo Autenticador
               </h3>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                No seu app autenticador, selecione <strong>Adicionar conta</strong> e insira a chave abaixo:
+                Abra o <strong>Google Authenticator</strong> (ou outro app compatível como Microsoft Authenticator, Authy ou Bitwarden), toque no botão <strong>+</strong> e aponte a câmera para o QR Code abaixo:
               </p>
 
-              <div className="flex items-center gap-2">
-                <code
-                  className="px-3 py-2 rounded-lg font-mono text-xs font-semibold tracking-wider flex-1"
+              {setupData.qr_code && (
+                <div
+                  className="flex flex-col items-center justify-center p-3 rounded-xl bg-white mx-auto shadow-xs"
                   style={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-divider)',
-                    color: 'var(--color-primary)',
+                    border: '1px solid var(--color-border)',
+                    maxWidth: 220,
                   }}
                 >
-                  {setupData.secret}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(setupData.secret, 'key')}
-                  className="btn btn-ghost text-xs flex items-center gap-1.5"
-                  style={{ minHeight: 34 }}
-                >
-                  {copiedKey ? <Check size={13} /> : <Copy size={13} />}
-                  <span>{copiedKey ? 'Copiada' : 'Copiar'}</span>
-                </button>
+                  <img
+                    src={setupData.qr_code}
+                    alt="QR Code para Autenticador"
+                    className="w-44 h-44 block"
+                    style={{ imageRendering: 'crisp-edges' }}
+                  />
+                  <span className="text-[11px] font-medium text-slate-500 mt-2">
+                    SGI v2 TOTP
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5 mt-1">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                  Ou insira a chave manualmente se preferir:
+                </span>
+                <div className="flex items-center gap-2">
+                  <code
+                    className="px-3 py-2 rounded-lg font-mono text-xs font-semibold tracking-wider flex-1"
+                    style={{
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-divider)',
+                      color: 'var(--color-primary)',
+                    }}
+                  >
+                    {setupData.secret}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(setupData.secret, 'key')}
+                    className="btn btn-ghost text-xs flex items-center gap-1.5"
+                    style={{ minHeight: 34 }}
+                  >
+                    {copiedKey ? <Check size={13} /> : <Copy size={13} />}
+                    <span>{copiedKey ? 'Copiada' : 'Copiar'}</span>
+                  </button>
+                </div>
               </div>
 
               <h3 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>
