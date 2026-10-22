@@ -1,5 +1,6 @@
 """Testes para lockout_service (protecao contra forca bruta)."""
 
+from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 from app.services.lockout_service import (
@@ -29,3 +30,25 @@ async def test_lockout_after_max_attempts():
     # Limpa lockout
     await clear_lockout(test_email)
     await check_lockout(test_email)  # Nao deve levantar excecao
+
+
+@pytest.mark.asyncio
+async def test_lockout_memory_fallback():
+    test_email = "memory_bruteforce@sgi.com"
+    with patch(
+        "app.services.lockout_service.get_redis",
+        return_value=None,
+    ):
+        await clear_lockout(test_email)
+
+        for _ in range(4):
+            await register_failed_attempt(test_email)
+        await check_lockout(test_email)
+
+        await register_failed_attempt(test_email)
+        with pytest.raises(HTTPException) as exc_info:
+            await check_lockout(test_email)
+        assert exc_info.value.status_code == 429
+
+        await clear_lockout(test_email)
+        await check_lockout(test_email)
