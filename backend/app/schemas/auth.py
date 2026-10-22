@@ -56,6 +56,7 @@ class GoogleCallbackRequest(BaseModel):
 class MfaSetupResponse(BaseModel):
     secret: str
     uri: str
+    qr_code: Optional[str] = None
     backup_codes: list[str]
 
 

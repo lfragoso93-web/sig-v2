@@ -4,6 +4,7 @@ import time
 from app.services.totp_service import (
     compute_totp,
     generate_backup_codes,
+    generate_qr_code_data_uri,
     generate_totp_secret,
     get_totp_uri,
     serialize_backup_codes,
@@ -79,3 +80,10 @@ def test_totp_uri_generation():
     assert uri.startswith(expected_prefix)
     assert "secret=JBSWY3DPEHPK3PXP" in uri
     assert "issuer=SGI+v2" in uri
+
+
+def test_generate_qr_code_data_uri():
+    uri = get_totp_uri("JBSWY3DPEHPK3PXP", "test@sgi.com")
+    qr_data = generate_qr_code_data_uri(uri)
+    assert qr_data.startswith("data:image/svg+xml;base64,")
+    assert len(qr_data) > 100

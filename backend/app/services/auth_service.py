@@ -47,6 +47,7 @@ from app.services.lockout_service import (
 )
 from app.services.totp_service import (
     generate_backup_codes,
+    generate_qr_code_data_uri,
     generate_totp_secret,
     get_totp_uri,
     serialize_backup_codes,
@@ -173,9 +174,11 @@ async def setup_mfa(user: User) -> MfaSetupResponse:
     secret = generate_totp_secret()
     backup_codes = generate_backup_codes()
     uri = get_totp_uri(secret, user.email)
+    qr_code = generate_qr_code_data_uri(uri)
     return MfaSetupResponse(
         secret=secret,
         uri=uri,
+        qr_code=qr_code,
         backup_codes=backup_codes,
     )
 

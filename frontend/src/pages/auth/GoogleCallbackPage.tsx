@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/services/api'
@@ -20,6 +20,7 @@ export default function GoogleCallbackPage() {
 
   const code = searchParams.get('code')
   const state = searchParams.get('state')
+  const hasExecutedRef = useRef(false)
 
   useEffect(() => {
     if (!code || !state) {
@@ -27,6 +28,9 @@ export default function GoogleCallbackPage() {
       setLoading(false)
       return
     }
+
+    if (hasExecutedRef.current) return
+    hasExecutedRef.current = true
 
     let isMounted = true
 
