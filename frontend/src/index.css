@@ -130,11 +130,13 @@ table {
   width: 100%;
 }
 
-/* ── Tipografia mínima em inputs (evita zoom iOS) ─────── */
-input,
-select,
-textarea {
-  font-size: 16px;
+/* ── Tipografia mínima em inputs no mobile (evita zoom iOS) ─── */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* ── Remove hover em dispositivos touch ───────────────── */

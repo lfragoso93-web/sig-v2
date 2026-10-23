@@ -5,6 +5,7 @@ import type {
   IntradayReconciliation,
 } from '@/hooks/useReconciliation'
 import {
+  formatReconciliationFieldLabel,
   presentClassReconciliation,
   presentIntradayReconciliation,
 } from './PortfolioReconciliationPanel'
@@ -82,5 +83,13 @@ describe('PortfolioReconciliationPanel presentations', () => {
     const result = presentIntradayReconciliation(data)
     expect(result.tone).toBe('error')
     expect(result.failedFields).toEqual(['positions.total_patrimonio'])
+    expect(result.impact).toContain('Impacto:')
+  })
+
+  it('traduz nomes técnicos de campos divergentes para rótulos amigáveis em português', () => {
+    expect(formatReconciliationFieldLabel('market_value')).toBe('Valor de mercado (Patrimônio)')
+    expect(formatReconciliationFieldLabel('cost_basis')).toBe('Custo de aquisição (Investido)')
+    expect(formatReconciliationFieldLabel('net_external_flow')).toBe('Fluxo líquido do dia (Aportes/Resgates)')
+    expect(formatReconciliationFieldLabel('groups.ACAO.capital_result_value')).toBe('Resultado de capital (Ações)')
   })
 })

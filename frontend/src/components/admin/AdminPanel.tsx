@@ -1,15 +1,18 @@
 /**
  * AdminPanel — visível apenas para usuários com role === 'superadmin'
- * Seções:
+ * Seções independentes em cards separados para organização visual limpa:
  *   1. Estatísticas do sistema
- *   2. Gestão de usuários (listar, ativar/desativar, editar role, excluir, resetar senha)
- *   3. Configurações do sistema (chave/valor)
+ *   2. Gestão de usuários
+ *   3. Configurações do sistema e Backup
+ *   4. Provedores de Mercado
+ *   5. Central de Bootstrap
+ *   6. Audit Logs
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database, Server, Zap,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database, Server, Zap, Mail, Send, AlertTriangle, CheckCircle2,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
@@ -42,30 +45,82 @@ interface AdminStats {
   system: string
 }
 
+interface SmtpStatus {
+  configured: boolean
+  mode: 'live' | 'simulation'
+  host: string
+  port: number
+  use_tls: boolean
+  smtp_user_masked: string | null
+  from_email: string
+  from_name: string
+}
+
+interface SmtpTestResult {
+  ok: boolean
+  simulated: boolean
+  to_email: string
+  host: string
+  port: number
+  duration_ms: number
+  message: string
+  error: string | null
+}
+
 // ── API ─────────────────────────────────────────────
-const fetchStats   = () => api.get<AdminStats>('/admin/stats').then(r => r.data)
-const fetchUsers   = (page: number, search: string) =>
+const fetchStats      = () => api.get<AdminStats>('/admin/stats').then(r => r.data)
+const fetchUsers      = (page: number, search: string) =>
   api.get('/admin/users', { params: { page, page_size: 10, search: search || undefined } }).then(r => r.data)
-const fetchConfigs = () => api.get<SystemConfig[]>('/admin/config').then(r => r.data)
+const fetchConfigs    = () => api.get<SystemConfig[]>('/admin/config').then(r => r.data)
+const fetchSmtpStatus = () => api.get<SmtpStatus>('/admin/smtp/status').then(r => r.data)
 
 const ROLES = ['user', 'superadmin'] as const
 
 // ── Sub-components ──────────────────────────────────────
-function SectionHeader({ icon: Icon, title, open, onToggle }: {
-  icon: React.ElementType; title: string; open: boolean; onToggle: () => void
+function AdminSectionCard({
+  icon: Icon,
+  title,
+  subtitle,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: React.ElementType
+  title: string
+  subtitle: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
 }) {
   return (
-    <button onClick={onToggle} className="w-full flex items-center justify-between py-2 text-left">
-      <div className="flex items-center gap-2">
-        <Icon size={15} style={{ color: 'var(--color-primary)' }} />
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-          {title}
-        </span>
-      </div>
-      {open
-        ? <ChevronUp  size={14} style={{ color: 'var(--color-text-faint)' }} />
-        : <ChevronDown size={14} style={{ color: 'var(--color-text-faint)' }} />}
-    </button>
+    <section className="card settings-card">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="settings-card-header-interactive"
+        style={{
+          borderBottom: open ? '1px solid oklch(from var(--color-text) l c h / 0.07)' : 'none',
+        }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="settings-card-icon" aria-hidden="true">
+            <Icon size={15} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
+              {title}
+            </h3>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+              {subtitle}
+            </p>
+          </div>
+        </div>
+        {open
+          ? <ChevronUp size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+          : <ChevronDown size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
+      </button>
+      {open && <div className="settings-card-body">{children}</div>}
+    </section>
   )
 }
 
@@ -118,7 +173,6 @@ function ResetPasswordForm({ userId, onClose }: { userId: number; onClose: () =>
         value={newPassword}
         onChange={e => { setNewPassword(e.target.value); setFeedback(null) }}
         className="input w-full text-xs"
-        style={{ fontSize: 16 }}
       />
       {feedback && (
         <p
@@ -143,7 +197,6 @@ function ResetPasswordForm({ userId, onClose }: { userId: number; onClose: () =>
           onClick={() => resetPassword.mutate()}
           disabled={!isStrongPassword(newPassword) || resetPassword.isPending}
           className="btn btn-primary text-xs px-3 disabled:opacity-50"
-          style={{ minHeight: 32 }}
         >
           {resetPassword.isPending
             ? <Loader2 size={12} className="animate-spin" />
@@ -165,14 +218,14 @@ function StatsSection() {
   )
   if (!data) return null
   return (
-    <div className="grid grid-cols-2 gap-2 py-2">
+    <div className="grid grid-cols-2 gap-3">
       {[
-        { label: 'Usuários', value: data.total_users },
-        { label: 'Versão',   value: data.version },
+        { label: 'Usuários Cadastrados', value: data.total_users },
+        { label: 'Versão do Sistema',   value: data.version },
       ].map(({ label, value }) => (
-        <div key={label} className="rounded-lg p-3" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
+        <div key={label} className="rounded-lg p-3.5" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
           <div className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>{label}</div>
-          <div className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{value}</div>
+          <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{value}</div>
         </div>
       ))}
     </div>
@@ -188,7 +241,6 @@ function UsersSection() {
   const [editingUser,     setEditingUser]     = useState<number | null>(null)
   const [userForm,        setUserForm]        = useState({ name: '', email: '', role: 'user' })
   const [userFeedback,    setUserFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
-  // Controla qual usuário está com o form de reset aberto (null = nenhum)
   const [resettingId,     setResettingId]     = useState<number | null>(null)
 
   const handleSearch = (v: string) => {
@@ -230,7 +282,6 @@ function UsersSection() {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
-  // Criar usuário
   const [showCreate, setShowCreate] = useState(false)
   const [newUser,    setNewUser]    = useState({ name: '', email: '', password: '', role: 'user' })
   const createUser = useMutation({
@@ -255,28 +306,23 @@ function UsersSection() {
   }
 
   return (
-    <div className="flex flex-col gap-3 py-2">
-
-      {/* Busca + criar */}
+    <div className="flex flex-col gap-3">
       <div className="flex gap-2">
         <input
           value={search}
           onChange={e => handleSearch(e.target.value)}
           placeholder="Buscar usuário..."
           className="input flex-1 text-xs"
-          style={{ fontSize: 16 }}
         />
         <button
           onClick={() => setShowCreate(v => !v)}
           className="btn btn-primary px-3"
           title="Criar usuário"
-          style={{ minHeight: 38 }}
         >
           <Plus size={14} />
         </button>
       </div>
 
-      {/* Form criar usuário */}
       {showCreate && (
         <div
           className="rounded-lg p-3 flex flex-col gap-2"
@@ -289,7 +335,6 @@ function UsersSection() {
             value={newUser.name}
             onChange={e => setNewUser(v => ({ ...v, name: e.target.value }))}
             className="input w-full text-xs"
-            style={{ fontSize: 16 }}
           />
           <input
             type="email"
@@ -297,20 +342,17 @@ function UsersSection() {
             value={newUser.email}
             onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))}
             className="input w-full text-xs"
-            style={{ fontSize: 16 }}
           />
           <PasswordInput
             placeholder="Senha forte (min. 10 caracteres)"
             value={newUser.password}
             onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))}
             className="input w-full text-xs"
-            style={{ fontSize: 16 }}
           />
           <select
             value={newUser.role}
             onChange={e => setNewUser(v => ({ ...v, role: e.target.value }))}
-            className="input w-full text-xs"
-            style={{ fontSize: 16 }}
+            className="select-modern w-full"
           >
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -324,7 +366,6 @@ function UsersSection() {
               onClick={() => createUser.mutate()}
               disabled={createUser.isPending || !newUser.email || !isStrongPassword(newUser.password)}
               className="btn btn-primary text-xs px-3 disabled:opacity-50"
-              style={{ minHeight: 32 }}
             >
               {createUser.isPending ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
               Criar
@@ -333,17 +374,16 @@ function UsersSection() {
         </div>
       )}
 
-      {/* Lista de usuários */}
       {isLoading ? (
         <div className="py-4 text-center">
           <Loader2 size={16} className="animate-spin mx-auto" style={{ color: 'var(--color-primary)' }} />
         </div>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2">
           {users.map(u => (
             <li key={u.id} className="flex flex-col gap-0">
               <div
-                className="rounded-lg px-3 py-2 flex items-center justify-between gap-2"
+                className="rounded-lg px-3.5 py-2.5 flex items-center justify-between gap-2"
                 style={{
                   background:  'var(--color-surface-offset)',
                   border:      '1px solid var(--color-divider)',
@@ -359,7 +399,6 @@ function UsersSection() {
                         value={userForm.name}
                         onChange={e => setUserForm(v => ({ ...v, name: e.target.value }))}
                         className="input text-xs py-1 px-2"
-                        style={{ fontSize: 13 }}
                         placeholder="Nome"
                         autoFocus
                       />
@@ -368,14 +407,12 @@ function UsersSection() {
                         value={userForm.email}
                         onChange={e => setUserForm(v => ({ ...v, email: e.target.value }))}
                         className="input text-xs py-1 px-2"
-                        style={{ fontSize: 13 }}
                         placeholder="E-mail"
                       />
                       <select
                         value={userForm.role}
                         onChange={e => setUserForm(v => ({ ...v, role: e.target.value }))}
-                        className="input text-xs py-1 px-2"
-                        style={{ fontSize: 13 }}
+                        className="select-modern w-full"
                       >
                         {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
@@ -384,7 +421,6 @@ function UsersSection() {
                           onClick={() => updateUser.mutate({ id: u.id, ...userForm })}
                           disabled={updateUser.isPending || !userForm.name.trim() || !userForm.email.trim()}
                           className="btn btn-primary text-xs px-2 py-1 disabled:opacity-50"
-                          style={{ minHeight: 28 }}
                         >
                           {updateUser.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                           Salvar
@@ -406,9 +442,7 @@ function UsersSection() {
                     <span className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
                       {u.name || u.email}
                     </span>
-
                     <RoleBadge role={u.role} />
-
                     {!u.is_active && (
                       <span className="text-xs italic" style={{ color: 'var(--color-text-faint)' }}>inativo</span>
                     )}
@@ -433,17 +467,16 @@ function UsersSection() {
                   <button
                     onClick={() => startEditUser(u)}
                     title="Editar usuário"
-                    className="p-1.5 rounded"
-                    style={{ color: editingUser === u.id ? 'var(--color-primary)' : 'var(--color-text-faint)' }}
+                    className="settings-icon-button"
+                    style={{ color: editingUser === u.id ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
                   >
                     <Pencil size={13} />
                   </button>
-                  {/* Botão reset de senha */}
                   <button
                     onClick={() => setResettingId(id => id === u.id ? null : u.id)}
                     title="Redefinir senha"
-                    className="p-1.5 rounded"
-                    style={{ color: resettingId === u.id ? 'var(--color-primary)' : 'var(--color-text-faint)' }}
+                    className="settings-icon-button"
+                    style={{ color: resettingId === u.id ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
                   >
                     <KeyRound size={13} />
                   </button>
@@ -453,8 +486,8 @@ function UsersSection() {
                       toggleActive.mutate(u.id)
                     }}
                     title={u.is_active ? 'Desativar' : 'Ativar'}
-                    className="p-1.5 rounded"
-                    style={{ color: 'var(--color-text-faint)' }}
+                    className="settings-icon-button"
+                    style={{ color: 'var(--color-text-muted)' }}
                   >
                     <Power size={13} />
                   </button>
@@ -464,15 +497,14 @@ function UsersSection() {
                       deleteUser.mutate(u.id)
                     }}
                     title="Excluir usuário"
-                    className="p-1.5 rounded"
-                    style={{ color: 'var(--color-text-faint)' }}
+                    className="settings-icon-button"
+                    style={{ color: 'var(--color-text-muted)' }}
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
               </div>
 
-              {/* Form reset senha — expande inline abaixo do card do usuário */}
               {resettingId === u.id && (
                 <div style={{ borderTop: 'none' }}>
                   <ResetPasswordForm
@@ -491,7 +523,6 @@ function UsersSection() {
         </ul>
       )}
 
-      {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <button
@@ -507,6 +538,224 @@ function UsersSection() {
             className="text-xs disabled:opacity-30"
             style={{ color: 'var(--color-text-muted)' }}
           >Próxima →</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SMTP Diagnostic & Test section ───────────────────────
+function SmtpTestSection() {
+  const { data: smtpStatus, isLoading } = useQuery<SmtpStatus>({
+    queryKey: ['admin-smtp-status'],
+    queryFn:  fetchSmtpStatus,
+  })
+  const [toEmail,    setToEmail]    = useState('')
+  const [testResult, setTestResult] = useState<SmtpTestResult | null>(null)
+  const [reqError,   setReqError]   = useState<string | null>(null)
+  const [divResult,  setDivResult]  = useState<string | null>(null)
+
+  const testSmtp = useMutation({
+    mutationFn: (email: string) =>
+      api.post<SmtpTestResult>('/admin/smtp/test', { to_email: email }).then(r => r.data),
+    onSuccess: (res) => {
+      setTestResult(res)
+      setReqError(null)
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail
+      setTestResult(null)
+      setReqError(typeof detail === 'string' ? detail : 'Informe um e-mail válido para realizar o teste.')
+    },
+  })
+
+  const notifyDividends = useMutation({
+    mutationFn: () =>
+      api.post<{
+        payment_date: string
+        users_checked: number
+        users_with_payments: number
+        emails_sent: number
+        skipped_already_sent: number
+        errors: number
+      }>('/admin/smtp/notify-dividends?force=true').then(r => r.data),
+    onSuccess: (res) => {
+      setDivResult(
+        `Verificação concluída (${res.payment_date}): ${res.users_checked} usuários verificados, ` +
+        `${res.users_with_payments} com proventos hoje, ${res.emails_sent} e-mail(s) enviado(s).`,
+      )
+    },
+    onError: () => {
+      setDivResult('Erro ao executar verificação de proventos do dia.')
+    },
+  })
+
+  if (isLoading) {
+    return (
+      <div className="py-2 text-center">
+        <Loader2 size={14} className="animate-spin mx-auto" style={{ color: 'var(--color-primary)' }} />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="rounded-lg p-3.5 flex flex-col gap-3"
+      style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
+    >
+      {smtpStatus && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+              Status do servidor SMTP
+            </span>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-semibold"
+              style={{
+                background: smtpStatus.configured
+                  ? 'oklch(from var(--color-success) l c h / 0.14)'
+                  : 'oklch(from var(--color-warning, #f59e0b) l c h / 0.14)',
+                color: smtpStatus.configured
+                  ? 'var(--color-success)'
+                  : 'var(--color-warning, #f59e0b)',
+                border: `1px solid ${
+                  smtpStatus.configured
+                    ? 'oklch(from var(--color-success) l c h / 0.35)'
+                    : 'oklch(from var(--color-warning, #f59e0b) l c h / 0.35)'
+                }`,
+              }}
+            >
+              {smtpStatus.configured ? 'Ativo (Disparo Real)' : 'Modo Simulação (Sem credenciais)'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div className="rounded px-2.5 py-1.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-divider)' }}>
+              <div style={{ color: 'var(--color-text-faint)' }}>Host / Porta</div>
+              <div className="font-mono truncate" style={{ color: 'var(--color-text)' }}>
+                {smtpStatus.host}:{smtpStatus.port} {smtpStatus.use_tls ? '(TLS)' : ''}
+              </div>
+            </div>
+            <div className="rounded px-2.5 py-1.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-divider)' }}>
+              <div style={{ color: 'var(--color-text-faint)' }}>Usuário SMTP</div>
+              <div className="font-mono truncate" style={{ color: 'var(--color-text)' }}>
+                {smtpStatus.smtp_user_masked ?? 'Não configurado'}
+              </div>
+            </div>
+            <div className="rounded px-2.5 py-1.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-divider)' }}>
+              <div style={{ color: 'var(--color-text-faint)' }}>Remetente</div>
+              <div className="truncate" style={{ color: 'var(--color-text)' }} title={`${smtpStatus.from_name} <${smtpStatus.from_email}>`}>
+                {smtpStatus.from_name} &lt;{smtpStatus.from_email}&gt;
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="email"
+          placeholder="Digite o e-mail de destino para o teste..."
+          value={toEmail}
+          onChange={e => { setToEmail(e.target.value); setReqError(null) }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && toEmail.trim()) {
+              e.preventDefault()
+              testSmtp.mutate(toEmail.trim())
+            }
+          }}
+          className="input flex-1 text-xs"
+        />
+        <button
+          type="button"
+          onClick={() => testSmtp.mutate(toEmail.trim())}
+          disabled={testSmtp.isPending || !toEmail.trim()}
+          className="btn btn-primary text-xs px-3 py-1.5 flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+        >
+          {testSmtp.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+          Enviar e-mail de teste
+        </button>
+      </div>
+
+      <div
+        className="rounded-lg p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-divider)' }}
+      >
+        <div className="min-w-0">
+          <div className="font-semibold" style={{ color: 'var(--color-text)' }}>
+            Gatilhos automáticos ativos
+          </div>
+          <div style={{ color: 'var(--color-text-muted)' }}>
+            Boas-vindas · Reset e alteração de senha · Status e exclusão de conta · Proventos do dia (08:30)
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => notifyDividends.mutate()}
+          disabled={notifyDividends.isPending}
+          className="text-xs px-2.5 py-1.5 rounded-lg font-medium shrink-0 inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          style={{
+            background: 'var(--color-surface-offset)',
+            border: '1px solid var(--color-border)',
+            color: 'var(--color-text)',
+          }}
+        >
+          {notifyDividends.isPending ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+          Disparar proventos de hoje
+        </button>
+      </div>
+
+      {divResult && (
+        <div
+          className="rounded-lg px-3 py-2 text-xs"
+          style={{
+            background: 'oklch(from var(--color-primary) l c h / 0.1)',
+            border: '1px solid oklch(from var(--color-primary) l c h / 0.25)',
+            color: 'var(--color-text)',
+          }}
+        >
+          {divResult}
+        </div>
+      )}
+
+      {reqError && (
+        <div
+          className="rounded-lg px-3 py-2 text-xs flex items-start gap-2"
+          style={{
+            background: 'oklch(from var(--color-error) l c h / 0.1)',
+            border: '1px solid oklch(from var(--color-error) l c h / 0.3)',
+            color: 'var(--color-error)',
+          }}
+        >
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+          <span>{reqError}</span>
+        </div>
+      )}
+
+      {testResult && (
+        <div
+          className="rounded-lg px-3 py-2.5 text-xs flex flex-col gap-1"
+          style={{
+            background: testResult.ok
+              ? 'oklch(from var(--color-success) l c h / 0.1)'
+              : 'oklch(from var(--color-error) l c h / 0.1)',
+            border: `1px solid ${
+              testResult.ok
+                ? 'oklch(from var(--color-success) l c h / 0.3)'
+                : 'oklch(from var(--color-error) l c h / 0.3)'
+            }`,
+            color: testResult.ok ? 'var(--color-success)' : 'var(--color-error)',
+          }}
+        >
+          <div className="flex items-center gap-1.5 font-semibold">
+            {testResult.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            <span>{testResult.message}</span>
+          </div>
+          {testResult.error && (
+            <div className="font-mono text-[11px] opacity-90 break-all pl-5">
+              Detalhe técnico: {testResult.error}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -546,65 +795,72 @@ function ConfigsSection() {
   )
 
   return (
-    <div className="flex flex-col gap-4 py-2">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 pt-1">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-2">
           <Settings size={14} style={{ color: 'var(--color-primary)' }} />
           <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
             Variáveis do sistema
           </span>
         </div>
-      {configs.length === 0 && (
-        <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
-          Nenhuma configuração cadastrada.
-        </p>
-      )}
-      {configs.map(c => (
-        <div
-          key={c.key}
-          className="rounded-lg p-3 flex flex-col gap-1.5"
-          style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-mono" style={{ color: 'var(--color-primary)' }}>{c.key}</span>
-            {c.is_public && (
-              <span
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{ color: 'var(--color-text-faint)', border: '1px solid var(--color-border)' }}
-              >pública</span>
+        {configs.length === 0 && (
+          <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
+            Nenhuma configuração cadastrada.
+          </p>
+        )}
+        {configs.map(c => (
+          <div
+            key={c.key}
+            className="rounded-lg p-3 flex flex-col gap-1.5"
+            style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono" style={{ color: 'var(--color-primary)' }}>{c.key}</span>
+              {c.is_public && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded"
+                  style={{ color: 'var(--color-text-faint)', border: '1px solid var(--color-border)' }}
+                >pública</span>
+              )}
+            </div>
+            {c.description && (
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{c.description}</p>
             )}
+            <div className="flex gap-2">
+              <input
+                value={edits[c.key] ?? c.value}
+                onChange={e => handleEdit(c.key, e.target.value)}
+                className="input flex-1 text-xs font-mono"
+              />
+              {edits[c.key] !== undefined && edits[c.key] !== c.value && (
+                <button
+                  onClick={() => handleSave(c.key)}
+                  disabled={saving === c.key}
+                  title="Salvar"
+                  className="btn btn-primary px-2.5"
+                >
+                  {saving === c.key
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Save size={12} />}
+                </button>
+              )}
+            </div>
           </div>
-          {c.description && (
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{c.description}</p>
-          )}
-          <div className="flex gap-2">
-            <input
-              value={edits[c.key] ?? c.value}
-              onChange={e => handleEdit(c.key, e.target.value)}
-              className="input flex-1 text-xs font-mono"
-              style={{ fontSize: 13 }}
-            />
-            {edits[c.key] !== undefined && edits[c.key] !== c.value && (
-              <button
-                onClick={() => handleSave(c.key)}
-                disabled={saving === c.key}
-                title="Salvar"
-                className="btn btn-primary px-2"
-                style={{ minHeight: 34 }}
-              >
-                {saving === c.key
-                  ? <Loader2 size={12} className="animate-spin" />
-                  : <Save size={12} />}
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
-
+        ))}
       </div>
 
-      <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--color-divider)' }}>
-        <div className="flex items-center gap-2 pt-1">
+      <div className="flex flex-col gap-2.5 pt-3" style={{ borderTop: '1px solid var(--color-divider)' }}>
+        <div className="flex items-center gap-2">
+          <Mail size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Diagnóstico e Teste de E-mail (SMTP)
+          </span>
+        </div>
+        <SmtpTestSection />
+      </div>
+
+      <div className="flex flex-col gap-2.5 pt-3" style={{ borderTop: '1px solid var(--color-divider)' }}>
+        <div className="flex items-center gap-2">
           <Database size={14} style={{ color: 'var(--color-primary)' }} />
           <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
             Backup e restauração
@@ -617,82 +873,74 @@ function ConfigsSection() {
 }
 
 export default function AdminPanel() {
-  const [openStats,   setOpenStats]   = useState(true)
-  const [openUsers,   setOpenUsers]   = useState(true)
+  const [openStats,     setOpenStats]     = useState(true)
+  const [openUsers,     setOpenUsers]     = useState(true)
   const [openConfigs,   setOpenConfigs]   = useState(false)
   const [openProviders, setOpenProviders] = useState(false)
   const [openBootstrap, setOpenBootstrap] = useState(false)
   const [openAudit,     setOpenAudit]     = useState(false)
 
   return (
-    <section
-      className="rounded-xl p-4 flex flex-col gap-1"
-      style={{
-        background: 'var(--color-surface)',
-        border:     '1px solid oklch(from var(--color-primary) l c h / 0.3)',
-      }}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className="w-2 h-2 rounded-full"
-          style={{ background: 'var(--color-primary)' }}
-        />
-        <h2
-          className="text-sm font-semibold uppercase tracking-wide"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          Painel Admin
-        </h2>
-      </div>
+    <div className="settings-stack">
+      <AdminSectionCard
+        icon={BarChart2}
+        title="Estatísticas do Sistema"
+        subtitle="Visão geral de usuários ativos e versão em execução"
+        open={openStats}
+        onToggle={() => setOpenStats(v => !v)}
+      >
+        <StatsSection />
+      </AdminSectionCard>
 
-      {/* Estatísticas */}
-      <div style={{ borderBottom: '1px solid var(--color-divider)', paddingBottom: 4 }}>
-        <SectionHeader icon={BarChart2} title="Estatísticas" open={openStats}   onToggle={() => setOpenStats(v => !v)} />
-        {openStats   && <StatsSection />}
-      </div>
+      <AdminSectionCard
+        icon={Users}
+        title="Gestão de Usuários"
+        subtitle="Controle de contas, permissões de acesso e redefinição de senhas"
+        open={openUsers}
+        onToggle={() => setOpenUsers(v => !v)}
+      >
+        <UsersSection />
+      </AdminSectionCard>
 
-      {/* Usuários */}
-      <div style={{ borderBottom: '1px solid var(--color-divider)', paddingBottom: 4 }}>
-        <SectionHeader icon={Users}    title="Usuários"     open={openUsers}   onToggle={() => setOpenUsers(v => !v)} />
-        {openUsers   && <UsersSection />}
-      </div>
+      <AdminSectionCard
+        icon={Settings}
+        title="Configurações do Sistema e Backup"
+        subtitle="Parâmetros operacionais globais e cópias de segurança do banco"
+        open={openConfigs}
+        onToggle={() => setOpenConfigs(v => !v)}
+      >
+        <ConfigsSection />
+      </AdminSectionCard>
 
-      {/* Configurações do sistema */}
-      <div style={{ borderBottom: '1px solid var(--color-divider)', paddingBottom: 4 }}>
-        <SectionHeader icon={Settings} title="Config. do sistema" open={openConfigs} onToggle={() => setOpenConfigs(v => !v)} />
-        {openConfigs && <ConfigsSection />}
-      </div>
+      <AdminSectionCard
+        icon={Server}
+        title="Provedores de Mercado"
+        subtitle="Credenciais, prioridade e status dos provedores de cotações e eventos"
+        open={openProviders}
+        onToggle={() => setOpenProviders(v => !v)}
+      >
+        <ProviderConfigPanel />
+      </AdminSectionCard>
 
-      {/* Provedores de Mercado */}
-      <div>
-        <SectionHeader icon={Server} title="Provedores de Mercado" open={openProviders} onToggle={() => setOpenProviders(v => !v)} />
-        {openProviders && (
-          <div className="mt-3">
-            <ProviderConfigPanel />
-          </div>
-        )}
-      </div>
+      <AdminSectionCard
+        icon={Zap}
+        title="Central de Bootstrap"
+        subtitle="Sincronização inicial de catálogo, cotações históricas e dividendos"
+        open={openBootstrap}
+        onToggle={() => setOpenBootstrap(v => !v)}
+      >
+        <BootstrapPanel />
+      </AdminSectionCard>
 
-      {/* Central de Bootstrap */}
-      <div style={{ borderTop: '1px solid var(--color-divider)', paddingTop: 4 }}>
-        <SectionHeader icon={Zap} title="Central de Bootstrap" open={openBootstrap} onToggle={() => setOpenBootstrap(v => !v)} />
-        {openBootstrap && (
-          <div className="mt-3">
-            <BootstrapPanel />
-          </div>
-        )}
-      </div>
-
-      {/* Audit Logs */}
-      <div style={{ borderTop: '1px solid var(--color-divider)', paddingTop: 4 }}>
-        <SectionHeader icon={BookOpen} title="Audit Logs" open={openAudit} onToggle={() => setOpenAudit(v => !v)} />
-        {openAudit && (
-          <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--color-divider)' }}>
-            <AuditLogsPanel />
-          </div>
-        )}
-      </div>
-    </section>
+      <AdminSectionCard
+        icon={BookOpen}
+        title="Audit Logs"
+        subtitle="Trilha de auditoria administrativa e eventos críticos do sistema"
+        open={openAudit}
+        onToggle={() => setOpenAudit(v => !v)}
+      >
+        <AuditLogsPanel />
+      </AdminSectionCard>
+    </div>
   )
 }

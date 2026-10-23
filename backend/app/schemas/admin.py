@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from uuid import UUID
 
@@ -27,3 +27,29 @@ class AdminBackupOperationResponse(BaseModel):
 class AdminBackupOperationsResponse(BaseModel):
     operations: list[AdminBackupOperationResponse]
     count: int
+
+
+class AdminSmtpStatusResponse(BaseModel):
+    configured: bool
+    mode: str
+    host: str
+    port: int
+    use_tls: bool
+    smtp_user_masked: str | None
+    from_email: str
+    from_name: str
+
+
+class AdminSmtpTestRequest(BaseModel):
+    to_email: EmailStr
+
+
+class AdminSmtpTestResponse(BaseModel):
+    ok: bool
+    simulated: bool
+    to_email: str
+    host: str
+    port: int
+    duration_ms: int
+    message: str
+    error: str | None = None

@@ -4,138 +4,134 @@
    .btn e .input vivem exclusivamente em globals.css
    ========================================================= */
 
-/* ─── KPI Card ────────────────────────────────────────────────────────────────── */
-.kpi-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
+@layer components {
+  /* ─── KPI Card ────────────────────────────────────────────────────────────────── */
+  .kpi-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
 
-.kpi-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
-}
+  .kpi-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
 
-.kpi-value {
-  font-size: var(--text-xl);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-  color: var(--color-text);
-}
+  .kpi-value {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: var(--color-text);
+  }
 
-.kpi-change {
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
+  .kpi-change {
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
 
-.kpi-change.positive { color: var(--color-success); }
-.kpi-change.negative { color: var(--color-notification); }
+  .kpi-change.positive { color: var(--color-success); }
+  .kpi-change.negative { color: var(--color-notification); }
 
-/* ─── Tabela de posições ─────────────────────────────────────────────────────── */
-.positions-table {
-  width: 100%;
-  /*
-   * table-layout: fixed garante que as colunas respeitem as larguras
-   * definidas e que o conteúdo longo (tickers, valores) não estoure o
-   * container com overflow-x:auto.
-   */
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
+  /* ─── Tabela de posições ─────────────────────────────────────────────────────── */
+  .positions-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
 
-/* Larguras padrão por tipo de coluna — podem ser sobrescritas inline */
-.positions-table th:first-child,
-.positions-table td:first-child {
-  width: 5.5rem;    /* Data */
-}
-.positions-table th:nth-child(2),
-.positions-table td:nth-child(2) {
-  width: auto;      /* Ativo — flex */
-}
-.positions-table th:nth-child(3),
-.positions-table td:nth-child(3) {
-  width: 6.5rem;    /* Tipo */
-}
+  .positions-table th:first-child,
+  .positions-table td:first-child {
+    width: 5.5rem;    /* Data */
+  }
+  .positions-table th:nth-child(2),
+  .positions-table td:nth-child(2) {
+    width: auto;      /* Ativo — flex */
+  }
+  .positions-table th:nth-child(3),
+  .positions-table td:nth-child(3) {
+    width: 6.5rem;    /* Tipo */
+  }
 
-.positions-table th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--color-divider);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .positions-table th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--color-divider);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-.positions-table td {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-divider);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .positions-table td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-divider);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.positions-table tr:last-child td {
-  border-bottom: none;
-}
+  .positions-table tr:last-child td {
+    border-bottom: none;
+  }
 
-.positions-table tr:hover td {
-  background: var(--color-surface-offset);
-}
+  .positions-table tr:hover td {
+    background: var(--color-surface-offset);
+  }
 
-/* ─── Badge tipo de ativo ─────────────────────────────────────────────────────────── */
-.asset-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
+  /* ─── Badge tipo de ativo ─────────────────────────────────────────────────────────── */
+  .asset-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
 
-.asset-badge.acao       { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
-.asset-badge.fii        { background: oklch(from var(--color-gold)    l c h / 0.15); color: var(--color-gold); }
-.asset-badge.etf        { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
-.asset-badge.etf_br     { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
-.asset-badge.etf_int    { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
-.asset-badge.tesouro    { background: oklch(from var(--color-success) l c h / 0.12); color: var(--color-success); }
-.asset-badge.stock      { background: oklch(from var(--color-primary) l c h / 0.12); color: var(--color-primary); }
-.asset-badge.cripto     { background: oklch(from var(--color-orange)  l c h / 0.12); color: var(--color-orange); }
-.asset-badge.renda-fixa { background: oklch(from var(--color-warning) l c h / 0.12); color: var(--color-warning); }
+  .asset-badge.acao       { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
+  .asset-badge.fii        { background: oklch(from var(--color-gold)    l c h / 0.15); color: var(--color-gold); }
+  .asset-badge.etf        { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
+  .asset-badge.etf_br     { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
+  .asset-badge.etf_int    { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
+  .asset-badge.tesouro    { background: oklch(from var(--color-success) l c h / 0.12); color: var(--color-success); }
+  .asset-badge.stock      { background: oklch(from var(--color-primary) l c h / 0.12); color: var(--color-primary); }
+  .asset-badge.cripto     { background: oklch(from var(--color-orange)  l c h / 0.12); color: var(--color-orange); }
+  .asset-badge.renda-fixa { background: oklch(from var(--color-warning) l c h / 0.12); color: var(--color-warning); }
 
-/* ─── Skeleton ─────────────────────────────────────────────────────────────────────── */
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
+  /* ─── Skeleton ─────────────────────────────────────────────────────────────────────── */
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
 
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-surface-offset) 25%,
-    var(--color-surface-dynamic) 50%,
-    var(--color-surface-offset) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: var(--radius-sm);
-}
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-offset) 25%,
+      var(--color-surface-dynamic) 50%,
+      var(--color-surface-offset) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+  }
 }

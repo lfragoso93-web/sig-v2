@@ -501,6 +501,9 @@ async def delete_transaction(
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     try:
+        from app.services.portfolio_class_snapshot_service import (
+            rebuild_class_snapshots,
+        )
         from app.services.portfolio_snapshot_canonical_twr_service import (
             backfill_canonical_snapshots_with_returns,
         )
@@ -522,11 +525,16 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
                 db=db,
                 portfolio_id=portfolio_id,
             )
+            class_count = await rebuild_class_snapshots(
+                db=db,
+                portfolio_id=portfolio_id,
+            )
             await invalidate_rentabilidade_cache(portfolio_id)
             log.info(
-                "[snapshot_backfill] portfolio=%s — %s snapshots recalculados",
+                "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",
                 portfolio_id,
                 count,
+                class_count,
             )
     except Exception as exc:
         log.error("[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc)

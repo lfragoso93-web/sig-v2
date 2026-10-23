@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Trash2, Plus, Pencil, Check, X, Loader2,
   Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp,
-  Wallet, User, PieChart, Settings2,
+  Wallet, User, PieChart, Settings2, FolderPlus,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from '@/hooks/usePortfolios'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,22 +18,63 @@ function SectionCard({ children }: { children: React.ReactNode }) {
   return <section className="card settings-card">{children}</section>
 }
 
-function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
+function CardHeader({
+  icon: Icon,
+  title,
+  subtitle,
+  badge,
+}: {
+  icon: React.ElementType
+  title: React.ReactNode
+  subtitle?: string
+  badge?: React.ReactNode
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <Icon size={15} style={{ color: 'var(--color-primary)' }} />
-      <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{children}</h2>
+    <div className="settings-card-header">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="settings-card-icon" aria-hidden="true">
+          <Icon size={16} strokeWidth={2} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+      {badge && <div className="shrink-0">{badge}</div>}
     </div>
   )
 }
 
 function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="settings-field"><label className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{label}</label>{children}</div>
+  return (
+    <div className="settings-field">
+      <label className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
 }
 
 function SaveFeedback({ msg, isError }: { msg: string; isError?: boolean }) {
   return (
-    <p className="text-xs px-3 py-2 rounded-lg" style={{ color: isError ? 'var(--color-error)' : 'var(--color-success)', background: isError ? 'oklch(from var(--color-error) l c h / 0.1)' : 'oklch(from var(--color-success) l c h / 0.1)' }}>{msg}</p>
+    <p
+      className="text-xs px-3 py-2 rounded-lg"
+      style={{
+        color: isError ? 'var(--color-error)' : 'var(--color-success)',
+        background: isError
+          ? 'oklch(from var(--color-error) l c h / 0.1)'
+          : 'oklch(from var(--color-success) l c h / 0.1)',
+      }}
+    >
+      {msg}
+    </p>
   )
 }
 
@@ -48,12 +89,32 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 function Tabs({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   return (
-    <div role="tablist" className="settings-tabs" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
+    <div
+      role="tablist"
+      className="settings-tabs"
+      style={{
+        background: 'var(--color-surface)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
+        boxShadow: 'var(--shadow-xs)',
+      }}
+    >
       {TABS.map(t => {
         const isActive = t.id === active
         return (
-          <button key={t.id} role="tab" aria-selected={isActive} onClick={() => onChange(t.id)} className="settings-tab" style={{ background: isActive ? 'var(--color-surface-2)' : 'transparent', color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)', boxShadow: isActive ? 'var(--shadow-sm)' : 'none', fontWeight: isActive ? 600 : 500 }}>
-            <t.icon size={13} />
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(t.id)}
+            className="settings-tab"
+            style={{
+              background: isActive ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'transparent',
+              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              border: isActive ? '1px solid oklch(from var(--color-primary) l c h / 0.22)' : '1px solid transparent',
+              fontWeight: isActive ? 600 : 500,
+            }}
+          >
+            <t.icon size={14} />
             <span>{t.label}</span>
           </button>
         )
@@ -72,14 +133,21 @@ function ProfileSection() {
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
 
-  useEffect(() => { setName(user?.name ?? ''); setEmail(user?.email ?? '') }, [user?.name, user?.email])
+  useEffect(() => {
+    setName(user?.name ?? '')
+    setEmail(user?.email ?? '')
+  }, [user?.name, user?.email])
 
   const dirty = name !== (user?.name ?? '') || email !== (user?.email ?? '')
 
   async function handleSave() {
     setFeedback(null)
-    try { await updateProfile.mutateAsync({ name, email }); setFeedback({ msg: 'Dados atualizados com sucesso.', isError: false }) }
-    catch (error: unknown) { setFeedback({ msg: getApiErrorDetail(error) ?? 'Erro ao atualizar dados.', isError: true }) }
+    try {
+      await updateProfile.mutateAsync({ name, email })
+      setFeedback({ msg: 'Dados atualizados com sucesso.', isError: false })
+    } catch (error: unknown) {
+      setFeedback({ msg: getApiErrorDetail(error) ?? 'Erro ao atualizar dados.', isError: true })
+    }
   }
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -94,27 +162,101 @@ function ProfileSection() {
   const avatarSrc = avatarPreview ?? user?.avatar_url
 
   return (
-    <>
-      <SectionTitle icon={UserCircle}>Minha conta</SectionTitle>
-      <div className="settings-profile-header">
-        <div className="relative shrink-0">
-          {avatarSrc ? <img src={avatarSrc} alt="Avatar" className="w-16 h-16 rounded-full object-cover" style={{ border: '2px solid var(--color-border)' }} /> : <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold" style={{ background: 'oklch(from var(--color-primary) l c h / 0.15)', color: 'var(--color-primary)' }}>{(user?.name ?? user?.email ?? '?')[0].toUpperCase()}</div>}
-          <button onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow" style={{ background: 'var(--color-primary)', color: 'var(--color-text-inverse)', border: '2px solid var(--color-surface)' }} title="Alterar foto" disabled={updateAvatar.isPending}>{updateAvatar.isPending ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}</button>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+    <SectionCard>
+      <CardHeader
+        icon={UserCircle}
+        title="Minha conta"
+        subtitle="Informações pessoais de identificação e foto de perfil"
+      />
+      <div className="settings-card-body">
+        <div className="settings-profile-header">
+          <div className="relative shrink-0">
+            {avatarSrc ? (
+              <img
+                src={avatarSrc}
+                alt="Avatar"
+                className="w-14 h-14 rounded-full object-cover"
+                style={{ border: '2px solid var(--color-border)' }}
+              />
+            ) : (
+              <div
+                className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold"
+                style={{
+                  background: 'oklch(from var(--color-primary) l c h / 0.14)',
+                  color: 'var(--color-primary)',
+                }}
+              >
+                {(user?.name ?? user?.email ?? '?')[0].toUpperCase()}
+              </div>
+            )}
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center shadow"
+              style={{
+                background: 'var(--color-primary)',
+                color: 'var(--color-text-inverse)',
+                border: '2px solid var(--color-surface)',
+              }}
+              title="Alterar foto"
+              disabled={updateAvatar.isPending}
+            >
+              {updateAvatar.isPending ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+              {user?.name || '—'}
+            </span>
+            <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+              {user?.email}
+            </span>
+            <span
+              className="text-xs mt-1 px-2 py-0.5 rounded-full self-start"
+              style={{
+                background: 'oklch(from var(--color-primary) l c h / 0.12)',
+                color: 'var(--color-primary)',
+                fontWeight: 550,
+              }}
+            >
+              {user?.role}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{user?.name || '—'}</span>
-          <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{user?.email}</span>
-          <span className="text-xs mt-1 px-2 py-0.5 rounded-full self-start" style={{ background: 'oklch(from var(--color-primary) l c h / 0.12)', color: 'var(--color-primary)', fontWeight: 500 }}>{user?.role}</span>
+
+        <div className="settings-form-grid">
+          <FieldGroup label="Nome completo">
+            <input
+              className="input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Seu nome"
+            />
+          </FieldGroup>
+          <FieldGroup label="E-mail de acesso">
+            <input
+              type="email"
+              className="input"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+            />
+          </FieldGroup>
+        </div>
+
+        {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
+
+        <div className="flex justify-end pt-1">
+          <button
+            onClick={handleSave}
+            disabled={!dirty || updateProfile.isPending}
+            className="btn btn-primary settings-action disabled:opacity-40"
+          >
+            {updateProfile.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Salvar dados'}
+          </button>
         </div>
       </div>
-      <div className="settings-form-grid">
-        <FieldGroup label="Nome"><input className="input" style={{ fontSize: 16 }} value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" /></FieldGroup>
-        <FieldGroup label="E-mail"><input type="email" className="input" style={{ fontSize: 16 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" /></FieldGroup>
-      </div>
-      {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
-      <button onClick={handleSave} disabled={!dirty || updateProfile.isPending} className="btn btn-primary settings-action disabled:opacity-40" style={{ minHeight: 38 }}>{updateProfile.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Salvar dados'}</button>
-    </>
+    </SectionCard>
   )
 }
 
@@ -126,21 +268,97 @@ function PasswordSection() {
   const set = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }))
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setFeedback(null)
-    if (form.next !== form.confirm) { setFeedback({ msg: 'As senhas não coincidem.', isError: true }); return }
+    e.preventDefault()
+    setFeedback(null)
+    if (form.next !== form.confirm) {
+      setFeedback({ msg: 'As senhas não coincidem.', isError: true })
+      return
+    }
     const passwordError = getPasswordPolicyError(form.next)
-    if (passwordError) { setFeedback({ msg: passwordError, isError: true }); return }
-    try { await changePassword.mutateAsync({ current_password: form.current, new_password: form.next }); setFeedback({ msg: 'Senha alterada com sucesso.', isError: false }); setForm({ current: '', next: '', confirm: '' }); setTimeout(() => setOpen(false), 1500) }
-    catch (error: unknown) { setFeedback({ msg: getApiErrorDetail(error) ?? 'Senha atual incorreta.', isError: true }) }
+    if (passwordError) {
+      setFeedback({ msg: passwordError, isError: true })
+      return
+    }
+    try {
+      await changePassword.mutateAsync({ current_password: form.current, new_password: form.next })
+      setFeedback({ msg: 'Senha alterada com sucesso.', isError: false })
+      setForm({ current: '', next: '', confirm: '' })
+      setTimeout(() => setOpen(false), 1500)
+    } catch (error: unknown) {
+      setFeedback({ msg: getApiErrorDetail(error) ?? 'Senha atual incorreta.', isError: true })
+    }
   }
 
   return (
     <SectionCard>
-      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-2"><KeyRound size={15} style={{ color: 'var(--color-primary)' }} /><h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Alterar senha</h2></div>
-        {open ? <ChevronUp size={14} style={{ color: 'var(--color-text-faint)' }} /> : <ChevronDown size={14} style={{ color: 'var(--color-text-faint)' }} />}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="settings-card-header-interactive"
+        style={{
+          borderBottom: open ? '1px solid oklch(from var(--color-text) l c h / 0.07)' : 'none',
+        }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="settings-card-icon" aria-hidden="true">
+            <KeyRound size={15} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
+              Alterar senha
+            </h2>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+              Atualize sua credencial de acesso com política de segurança reforçada
+            </p>
+          </div>
+        </div>
+        {open ? (
+          <ChevronUp size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+        ) : (
+          <ChevronDown size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+        )}
       </button>
-      {open && <form onSubmit={handleSubmit} className="settings-form-grid mt-1"><FieldGroup label="Senha atual"><PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.current} onChange={e => set('current', e.target.value)} required /></FieldGroup><FieldGroup label="Nova senha"><PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.next} onChange={e => set('next', e.target.value)} required /></FieldGroup><FieldGroup label="Confirmar nova senha"><PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.confirm} onChange={e => set('confirm', e.target.value)} required /></FieldGroup>{feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}<button type="submit" disabled={changePassword.isPending} className="btn btn-primary settings-action disabled:opacity-40" style={{ minHeight: 38 }}>{changePassword.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Alterar senha'}</button></form>}
+
+      {open && (
+        <form onSubmit={handleSubmit} className="settings-card-body">
+          <div className="settings-form-grid">
+            <FieldGroup label="Senha atual">
+              <PasswordInput
+                className="input w-full"
+                value={form.current}
+                onChange={e => set('current', e.target.value)}
+                required
+              />
+            </FieldGroup>
+            <FieldGroup label="Nova senha">
+              <PasswordInput
+                className="input w-full"
+                value={form.next}
+                onChange={e => set('next', e.target.value)}
+                required
+              />
+            </FieldGroup>
+            <FieldGroup label="Confirmar nova senha">
+              <PasswordInput
+                className="input w-full"
+                value={form.confirm}
+                onChange={e => set('confirm', e.target.value)}
+                required
+              />
+            </FieldGroup>
+          </div>
+          {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              disabled={changePassword.isPending}
+              className="btn btn-primary settings-action disabled:opacity-40"
+            >
+              {changePassword.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Alterar senha'}
+            </button>
+          </div>
+        </form>
+      )}
     </SectionCard>
   )
 }
@@ -154,24 +372,151 @@ function CarteirasSection() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const handleCreate = () => { if (!newName.trim()) return; createPortfolio({ name: newName.trim() }, { onSuccess: () => setNewName('') }) }
-  const startEdit = (id: number, name: string) => { setEditingId(id); setEditName(name) }
-  const confirmEdit = (id: number) => { if (!editName.trim()) return; updatePortfolio({ id, name: editName.trim() }, { onSuccess: () => setEditingId(null) }) }
-  const handleDelete = (id: number, name: string) => { if (!confirm(`Excluir carteira "${name}"? Esta ação não pode ser desfeita.`)) return; setDeletingId(id); deletePortfolio(id, { onSettled: () => setDeletingId(null) }) }
+
+  const handleCreate = () => {
+    if (!newName.trim()) return
+    createPortfolio({ name: newName.trim() }, { onSuccess: () => setNewName('') })
+  }
+  const startEdit = (id: number, name: string) => {
+    setEditingId(id)
+    setEditName(name)
+  }
+  const confirmEdit = (id: number) => {
+    if (!editName.trim()) return
+    updatePortfolio({ id, name: editName.trim() }, { onSuccess: () => setEditingId(null) })
+  }
+  const handleDelete = (id: number, name: string) => {
+    if (!confirm(`Excluir carteira "${name}"? Esta ação não pode ser desfeita.`)) return
+    setDeletingId(id)
+    deletePortfolio(id, { onSettled: () => setDeletingId(null) })
+  }
 
   return (
-    <>
-      <SectionTitle icon={Wallet}>Carteiras</SectionTitle>
-      <ul className="flex flex-col gap-2">
-        {portfolios.map(p => (
-          <li key={p.id} className="settings-list-row" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
-            {editingId === p.id ? <><input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmEdit(p.id); if (e.key === 'Escape') setEditingId(null) }} autoFocus className="input flex-1 text-sm" style={{ fontSize: 16 }} /><button onClick={() => confirmEdit(p.id)} disabled={isUpdating} className="settings-icon-button" style={{ color: 'var(--color-primary)' }} title="Salvar">{isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}</button><button onClick={() => setEditingId(null)} className="settings-icon-button" style={{ color: 'var(--color-text-faint)' }} title="Cancelar"><X size={14} /></button></> : <><span className="text-sm flex-1 truncate" style={{ color: 'var(--color-text)' }}>{p.name}</span><button onClick={() => startEdit(p.id, p.name)} className="settings-icon-button" style={{ color: 'var(--color-text-faint)' }} title="Renomear"><Pencil size={14} /></button><button onClick={() => handleDelete(p.id, p.name)} disabled={isDeleting && deletingId === p.id} className="settings-icon-button disabled:opacity-50" style={{ color: 'var(--color-text-faint)' }} title="Excluir carteira">{isDeleting && deletingId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}</button></>}
-          </li>
-        ))}
-        {portfolios.length === 0 && <li className="text-center text-sm py-4" style={{ color: 'var(--color-text-muted)' }}>Nenhuma carteira cadastrada.</li>}
-      </ul>
-      <div className="settings-inline-form"><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome da nova carteira" className="input flex-1 text-sm" style={{ fontSize: 16 }} onKeyDown={e => e.key === 'Enter' && handleCreate()} /><button onClick={handleCreate} disabled={isCreating || !newName.trim()} className="btn btn-primary px-3 disabled:opacity-50" title="Criar carteira">{isCreating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}</button></div>
-    </>
+    <div className="settings-stack">
+      <SectionCard>
+        <CardHeader
+          icon={FolderPlus}
+          title="Nova carteira"
+          subtitle="Crie uma carteira independente para separar estratégias ou titulares"
+        />
+        <div className="settings-card-body">
+          <div className="settings-inline-form">
+            <input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="Ex.: Carteira Previdenciária, Internacional..."
+              className="input flex-1 text-sm"
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+            <button
+              onClick={handleCreate}
+              disabled={isCreating || !newName.trim()}
+              className="btn btn-primary px-4 disabled:opacity-50"
+              title="Criar carteira"
+            >
+              {isCreating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              <span>Criar carteira</span>
+            </button>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard>
+        <CardHeader
+          icon={Wallet}
+          title="Carteiras cadastradas"
+          subtitle="Renomeie ou gerencie as carteiras ativas vinculadas ao seu perfil"
+          badge={
+            <span className="badge badge-primary tabular-nums">
+              {portfolios.length} {portfolios.length === 1 ? 'carteira' : 'carteiras'}
+            </span>
+          }
+        />
+        <div className="settings-card-body">
+          <ul className="flex flex-col gap-2.5">
+            {portfolios.map(p => (
+              <li
+                key={p.id}
+                className="settings-list-row"
+                style={{
+                  background: 'var(--color-surface-offset)',
+                  border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
+                }}
+              >
+                {editingId === p.id ? (
+                  <>
+                    <input
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') confirmEdit(p.id)
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      autoFocus
+                      className="input flex-1 text-sm"
+                    />
+                    <button
+                      onClick={() => confirmEdit(p.id)}
+                      disabled={isUpdating}
+                      className="settings-icon-button"
+                      style={{ color: 'var(--color-primary)' }}
+                      title="Salvar"
+                    >
+                      {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="settings-icon-button"
+                      style={{ color: 'var(--color-text-muted)' }}
+                      title="Cancelar"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <Wallet size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                      <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                        {p.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => startEdit(p.id, p.name)}
+                        className="settings-icon-button"
+                        style={{ color: 'var(--color-text-muted)' }}
+                        title="Renomear"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p.id, p.name)}
+                        disabled={isDeleting && deletingId === p.id}
+                        className="settings-icon-button disabled:opacity-50"
+                        style={{ color: 'var(--color-text-muted)' }}
+                        title="Excluir carteira"
+                      >
+                        {isDeleting && deletingId === p.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+            {portfolios.length === 0 && (
+              <li className="text-center text-sm py-6" style={{ color: 'var(--color-text-muted)' }}>
+                Nenhuma carteira cadastrada.
+              </li>
+            )}
+          </ul>
+        </div>
+      </SectionCard>
+    </div>
   )
 }
 
@@ -181,11 +526,94 @@ function DangerZone() {
   const [open, setOpen] = useState(false)
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
-  async function handleDelete() { if (confirm !== user?.email) { setError('O e-mail digitado não confere.'); return } try { await deleteAccount.mutateAsync() } catch { setError('Erro ao excluir conta. Tente novamente.') } }
+
+  async function handleDelete() {
+    if (confirm !== user?.email) {
+      setError('O e-mail digitado não confere.')
+      return
+    }
+    try {
+      await deleteAccount.mutateAsync()
+    } catch {
+      setError('Erro ao excluir conta. Tente novamente.')
+    }
+  }
+
   return (
-    <section className="card settings-card" style={{ border: '1px solid oklch(from var(--color-error) l c h / 0.3)', background: 'oklch(from var(--color-error) l c h / 0.04)' }}>
-      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full"><div className="flex items-center gap-2"><AlertTriangle size={15} style={{ color: 'var(--color-error)' }} /><h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-error)' }}>Zona de perigo</h2></div>{open ? <ChevronUp size={14} style={{ color: 'var(--color-error)' }} /> : <ChevronDown size={14} style={{ color: 'var(--color-error)' }} />}</button>
-      {open && <div className="flex flex-col gap-3"><p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>A exclusão da conta é <strong style={{ color: 'var(--color-error)' }}>permanente e irreversível</strong>. Todos os seus dados, carteiras e histórico serão apagados.</p><FieldGroup label={`Digite seu e-mail (${user?.email}) para confirmar`}><input type="email" className="input" style={{ fontSize: 16 }} placeholder={user?.email} value={confirm} onChange={e => { setConfirm(e.target.value); setError(null) }} /></FieldGroup>{error && <SaveFeedback msg={error} isError />}<button onClick={handleDelete} disabled={confirm !== user?.email || deleteAccount.isPending} className="btn settings-action disabled:opacity-40" style={{ background: 'var(--color-error)', color: '#fff', minHeight: 38 }}>{deleteAccount.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Excluir minha conta'}</button></div>}
+    <section
+      className="card settings-card"
+      style={{
+        border: '1px solid oklch(from var(--color-error) l c h / 0.28)',
+        background: 'oklch(from var(--color-error) l c h / 0.03)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="settings-card-header-interactive"
+        style={{
+          borderBottom: open ? '1px solid oklch(from var(--color-error) l c h / 0.18)' : 'none',
+        }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className="settings-card-icon"
+            aria-hidden="true"
+            style={{
+              background: 'oklch(from var(--color-error) l c h / 0.12)',
+              color: 'var(--color-error)',
+              borderColor: 'oklch(from var(--color-error) l c h / 0.24)',
+            }}
+          >
+            <AlertTriangle size={15} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-error)' }}>
+              Zona de perigo
+            </h2>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+              Exclusão definitiva da conta e remoção de todos os portfólios
+            </p>
+          </div>
+        </div>
+        {open ? (
+          <ChevronUp size={15} style={{ color: 'var(--color-error)', flexShrink: 0 }} />
+        ) : (
+          <ChevronDown size={15} style={{ color: 'var(--color-error)', flexShrink: 0 }} />
+        )}
+      </button>
+
+      {open && (
+        <div className="settings-card-body">
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            A exclusão da conta é <strong style={{ color: 'var(--color-error)' }}>permanente e irreversível</strong>.
+            Todos os seus dados, carteiras e histórico serão apagados.
+          </p>
+          <FieldGroup label={`Digite seu e-mail (${user?.email}) para confirmar`}>
+            <input
+              type="email"
+              className="input"
+              placeholder={user?.email}
+              value={confirm}
+              onChange={e => {
+                setConfirm(e.target.value)
+                setError(null)
+              }}
+            />
+          </FieldGroup>
+          {error && <SaveFeedback msg={error} isError />}
+          <div className="flex justify-end pt-1">
+            <button
+              onClick={handleDelete}
+              disabled={confirm !== user?.email || deleteAccount.isPending}
+              className="btn settings-action disabled:opacity-40"
+              style={{ background: 'var(--color-error)', color: '#fff' }}
+            >
+              {deleteAccount.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Excluir minha conta'}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -194,21 +622,38 @@ export default function Configuracoes() {
   const { user } = useAuth()
   const isSuperAdmin = user?.role === 'superadmin'
   const [activeTab, setActiveTab] = useState<TabId>('conta')
+
   return (
     <div className="page-container settings-page">
-      <div className="page-header"><div><h1 className="page-title">Configurações</h1><p className="page-subtitle">Gerencie seu perfil e carteiras</p></div></div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Configurações</h1>
+          <p className="page-subtitle">Gerencie seu perfil, segurança, carteiras e parâmetros do sistema</p>
+        </div>
+      </div>
+
       <Tabs active={activeTab} onChange={setActiveTab} />
+
       <div className="settings-content">
         {activeTab === 'conta' && (
-          <div className="flex flex-col gap-4">
-            <SectionCard><ProfileSection /></SectionCard>
+          <div className="settings-stack">
+            <ProfileSection />
             <PasswordSection />
             <MfaSecuritySection />
           </div>
         )}
-        {activeTab === 'carteiras' && <SectionCard><CarteirasSection /></SectionCard>}
-        {activeTab === 'distribuicao' && <SectionCard><DistribuicaoCarteira /></SectionCard>}
-        {activeTab === 'avancado' && <div className="flex flex-col gap-4">{isSuperAdmin && <AdminPanel />}<DangerZone /></div>}
+        {activeTab === 'carteiras' && <CarteirasSection />}
+        {activeTab === 'distribuicao' && (
+          <SectionCard>
+            <DistribuicaoCarteira />
+          </SectionCard>
+        )}
+        {activeTab === 'avancado' && (
+          <div className="settings-stack">
+            {isSuperAdmin && <AdminPanel />}
+            <DangerZone />
+          </div>
+        )}
       </div>
     </div>
   )

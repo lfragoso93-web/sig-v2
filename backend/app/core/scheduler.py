@@ -177,6 +177,39 @@ def start_scheduler() -> None:
                     )
 
     @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=8, minute=30),
+        id="notify_daily_dividend_payments",
+        name="Enviar resumo matinal por e-mail dos proventos pagos no dia",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def run_daily_dividend_notifications():
+        from app.core.database import AsyncSessionLocal
+        from app.services.dividend_notification_service import (
+            notify_daily_dividend_payments,
+        )
+
+        async with distributed_job_lock(
+            job_name="notify_daily_dividend_payments",
+            period="daily",
+            ttl_seconds=3600,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    result = await notify_daily_dividend_payments(db)
+                    logger.info(
+                        "[scheduler] Notificações de proventos do dia: %s",
+                        result,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro ao enviar notificações de proventos: %s",
+                        exc,
+                    )
+
+    @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
         id="portfolio_snapshot_auto_maintenance",
         name="Manutenção automática de snapshots patrimoniais e TWR",

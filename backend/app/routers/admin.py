@@ -24,6 +24,9 @@ from app.models.admin_backup_operation import (
 from app.schemas.admin import (
     AdminRestoreRequest,
     AdminBackupOperationsResponse,
+    AdminSmtpStatusResponse,
+    AdminSmtpTestRequest,
+    AdminSmtpTestResponse,
 )
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
@@ -119,7 +122,13 @@ async def admin_create_user(
     _: User = Depends(require_superadmin),
 ):
     """Cria usuário (SuperAdmin pode definir role)."""
-    return await create_user(db, data, role=role)
+    user = await create_user(db, data, role=role)
+    try:
+        from app.services.email_service import send_welcome_email
+        await send_welcome_email(user.email, user.name or user.email)
+    except Exception as exc:
+        logger.warning("Falha ao enviar e-mail de boas-vindas ao criar usuário pelo admin: %s", exc)
+    return user
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
@@ -169,7 +178,16 @@ async def admin_delete_user(
     """Remove usuário permanentemente (cascade deleta carteiras e dados)."""
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Você não pode excluir sua própria conta")
+    target_user = await get_user_by_id(db, user_id)
+    email = target_user.email if target_user else None
+    name = (target_user.name or target_user.email) if target_user else None
     await delete_user(db, user_id)
+    if email:
+        try:
+            from app.services.email_service import send_account_deleted_email
+            await send_account_deleted_email(email, name or email)
+        except Exception as exc:
+            logger.warning("Falha ao enviar e-mail de exclusão de conta pelo admin: %s", exc)
     return MessageResponse(message="Usuário excluído com sucesso")
 
 
@@ -188,8 +206,13 @@ async def admin_toggle_user_active(
     if user.role == UserRole.superadmin and user.is_active and await count_active_superadmins(db) <= 1:
         raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
     user.is_active = not user.is_active
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
+    try:
+        from app.services.email_service import send_account_status_email
+        await send_account_status_email(user.email, user.name or user.email, user.is_active)
+    except Exception as exc:
+        logger.warning("Falha ao enviar e-mail de status da conta: %s", exc)
     return user
 
 
@@ -209,6 +232,15 @@ async def admin_reset_password(
     user.hashed_password = hash_password(data.new_password)
     await db.commit()
     await db.refresh(user)
+    try:
+        from app.services.email_service import send_password_changed_email
+        await send_password_changed_email(
+            user.email,
+            user.name or user.email,
+            origin="redefinição pelo administrador",
+        )
+    except Exception as exc:
+        logger.warning("Falha ao enviar e-mail de redefinição de senha pelo admin: %s", exc)
     return MessageResponse(
         message=f"Senha do usuário {user.email} redefinida com sucesso"
     )
@@ -921,3 +953,38 @@ async def clear_asset_coverage(
     from app.services.asset_coverage_service import asset_coverage_service
     cleared = await asset_coverage_service.clear_coverage(ticker=ticker)
     return {"status": "ok", "cleared_count": cleared}
+
+
+# -----------------------------------------------------------------------------
+# Diagnóstico e Teste de SMTP (Brevo / E-mails Transacionais)
+# -----------------------------------------------------------------------------
+
+@router.get("/smtp/status", response_model=AdminSmtpStatusResponse)
+async def admin_get_smtp_status(
+    _: User = Depends(require_superadmin),
+):
+    """Retorna o status atual de configuração do servidor SMTP (sem expor segredos)."""
+    from app.services.email_service import get_smtp_status
+    return get_smtp_status()
+
+
+@router.post("/smtp/test", response_model=AdminSmtpTestResponse)
+async def admin_test_smtp(
+    data: AdminSmtpTestRequest,
+    _: User = Depends(require_superadmin),
+):
+    """Testa a conexão, autenticação e disparo de e-mail via SMTP."""
+    from app.services.email_service import send_smtp_test_email
+    return await send_smtp_test_email(str(data.to_email))
+
+
+@router.post("/smtp/notify-dividends", response_model=dict)
+async def admin_trigger_dividend_notifications(
+    force: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """Dispara a verificação e envio de avisos de proventos creditados na data atual."""
+    from app.services.dividend_notification_service import notify_daily_dividend_payments
+    return await notify_daily_dividend_payments(db, force=force)
+

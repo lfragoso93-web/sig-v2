@@ -143,42 +143,51 @@ export default function MfaSecuritySection() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-between w-full"
+        className="settings-card-header-interactive"
+        style={{
+          borderBottom: open ? '1px solid oklch(from var(--color-text) l c h / 0.07)' : 'none',
+        }}
       >
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={15} style={{ color: 'var(--color-primary)' }} />
-          <h2
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            Autenticação em Duas Etapas (MFA / 2FA)
-          </h2>
-          {status && (
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-medium ml-2"
-              style={{
-                background: status.mfa_enabled
-                  ? 'oklch(from var(--color-success) l c h / 0.15)'
-                  : 'oklch(from var(--color-text-muted) l c h / 0.12)',
-                color: status.mfa_enabled
-                  ? 'var(--color-success)'
-                  : 'var(--color-text-muted)',
-              }}
-            >
-              {status.mfa_enabled ? 'Ativado' : 'Opcional (Desativado)'}
-            </span>
-          )}
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="settings-card-icon" aria-hidden="true">
+            <ShieldCheck size={15} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
+                Autenticação em Duas Etapas (MFA / 2FA)
+              </h2>
+              {status && (
+                <span
+                  className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                  style={{
+                    background: status.mfa_enabled
+                      ? 'oklch(from var(--color-success) l c h / 0.14)'
+                      : 'oklch(from var(--color-text-muted) l c h / 0.12)',
+                    color: status.mfa_enabled
+                      ? 'var(--color-success)'
+                      : 'var(--color-text-muted)',
+                  }}
+                >
+                  {status.mfa_enabled ? 'Ativado' : 'Opcional (Desativado)'}
+                </span>
+              )}
+            </div>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+              Proteja seu acesso com código temporário TOTP (Google Authenticator, Authy, 1Password)
+            </p>
+          </div>
         </div>
         {open ? (
-          <ChevronUp size={14} style={{ color: 'var(--color-text-faint)' }} />
+          <ChevronUp size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
         ) : (
-          <ChevronDown size={14} style={{ color: 'var(--color-text-faint)' }} />
+          <ChevronDown size={15} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
         )}
       </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-3">
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="settings-card-body">
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
             Adicione uma camada extra de segurança à sua conta exigindo um código de verificação
             do seu celular ou computador (compatível com Google Authenticator, Authy, Bitwarden e 1Password).
           </p>
@@ -205,7 +214,6 @@ export default function MfaSecuritySection() {
                 onClick={startSetup}
                 disabled={loading}
                 className="btn btn-primary text-xs"
-                style={{ minHeight: 36 }}
               >
                 {loading ? (
                   <Loader2 size={13} className="animate-spin" />
@@ -271,7 +279,6 @@ export default function MfaSecuritySection() {
                     type="button"
                     onClick={() => copyToClipboard(setupData.secret, 'key')}
                     className="btn btn-ghost text-xs flex items-center gap-1.5"
-                    style={{ minHeight: 34 }}
                   >
                     {copiedKey ? <Check size={13} /> : <Copy size={13} />}
                     <span>{copiedKey ? 'Copiada' : 'Copiar'}</span>
@@ -310,7 +317,6 @@ export default function MfaSecuritySection() {
                     copyToClipboard(setupData.backup_codes.join('\n'), 'codes')
                   }
                   className="btn btn-ghost text-xs flex items-center gap-1.5"
-                  style={{ minHeight: 30 }}
                 >
                   {copiedCodes ? <Check size={13} /> : <Copy size={13} />}
                   <span>{copiedCodes ? 'Códigos Copiados!' : 'Copiar todos os códigos'}</span>
@@ -337,7 +343,6 @@ export default function MfaSecuritySection() {
                     type="submit"
                     disabled={isEnabling || confirmCode.trim().length !== 6}
                     className="btn btn-primary text-xs"
-                    style={{ minHeight: 36 }}
                   >
                     {isEnabling ? (
                       <Loader2 size={13} className="animate-spin" />
@@ -417,7 +422,6 @@ export default function MfaSecuritySection() {
                       style={{
                         background: 'var(--color-notification)',
                         color: 'white',
-                        minHeight: 34,
                       }}
                     >
                       {isDisabling ? (
