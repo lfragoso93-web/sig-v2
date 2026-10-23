@@ -79,4 +79,14 @@ class ClassTargetOut(BaseModel):
 
 
 class ClassTargetIn(BaseModel):
+    asset_type: Optional[str] = None
     target_pct: float
+
+
+class ClassTargetBulkItemIn(BaseModel):
+    asset_type: str
+    target_pct: float
+
+
+class ClassTargetBulkIn(BaseModel):
+    targets: list[ClassTargetBulkItemIn]

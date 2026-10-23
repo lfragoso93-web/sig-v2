@@ -94,7 +94,12 @@ async def confirm_password_reset(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def refresh(
+    request: Request,
+    data: RefreshRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """Troca um refresh token valido por um novo par access + refresh."""
     payload = decode_token(data.refresh_token)
 

@@ -10,12 +10,24 @@ import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { findAnchorElement, resolveScrollRestoration } from '@/utils/scrollRestoration'
 
 export default function AppLayout() {
-  const { sidebarOpen, closeSidebar, transactionModal, closeTransactionModal } = useAppStore()
+  const { sidebarOpen, closeSidebar, transactionModal, openTransactionModal, closeTransactionModal } = useAppStore()
   const overlayRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
   const scrollPositions = useRef(new Map<string, number>())
   const location = useLocation()
   const navigationType = useNavigationType()
+
+  // Atalho de produtividade global: Alt+N abre o modal de Novo Lançamento
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'n' || e.key === 'N') && !transactionModal.open) {
+        e.preventDefault()
+        openTransactionModal()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [openTransactionModal, transactionModal.open])
 
   useEffect(() => {
     const el = overlayRef.current
@@ -64,7 +76,7 @@ export default function AppLayout() {
     >
       <Topbar />
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {sidebarOpen && (
           <div
             ref={overlayRef}
@@ -89,8 +101,9 @@ export default function AppLayout() {
             overflowX:  'clip',
             height:     '100%',
             background: 'var(--color-bg)',
+            scrollPaddingBottom: 'calc(6.5rem + env(safe-area-inset-bottom, 0px))',
           }}
-          className="lg:pb-0 pb-[calc(60px+env(safe-area-inset-bottom,0px))]"
+          className="lg:pb-0 pb-[calc(96px+env(safe-area-inset-bottom,0px))]"
         >
           <ErrorBoundary>
             <Outlet />

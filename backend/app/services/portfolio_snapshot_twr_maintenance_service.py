@@ -18,6 +18,9 @@ from app.services.canonical_dividend_aggregation_service import (
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
+from app.services.portfolio_class_reconciliation_service import (
+    reconcile_latest_class_snapshots,
+)
 from app.services.portfolio_class_snapshot_service import (
     SUPPORTED_CLASS_TWR_TYPES,
     rebuild_class_snapshots,
@@ -148,11 +151,26 @@ async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int
         .group_by(PortfolioClassSnapshot.asset_type)
     )
     latest_by_type = {row.asset_type: row[1] for row in snapshot_result.all()}
-    return any(
+    if any(
         latest_by_type.get(asset_type) is None
         or latest_by_type[asset_type] < date.today()
         for asset_type in transaction_types
-    )
+    ):
+        return True
+
+    reconciliation = await reconcile_latest_class_snapshots(db, portfolio_id)
+    if (
+        reconciliation.get("is_comparable") is True
+        and reconciliation.get("is_reconciled") is False
+    ):
+        logger.warning(
+            "[snapshot_twr_auto] portfolio=%s divergência entre consolidado e classes em %s; reconstruindo",
+            portfolio_id,
+            reconciliation.get("snapshot_date"),
+        )
+        return True
+
+    return False
 
 
 async def maintain_twr_snapshots_for_active_portfolios(

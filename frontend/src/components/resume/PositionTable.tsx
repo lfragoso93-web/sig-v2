@@ -43,10 +43,10 @@ function fmtQty(v: unknown) {
     : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
 }
 
-function displayName(ticker: string, assetType: string | null | undefined): string {
+function displayName(ticker: string, assetType: string | null | undefined, assetLabel?: string | null): string {
   if (!assetType) return ticker
   const norm = assetType.toUpperCase()
-  if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') return formatTreasuryName(ticker)
+  if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') return formatTreasuryName(ticker, assetLabel)
   return ticker
 }
 
@@ -306,7 +306,7 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
   const safeType = item.asset_type ?? ''
   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
   const isRF = isRendaFixa(safeType)
-  const name = displayName(item.ticker, safeType)
+  const name = displayName(item.ticker, safeType, item.asset_label)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
   const result = safeNum(item.variation_value)
   const varColor = result >= 0 ? 'var(--color-success)' : 'var(--color-error)'
@@ -658,7 +658,7 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                 {group.positions.map(item => {
                   const safeType = item.asset_type ?? ''
                   const hasQuote = item.current_price !== null && item.current_price !== undefined
-                  const name = displayName(item.ticker, safeType)
+                  const name = displayName(item.ticker, safeType, item.asset_label)
                   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
                   const itemIsRF = isRendaFixa(safeType)
                   const result = safeNum(item.variation_value)

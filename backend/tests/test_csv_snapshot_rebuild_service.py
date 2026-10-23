@@ -41,6 +41,10 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
             new=AsyncMock(return_value=400),
         ) as backfill,
         patch(
+            "app.services.csv_snapshot_rebuild_service.rebuild_class_snapshots",
+            new=AsyncMock(return_value=80),
+        ) as rebuild_classes,
+        patch(
             "app.services.csv_snapshot_rebuild_service.invalidate_portfolio_cache",
             new=AsyncMock(),
         ) as invalidate_cache,
@@ -58,6 +62,7 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
         commit=True,
     )
     backfill.assert_awaited_once_with(db, 7)
+    rebuild_classes.assert_awaited_once_with(db, 7)
     invalidate_cache.assert_awaited_once_with(7)
     invalidate_rentabilidade.assert_awaited_once_with(7)
 

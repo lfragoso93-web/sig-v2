@@ -31,6 +31,7 @@ from app.schemas.auth import (
 from app.schemas.password_policy import validate_strong_password
 from app.schemas.user import UserCreate
 from app.services.email_service import (
+    send_password_changed_email,
     send_password_reset_email,
     send_welcome_email,
 )
@@ -420,3 +421,15 @@ async def reset_password(
         .values(hashed_password=hash_password(new_password))
     )
     await db.flush()
+    try:
+        await send_password_changed_email(
+            user.email,
+            user.name or user.email,
+            origin="recuperação por link de e-mail",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Falha ao enviar aviso de senha redefinida id=%s: %s",
+            user.id,
+            exc,
+        )

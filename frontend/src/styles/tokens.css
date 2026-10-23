@@ -102,18 +102,17 @@
 
   /* ── Tipografia fluida ──────────────────────────────── */
   /*
-   * Escala com clamp() — nunca abaixo de 12px.
+   * Escala com clamp() refinada e compacta para dashboard financeiro.
    * Referência: viewport 375px (min) → 1440px (max).
-   * Regra: body = --text-sm (14→16px), UI labels = --text-xs (12→13px).
    */
-  --text-xs:   clamp(0.75rem,  0.72rem + 0.14vw, 0.8125rem);  /* 12 → 13px  */
-  --text-sm:   clamp(0.875rem, 0.83rem + 0.21vw, 0.9375rem);  /* 14 → 15px  */
-  --text-base: clamp(0.9375rem,0.88rem + 0.28vw, 1rem);       /* 15 → 16px  */
-  --text-md:   clamp(1rem,     0.94rem + 0.28vw, 1.0625rem);  /* 16 → 17px  */
-  --text-lg:   clamp(1.0625rem,0.96rem + 0.49vw, 1.25rem);    /* 17 → 20px  */
-  --text-xl:   clamp(1.25rem,  1.05rem + 0.94vw, 1.625rem);   /* 20 → 26px  */
-  --text-2xl:  clamp(1.5rem,   1.2rem  + 1.41vw, 2.0625rem);  /* 24 → 33px  */
-  --text-3xl:  clamp(1.875rem, 1.4rem  + 2.25vw, 2.75rem);    /* 30 → 44px  */
+  --text-xs:   clamp(0.71875rem, 0.7rem + 0.08vw, 0.75rem);     /* 11.5 → 12px */
+  --text-sm:   clamp(0.78125rem, 0.76rem + 0.1vw, 0.8125rem);   /* 12.5 → 13px */
+  --text-base: clamp(0.84375rem, 0.82rem + 0.12vw, 0.875rem);   /* 13.5 → 14px */
+  --text-md:   clamp(0.875rem,   0.85rem + 0.15vw, 0.9375rem);  /* 14 → 15px   */
+  --text-lg:   clamp(0.95rem,    0.9rem  + 0.22vw, 1.0625rem);  /* 15.2 → 17px */
+  --text-xl:   clamp(1.0625rem,  0.98rem + 0.35vw, 1.25rem);    /* 17 → 20px   */
+  --text-2xl:  clamp(1.25rem,    1.1rem  + 0.55vw, 1.5rem);     /* 20 → 24px   */
+  --text-3xl:  clamp(1.5rem,     1.3rem  + 0.8vw,  1.875rem);   /* 24 → 30px   */
 
   /*
    * General Sans (Fontshare) — geométrico, neutro, sofisticado.
@@ -151,7 +150,7 @@
   --sidebar-width-collapsed: 68px;
 
   /* ── Topbar ─────────────────────────────────────────── */
-  --topbar-height: 56px;
+  --topbar-height: 52px;
 }
 
 /* ── Dark Mode (preferência do sistema) ────────────────────────── */

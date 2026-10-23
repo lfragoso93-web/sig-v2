@@ -28,7 +28,7 @@
 
   @media (min-width: 1600px) {
     .page-container {
-      max-width: min(1840px, 100%);
+      max-width: min(1360px, 100%);
     }
 
     .table-responsive table,
@@ -95,7 +95,7 @@
 
   @media (max-width: 640px) {
     .page-title {
-      font-size: clamp(1.25rem, 7vw, 1.5rem);
+      font-size: clamp(1.15rem, 5.5vw, 1.35rem);
     }
 
     .page-subtitle {
@@ -103,7 +103,7 @@
     }
 
     .section-card-header {
-      padding: 0.875rem 1rem;
+      padding: 0.75rem 0.95rem;
     }
 
     .card.p-4,

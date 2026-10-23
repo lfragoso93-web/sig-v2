@@ -42,7 +42,9 @@ from app.services.fixed_income_valuation_service import (
     get_fixed_income_totals_from_transactions,
 )
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
-from app.services.price_history_service import get_prices_at_date_batch
+from app.services.lifecycle_aware_price_service import (
+    get_prices_at_date_with_lifecycle,
+)
 from app.services.twr_service import (
     DailyTwrInput,
     append_compounded_return_pct,
@@ -387,11 +389,16 @@ async def rebuild_class_snapshots(
                     (position.ticker, asset_type)
                     for position in open_positions
                 ]
-                prices = (
-                    await get_prices_at_date_batch(db, requirements, cursor.isoformat())
-                    if requirements
-                    else {}
-                )
+                if requirements:
+                    prices, pre_listing, _real_gaps = (
+                        await get_prices_at_date_with_lifecycle(
+                            db,
+                            requirements,
+                            cursor,
+                        )
+                    )
+                else:
+                    prices, pre_listing = {}, set()
                 fx_rate = Decimal(1)
                 if asset_type in _USD_TYPES and requirements:
                     fx_rate = fx_rates_by_date[cursor]
@@ -405,9 +412,15 @@ async def rebuild_class_snapshots(
                 )
                 has_partial_prices = has_pending_fraction
                 for position in open_positions:
-                    close = prices.get(position.ticker)
+                    ticker_upper = position.ticker.upper()
+                    close = (
+                        None
+                        if ticker_upper in pre_listing
+                        else prices.get(ticker_upper)
+                    )
                     if close is None:
-                        has_partial_prices = True
+                        if ticker_upper not in pre_listing:
+                            has_partial_prices = True
                         close_decimal = (
                             position.cost / position.quantity
                             if position.quantity > 0

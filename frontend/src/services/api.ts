@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
 const _raw = import.meta.env.VITE_API_URL
@@ -22,18 +22,77 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Logout automático em 401 — exceto na rota de login (credenciais erradas)
+interface RetriableRequestConfig extends AxiosRequestConfig {
+  _retry?: boolean
+}
+
+let refreshPromise: Promise<string | null> | null = null
+
+async function tryRefreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('sig_refresh')
+  if (!refreshToken) return null
+
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post<{ access_token?: string; refresh_token?: string }>(
+        `${BASE_URL}/api/v1/auth/refresh`,
+        { refresh_token: refreshToken },
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+      .then((res) => {
+        const nextAccess = res.data?.access_token
+        const nextRefresh = res.data?.refresh_token
+        if (!nextAccess || !nextRefresh) return null
+
+        localStorage.setItem('sig_token', nextAccess)
+        localStorage.setItem('sig_refresh', nextRefresh)
+        api.defaults.headers.common['Authorization'] = `Bearer ${nextAccess}`
+        useAuthStore.setState({ token: nextAccess, isAuthenticated: true })
+        return nextAccess
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+
+  return refreshPromise
+}
+
+function forceLogoutRedirect() {
+  useAuthStore.getState().logout()
+  localStorage.removeItem('sig_token')
+  localStorage.removeItem('sig_refresh')
+  localStorage.removeItem('sig-auth')
+  delete api.defaults.headers.common['Authorization']
+  window.location.replace('/login')
+}
+
+// Renovação silenciosa em 401 via refresh_token; logout apenas se refresh falhar
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    const isLoginRoute = err.config?.url?.includes('/auth/login')
-    if (err.response?.status === 401 && !isLoginRoute) {
-      // Limpa TODOS os tokens para evitar loop de re-hidrataÃ§Ã£o
-      useAuthStore.getState().logout()
-      localStorage.removeItem('sig_token')
-      localStorage.removeItem('sig_refresh')
-      localStorage.removeItem('sig-auth')
-      window.location.replace('/login')
+  async (err) => {
+    const originalConfig = err.config as RetriableRequestConfig | undefined
+    const url = originalConfig?.url ?? ''
+    const isAuthBypassRoute =
+      url.includes('/auth/login') ||
+      url.includes('/auth/register') ||
+      url.includes('/auth/refresh') ||
+      url.includes('/auth/mfa/verify')
+
+    if (err.response?.status === 401 && !isAuthBypassRoute && originalConfig) {
+      if (!originalConfig._retry) {
+        originalConfig._retry = true
+        const newAccessToken = await tryRefreshAccessToken()
+        if (newAccessToken) {
+          originalConfig.headers = {
+            ...originalConfig.headers,
+            Authorization: `Bearer ${newAccessToken}`,
+          }
+          return api(originalConfig)
+        }
+      }
+      forceLogoutRedirect()
     }
     return Promise.reject(err)
   }

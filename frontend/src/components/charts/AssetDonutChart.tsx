@@ -1,21 +1,27 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import type { AssetTypeDistribution } from '@/hooks/usePortfolio'
+import { formatBRL } from '@/utils/format'
 
 // Paleta de cores fixa — usada quando o backend não retornar `color`
 const PALETTE = [
-  '#6366f1', // indigo
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#3b82f6', // blue
-  '#ec4899', // pink
-  '#8b5cf6', // violet
-  '#14b8a6', // teal
-  '#f97316', // orange
+  '#01696f', // teal primary
+  '#006494', // blue
+  '#c18f00', // gold
+  '#3d7020', // green
+  '#7a39bb', // purple
+  '#da7101', // orange
+  '#a13544', // notification/rose
+  '#4f98a3', // cyan
 ]
 
 function safeNumber(value: unknown): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
+}
+
+function clampPercentage(value: unknown): number {
+  const n = safeNumber(value)
+  return Math.min(Math.max(n, 0), 100)
 }
 
 function getColor(entry: AssetTypeDistribution, index: number): string {
@@ -34,13 +40,15 @@ function CustomTooltip({ active, payload }: {
     <div
       className="rounded-lg p-3 text-xs"
       style={{
-        background: 'var(--color-surface)',
+        background: 'var(--color-surface-2)',
         border: '1px solid var(--color-border)',
         boxShadow: 'var(--shadow-lg)',
       }}
     >
       <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{d.label}</p>
-      <p style={{ color: 'var(--color-text-muted)' }}>{safeNumber(d.percentage).toFixed(1)}%</p>
+      <p className="tabular-nums font-medium" style={{ color: 'var(--color-text-muted)' }}>
+        {formatBRL(safeNumber(d.value))} ({clampPercentage(d.percentage).toFixed(1)}%)
+      </p>
     </div>
   )
 }
@@ -49,21 +57,24 @@ export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[
   if (!data || data.length === 0) return null
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div className="flex flex-col sm:flex-row items-center gap-5 w-full min-w-0">
       {/* Donut */}
-      <div style={{ flexShrink: 0 }}>
-        <ResponsiveContainer width={180} height={180}>
+      <div style={{ flexShrink: 0, width: 184, height: 184 }}>
+        <ResponsiveContainer width={184} height={184}>
           <PieChart>
             <Pie
               data={data}
-              cx="50%" cy="50%"
-              innerRadius={50}
-              outerRadius={78}
-              paddingAngle={3}
+              cx="50%"
+              cy="50%"
+              innerRadius={54}
+              outerRadius={80}
+              paddingAngle={2.5}
               dataKey="value"
+              stroke="var(--color-surface)"
+              strokeWidth={2}
             >
               {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
+                <Cell key={`cell-${entry.asset_type ?? index}`} fill={getColor(entry, index)} />
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
@@ -71,44 +82,72 @@ export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[
         </ResponsiveContainer>
       </div>
 
-      {/* Legenda com % */}
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0, flex: 1, minWidth: 0 }}>
-        {data.map((entry, index) => (
-          <li
-            key={entry.asset_type}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 6,
-              fontSize: 12,
-            }}
-          >
-            <span
+      {/* Legenda com percentuais seguros */}
+      <ul
+        aria-label="Legenda de distribuição por classe"
+        style={{
+          listStyle: 'none',
+          margin: 0,
+          padding: 0,
+          flex: 1,
+          width: '100%',
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
+        }}
+      >
+        {data.map((entry, index) => {
+          const pct = clampPercentage(entry.percentage)
+          const color = getColor(entry, index)
+          return (
+            <li
+              key={entry.asset_type}
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: getColor(entry, index),
-                flexShrink: 0,
-              }}
-            />
-            <span
-              style={{
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                color: 'var(--color-text)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.625rem',
+                fontSize: 'var(--text-xs)',
+                minWidth: 0,
               }}
             >
-              {entry.label}
-            </span>
-            <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-              {safeNumber(entry.percentage).toFixed(1)}%
-            </span>
-          </li>
-        ))}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: 'var(--color-text)',
+                    fontWeight: 500,
+                  }}
+                  title={entry.label}
+                >
+                  {entry.label}
+                </span>
+              </div>
+              <span
+                className="tabular-nums font-semibold"
+                style={{
+                  color: 'var(--color-text-muted)',
+                  flexShrink: 0,
+                }}
+              >
+                {pct.toFixed(1)}%
+              </span>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -6,7 +7,13 @@ from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.schemas.user import UserPasswordUpdate, UserResponse, UserUpdate
 from app.schemas.auth import MessageResponse
+from app.services.email_service import (
+    send_account_deleted_email,
+    send_password_changed_email,
+)
 from app.services.user_service import update_user, delete_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["users"])
 
@@ -39,6 +46,14 @@ async def change_my_password(
 
     current_user.hashed_password = hash_password(data.new_password)
     await db.commit()
+    try:
+        await send_password_changed_email(
+            current_user.email,
+            current_user.name or current_user.email,
+            origin="alteração nas configurações da conta",
+        )
+    except Exception as exc:
+        logger.warning("Falha ao enviar aviso de senha alterada: %s", exc)
     return MessageResponse(message="Senha alterada com sucesso")
 
 
@@ -60,5 +75,11 @@ async def delete_me(
     O usuario exclui a propria conta permanentemente.
     Remove todos os dados associados via ON DELETE CASCADE no PostgreSQL.
     """
+    email = current_user.email
+    name = current_user.name or current_user.email
     await delete_user(db, current_user.id)
+    try:
+        await send_account_deleted_email(email, name)
+    except Exception as exc:
+        logger.warning("Falha ao enviar e-mail de exclusão de conta: %s", exc)
     return MessageResponse(message="Conta excluida com sucesso")

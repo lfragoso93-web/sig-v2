@@ -61,6 +61,44 @@ async def test_canonical_totals_substitui_proxy_de_renda_fixa(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_canonical_totals_substitui_custo_inflado_de_renda_fixa_apos_resgate(
+    monkeypatch,
+):
+    async def fake_base(*_args, **_kwargs):
+        return {
+            "market_value": Decimal("11912.34"),
+            "cost_basis": Decimal("11007.95"),
+            "invested_total": Decimal("6325.76"),
+            "realized_pnl": Decimal("5571.07"),
+            "unrealized_pnl": Decimal("904.40"),
+            "total_pnl": Decimal("6475.47"),
+            "return_pct": Decimal("39.0000"),
+            "market_value_by_class": {
+                "ACAO": Decimal("4823.84"),
+                "RENDA_FIXA": Decimal("7088.50"),
+            },
+        }
+
+    async def fake_fixed_income(*_args, **_kwargs):
+        return {
+            "invested_amount": Decimal("1514.83"),
+            "current_value": Decimal("1542.88"),
+            "income_amount": Decimal("28.05"),
+        }
+
+    monkeypatch.setattr(service, "_base_totals_without_dedicated_lookup", fake_base)
+    monkeypatch.setattr(service, "_fixed_income_totals_at_date", fake_fixed_income)
+    monkeypatch.setattr(service, "_treasury_correction_at_date", _treasury_without_correction)
+
+    result = await service.calculate_canonical_portfolio_totals(None, 15, None)
+
+    assert result["market_value"] == Decimal("6366.72")
+    assert result["cost_basis"] == Decimal("5434.28")
+    assert result["market_value_by_class"]["RENDA_FIXA"] == Decimal("1542.88")
+    assert sum(result["market_value_by_class"].values(), Decimal("0")) == Decimal("6366.72")
+
+
+@pytest.mark.asyncio
 async def test_canonical_totals_sem_renda_fixa_preserva_base(monkeypatch):
     base = {
         "market_value": Decimal("850.00"),

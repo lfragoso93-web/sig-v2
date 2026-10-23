@@ -72,6 +72,24 @@ export function useUpsertClassTarget(portfolioId: number | null) {
   })
 }
 
+export function useBulkUpsertClassTargets(portfolioId: number | null) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (targets: ClassTargetUpsertPayload[]) => {
+      if (!portfolioId) throw new Error('portfolioId requerido')
+      const res = await api.put(
+        `/portfolios/${portfolioId}/class-targets`,
+        { targets }
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      invalidateTargetConsumers(queryClient, portfolioId)
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Mutation: delete (remove meta de um asset_type)
 // ---------------------------------------------------------------------------

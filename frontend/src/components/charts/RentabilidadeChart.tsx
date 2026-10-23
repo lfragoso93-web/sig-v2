@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { useMonthlyEvolution, type PeriodOption } from '@/hooks/useEvolution'
 import { useMonthlyBenchmarks } from '@/hooks/useRentabilidade'
+import TwrHelpPopover from '@/components/ui/TwrHelpPopover'
 
 interface ChartPoint {
   period: string
@@ -116,11 +117,14 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
   const loading = loadingMonthly || loadingBenchmarks
 
   return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+    <div className="card overflow-hidden">
+      <div className="section-card-header flex-wrap gap-3">
         <div className="flex flex-col">
-          <span className="section-card-title">TWR mensal</span>
-          <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
+          <div className="flex items-center gap-1.5">
+            <span className="section-card-title">TWR mensal</span>
+            <TwrHelpPopover />
+          </div>
+          <span className="text-xs mt-0.5" style={{ color: 'var(--color-text-faint)' }}>
             Carteira e benchmarks mensais servidos por séries persistidas
           </span>
         </div>
@@ -132,7 +136,7 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
               onClick={item.toggle}
               disabled={!item.available}
               title={item.available ? undefined : 'Histórico persistido ainda indisponível'}
-              className="px-2 py-1 rounded-full text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2.5 py-1 rounded-full text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               style={{
                 border: '1px solid var(--color-divider)',
                 background: item.active && item.available ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'transparent',
@@ -146,7 +150,7 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
             <button
               key={option.value}
               onClick={() => setPeriod(option.value)}
-              className="px-2 py-1 rounded-full text-xs font-semibold"
+              className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
               style={{
                 border: '1px solid var(--color-divider)',
                 background: period === option.value ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'transparent',
@@ -159,31 +163,33 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
         </div>
       </div>
 
-      {loading ? (
-        <div className="animate-pulse rounded-lg" style={{ height: 280, background: 'var(--color-surface-offset)' }} />
-      ) : chartData.length === 0 ? (
-        <div className="flex items-center justify-center" style={{ height: 280 }}>
-          <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>Sem snapshots para o período selecionado</span>
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="oklch(from var(--color-text) l c h / 0.06)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-            <YAxis tickFormatter={value => `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`} tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} width={54} />
-            <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.18)" />
-            <Bar dataKey="carteira" name="Carteira (TWR)" fill="var(--color-primary)" radius={[3, 3, 0, 0]} maxBarSize={30} />
-            {showIbov && availability?.IBOV.available && <Line type="monotone" dataKey="ibov" name="IBOV" connectNulls dot={false} strokeWidth={2} />}
-            {showCdi && availability?.CDI.available && <Line type="monotone" dataKey="cdi" name="CDI" connectNulls dot={false} strokeWidth={2} />}
-            {showIpca && availability?.IPCA.available && <Line type="monotone" dataKey="ipca" name="IPCA" connectNulls dot={false} strokeWidth={2} />}
-          </ComposedChart>
-        </ResponsiveContainer>
-      )}
+      <div className="section-card-body">
+        {loading ? (
+          <div className="animate-pulse rounded-lg" style={{ height: 280, background: 'var(--color-surface-offset)' }} />
+        ) : chartData.length === 0 ? (
+          <div className="flex items-center justify-center" style={{ height: 280 }}>
+            <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>Sem snapshots para o período selecionado</span>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(from var(--color-text) l c h / 0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+              <YAxis tickFormatter={value => `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`} tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} width={54} />
+              <Tooltip content={<CustomTooltip />} />
+              <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.18)" />
+              <Bar dataKey="carteira" name="Carteira (TWR)" fill="var(--color-primary)" radius={[3, 3, 0, 0]} maxBarSize={30} />
+              {showIbov && availability?.IBOV.available && <Line type="monotone" dataKey="ibov" name="IBOV" connectNulls dot={false} strokeWidth={2} />}
+              {showCdi && availability?.CDI.available && <Line type="monotone" dataKey="cdi" name="CDI" connectNulls dot={false} strokeWidth={2} />}
+              {showIpca && availability?.IPCA.available && <Line type="monotone" dataKey="ipca" name="IPCA" connectNulls dot={false} strokeWidth={2} />}
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
 
-      <p className="text-[10px] mt-2" style={{ color: 'var(--color-text-faint)' }}>
-        Nenhuma consulta externa é realizada pelo navegador. Benchmarks sem histórico materializado permanecem indisponíveis.
-      </p>
+        <p className="text-[10px] mt-3" style={{ color: 'var(--color-text-faint)' }}>
+          Nenhuma consulta externa é realizada pelo navegador. Benchmarks sem histórico materializado permanecem indisponíveis.
+        </p>
+      </div>
     </div>
   )
 }

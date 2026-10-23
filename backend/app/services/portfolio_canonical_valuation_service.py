@@ -404,22 +404,33 @@ async def calculate_canonical_portfolio_totals(
         treasury_ticker_cache=treasury_ticker_cache,
     )
 
+    fixed_income_base = Decimal(
+        str(totals["market_value_by_class"].get(AssetType.RENDA_FIXA.value, _ZERO))
+    )
+    fixed_income_cost_correction = fixed_income["invested_amount"] - fixed_income_base
+    fixed_income_market_correction = fixed_income["current_value"] - fixed_income_base
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
     treasury_correction = Decimal(str(treasury["correction"]))
-    total_correction = fixed_income_correction + treasury_correction
-    market_value = Decimal(str(totals["market_value"])) + total_correction
-    unrealized_pnl = Decimal(str(totals["unrealized_pnl"])) + total_correction
-    realized_pnl = Decimal(str(totals["realized_pnl"]))
+    market_value = (
+        Decimal(str(totals["market_value"]))
+        + fixed_income_market_correction
+        + treasury_correction
+    )
+    cost_basis = Decimal(str(totals["cost_basis"])) + fixed_income_cost_correction
+    unrealized_pnl = market_value - cost_basis
+    realized_pnl = Decimal(str(totals["realized_pnl"])) - fixed_income_cost_correction
     total_pnl = realized_pnl + unrealized_pnl
-    cost_basis = Decimal(str(totals["cost_basis"]))
     invested_total = Decimal(str(totals["invested_total"]))
 
     market_value_by_class = dict(totals["market_value_by_class"])
-    if fixed_income["invested_amount"] or fixed_income["current_value"]:
-        market_value_by_class[AssetType.RENDA_FIXA.value] = (
-            Decimal(str(market_value_by_class.get(AssetType.RENDA_FIXA.value, _ZERO)))
-            + fixed_income_correction
-        ).quantize(_MONEY)
+    if (
+        fixed_income_base
+        or fixed_income["invested_amount"]
+        or fixed_income["current_value"]
+    ):
+        market_value_by_class[AssetType.RENDA_FIXA.value] = fixed_income[
+            "current_value"
+        ].quantize(_MONEY)
     if treasury_correction:
         market_value_by_class[AssetType.TESOURO_DIRETO.value] = (
             Decimal(str(market_value_by_class.get(AssetType.TESOURO_DIRETO.value, _ZERO)))
@@ -456,6 +467,8 @@ async def calculate_canonical_portfolio_totals(
     return {
         **totals,
         "market_value": market_value.quantize(_MONEY),
+        "cost_basis": cost_basis.quantize(_MONEY),
+        "realized_pnl": realized_pnl.quantize(_MONEY),
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),

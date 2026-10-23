@@ -10,8 +10,10 @@ BDR foi adicionado explicitamente na Sprint 5E (Issue #79).
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.portfolio_class_target import PortfolioClassTarget
 from decimal import Decimal
+import math
 
 # Todas as classes de ativos reconhecidas pelo sistema.
 # BDR adicionado explicitamente na Sprint 5E.
@@ -122,10 +124,13 @@ async def upsert_target(
     target_pct: float,
 ) -> PortfolioClassTarget:
     """Cria ou atualiza a meta de uma classe. Suporta todas as classes em VALID_ASSET_CLASSES."""
+    normalized_type = str(asset_type).strip().upper()
+    safe_pct = Decimal(str(round(float(target_pct), 2)))
+
     result = await db.execute(
         select(PortfolioClassTarget).where(
             PortfolioClassTarget.portfolio_id == portfolio_id,
-            PortfolioClassTarget.asset_type == asset_type,
+            PortfolioClassTarget.asset_type == normalized_type,
         )
     )
     target = result.scalar_one_or_none()
@@ -133,16 +138,48 @@ async def upsert_target(
     if target is None:
         target = PortfolioClassTarget(
             portfolio_id=portfolio_id,
-            asset_type=asset_type,
-            target_pct=Decimal(str(round(target_pct, 2))),
+            asset_type=normalized_type,
+            target_pct=safe_pct,
         )
         db.add(target)
     else:
-        target.target_pct = Decimal(str(round(target_pct, 2)))
+        target.target_pct = safe_pct
 
     await db.commit()
     await db.refresh(target)
     return target
+
+
+async def bulk_upsert_targets(
+    db: AsyncSession,
+    portfolio_id: int,
+    items: list[tuple[str, float]],
+) -> list[PortfolioClassTarget]:
+    """Atualiza múltiplas metas em uma única transação atômica."""
+    if not items:
+        return await get_targets(db, portfolio_id)
+
+    for raw_type, raw_pct in items:
+        normalized_type = str(raw_type).strip().upper()
+        if not math.isfinite(float(raw_pct)) or float(raw_pct) < 0 or float(raw_pct) > 100:
+            raise ValueError(f"target_pct inválido para {normalized_type}: deve estar entre 0 e 100.")
+        safe_pct = Decimal(str(round(float(raw_pct), 2)))
+        stmt = (
+            pg_insert(PortfolioClassTarget)
+            .values(
+                portfolio_id=portfolio_id,
+                asset_type=normalized_type,
+                target_pct=safe_pct,
+            )
+            .on_conflict_do_update(
+                constraint="uq_portfolio_class_target",
+                set_={"target_pct": safe_pct},
+            )
+        )
+        await db.execute(stmt)
+
+    await db.commit()
+    return await get_targets(db, portfolio_id)
 
 
 async def delete_target(
