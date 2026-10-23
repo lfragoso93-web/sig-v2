@@ -22,6 +22,7 @@ services:
       POSTGRES_USER:     ${POSTGRES_USER:-sgi}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgi}
       POSTGRES_DB:       ${POSTGRES_DB:-sgi}
+      TZ:                ${TZ:-America/Sao_Paulo}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -37,6 +38,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -59,6 +62,7 @@ services:
       - path: .env
         required: false
     environment:
+      TZ:                 ${TZ:-America/Sao_Paulo}
       DATABASE_URL:       postgresql+psycopg2://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
       ASYNC_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
       REDIS_URL:          redis://redis:6379/0
@@ -93,6 +97,8 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-80}:80"
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
     depends_on:
       backend:
         condition: service_healthy
