@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -13,9 +14,14 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.routers.admin import require_superadmin
+from app.services.system_bootstrap_execution_context import (
+    BOOTSTRAP_COMMIT_SHA_ENV,
+    DEFAULT_BOOTSTRAP_COMMIT_SHA,
+)
 from app.services.system_bootstrap_service import (
     BOOTSTRAP_SCHEMA_VERSION,
     CANONICAL_BOOTSTRAP_STAGES,
@@ -41,7 +47,7 @@ class BootstrapTriggerRequest(BaseModel):
     commit_sha: str | None = Field(
         default=None,
         pattern=r"^[0-9a-f]{40}$",
-        description="SHA completo de 40 dígitos hexadecimais da stable-15jun",
+        description="SHA opcional de 40 dígitos hexadecimais",
     )
     stages: list[str] | None = Field(
         default=None,
@@ -76,9 +82,7 @@ async def admin_trigger_system_bootstrap(
     commit_sha: str | None = Query(
         None,
         pattern=r"^[0-9a-f]{40}$",
-        description=(
-            "SHA completo da stable-15jun que identifica esta execução"
-        ),
+        description="SHA opcional que identifica esta execução",
     ),
     stages: list[str] | None = Query(
         None,
@@ -87,13 +91,14 @@ async def admin_trigger_system_bootstrap(
     _: User = Depends(require_superadmin),
 ):
     actual_sha = (
-        payload.commit_sha if payload and payload.commit_sha else None
-    ) or commit_sha
-    if not actual_sha:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="commit_sha obrigatorio (40 digitos hexadecimais)",
-        )
+        (payload.commit_sha if payload and payload.commit_sha else None)
+        or commit_sha
+        or os.getenv(BOOTSTRAP_COMMIT_SHA_ENV, "").strip().lower()
+        or getattr(settings, "APP_COMMIT_SHA", "").strip().lower()
+        or DEFAULT_BOOTSTRAP_COMMIT_SHA
+    )
+    if len(actual_sha) != 40:
+        actual_sha = DEFAULT_BOOTSTRAP_COMMIT_SHA
 
     actual_stages = (
         payload.stages if payload and payload.stages else None

@@ -76,6 +76,23 @@ async def _counts() -> B3SeedCounts:
     return B3SeedCounts(assets=int(assets or 0), prices=int(prices or 0))
 
 
+async def _covered_historical_years(end_year: int) -> set[int]:
+    async with AsyncSessionLocal() as db:
+        yr_col = func.extract("year", AssetPrice.timestamp)
+        rows = (
+            await db.execute(
+                select(yr_col, func.count())
+                .where(AssetPrice.source == "b3_cotahist")
+                .group_by(yr_col)
+            )
+        ).all()
+    return {
+        int(yr)
+        for yr, cnt in rows
+        if yr is not None and int(yr) < end_year and int(cnt or 0) >= 10_000
+    }
+
+
 async def run_pre_prod_b3_seed(
     *,
     start_year: int,
@@ -100,13 +117,48 @@ async def run_pre_prod_b3_seed(
         try:
             before = await _counts()
             if include_catalog:
-                records = []
-                for year in range(start_year, end_year + 1):
-                    records.extend(await fetch_b3_cotahist_year_records(year))
-                async with AsyncSessionLocal() as db:
-                    catalog_result = await upsert_b3_cotahist_catalog(db, records)
-                    await db.commit()
-                catalog = asdict(catalog_result)
+                if before.prices >= 1_000_000 and before.assets >= 1_000:
+                    covered = await _covered_historical_years(end_year)
+                    years_to_fetch = [
+                        y
+                        for y in range(start_year, end_year + 1)
+                        if y == end_year or y not in covered
+                    ]
+                    created_total = 0
+                    updated_total = 0
+                    unresolved_total = 0
+                    ineligible_total = 0
+                    for year in years_to_fetch:
+                        yr_records = await fetch_b3_cotahist_year_records(year)
+                        if not yr_records:
+                            continue
+                        async with AsyncSessionLocal() as db:
+                            cat_res = await upsert_b3_cotahist_catalog(
+                                db, yr_records
+                            )
+                            await db.commit()
+                        created_total += getattr(cat_res, "created", 0)
+                        updated_total += getattr(cat_res, "updated", 0)
+                        unresolved_total += getattr(cat_res, "unresolved", 0)
+                        ineligible_total += getattr(cat_res, "ineligible", 0)
+                    catalog = {
+                        "created": created_total,
+                        "updated": updated_total,
+                        "unresolved": unresolved_total,
+                        "ineligible": ineligible_total,
+                    }
+                else:
+                    records = []
+                    for year in range(start_year, end_year + 1):
+                        records.extend(
+                            await fetch_b3_cotahist_year_records(year)
+                        )
+                    async with AsyncSessionLocal() as db:
+                        catalog_result = await upsert_b3_cotahist_catalog(
+                            db, records
+                        )
+                        await db.commit()
+                    catalog = asdict(catalog_result)
                 catalog_errors = 0
             else:
                 catalog = {

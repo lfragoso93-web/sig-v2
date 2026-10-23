@@ -43,13 +43,10 @@ export interface BootstrapStatusResponse {
   stages: BootstrapStage[]
 }
 
-const DEFAULT_COMMIT_SHA = '0000000000000000000000000000000000000000'
-
 export default function BootstrapPanel() {
   const queryClient = useQueryClient()
   const [selectedStageForModal, setSelectedStageForModal] = useState<BootstrapStage | null>(null)
   const [isFullBootstrapModalOpen, setIsFullBootstrapModalOpen] = useState(false)
-  const [commitShaInput, setCommitShaInput] = useState('')
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({})
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
 
@@ -58,7 +55,6 @@ export default function BootstrapPanel() {
     queryFn: () => api.get('/admin/bootstrap/status').then(r => r.data),
     refetchInterval: (query) => {
       const data = query.state.data as BootstrapStatusResponse | undefined
-      // Polling a cada 2.5s se estiver executando ou reservado
       if (data?.state === 'running' || data?.launch_reserved) {
         return 2500
       }
@@ -67,9 +63,8 @@ export default function BootstrapPanel() {
   })
 
   const triggerMutation = useMutation({
-    mutationFn: (variables: { commitSha: string; stages?: string[] }) =>
+    mutationFn: (variables: { stages?: string[] }) =>
       api.post('/admin/bootstrap', {
-        commit_sha: variables.commitSha,
         stages: variables.stages,
       }).then(r => r.data),
     onSuccess: (data) => {
@@ -94,18 +89,15 @@ export default function BootstrapPanel() {
   }
 
   const handleOpenFullBootstrap = () => {
-    setCommitShaInput(statusData?.commit_sha || DEFAULT_COMMIT_SHA)
     setIsFullBootstrapModalOpen(true)
   }
 
   const handleOpenStageBootstrap = (stage: BootstrapStage) => {
-    setCommitShaInput(statusData?.commit_sha || DEFAULT_COMMIT_SHA)
     setSelectedStageForModal(stage)
   }
 
   const handleConfirmTrigger = (stages?: string[]) => {
-    const sha = commitShaInput.trim() || DEFAULT_COMMIT_SHA
-    triggerMutation.mutate({ commitSha: sha, stages })
+    triggerMutation.mutate({ stages })
   }
 
   const getStatusBadge = (status: BootstrapStage['status']) => {
@@ -208,13 +200,17 @@ export default function BootstrapPanel() {
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-semibold text-sm">Status Global:</span>
             {getGlobalStateBadge(statusData?.state)}
-            {statusData?.ready_for_real_data ? (
+            {statusData?.ready_for_real_data || statusData?.bootstrap_complete ? (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                <ShieldCheck size={12} /> Certificado para Dados Reais
+                <ShieldCheck size={12} /> Ambiente Produtivo Ativo
+              </span>
+            ) : statusData?.state === 'running' ? (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                <Loader2 size={12} className="animate-spin" /> Sincronizando Dados
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                <ShieldAlert size={12} /> Certificação Real Pendente
+                <ShieldAlert size={12} /> Aguardando Sincronização
               </span>
             )}
             <span className="text-xs text-zinc-400 font-mono">
@@ -388,24 +384,8 @@ export default function BootstrapPanel() {
             </div>
 
             <p className="text-xs text-zinc-300 leading-relaxed">
-              Esta ação executará <strong>todos os 10 estágios canônicos</strong> do <code>system-bootstrap.v4</code> em sequência estrita, consultando provedores de mercado e reconciliando catálogos globais.
+              Esta ação executará <strong>todos os 10 estágios canônicos</strong> do <code>system-bootstrap.v4</code> em sequência estrita, consultando provedores de mercado e sincronizando catálogos, cotações, benchmarks, câmbio, proventos (inclusive retroativos) e eventos corporativos.
             </p>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Commit SHA da stable-15jun (40 dígitos hexadecimais):
-              </label>
-              <input
-                type="text"
-                value={commitShaInput}
-                onChange={e => setCommitShaInput(e.target.value)}
-                placeholder="Ex: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-700 text-xs font-mono text-zinc-100 focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-[10px] text-zinc-400">
-                O SHA audita formalmente a execução e identifica o snapshot de código nos gates de governança.
-              </span>
-            </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
               <button
@@ -417,7 +397,7 @@ export default function BootstrapPanel() {
               </button>
               <button
                 onClick={() => handleConfirmTrigger()}
-                disabled={triggerMutation.isPending || !commitShaInput.trim()}
+                disabled={triggerMutation.isPending}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-colors"
               >
                 {triggerMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
@@ -450,19 +430,6 @@ export default function BootstrapPanel() {
               </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Commit SHA da stable-15jun:
-              </label>
-              <input
-                type="text"
-                value={commitShaInput}
-                onChange={e => setCommitShaInput(e.target.value)}
-                placeholder="Ex: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-700 text-xs font-mono text-zinc-100 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
               <button
                 onClick={() => setSelectedStageForModal(null)}
@@ -473,7 +440,7 @@ export default function BootstrapPanel() {
               </button>
               <button
                 onClick={() => handleConfirmTrigger([selectedStageForModal.id])}
-                disabled={triggerMutation.isPending || !commitShaInput.trim()}
+                disabled={triggerMutation.isPending}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition-colors"
               >
                 {triggerMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}

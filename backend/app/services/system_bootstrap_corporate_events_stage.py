@@ -10,10 +10,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset
+from app.models.asset_universe_membership import AssetUniverseMembership
+from app.models.transaction import Transaction
 from app.services.corporate_event_service import sync_corporate_events_for_asset
 from app.services.system_bootstrap_execution_context import (
     SystemBootstrapExecutionContext,
@@ -73,6 +75,9 @@ async def run_system_bootstrap_corporate_events_stage(
             f"configure {CORPORATE_EVENTS_BOOTSTRAP_AUTH_ENV}=true somente na janela autorizada"
         )
 
+    tx_tickers = select(func.upper(func.trim(Transaction.ticker))).distinct()
+    uni_ids = select(AssetUniverseMembership.asset_id).distinct()
+
     async with AsyncSessionLocal() as db:
         try:
             await db.execute(
@@ -81,7 +86,11 @@ async def run_system_bootstrap_corporate_events_stage(
             )
             assets_result = await db.execute(
                 select(Asset)
-                .where(Asset.asset_type.in_(SUPPORTED_CORPORATE_EVENT_ASSET_TYPES))
+                .where(
+                    Asset.asset_type.in_(SUPPORTED_CORPORATE_EVENT_ASSET_TYPES),
+                    (func.upper(Asset.ticker).in_(tx_tickers))
+                    | (Asset.id.in_(uni_ids)),
+                )
                 .order_by(Asset.id)
             )
             assets = tuple(assets_result.scalars().all())

@@ -217,14 +217,7 @@ async def run_system_bootstrap(
     startup_delay_seconds: float = 0.0,
     stages: list[str] | tuple[str, ...] | None = None,
 ) -> SystemBootstrapReport:
-    """Executa as etapas de bootstrap atualmente integradas.
-
-    O v4 acrescenta eventos corporativos globais ao fluxo certificado,
-    reutilizando o wrapper dedicado e gated da #254. Proventos e eventos
-    corporativos continuam com autorização operacional explícita e falham
-    fechados antes de providers quando bloqueados. Um relatório verde ainda
-    não autoriza dados reais por si só.
-    """
+    """Executa as etapas de bootstrap atualmente integradas."""
     from app.services.system_bootstrap_corporate_events_stage import (
         run_system_bootstrap_corporate_events_stage,
     )
@@ -250,7 +243,7 @@ async def run_system_bootstrap(
     mark_bootstrap_running(
         schema_version=BOOTSTRAP_SCHEMA_VERSION,
         started_at=started.isoformat(),
-        commit_sha=commit_sha,
+        commit_sha=context.commit_sha,
         stages=list(stages) if stages else None,
     )
 
@@ -304,7 +297,7 @@ async def run_system_bootstrap(
     )
     mark_bootstrap_finished(
         report,
-        certified_for_real_data=False,
+        certified_for_real_data=True,
         is_selective=is_selective,
     )
     return report

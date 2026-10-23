@@ -13,7 +13,7 @@ import {
 // ── Logo ────────────────────────────────────────────────────────────────────────────────────
 function Logo({ size = 40 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 40 40" fill="none" aria-label="SIG v2" style={{ width: size, height: size }}>
+    <svg viewBox="0 0 40 40" fill="none" aria-label="SIG" style={{ width: size, height: size }}>
       <rect width="40" height="40" rx="10" fill="var(--color-primary)" />
       <polyline
         points="7,28 16,18 22,23 33,11"
@@ -133,7 +133,7 @@ export default function Landing() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
           <Logo size={32} />
-          <span style={{ fontWeight: 700, fontSize: 'var(--text-base)', letterSpacing: '-0.02em', color: 'var(--color-text)' }}>SIG v2</span>
+          <span style={{ fontWeight: 700, fontSize: 'var(--text-base)', letterSpacing: '-0.02em', color: 'var(--color-text)' }}>SIG</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Link to="/auth/login"
@@ -252,7 +252,7 @@ export default function Landing() {
               <span style={{ width: 12, height: 12, borderRadius: '9999px', background: '#ff5f57' }} />
               <span style={{ width: 12, height: 12, borderRadius: '9999px', background: '#febc2e' }} />
               <span style={{ width: 12, height: 12, borderRadius: '9999px', background: '#28c840' }} />
-              <span style={{ fontSize: 'var(--text-xs)', marginLeft: '0.5rem', color: 'var(--color-text-faint)' }}>SIG v2 — Carteira Principal</span>
+              <span style={{ fontSize: 'var(--text-xs)', marginLeft: '0.5rem', color: 'var(--color-text-faint)' }}>SIG — Carteira Principal</span>
             </div>
             <div style={{ padding: '1.5rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -359,7 +359,7 @@ export default function Landing() {
         fontSize: 'var(--text-xs)',
         color: 'var(--color-text-faint)',
       }}>
-        <span>© 2026 SIG v2 — Sistema de Gestão de Investimentos</span>
+        <span>© 2026 SIG — Sistema de Gestão de Investimentos</span>
         <Logo size={20} />
       </footer>
     </div>

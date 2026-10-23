@@ -995,7 +995,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                           border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
                           borderRadius: 'var(--radius-full)', padding: '1px 6px',
                         }}>
-                          <Zap size={8} /> BRAPI
+                          <Zap size={8} /> Cotação
                         </span>
                       )}
                     >

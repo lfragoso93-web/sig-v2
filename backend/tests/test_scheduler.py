@@ -19,13 +19,20 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
 
     try:
         job_ids = {job.id for job in scheduler.get_jobs()}
-        assert job_ids == {
+        expected = {
             "persist_daily_close_prices",
             "persist_treasury_daily_close",
             "portfolio_snapshot_auto_maintenance",
             "update_quotes_intraday_full_hour",
             "update_quotes_intraday_half_hour",
         }
+        if scheduler_module.settings.ENABLE_DAILY_BENCHMARK_SYNC:
+            expected.add("sync_benchmark_rates_daily")
+            expected.add("sync_ibov_benchmark_daily")
+        if scheduler_module.settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
+            expected.add("audit_b3_market_calendar_monthly")
+        expected.add("notify_daily_dividend_payments")
+        assert job_ids == expected
 
         intraday = scheduler.get_job("update_quotes_intraday_full_hour")
         assert intraday is not None

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     APP_COMMIT_SHA: str = ""
     REAL_DATASET_REFERENCE: str = ""
     ENABLE_BOOT_MARKET_SYNC: bool = False
+    ENABLE_DAILY_BENCHMARK_SYNC: bool = True
     ADMIN_BACKUP_RETENTION_HOURS: int = 24
     B3_BOOTSTRAP_START_YEAR: Optional[int] = None
     ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT: bool = False

@@ -21,7 +21,6 @@ def test_scheduler_only_runs_price_jobs_and_b3_audit_exception() -> None:
 
     forbidden = {
         "seed_treasury_assets",
-        "benchmark_rate_service",
         "proventos_daily_sync_service",
         "run_daily_proventos_sync",
         "market_pipeline_batch_service",

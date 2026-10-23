@@ -13,8 +13,8 @@ describe('orphan pages', () => {
 
   it('keeps the canonical transactions page routed', () => {
     const main = readFileSync(sourcePath('src/main.tsx'), 'utf8')
-    expect(main).toContain("import Transacoes        from '@/pages/Transacoes'")
-    expect(main).toContain("{ path: 'transacoes',    element: <Transacoes /> }")
+    expect(main).toMatch(/import\(['\"]@\/pages\/Transacoes['\"]\)/)
+    expect(main).toMatch(/path:\s*'transacoes'/)
     expect(main).not.toContain('AssetsPage')
     expect(main).not.toContain('LancamentosPage')
   })

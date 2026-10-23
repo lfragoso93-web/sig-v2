@@ -90,7 +90,7 @@ describe('BootstrapPanel (Issue #253)', () => {
 
     expect(await screen.findByText('Sistema Pronto')).toBeDefined()
     expect(screen.getByText('Status Global:')).toBeDefined()
-    expect(screen.getByText('Certificação Real Pendente')).toBeDefined()
+    expect(screen.getByText('Ambiente Produtivo Ativo')).toBeDefined()
     expect(screen.getByText('Catálogo e Histórico Base B3')).toBeDefined()
     expect(screen.getByText('Enriquecimento BRAPI e Cripto')).toBeDefined()
     expect(screen.getByText('Histórico Oficial do Tesouro')).toBeDefined()
@@ -111,14 +111,10 @@ describe('BootstrapPanel (Issue #253)', () => {
     fireEvent.click(screen.getByText('Executar Bootstrap Completo'))
 
     expect(await screen.findByText('Confirmar Bootstrap Completo')).toBeDefined()
-    const input = screen.getByPlaceholderText('Ex: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-    fireEvent.change(input, { target: { value: '1111111111111111111111111111111111111111' } })
-
     fireEvent.click(screen.getByText('Confirmar e Iniciar'))
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith('/admin/bootstrap', {
-        commit_sha: '1111111111111111111111111111111111111111',
         stages: undefined,
       })
     })
@@ -143,14 +139,10 @@ describe('BootstrapPanel (Issue #253)', () => {
     expect(await screen.findByText(/Executar Etapa: Enriquecimento BRAPI e Cripto/)).toBeDefined()
     expect(screen.getByText(/Atenção às dependências:/)).toBeDefined()
 
-    const input = screen.getByPlaceholderText('Ex: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-    fireEvent.change(input, { target: { value: '1111111111111111111111111111111111111111' } })
-
     fireEvent.click(screen.getByText('Confirmar Execução'))
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith('/admin/bootstrap', {
-        commit_sha: '1111111111111111111111111111111111111111',
         stages: ['asset_catalog'],
       })
     })

@@ -33,6 +33,7 @@ _B3_TYPES = {
     AssetType.BDR.value,
 }
 _B3_BENCHMARK_TICKERS = {_IBOV_TICKER}
+_BATCH_SIZE = 1000
 
 
 @dataclass
@@ -158,7 +159,28 @@ async def rebuild_b3_historical_market(
         touched: set[int] = set()
         inserted_by_asset: dict[int, int] = {}
 
+        covered_years: set[int] = set()
+        if resolved_end_year > resolved_start_year:
+            yr_col = func.extract("year", AssetPrice.timestamp)
+            yr_rows = (
+                await db.execute(
+                    select(yr_col, func.count())
+                    .where(AssetPrice.source == "b3_cotahist")
+                    .group_by(yr_col)
+                )
+            ).all()
+            covered_years = {
+                int(yr)
+                for yr, cnt in yr_rows
+                if yr is not None
+                and int(yr) < resolved_end_year
+                and int(cnt or 0) >= 10_000
+            }
+
         for year in range(resolved_start_year, resolved_end_year + 1):
+            if year in covered_years:
+                result.years_processed += 1
+                continue
             try:
                 records = await fetch_b3_cotahist_year_records(year)
                 series_by_ticker = _canonical_records_by_ticker(records, tickers)
@@ -166,37 +188,48 @@ async def rebuild_b3_historical_market(
                 if not series_by_ticker:
                     result.files_empty += 1
                     continue
-                for ticker, records in series_by_ticker.items():
+
+                batch_values: list[dict] = []
+                batch_asset_ids: list[int] = []
+                for ticker, ticker_records in series_by_ticker.items():
                     asset = assets_by_ticker.get(ticker)
                     if asset is None:
                         continue
-                    result.rows_received += len(records)
-                    for record in records:
+                    result.rows_received += len(ticker_records)
+                    asset_id = int(asset.id)
+                    for record in ticker_records:
                         if cutoff_date is not None and record.timestamp.date() > cutoff_date:
                             continue
-                        stmt = (
-                            pg_insert(AssetPrice)
-                            .values(
-                                asset_id=int(asset.id),
-                                timestamp=record.timestamp,
-                                open=record.open,
-                                high=record.high,
-                                low=record.low,
-                                close=record.close,
-                                volume=record.volume,
-                                source="b3_cotahist",
-                            )
-                            .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
-                            .returning(AssetPrice.id)
+                        batch_values.append(
+                            {
+                                "asset_id": asset_id,
+                                "timestamp": record.timestamp,
+                                "open": record.open,
+                                "high": record.high,
+                                "low": record.low,
+                                "close": record.close,
+                                "volume": record.volume,
+                                "source": "b3_cotahist",
+                            }
                         )
-                        inserted = await db.execute(stmt)
-                        if inserted.scalar_one_or_none() is not None:
+                        batch_asset_ids.append(asset_id)
+
+                for i in range(0, len(batch_values), _BATCH_SIZE):
+                    chunk = batch_values[i : i + _BATCH_SIZE]
+                    stmt = (
+                        pg_insert(AssetPrice)
+                        .values(chunk)
+                        .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
+                        .returning(AssetPrice.asset_id)
+                    )
+                    inserted_res = await db.execute(stmt)
+                    for ins_asset_id in inserted_res.scalars().all():
+                        if ins_asset_id is not None:
                             result.rows_inserted += 1
-                            asset_id = int(asset.id)
-                            inserted_by_asset[asset_id] = (
-                                inserted_by_asset.get(asset_id, 0) + 1
-                            )
-                            touched.add(asset_id)
+                            aid = int(ins_asset_id)
+                            inserted_by_asset[aid] = inserted_by_asset.get(aid, 0) + 1
+                            touched.add(aid)
+
                 await db.commit()
             except Exception:
                 await db.rollback()
@@ -207,20 +240,35 @@ async def rebuild_b3_historical_market(
             result.refreshed = await refresh_asset_last_prices(db, touched)
             await db.commit()
 
+        price_stats_rows = (
+            await db.execute(
+                select(
+                    AssetPrice.asset_id,
+                    func.min(AssetPrice.timestamp),
+                    func.max(AssetPrice.timestamp),
+                )
+                .group_by(AssetPrice.asset_id)
+            )
+        ).all()
+        price_stats = {int(aid): (mn, mx) for aid, mn, mx in price_stats_rows}
+
+        tx_stats_rows = (
+            await db.execute(
+                select(
+                    Transaction.asset_type,
+                    func.upper(Transaction.ticker),
+                    func.min(Transaction.date),
+                )
+                .group_by(Transaction.asset_type, func.upper(Transaction.ticker))
+            )
+        ).all()
+        tx_stats = {(at, tk): dt for at, tk, dt in tx_stats_rows}
+
         for asset in assets:
-            price_result = await db.execute(
-                select(func.min(AssetPrice.timestamp), func.max(AssetPrice.timestamp)).where(
-                    AssetPrice.asset_id == asset.id
-                )
+            first_ts, last_ts = price_stats.get(int(asset.id), (None, None))
+            first_transaction_date = tx_stats.get(
+                (asset.asset_type, str(asset.ticker).upper())
             )
-            first_ts, last_ts = price_result.one()
-            tx_result = await db.execute(
-                select(func.min(Transaction.date)).where(
-                    Transaction.asset_type == asset.asset_type,
-                    func.upper(Transaction.ticker) == str(asset.ticker).upper(),
-                )
-            )
-            first_transaction_date = tx_result.scalar_one_or_none()
             first_price_date = first_ts.date() if first_ts else None
             last_price_date = last_ts.date() if last_ts else None
             lifecycle = _classify_lifecycle(

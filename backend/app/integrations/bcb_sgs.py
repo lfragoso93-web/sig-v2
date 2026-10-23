@@ -23,6 +23,10 @@ import httpx
 logger = logging.getLogger(__name__)
 
 BCB_SGS_BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs"
+BCB_SGS_DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+}
 
 
 @dataclass(frozen=True)
@@ -129,7 +133,17 @@ async def _fetch_sgs_window(
             return []
 
     response.raise_for_status()
-    return _normalize_rows(meta, response.json())
+    try:
+        data = response.json()
+    except Exception as exc:
+        logger.warning(
+            "[BCB SGS] resposta nao JSON para %s (status %s): %s",
+            meta.indicator,
+            response.status_code,
+            exc,
+        )
+        return []
+    return _normalize_rows(meta, data)
 
 
 def _windows(start_date: date, end_date: date, window_days: int) -> Iterable[tuple[date, date]]:
@@ -158,7 +172,7 @@ async def fetch_sgs_series(
         raise ValueError(f"Indicador SGS não suportado: {indicator}")
 
     meta = SGS_INDICATORS[key]
-    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+    async with httpx.AsyncClient(timeout=timeout_seconds, headers=BCB_SGS_DEFAULT_HEADERS) as client:
         if limit_last is not None or not start_date or not end_date:
             return await _fetch_sgs_window(
                 client,

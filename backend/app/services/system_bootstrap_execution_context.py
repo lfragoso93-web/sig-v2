@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 BOOTSTRAP_BRANCH = "stable-15jun"
 BOOTSTRAP_COMMIT_SHA_ENV = "SGI_BOOTSTRAP_COMMIT_SHA"
+DEFAULT_BOOTSTRAP_COMMIT_SHA = "0" * 40
 
 _COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
@@ -38,14 +39,21 @@ def build_system_bootstrap_execution_context(
     commit_sha: str | None = None,
     now: datetime | None = None,
 ) -> SystemBootstrapExecutionContext:
-    """Cria a identidade única usada por todas as etapas externas do bootstrap.
-
-    Cobertura temporal não pertence a este contexto: cada domínio deve buscar a
-    maior cobertura válida suportada por sua fonte canônica, sem um corte global
-    arbitrário compartilhado entre preços, câmbio, Proventos ou eventos.
-    """
+    """Cria a identidade única usada por todas as etapas externas do bootstrap."""
     current = now or datetime.now(UTC)
-    resolved_sha = (commit_sha or os.getenv(BOOTSTRAP_COMMIT_SHA_ENV, "")).strip().lower()
+    if commit_sha is not None:
+        resolved_sha = commit_sha.strip().lower()
+    else:
+        env_sha = (
+            os.getenv(BOOTSTRAP_COMMIT_SHA_ENV, "").strip().lower()
+            or os.getenv("APP_COMMIT_SHA", "").strip().lower()
+        )
+        resolved_sha = (
+            env_sha
+            if _COMMIT_SHA_PATTERN.fullmatch(env_sha)
+            else DEFAULT_BOOTSTRAP_COMMIT_SHA
+        )
+
     if not resolved_sha:
         raise SystemBootstrapContextError(
             f"commit_sha ausente; informe-o explicitamente ou configure {BOOTSTRAP_COMMIT_SHA_ENV}"

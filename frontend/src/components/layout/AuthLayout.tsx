@@ -21,7 +21,7 @@ export default function AuthLayout() {
         </div>
 
         <p className="auth-footer-note">
-          SIG v2 &mdash; Uso interno
+          SIG &mdash; Uso interno
         </p>
       </div>
     </div>

@@ -144,6 +144,63 @@ def start_scheduler() -> None:
                     exc,
                 )
 
+    if settings.ENABLE_DAILY_BENCHMARK_SYNC:
+
+        @scheduler.scheduled_job(
+            _cron_trigger(day_of_week="mon-fri", hour=20, minute=40),
+            id="sync_benchmark_rates_daily",
+            name="Sincronizar índices macroeconômicos (CDI, SELIC, IPCA, IGPM)",
+            max_instances=1,
+            coalesce=True,
+        )
+        async def sync_benchmark_rates_daily():
+            """Atualiza índices macroeconômicos diários e mensais do SGS/BCB."""
+            from app.core.database import AsyncSessionLocal
+            from app.models.asset import AssetType
+            from app.services.benchmark_rate_service import import_missing_benchmark_history
+            from app.services.quote_cache_invalidation_service import invalidate_quote_consumers
+
+            async with distributed_job_lock(
+                job_name="sync_benchmark_rates_daily",
+                period="daily",
+                ttl_seconds=3600,
+            ) as acquired:
+                if not acquired:
+                    return
+                async with AsyncSessionLocal() as db:
+                    try:
+                        stats = await import_missing_benchmark_history(db)
+                        await invalidate_quote_consumers(db, asset_types=[AssetType.RENDA_FIXA])
+                        logger.info("[scheduler] Índices macroeconômicos atualizados: %s", stats)
+                    except Exception as exc:
+                        logger.error("[scheduler] Erro ao sincronizar índices macroeconômicos: %s", exc)
+
+        @scheduler.scheduled_job(
+            _cron_trigger(day_of_week="mon-fri", hour=20, minute=42),
+            id="sync_ibov_benchmark_daily",
+            name="Sincronizar fechamento diário do IBOV (Ibovespa)",
+            max_instances=1,
+            coalesce=True,
+        )
+        async def sync_ibov_benchmark_daily():
+            """Atualiza fechamento do IBOV em asset_prices."""
+            from app.core.database import AsyncSessionLocal
+            from app.services.ibov_benchmark_service import sync_ibov_benchmark_prices
+
+            async with distributed_job_lock(
+                job_name="sync_ibov_benchmark_daily",
+                period="daily",
+                ttl_seconds=3600,
+            ) as acquired:
+                if not acquired:
+                    return
+                async with AsyncSessionLocal() as db:
+                    try:
+                        count = await sync_ibov_benchmark_prices(db, range_str="1mo")
+                        logger.info("[scheduler] Fechamento do IBOV atualizado: %d registros", count)
+                    except Exception as exc:
+                        logger.error("[scheduler] Erro ao sincronizar fechamento do IBOV: %s", exc)
+
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=50),
         id="persist_treasury_daily_close",

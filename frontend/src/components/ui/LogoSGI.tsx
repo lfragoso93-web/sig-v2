@@ -88,17 +88,6 @@ export default function LogoSGI({
             }}
           >
             SIG
-            <span
-              style={{
-                marginLeft:    Math.round(3 * r),
-                fontSize:      isAuth ? Math.round(11 * r) : Math.round(9.5 * r),
-                fontWeight:    500,
-                color:         'var(--color-text-muted)',
-                letterSpacing: '0',
-              }}
-            >
-              v2
-            </span>
           </span>
 
           {/* Subtítulo — apenas na variante auth */}

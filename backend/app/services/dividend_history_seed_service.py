@@ -1,8 +1,8 @@
 """Complemento histórico para o seed de proventos.
 
-A BRAPI permanece como fonte principal dos eventos corporativos. Este serviço usa
-Yahoo Finance apenas para preencher datas anteriores ao evento mais antigo já
-armazenado para o ativo, evitando sobrepor eventos ricos (Data Com, JCP etc.).
+A BRAPI e a B3 permanecem como fontes principais dos eventos corporativos ricos.
+Este serviço usa Yahoo Finance para preencher datas retroativas (anteriores à
+janela principal) ou lacunas de cobertura sem sobrepor eventos já persistidos.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,9 +28,6 @@ logger = logging.getLogger(__name__)
 SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 NATIONAL_TYPES = {"ACAO", "FII", "ETF_NACIONAL", "BDR"}
 
-# Evita consultar repetidamente símbolos ausentes/delisted na mesma instância.
-# O cache é apenas operacional e expira para permitir que tickers novos passem a
-# ser reconhecidos pelo provedor futuramente.
 _UNAVAILABLE_TTL_SECONDS = 24 * 60 * 60
 _unavailable_symbols: dict[str, float] = {}
 
@@ -65,12 +62,7 @@ def _mark_symbol_unavailable(symbol: str) -> None:
 
 
 async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, float]]:
-    """Busca dividendos sem depender de ``period=max``.
-
-    Alguns tickers recém-listados, renomeados ou descontinuados não possuem
-    histórico no Yahoo. Esses casos retornam lista vazia e entram em cooldown,
-    sem interromper nem poluir a sincronização dos demais ativos.
-    """
+    """Busca dividendos desde 1970 via Yahoo Finance."""
     symbol = _yf_symbol(ticker, asset_type)
     if _is_symbol_unavailable(symbol):
         logger.debug(
@@ -135,17 +127,23 @@ async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, 
     return rows
 
 
+def _has_nearby_existing_date(
+    event_date: date,
+    existing_dates: set[date],
+    tolerance_days: int = 5,
+) -> bool:
+    for d in existing_dates:
+        if abs((d - event_date).days) <= tolerance_days:
+            return True
+    return False
+
+
 async def seed_full_dividend_history(
     db: AsyncSession,
     ticker: str,
     asset_type: str,
 ) -> int:
-    """Persiste o histórico global anterior à cobertura principal.
-
-    A escrita é idempotente pela constraint
-    ``uq_asset_dividend_asset_exdate_type``. Assim, reexecutar o seed nunca deve
-    abortar o processamento do ativo por eventos já existentes.
-    """
+    """Persiste o histórico global retroativo e complementar de proventos."""
     ticker = ticker.upper().strip()
     asset_type = asset_type.upper().strip()
     if not ticker or asset_type in SKIP_TYPES:
@@ -158,12 +156,19 @@ async def seed_full_dividend_history(
     if asset is None:
         return 0
 
-    earliest_result = await db.execute(
-        select(func.min(AssetDividend.ex_date)).where(
-            AssetDividend.asset_id == asset.id
+    existing_rows = (
+        await db.execute(
+            select(AssetDividend.ex_date, AssetDividend.record_date).where(
+                AssetDividend.asset_id == asset.id
+            )
         )
-    )
-    earliest_existing = earliest_result.scalar_one_or_none()
+    ).all()
+    existing_dates: set[date] = set()
+    for ex_d, rec_d in existing_rows:
+        if ex_d is not None:
+            existing_dates.add(ex_d)
+        if rec_d is not None:
+            existing_dates.add(rec_d)
 
     history = await _fetch_full_history(ticker, asset_type)
     if not history:
@@ -173,10 +178,7 @@ async def seed_full_dividend_history(
     inserted = 0
 
     for event_date, amount in history:
-        # A BRAPI continua responsável pela cobertura principal e pelos campos
-        # ricos. O Yahoo complementa somente datas anteriores ao primeiro evento
-        # conhecido dessa fonte principal.
-        if earliest_existing is not None and event_date >= earliest_existing:
+        if _has_nearby_existing_date(event_date, existing_dates):
             continue
 
         stmt = (
@@ -186,7 +188,7 @@ async def seed_full_dividend_history(
                 record_date=None,
                 ex_date=event_date,
                 payment_date=event_date,
-                value_per_unit=Decimal(str(amount)),
+                value_per_unit=Decimal(str(round(amount, 8))),
                 dividend_type=dividend_type,
                 source="yfinance_history",
                 raw_payload={
@@ -200,6 +202,7 @@ async def seed_full_dividend_history(
         result = await db.execute(stmt)
         if result.rowcount and result.rowcount > 0:
             inserted += 1
+            existing_dates.add(event_date)
 
     if inserted:
         await db.flush()

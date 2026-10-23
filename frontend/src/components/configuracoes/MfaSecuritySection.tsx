@@ -255,7 +255,7 @@ export default function MfaSecuritySection() {
                     style={{ imageRendering: 'crisp-edges' }}
                   />
                   <span className="text-[11px] font-medium text-slate-500 mt-2">
-                    SGI v2 TOTP
+                    SGI TOTP
                   </span>
                 </div>
               )}
