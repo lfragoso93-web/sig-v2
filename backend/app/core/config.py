@@ -123,7 +123,7 @@ class Settings(BaseSettings):
             raise ValueError("limites do provedor devem ser positivos")
         if self.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
             source_url = self.B3_MARKET_CALENDAR_SOURCE_URL or ""
-            if not re.fullmatch(r"https://www\\.b3\\.com\\.br/.+", source_url):
+            if not re.fullmatch(r"https://www\.b3\.com\.br/.+", source_url):
                 raise ValueError(
                     "fonte mensal do calendario B3 deve ser HTTPS oficial"
                 )
