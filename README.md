@@ -1,4 +1,6 @@
-# SGI v2 — Sistema de Gestão de Investimentos
+# SGI — Sistema de Gestão de Investimentos
+
+> **Documentação Completa da Aplicação:** Consulte o manual técnico unificado em [docs/DOCUMENTACAO_DO_SISTEMA.md](docs/DOCUMENTACAO_DO_SISTEMA.md).
 
 ## Ambiente de validação com usuários
 
