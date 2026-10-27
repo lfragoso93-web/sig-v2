@@ -178,6 +178,7 @@ async def add_transaction_record(
             f"operation invalida: '{payload.operation}'. Use 'buy' ou 'sell'."
         ) from exc
 
+    currency = payload.currency or "BRL"
     if asset_type == "CRIPTO":
         try:
             crypto_asset = await require_catalog_crypto_asset(db, ticker)
@@ -220,7 +221,6 @@ async def add_transaction_record(
             contract_payload=payload.fixed_income_contract,
         )
 
-    currency = payload.currency or "BRL"
     if asset_type != "CRIPTO":
         await _add_catalog_asset_if_missing(
             db,

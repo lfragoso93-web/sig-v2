@@ -987,4 +987,3 @@ async def admin_trigger_dividend_notifications(
     """Dispara a verificação e envio de avisos de proventos creditados na data atual."""
     from app.services.dividend_notification_service import notify_daily_dividend_payments
     return await notify_daily_dividend_payments(db, force=force)
-

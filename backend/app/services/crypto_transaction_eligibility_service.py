@@ -33,7 +33,6 @@ class CryptoTransactionEligibilityError(ValueError):
         return detail
 
 
-
 _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
     "BITCOIN": "BTC",
     "ETHEREUM": "ETH",
@@ -59,6 +58,7 @@ _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
     "BITCOIN CASH": "BCH",
     "USD COIN": "USDC",
 }
+
 
 async def require_catalog_crypto_asset(
     db: AsyncSession,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,9 +27,6 @@ from app.services.portfolio_analysis_service import PortfolioAnalysisService
 logger = logging.getLogger(__name__)
 
 
-
-
-
 def _normalize_asset_type(t: str) -> str:
     norm = t.upper().replace("-", "_").replace(" ", "_")
     if "ACAO" in norm or "AÇÕES" in norm or "ACOES" in norm:
@@ -51,6 +48,7 @@ def _normalize_asset_type(t: str) -> str:
     if "ETF" in norm:
         return "ETF_NACIONAL"
     return norm
+
 
 REFERENCE_ASSETS: dict[str, dict[str, list[tuple[str, str, float, str]]]] = {
     "ACAO": {
@@ -99,6 +97,7 @@ REFERENCE_ASSETS: dict[str, dict[str, list[tuple[str, str, float, str]]]] = {
         "performance": [("QQQ", "Invesco QQQ (Nasdaq 100)", 480.0, "Foco em Performance: tecnologia de ponta e crescimento internacional.")],
     },
 }
+
 
 class AiExplainerProvider(Protocol):
     async def explain_analysis(

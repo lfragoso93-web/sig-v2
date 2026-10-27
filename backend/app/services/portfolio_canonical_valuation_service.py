@@ -409,7 +409,6 @@ async def calculate_canonical_portfolio_totals(
     )
     fixed_income_cost_correction = fixed_income["invested_amount"] - fixed_income_base
     fixed_income_market_correction = fixed_income["current_value"] - fixed_income_base
-    fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
     treasury_correction = Decimal(str(treasury["correction"]))
     market_value = (
         Decimal(str(totals["market_value"]))

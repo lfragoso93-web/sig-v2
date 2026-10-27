@@ -141,7 +141,6 @@ async def suggest_assets_from_catalog(
     return suggestions
 
 
-
 def format_friendly_treasury_title(name: str | None, ticker: str | None = None) -> str:
     raw = (name or ticker or "").strip()
     if not raw:

@@ -466,4 +466,3 @@ async def send_dividend_payment_summary_email(
         f"Ver detalhes: {proventos_url}",
     ])
     return await send_email(to_email, subject, html_body, "\n".join(text_lines))
-

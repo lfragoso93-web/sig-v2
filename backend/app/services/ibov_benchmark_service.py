@@ -6,17 +6,15 @@ Utiliza Brapi (símbolo ^BVSP) com fallback para yfinance (^BVSP).
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
 import httpx
-from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.b3_historical_market_rebuild_service import _ensure_ibov_benchmark_asset
 
@@ -46,7 +44,7 @@ async def _fetch_ibov_brapi(range_str: str = "1mo") -> list[dict]:
         results = payload.get("results") or []
         if not results:
             return []
-        
+
         hist = results[0].get("historicalDataPrice") or []
         rows: list[dict] = []
         for item in hist:
@@ -90,7 +88,7 @@ async def sync_ibov_benchmark_prices(
 ) -> int:
     """Busca cotações do IBOV e persiste de forma idempotente em asset_prices."""
     asset = await _ensure_ibov_benchmark_asset(db)
-    
+
     rows = await _fetch_ibov_brapi(range_str=range_str)
     if not rows:
         import asyncio

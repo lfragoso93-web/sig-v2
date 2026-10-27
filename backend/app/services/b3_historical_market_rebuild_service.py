@@ -215,7 +215,7 @@ async def rebuild_b3_historical_market(
                         batch_asset_ids.append(asset_id)
 
                 for i in range(0, len(batch_values), _BATCH_SIZE):
-                    chunk = batch_values[i : i + _BATCH_SIZE]
+                    chunk = batch_values[i:i + _BATCH_SIZE]
                     stmt = (
                         pg_insert(AssetPrice)
                         .values(chunk)

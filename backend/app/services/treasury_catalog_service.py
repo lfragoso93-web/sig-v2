@@ -53,7 +53,6 @@ def slug_from_text(value: str | None) -> str:
     return normalize_treasury_text(value).replace(" ", "-")
 
 
-
 def format_friendly_treasury_title(name: str | None, ticker: str | None = None) -> str:
     raw = (name or ticker or "").strip()
     if not raw:
@@ -134,6 +133,7 @@ def format_friendly_treasury_title(name: str | None, ticker: str | None = None) 
     final_year = raw_year or ticker_commercial_year
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return f"{cleaned} {final_year}" if final_year else cleaned
+
 
 def _symbol(item: dict) -> str:
     direct = str(

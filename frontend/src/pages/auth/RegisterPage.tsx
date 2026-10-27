@@ -19,7 +19,7 @@ const schema = z.object({
   }),
   confirm: z.string(),
   acceptedTerms: z.literal(true, {
-    errorMap: () => ({ message: 'Você precisa ler e aceitar os Termos de Uso para continuar' }),
+    message: 'Você precisa ler e aceitar os Termos de Uso para continuar',
   }),
 }).refine(d => d.password === d.confirm, {
   message: 'As senhas não coincidem',
