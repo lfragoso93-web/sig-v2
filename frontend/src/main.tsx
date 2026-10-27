@@ -14,10 +14,11 @@ import ProtectedRoute, { OnboardingRoute } from '@/router/ProtectedRoute'
 import { LEGACY_PORTFOLIO_ROUTE_REDIRECTS } from '@/router/portfolioRoutes'
 
 // Critical-path pages (carregamento imediato)
-import LoginPage    from '@/pages/auth/LoginPage'
-import RegisterPage from '@/pages/auth/RegisterPage'
-import Landing      from '@/pages/Landing'
-import ResumePage   from '@/pages/ResumePage'
+import LoginPage      from '@/pages/auth/LoginPage'
+import RegisterPage   from '@/pages/auth/RegisterPage'
+import Landing        from '@/pages/Landing'
+import ResumePage     from '@/pages/ResumePage'
+import PatrimonioPage from '@/pages/PatrimonioPage'
 
 // Lazy-loaded pages (code splitting por rota para carregamento inicial rápido)
 const EsqueceuSenha             = lazy(() => import('@/pages/EsqueceuSenha'))
@@ -32,7 +33,6 @@ const AnalisePage               = lazy(() => import('@/pages/AnalisePage'))
 const IncomeCalculatorPage      = lazy(() => import('@/pages/IncomeCalculatorPage'))
 const FixedIncomeCalculatorPage = lazy(() => import('@/pages/FixedIncomeCalculatorPage'))
 const WelcomePage               = lazy(() => import('@/pages/WelcomePage'))
-const PatrimonioPage            = lazy(() => import('@/pages/PatrimonioPage'))
 const RendaVariavelPage         = lazy(() => import('@/pages/patrimonio/RendaVariavelPage'))
 const TesouroDiretoPage         = lazy(() => import('@/pages/patrimonio/TesouroDiretoPage'))
 const RendaFixaPage             = lazy(() => import('@/pages/patrimonio/RendaFixaPage'))
