@@ -16,13 +16,19 @@ from typing import Any, Optional, Sequence
 
 import httpx
 
+import re
 from app.core.config import settings
+from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
 _MAX_TICKERS_PER_REQUEST = 20
 _DEFAULT_TIMEOUT_SECONDS = 15.0
 _DEFAULT_MAX_RETRIES = 2
+
+_SAFE_SYMBOL_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
+_SAFE_MACRO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}\Z")
+_SAFE_PATH_RE = re.compile(r"^/(api/quote/[A-Za-z0-9^.,-]+|v2/(tickers/resolve|prime/macro/[A-Za-z0-9_.-]+))\Z")
 
 
 # -----------------------------------------------------------------------------
@@ -198,7 +204,7 @@ class BrapiV2Client:
         params: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Executa requisicao GET com retry em falhas transientes e mapeamento de excecoes."""
-        if not path.startswith("/") or "://" in path or ".." in path:
+        if not path.startswith("/") or "://" in path or ".." in path or not _SAFE_PATH_RE.fullmatch(path):
             raise ValueError(f"Caminho de requisicao BRAPI invalido: {path}")
 
         url = f"{self._base_url}{path}"
@@ -342,7 +348,7 @@ class BrapiV2Client:
             except BrapiV2RateLimitError:
                 raise
             except Exception as exc:
-                logger.warning("Falha ao buscar lote de cotacoes %s: %s", chunk, exc)
+                logger.warning("Falha ao buscar lote de cotacoes %s: %s", sanitize_log_value(chunk), sanitize_log_value(exc))
                 continue
 
             raw_results = payload.get("results")
@@ -370,7 +376,7 @@ class BrapiV2Client:
     ) -> Optional[PriceHistoryDTO]:
         """Obtem serie historica OHLCV de um ativo."""
         clean_symbol = symbol.strip().upper()
-        if not clean_symbol:
+        if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
         path = f"/api/quote/{clean_symbol}"
@@ -429,7 +435,7 @@ class BrapiV2Client:
     ) -> tuple[list[DividendEventDTO], list[CorporateEventDTO]]:
         """Obtem proventos em dinheiro e eventos corporativos separados (Bloco 4)."""
         clean_symbol = symbol.strip().upper()
-        if not clean_symbol:
+        if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return [], []
 
         path = f"/api/quote/{clean_symbol}"
@@ -503,7 +509,7 @@ class BrapiV2Client:
     ) -> Optional[FIIIndicatorDTO]:
         """Obtem dados operacionais, de vacancia e fundamentos de FII."""
         clean_symbol = symbol.strip().upper()
-        if not clean_symbol:
+        if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
         path = f"/api/quote/{clean_symbol}"
@@ -559,7 +565,7 @@ class BrapiV2Client:
     ) -> Optional[CompanyFundamentalsDTO]:
         """Obtem metricas fundamentalistas consolidadas para acoes."""
         clean_symbol = symbol.strip().upper()
-        if not clean_symbol:
+        if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
         path = f"/api/quote/{clean_symbol}"
@@ -618,7 +624,7 @@ class BrapiV2Client:
     ) -> list[MacroSeriesPointDTO]:
         """Obtem serie historica de indicadores macroeconomicos (CDI, SELIC, IPCA) ou moedas."""
         clean_name = name.strip().upper()
-        if not clean_name:
+        if not clean_name or not _SAFE_MACRO_RE.fullmatch(clean_name):
             return []
 
         path = f"/v2/prime/macro/{clean_name}"
@@ -673,6 +679,8 @@ class BrapiV2Client:
         for symbol in symbols:
             value = symbol.strip().upper()
             if not value or value in seen:
+                continue
+            if not _SAFE_SYMBOL_RE.fullmatch(value):
                 continue
             seen.add(value)
             normalized.append(value)

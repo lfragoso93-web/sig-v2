@@ -1,4 +1,5 @@
 import httpx
+from app.core.log_safety import sanitize_log_value
 import logging
 import re
 import time
@@ -1208,7 +1209,7 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
                         results[ticker] = float(price)
                         break
             except Exception as e:
-                logger.warning("[market_data] fetch_crypto_quote error para %s: %s", ticker, e)
+                logger.warning("[market_data] fetch_crypto_quote error para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
 
     return results
 
@@ -1242,9 +1243,9 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
                     results[ticker] = float(price)
                     logger.debug("[market_data] treasury %s (%s): %.4f", ticker, slug, float(price))
                 else:
-                    logger.warning("[market_data] treasury %s (%s): preco ausente na resposta", ticker, slug)
+                    logger.warning("[market_data] treasury %s (%s): preco ausente na resposta", sanitize_log_value(ticker), sanitize_log_value(slug))
             except Exception as e:
-                logger.warning("[market_data] fetch_treasury_prices error para %s (slug=%s): %s", ticker, slug, e)
+                logger.warning("[market_data] fetch_treasury_prices error para %s (slug=%s): %s", sanitize_log_value(ticker), sanitize_log_value(slug), sanitize_log_value(e))
 
     return results
 
@@ -1280,7 +1281,7 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
             if results:
                 return results[0]
     except Exception as e:
-        logger.warning("[market_data] fetch_asset_info error para %s: %s", ticker, e)
+        logger.warning("[market_data] fetch_asset_info error para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
     return None
 
 
@@ -1340,7 +1341,7 @@ async def fetch_treasury_price_by_date(
             if price is not None:
                 return float(price)
     except Exception as e:
-        logger.warning("[market_data] fetch_treasury_price_by_date error slug=%s date=%s: %s", slug, date_str, e)
+        logger.warning("[market_data] fetch_treasury_price_by_date error slug=%s date=%s: %s", sanitize_log_value(slug), sanitize_log_value(date_str), sanitize_log_value(e))
     return None
 
 
@@ -1392,5 +1393,5 @@ def _yf_search_sync(
                 out.append({"ticker": ticker_val.upper(), "name": name, "type": qt})
         return out[:limit]
     except Exception as e:
-        logger.warning("[market_data] _yf_search_sync error para %r: %s", q, e)
+        logger.warning("[market_data] _yf_search_sync error para %s: %s", sanitize_log_value(q), sanitize_log_value(e))
         return []

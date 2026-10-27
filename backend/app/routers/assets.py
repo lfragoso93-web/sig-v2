@@ -31,6 +31,9 @@ from app.services.persisted_price_query_service import (
 )
 from app.services.treasury_quote_query_service import load_treasury_rate_at_or_before
 
+_SAFE_TICKER_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
+_SAFE_MACRO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}\Z")
+
 router = APIRouter()
 
 _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
@@ -428,8 +431,11 @@ async def get_macro_series(
     _: User = Depends(get_current_user),
 ):
     """Retorna serie historica de indicador macroeconomico ou cambio (Issue #130 Bloco 7)."""
+    clean_indicator = indicator.strip().upper()
+    if not _SAFE_MACRO_RE.fullmatch(clean_indicator):
+        raise HTTPException(status_code=400, detail="Indicador macroeconomico invalido")
     from app.services.asset_enrichment_service import asset_enrichment_service
-    points = await asset_enrichment_service.get_macro_series(indicator)
+    points = await asset_enrichment_service.get_macro_series(clean_indicator)
     return [
         {"indicator": p.name, "date": p.point_date.isoformat(), "value": p.value}
         for p in points
@@ -443,8 +449,11 @@ async def get_asset_enrichment(
     _: User = Depends(get_current_user),
 ):
     """Retorna dados fundamentalistas/operacionais enriquecidos e status de cobertura (Issue #130)."""
+    clean_ticker = ticker.strip().upper()
+    if not _SAFE_TICKER_RE.fullmatch(clean_ticker):
+        raise HTTPException(status_code=400, detail="Ticker invalido")
     from app.services.asset_enrichment_service import asset_enrichment_service
-    return await asset_enrichment_service.get_asset_enrichment(ticker, asset_type=asset_type)
+    return await asset_enrichment_service.get_asset_enrichment(clean_ticker, asset_type=asset_type)
 
 
 @router.get("/csv-template", tags=["csv-import"])

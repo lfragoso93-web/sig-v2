@@ -6,6 +6,8 @@ import asyncio
 import logging
 from typing import Optional
 
+from app.core.log_safety import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 _CRYPTO_SYNONYMS: dict[str, str] = {
@@ -78,7 +80,7 @@ async def verify_market_asset_exists(
                     name = info.get("longName") or info.get("shortName") or normalized_ticker
                     return True, name
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar BRAPI quote para %s: %s", normalized_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar BRAPI quote para %s: %s", sanitize_log_value(normalized_ticker), sanitize_log_value(exc))
 
         # Fallback para B3: verificar lista de tickers se quote falhar
         try:
@@ -88,7 +90,7 @@ async def verify_market_asset_exists(
                     name = item.get("name") or normalized_ticker
                     return True, name
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar sugestoes BRAPI para %s: %s", normalized_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar sugestoes BRAPI para %s: %s", sanitize_log_value(normalized_ticker), sanitize_log_value(exc))
 
         # Fallback 2 para B3: Yahoo Finance (.SA) se BRAPI falhar ou nao tiver credencial
         def _check_yahoo_b3() -> tuple[bool, Optional[str]]:
@@ -108,7 +110,7 @@ async def verify_market_asset_exists(
             if exists:
                 return True, yf_name
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar yfinance para B3 %s: %s", normalized_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar yfinance para B3 %s: %s", sanitize_log_value(normalized_ticker), sanitize_log_value(exc))
 
         return False, None
 
@@ -143,7 +145,7 @@ async def verify_market_asset_exists(
             if exists:
                 return True, yf_name
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar yfinance para %s: %s", normalized_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar yfinance para %s: %s", sanitize_log_value(normalized_ticker), sanitize_log_value(exc))
 
         return False, None
 
@@ -157,7 +159,7 @@ async def verify_market_asset_exists(
             if quotes and (resolved_ticker in quotes or quotes.get(resolved_ticker) is not None):
                 return True, resolved_ticker
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar BRAPI crypto para %s: %s", resolved_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar BRAPI crypto para %s: %s", sanitize_log_value(resolved_ticker), sanitize_log_value(exc))
 
         # Fallback para Yahoo Finance crypto: {TICKER}-USD
         def _check_yahoo_crypto() -> tuple[bool, Optional[str]]:
@@ -177,7 +179,7 @@ async def verify_market_asset_exists(
             if exists:
                 return True, yf_name
         except Exception as exc:
-            logger.warning("[verify_asset] erro ao consultar yfinance crypto para %s: %s", resolved_ticker, exc)
+            logger.warning("[verify_asset] erro ao consultar yfinance crypto para %s: %s", sanitize_log_value(resolved_ticker), sanitize_log_value(exc))
 
         return False, None
 

@@ -137,3 +137,26 @@ async def test_resolve_tickers_normalizes_http_errors() -> None:
     async with _mock_client(handler) as http_client:
         with pytest.raises(BrapiV2Error, match="HTTP 429"):
             await client.resolve_tickers(["PETR4"], client=http_client)
+
+
+@pytest.mark.asyncio
+async def test_brapi_v2_client_rejects_unsafe_paths_ssrf_protection() -> None:
+    client = BrapiV2Client(base_url="https://market.example/api")
+    async with httpx.AsyncClient() as http_client:
+        with pytest.raises(ValueError, match="Caminho de requisicao BRAPI invalido"):
+            await client._request_with_retry(http_client, "/api/evil/path")
+
+        with pytest.raises(ValueError, match="Caminho de requisicao BRAPI invalido"):
+            await client._request_with_retry(http_client, "/api/quote/../../etc/passwd")
+
+
+@pytest.mark.asyncio
+async def test_brapi_v2_client_ignores_invalid_symbols_safely() -> None:
+    client = BrapiV2Client(base_url="https://market.example/api")
+    async with httpx.AsyncClient() as http_client:
+        # Invalid symbols should be discarded without request
+        assert await client.fetch_history("BAD TICKER; DROP TABLE", client=http_client) is None
+        assert await client.fetch_dividends_and_events("MALICIOUS/TICKER", client=http_client) == ([], [])
+        assert await client.fetch_fii_indicators("INVALID\nLINE", client=http_client) is None
+        assert await client.fetch_company_fundamentals("<script>", client=http_client) is None
+        assert await client.fetch_macro_series("INVALID?QUERY=1", client=http_client) == []

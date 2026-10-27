@@ -140,3 +140,24 @@ async def test_codeql_treasury_seed_item_error_log_escapes_symbol_and_exception(
     assert "save failed\\nINJECTED" in caplog.text
     assert "bond\ninjected" not in caplog.text
     assert "save failed\nINJECTED" not in caplog.text
+
+
+def test_codeql_asset_provider_verification_logs_sanitize_external_values() -> None:
+    source = (
+        BACKEND_ROOT / "app/services/asset_provider_verification_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from app.core.log_safety import sanitize_log_value" in source
+    assert source.count("sanitize_log_value(normalized_ticker)") >= 4
+    assert source.count("sanitize_log_value(resolved_ticker)") >= 2
+    assert source.count("sanitize_log_value(exc)") >= 6
+
+
+def test_codeql_brapi_logs_sanitize_external_values() -> None:
+    source = (
+        BACKEND_ROOT / "app/integrations/brapi.py"
+    ).read_text(encoding="utf-8")
+
+    assert "from app.core.log_safety import sanitize_log_value" in source
+    assert "sanitize_log_value(ticker)" in source
+    assert "sanitize_log_value(e)" in source

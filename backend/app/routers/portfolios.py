@@ -1,3 +1,4 @@
+import re
 import logging
 
 from fastapi import (
@@ -59,6 +60,8 @@ from app.services.portfolio_summary_service import get_canonical_portfolio_summa
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
 logger = logging.getLogger(__name__)
+_SAFE_TICKER_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
+
 router = APIRouter(tags=["portfolios"])
 
 _CSV_MESSAGE_EXACT = {
@@ -206,11 +209,14 @@ async def get_asset_portfolio_insights(
     current_user: User = Depends(get_current_user),
 ):
     """Retorna correlacao da posicao com a carteira e insights de IA (Issue #58)."""
+    clean_ticker = ticker.strip().upper()
+    if not _SAFE_TICKER_RE.fullmatch(clean_ticker):
+        raise HTTPException(status_code=400, detail="Ticker invalido")
     from app.services.asset_portfolio_insight_service import (
         asset_portfolio_insight_service,
     )
     return await asset_portfolio_insight_service.get_insight(
-        db, portfolio_id, current_user.id, ticker
+        db, portfolio_id, current_user.id, clean_ticker
     )
 
 
