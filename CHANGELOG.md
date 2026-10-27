@@ -24,6 +24,12 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - **Seguranca e CodeQL (Item 9 e Code Scanning)**:
   - Remediacao de 8 alertas do CodeQL: 7 de injecao de log (`py/log-injection`) via `sanitize_log_value` e 1 de SSRF parcial (`py/partial-ssrf`) em `brapi_v2_client.py`.
   - Auditoria e unificacao de dependencias do Dependabot (`npm audit` com 0 vulnerabilidades).
+- **Estabilizacao de CI/CD e Pipeline GitHub Actions**:
+  - Alinhamento de validacao Zod no frontend (`RegisterPage.tsx`) e formatacao `flake8`/`mypy` sem pendencias no backend.
+  - Alinhamento de variaveis de contrato em `.env.example` e `.env.oci.example` (`FINNHUB_API_KEY`, `TIINGO_API_KEY`, `ENABLE_DAILY_BENCHMARK_SYNC`).
+  - Atualizacao da imagem de producao frontend para `nginx:1.30.6-alpine`, sanando vulnerabilidades de seguranca do Trivy.
+  - Fallback resiliente para Yahoo Finance no servico de verificacao de existencia de ativos quando em ambiente de testes ou sem token BRAPI.
+  - Pipeline GitHub Actions 100% verde e sincronizacao ativa no ambiente produtivo OCI.
 
 ### 17/10/2026 - contratos de Renda Fixa (#355), validacao isolada
 
