@@ -90,6 +90,26 @@ async def verify_market_asset_exists(
         except Exception as exc:
             logger.warning("[verify_asset] erro ao consultar sugestoes BRAPI para %s: %s", normalized_ticker, exc)
 
+        # Fallback 2 para B3: Yahoo Finance (.SA) se BRAPI falhar ou nao tiver credencial
+        def _check_yahoo_b3() -> tuple[bool, Optional[str]]:
+            try:
+                import yfinance as yf
+                t = yf.Ticker(f"{normalized_ticker}.SA")
+                price = getattr(t.fast_info, "last_price", None)
+                if price is not None:
+                    name = t.info.get("shortName") or t.info.get("longName") or normalized_ticker
+                    return True, name
+            except Exception:
+                pass
+            return False, None
+
+        try:
+            exists, yf_name = await asyncio.to_thread(_check_yahoo_b3)
+            if exists:
+                return True, yf_name
+        except Exception as exc:
+            logger.warning("[verify_asset] erro ao consultar yfinance para B3 %s: %s", normalized_ticker, exc)
+
         return False, None
 
     # Ativos Internacionais: Stocks e ETFs
@@ -138,6 +158,26 @@ async def verify_market_asset_exists(
                 return True, resolved_ticker
         except Exception as exc:
             logger.warning("[verify_asset] erro ao consultar BRAPI crypto para %s: %s", resolved_ticker, exc)
+
+        # Fallback para Yahoo Finance crypto: {TICKER}-USD
+        def _check_yahoo_crypto() -> tuple[bool, Optional[str]]:
+            try:
+                import yfinance as yf
+                t = yf.Ticker(f"{resolved_ticker}-USD")
+                price = getattr(t.fast_info, "last_price", None)
+                if price is not None:
+                    name = t.info.get("shortName") or t.info.get("longName") or resolved_ticker
+                    return True, name
+            except Exception:
+                pass
+            return False, None
+
+        try:
+            exists, yf_name = await asyncio.to_thread(_check_yahoo_crypto)
+            if exists:
+                return True, yf_name
+        except Exception as exc:
+            logger.warning("[verify_asset] erro ao consultar yfinance crypto para %s: %s", resolved_ticker, exc)
 
         return False, None
 

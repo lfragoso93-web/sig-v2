@@ -104,12 +104,12 @@ async def _add_catalog_asset_if_missing(
     if result.scalar_one_or_none() is not None:
         return
 
-    official_name: str | None = None
-    try:
-        from app.services.asset_provider_verification_service import verify_market_asset_exists
-        exists, official_name = await verify_market_asset_exists(ticker, asset_type)
-    except Exception:
-        official_name = None
+    from app.services.asset_provider_verification_service import verify_market_asset_exists
+    exists, official_name = await verify_market_asset_exists(ticker, asset_type)
+    if not exists:
+        raise TransactionWriteError(
+            f"Ativo '{ticker}' ({asset_type}) não existe no catálogo e não foi encontrado nos provedores de mercado."
+        )
 
     db.add(
         Asset(
@@ -184,14 +184,14 @@ async def add_transaction_record(
             crypto_asset = await require_catalog_crypto_asset(db, ticker)
             ticker = crypto_asset.ticker.upper()
         except CryptoTransactionEligibilityError:
+            from app.services.asset_provider_verification_service import verify_market_asset_exists
             from app.services.crypto_transaction_eligibility_service import _CRYPTO_NAME_TO_TICKER
             resolved_ticker = _CRYPTO_NAME_TO_TICKER.get(ticker, ticker)
-            official_name: str | None = None
-            try:
-                from app.services.asset_provider_verification_service import verify_market_asset_exists
-                exists, official_name = await verify_market_asset_exists(resolved_ticker, "CRIPTO")
-            except Exception:
-                official_name = None
+            exists, official_name = await verify_market_asset_exists(resolved_ticker, "CRIPTO")
+            if not exists:
+                raise TransactionWriteError(
+                    f"Criptomoeda '{ticker}' não existe no catálogo e não foi encontrada nos provedores de mercado."
+                )
             ticker = resolved_ticker
             db.add(
                 Asset(
