@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Trash2, Plus, Pencil, Check, X, Loader2,
   Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp,
@@ -621,7 +622,23 @@ function DangerZone() {
 export default function Configuracoes() {
   const { user } = useAuth()
   const isSuperAdmin = user?.role === 'superadmin'
-  const [activeTab, setActiveTab] = useState<TabId>('conta')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as TabId | null
+  const initialTab: TabId = (tabParam && ['conta', 'carteiras', 'distribuicao', 'avancado'].includes(tabParam))
+    ? tabParam
+    : 'conta'
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+
+  useEffect(() => {
+    if (tabParam && ['conta', 'carteiras', 'distribuicao', 'avancado'].includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam)
+    }
+  }, [tabParam, activeTab])
+
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab(tab)
+    setSearchParams({ tab })
+  }
 
   return (
     <div className="page-container settings-page">
@@ -632,7 +649,7 @@ export default function Configuracoes() {
         </div>
       </div>
 
-      <Tabs active={activeTab} onChange={setActiveTab} />
+      <Tabs active={activeTab} onChange={handleTabChange} />
 
       <div className="settings-content">
         {activeTab === 'conta' && (

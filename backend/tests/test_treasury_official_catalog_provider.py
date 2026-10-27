@@ -67,3 +67,13 @@ async def test_brapi_is_used_only_when_official_catalog_is_empty(monkeypatch: py
     items = await provider.fetch_treasury_catalog()
 
     assert items == [{"symbol": "tesouro-selic-01032031", "source": provider.BRAPI_FALLBACK_SOURCE}]
+
+
+def test_format_friendly_treasury_title_conversions() -> None:
+    from app.services.treasury_catalog_service import format_friendly_treasury_title
+    assert format_friendly_treasury_title('Tesouro Selic 2029 01/03/2029') == 'Tesouro Selic 2029'
+    assert format_friendly_treasury_title('Tesouro IPCA+ com Juros Semestrais 2035 15/05/2035') == 'Tesouro IPCA+ com Juros Semestrais 2035'
+    assert format_friendly_treasury_title('Tesouro RendA+ Aposentadoria Extra 15/12/2049') == 'Tesouro Renda+ 2030'
+    assert format_friendly_treasury_title('Tesouro RendA+ 2030') == 'Tesouro Renda+ 2030'
+    assert format_friendly_treasury_title('Tesouro Educa+ 15/12/2034') == 'Tesouro Educa+ 2030'
+    assert format_friendly_treasury_title('Tesouro Educa+ 2030') == 'Tesouro Educa+ 2030'

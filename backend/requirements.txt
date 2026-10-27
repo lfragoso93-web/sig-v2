@@ -1,12 +1,12 @@
-fastapi>=0.143.3
-starlette>=1.8.0
+fastapi>=0.161.1
+starlette>=1.9.0
 uvicorn[standard]==0.54.0
 sqlalchemy[asyncio]==2.1.4
 psycopg2-binary==2.9.13
 asyncpg==0.32.0
 pydantic==2.14.1
 pydantic[email]==2.14.1
-pydantic-settings==2.16.0
+pydantic-settings==2.16.1
 alembic==1.20.0
 httpx==0.28.1
 yfinance==0.2.66
@@ -17,7 +17,7 @@ python-multipart==0.0.32
 apscheduler==3.11.3
 email-validator==2.3.0
 redis==8.1.0
-reportlab==5.0.1
+reportlab==5.1.0
 slowapi>=0.1.10
 limits>=5.8.0
 pytest==9.1.1

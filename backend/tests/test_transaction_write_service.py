@@ -196,3 +196,93 @@ async def test_create_transaction_record_requires_crypto_eligibility() -> None:
     ):
         with pytest.raises(Exception, match="unexpected"):
             await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+
+
+@pytest.mark.asyncio
+async def test_create_transaction_rejects_non_existent_asset() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=asset_result)
+
+    payload = TransactionCreate(
+        ticker="INVENTADO123",
+        asset_type="ACAO",
+        operation="buy",
+        quantity=10,
+        price=15,
+        fees=0,
+        date="2026-01-02",
+        currency="BRL",
+    )
+
+    with patch(
+        "app.services.asset_provider_verification_service.verify_market_asset_exists",
+        new_callable=AsyncMock,
+        return_value=(False, None),
+    ):
+        with pytest.raises(sut.TransactionWriteError, match="não existe no catálogo e não foi encontrado nos provedores"):
+            await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+
+
+@pytest.mark.asyncio
+async def test_create_crypto_transaction_by_name_resolves_and_saves_ticker() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    payload = TransactionCreate(
+        ticker="Bitcoin",
+        asset_type="CRIPTO",
+        operation="buy",
+        quantity=0.5,
+        price=350000,
+        fees=10,
+        date="2026-01-02",
+        currency="BRL",
+    )
+
+    fake_crypto_asset = MagicMock(spec=Asset)
+    fake_crypto_asset.ticker = "BTC"
+
+    with patch(
+        "app.services.transaction_write_service.require_catalog_crypto_asset",
+        new_callable=AsyncMock,
+        return_value=fake_crypto_asset,
+    ):
+        result = await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+
+    assert result.ticker == "BTC"
+    assert result.asset_type == "CRIPTO"
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_crypto_rejects_non_existent_crypto() -> None:
+    from app.services.crypto_transaction_eligibility_service import CryptoTransactionEligibilityError
+    db = AsyncMock(spec=AsyncSession)
+
+    payload = TransactionCreate(
+        ticker="FAKECOIN999",
+        asset_type="CRIPTO",
+        operation="buy",
+        quantity=10,
+        price=1,
+        fees=0,
+        date="2026-01-02",
+        currency="BRL",
+    )
+
+    with patch(
+        "app.services.transaction_write_service.require_catalog_crypto_asset",
+        new_callable=AsyncMock,
+        side_effect=CryptoTransactionEligibilityError(ticker="FAKECOIN999", reason="nao existe"),
+    ):
+        with patch(
+            "app.services.asset_provider_verification_service.verify_market_asset_exists",
+            new_callable=AsyncMock,
+            return_value=(False, None),
+        ):
+            with pytest.raises(sut.TransactionWriteError, match="não existe no catálogo e não foi encontrada nos provedores"):
+                await sut.create_transaction_record(db, portfolio_id=303, payload=payload)

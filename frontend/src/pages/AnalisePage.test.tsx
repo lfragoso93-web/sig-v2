@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AnalisePage from './AnalisePage'
 import type { PortfolioConsolidatedAnalysisResponse } from '@/hooks/usePortfolioAnalysis'
-import type { PortfolioAiAnalysisResponse } from '@/hooks/usePortfolioAiAnalysis'
+import type { PortfolioAiAnalysisResponse, ContributionSimulationResponse } from '@/hooks/usePortfolioAiAnalysis'
 
 const mockAnalysis: PortfolioConsolidatedAnalysisResponse = {
   portfolio_id: 15,
@@ -146,6 +146,50 @@ const mockAiData: PortfolioAiAnalysisResponse = {
   },
 }
 
+const mockSimulationData: ContributionSimulationResponse = {
+  portfolio_id: 15,
+  contribution_amount: 5000.0,
+  strategy: 'proventos',
+  current_total_value: 100000.0,
+  projected_total_value: 105000.0,
+  suggested_allocations: [
+    {
+      asset_type: 'ACAO',
+      label: 'Ações',
+      current_value: 30000.0,
+      current_weight_pct: 30.0,
+      target_weight_pct: 40.0,
+      allocated_amount: 5000.0,
+      projected_value: 35000.0,
+      projected_weight_pct: 33.3,
+      action_explanation: 'Recebe R$ 5.000,00 para aproximar da meta.',
+    },
+  ],
+  suggested_assets: [
+    {
+      ticker: 'BBAS3',
+      name: 'Banco do Brasil ON',
+      asset_type: 'ACAO',
+      current_quantity: 100,
+      current_price: 28.0,
+      current_value: 2800.0,
+      suggested_amount: 5000.0,
+      suggested_quantity: 178.5714,
+      reason: 'Foco em Proventos: histórico consistente de dividendos.',
+    },
+  ],
+  overall_impact_summary: 'Aporte prioriza Ações e foco em proventos.',
+  metadata: {
+    provider: 'sgi-audit-explainer-v1',
+    model: 'deterministic-rule-engine',
+    is_mock_or_deterministic: true,
+    execution_time_ms: 10.0,
+    disclaimer: 'Deterministic simulation.',
+  },
+}
+
+const mockMutateSimulate = vi.fn()
+
 vi.mock('@/store/appStore', () => ({
   useAppStore: (selector?: (state: any) => any) => {
     const state = {
@@ -163,12 +207,15 @@ vi.mock('@/hooks/usePortfolios', () => ({
   }),
 }))
 
+let currentAnalysisData: PortfolioConsolidatedAnalysisResponse | null = mockAnalysis
+let currentSimulationData: ContributionSimulationResponse | null = null
+
 vi.mock('@/hooks/usePortfolioAnalysis', async () => {
   const actual = await vi.importActual<object>('@/hooks/usePortfolioAnalysis')
   return {
     ...actual,
     usePortfolioAnalysis: () => ({
-      data: mockAnalysis,
+      data: currentAnalysisData,
       isLoading: false,
       error: null,
       refetch: vi.fn(),
@@ -187,8 +234,8 @@ vi.mock('@/hooks/usePortfolioAiAnalysis', async () => {
       refetch: vi.fn(),
     }),
     useSimulateContribution: () => ({
-      mutate: vi.fn(),
-      data: null,
+      mutate: mockMutateSimulate,
+      data: currentSimulationData,
       isPending: false,
     }),
     useAskPortfolioAi: () => ({
@@ -214,6 +261,8 @@ function renderWithProviders() {
 
 describe('AnalisePage determinismo e inteligência artificial (Issues #360 e #361)', () => {
   it('renders overall health score and AI executive summary tab', () => {
+    currentAnalysisData = mockAnalysis
+    currentSimulationData = null
     renderWithProviders()
 
     expect(screen.getByText(/Análise de Carteira/i)).toBeDefined()
@@ -223,9 +272,14 @@ describe('AnalisePage determinismo e inteligência artificial (Issues #360 e #36
     expect(screen.getByText('Equilibrada com foco em proventos')).toBeDefined()
     expect(screen.getByText('Pontos Fortes Observados')).toBeDefined()
     expect(screen.getByText('Simulador Inteligente de Próximo Aporte')).toBeDefined()
+    expect(screen.getByText('Acúmulo de Patrimônio')).toBeDefined()
+    expect(screen.getByText('Proventos & Renda')).toBeDefined()
+    expect(screen.getByText('Performance & Crescimento')).toBeDefined()
   })
 
   it('renders class breakdown cards when switching to classes tab', () => {
+    currentAnalysisData = mockAnalysis
+    currentSimulationData = null
     renderWithProviders()
 
     const classesTabBtn = screen.getByRole('button', { name: /Detalhamento por Classes/i })
@@ -236,5 +290,45 @@ describe('AnalisePage determinismo e inteligência artificial (Issues #360 e #36
     expect(screen.getByText('Aporte sugerido de R$ 10.000,00 para convergir à meta de 40.0%')).toBeDefined()
     expect(screen.getByText('Excesso de R$ 10.000,00 (10.0% acima da meta)')).toBeDefined()
     expect(screen.getByText(/Proveniência Canônica dos Dados:/i)).toBeDefined()
+  })
+
+  it('allows selecting strategy and triggers simulation with strategy payload (Item 6)', () => {
+    currentAnalysisData = mockAnalysis
+    currentSimulationData = null
+    mockMutateSimulate.mockClear()
+    renderWithProviders()
+
+    const proventosBtn = screen.getByText('Proventos & Renda')
+    fireEvent.click(proventosBtn)
+
+    expect(mockMutateSimulate).toHaveBeenCalledWith({
+      amount: 5000,
+      strategy: 'proventos',
+    })
+  })
+
+  it('renders recommended assets table when simulation returns suggested_assets (Item 6)', () => {
+    currentAnalysisData = mockAnalysis
+    currentSimulationData = mockSimulationData
+    renderWithProviders()
+
+    expect(screen.getByText(/Ativos Recomendados para Aporte/i)).toBeDefined()
+    expect(screen.getByText('BBAS3')).toBeDefined()
+    expect(screen.getByText('Banco do Brasil ON')).toBeDefined()
+    expect(screen.getByText('Foco em Proventos: histórico consistente de dividendos.')).toBeDefined()
+    expect(screen.getAllByText(/\+\s*R\$\s*5\.000,00/).length).toBeGreaterThan(0)
+  })
+
+  it('renders empty state banner with CTA to distribution settings when classes is empty (Item 7)', () => {
+    currentAnalysisData = {
+      ...mockAnalysis,
+      classes: [],
+      classes_analyzed_count: 0,
+    }
+    currentSimulationData = null
+    renderWithProviders()
+
+    expect(screen.getByText(/Sua carteira ainda não possui metas de distribuição cadastradas/i)).toBeDefined()
+    expect(screen.getByText('Definir Metas')).toBeDefined()
   })
 })

@@ -137,6 +137,31 @@ describe('AddTransactionModal', () => {
     },
   )
 
+  it('resolve nome completo de criptomoeda para ticker padrao ao salvar', async () => {
+    setup()
+    fireEvent.change(screen.getByRole('combobox', { name: /Tipo de ativo/i }), {
+      target: { value: 'cripto' },
+    })
+    fireEvent.change(screen.getByPlaceholderText(/ex: BTC ou Bitcoin/i), {
+      target: { value: 'Bitcoin' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('0'), {
+      target: { value: '0.5' },
+    })
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+      target: { value: '350000' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar Lançamento/i }))
+
+    expect(createTransaction).toHaveBeenCalledWith({
+      portfolioId: 42,
+      data: expect.objectContaining({
+        ticker: 'BTC',
+        asset_type: 'CRIPTO',
+      }),
+    })
+  })
+
   it('envia a classe canonica selecionada no payload de lancamento', async () => {
     setup()
 

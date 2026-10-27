@@ -710,12 +710,33 @@ export default function IRPFPage() {
                 value={selectedYear}
                 onChange={e => setSelectedYear(Number(e.target.value))}
                 className="appearance-none pl-1.5 pr-5 py-0.5 text-xs font-semibold tabular-nums cursor-pointer bg-transparent focus:outline-none"
-                style={{ color: 'var(--color-text)' }}
+                style={{ color: 'var(--color-text)', backgroundColor: 'var(--color-surface, #1e293b)' }}
                 disabled={loadingAnos}
               >
                 {anos && anos.length > 0
-                  ? anos.map(y => <option key={y} value={y}>{y}</option>)
-                  : <option value={fallbackYear}>{fallbackYear}</option>}
+                  ? anos.map(y => (
+                      <option
+                        key={y}
+                        value={y}
+                        style={{
+                          backgroundColor: 'var(--color-surface, #1e293b)',
+                          color: 'var(--color-text, #f8fafc)',
+                        }}
+                      >
+                        {y}
+                      </option>
+                    ))
+                  : (
+                      <option
+                        value={fallbackYear}
+                        style={{
+                          backgroundColor: 'var(--color-surface, #1e293b)',
+                          color: 'var(--color-text, #f8fafc)',
+                        }}
+                      >
+                        {fallbackYear}
+                      </option>
+                    )}
               </select>
               <ChevronDown
                 size={12}

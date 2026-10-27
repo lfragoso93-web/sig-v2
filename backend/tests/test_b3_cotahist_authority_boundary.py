@@ -36,8 +36,12 @@ def test_brapi_asset_seed_cannot_create_missing_b3_assets() -> None:
 def test_cotahist_rebuild_persists_official_ohlcv_not_close_only() -> None:
     source = _source(_B3_REBUILD)
 
-    for field in ("open=record.open", "high=record.high", "low=record.low"):
-        assert field in source
-    assert "close=record.close" in source
-    assert "volume=record.volume" in source
-    assert 'source="b3_cotahist"' in source
+    for field in (
+        ('"open": record.open', "open=record.open"),
+        ('"high": record.high', "high=record.high"),
+        ('"low": record.low', "low=record.low"),
+    ):
+        assert any(variant in source for variant in field)
+    assert '"close": record.close' in source or "close=record.close" in source
+    assert '"volume": record.volume' in source or "volume=record.volume" in source
+    assert 'source="b3_cotahist"' in source or '"source": "b3_cotahist"' in source

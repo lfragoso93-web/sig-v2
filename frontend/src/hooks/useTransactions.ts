@@ -89,6 +89,16 @@ function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfoli
   qc.invalidateQueries({ queryKey: ['rentabilidade-classes',portfolioId] })
   // Metas financeiras (current_value automático pode mudar após transação)
   qc.invalidateQueries({ queryKey: ['goals',                portfolioId] })
+  // Evolução patrimonial e TWR por classe
+  qc.invalidateQueries({ queryKey: ['evolution-daily',      portfolioId] })
+  qc.invalidateQueries({ queryKey: ['evolution-monthly',    portfolioId] })
+  qc.invalidateQueries({ queryKey: ['class-twr-availability', portfolioId] })
+  // Análise e IA da carteira
+  qc.invalidateQueries({ queryKey: ['portfolio-analysis',   portfolioId] })
+  qc.invalidateQueries({ queryKey: ['portfolio-ai-analysis', portfolioId] })
+  // IRPF e proventos
+  qc.invalidateQueries({ queryKey: ['irpf-anos',            portfolioId] })
+  qc.invalidateQueries({ queryKey: ['proventos-summary',    portfolioId] })
 }
 
 export function useTransactions(

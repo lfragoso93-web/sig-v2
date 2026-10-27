@@ -270,7 +270,7 @@ async def simulate_portfolio_contribution(
 
     service = PortfolioAiAnalysisService(db)
     try:
-        return await service.simulate_contribution(portfolio_id, current_user.id, payload.contribution_amount)
+        return await service.simulate_contribution(portfolio_id, current_user.id, payload.contribution_amount, strategy=payload.strategy)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   PieChart,
   ArrowUpRight,
@@ -14,6 +15,8 @@ import {
   Send,
   Calculator,
   ShieldCheck,
+  Coins,
+  Sliders,
 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import { usePortfolios } from '@/hooks/usePortfolios'
@@ -25,6 +28,7 @@ import {
   usePortfolioAiAnalysis,
   useSimulateContribution,
   useAskPortfolioAi,
+  type ContributionStrategy,
 } from '@/hooks/usePortfolioAiAnalysis'
 import { formatBRL } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -58,16 +62,19 @@ function concentrationBadge(level: string): { bg: string; text: string; label: s
 }
 
 function PortfolioAiSection({ portfolioId }: { portfolioId: number }) {
+  const navigate = useNavigate()
   const { data: aiData, isLoading, error } = usePortfolioAiAnalysis(portfolioId)
+  const { data: analysisData } = usePortfolioAnalysis(portfolioId)
   const simulateMutation = useSimulateContribution(portfolioId)
   const askMutation = useAskPortfolioAi(portfolioId)
 
   const [simAmount, setSimAmount] = useState('5000')
+  const [strategy, setStrategy] = useState<ContributionStrategy>('patrimonio')
   const [questionInput, setQuestionInput] = useState('')
   const [qaList, setQaList] = useState<Array<{ q: string; a: string; metrics: string[] }>>([])
 
-  const handleSimulate = (amountToSim: number) => {
-    simulateMutation.mutate(amountToSim)
+  const handleSimulate = (amountToSim: number, strat: ContributionStrategy = strategy) => {
+    simulateMutation.mutate({ amount: amountToSim, strategy: strat })
   }
 
   const handleAsk = (q: string) => {
@@ -231,9 +238,79 @@ function PortfolioAiSection({ portfolioId }: { portfolioId: number }) {
             <Calculator size={18} style={{ color: 'var(--color-primary)' }} />
             <h3 className="text-sm font-semibold">Simulador Inteligente de Próximo Aporte</h3>
           </div>
-          <span className="text-[11px] text-muted">
-            Otimiza a distribuição por déficit em relação às metas
-          </span>
+          <button
+            type="button"
+            onClick={() => navigate('/configuracoes?tab=distribuicao')}
+            className="text-[11px] font-medium flex items-center gap-1 hover:underline text-muted"
+          >
+            <Sliders size={12} />
+            Metas de Distribuição
+            <ArrowUpRight size={11} />
+          </button>
+        </div>
+
+        {/* Empty state banner when no targets or classes */}
+        {analysisData?.classes?.length === 0 && (
+          <div
+            className="rounded-lg p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+            style={{
+              background: 'oklch(from var(--color-primary) l c h / 0.08)',
+              border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Layers size={16} style={{ color: 'var(--color-primary)' }} className="shrink-0" />
+              <span>Sua carteira ainda não possui metas de distribuição cadastradas. Configure os percentuais desejados para simular aportes inteligentes.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/configuracoes?tab=distribuicao')}
+              className="btn btn-primary text-xs py-1 px-3 shrink-0 flex items-center gap-1"
+            >
+              Definir Metas
+              <ArrowUpRight size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Strategy Selector (Item 6) */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-semibold text-muted">Objetivo do Aporte:</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              { id: 'patrimonio', label: 'Acúmulo de Patrimônio', desc: 'Equilíbrio e diversificação', icon: Layers },
+              { id: 'proventos', label: 'Proventos & Renda', desc: 'Maximização de dividendos', icon: Coins },
+              { id: 'performance', label: 'Performance & Crescimento', desc: 'Retorno e valorização', icon: TrendingUp },
+            ].map(item => {
+              const isSelected = strategy === item.id
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    const newStrat = item.id as ContributionStrategy
+                    setStrategy(newStrat)
+                    if (Number(simAmount) > 0) {
+                      handleSimulate(Number(simAmount), newStrat)
+                    }
+                  }}
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all"
+                  style={{
+                    background: isSelected ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'var(--color-surface-offset)',
+                    borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                  }}
+                >
+                  <Icon size={16} className="shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold">{item.label}</span>
+                    <span className="text-[10px] text-muted">{item.desc}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -278,7 +355,7 @@ function PortfolioAiSection({ portfolioId }: { portfolioId: number }) {
 
         {/* Simulation Results */}
         {simulateMutation.data && (
-          <div className="flex flex-col gap-3 pt-2">
+          <div className="flex flex-col gap-4 pt-2">
             <div
               className="rounded-lg p-3 text-xs leading-relaxed"
               style={{
@@ -290,37 +367,103 @@ function PortfolioAiSection({ portfolioId }: { portfolioId: number }) {
               {simulateMutation.data.overall_impact_summary}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
-                    <th className="py-2 px-3 text-muted font-medium">Classe</th>
-                    <th className="py-2 px-3 text-muted font-medium text-right">Valor Atual</th>
-                    <th className="py-2 px-3 text-muted font-medium text-right">% Atual</th>
-                    <th className="py-2 px-3 text-muted font-medium text-right">Meta %</th>
-                    <th className="py-2 px-3 text-muted font-medium text-right font-semibold" style={{ color: 'var(--color-primary)' }}>Aporte Sugerido</th>
-                    <th className="py-2 px-3 text-muted font-medium text-right">% Projetada</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {simulateMutation.data.suggested_allocations.map(alloc => (
-                    <tr
-                      key={alloc.asset_type}
-                      style={{ borderBottom: '1px solid var(--color-divider)' }}
-                    >
-                      <td className="py-2.5 px-3 font-semibold">{alloc.label}</td>
-                      <td className="py-2.5 px-3 text-right">{formatBRL(alloc.current_value)}</td>
-                      <td className="py-2.5 px-3 text-right">{alloc.current_weight_pct.toFixed(1)}%</td>
-                      <td className="py-2.5 px-3 text-right text-muted">{alloc.target_weight_pct ? `${alloc.target_weight_pct.toFixed(1)}%` : '—'}</td>
-                      <td className="py-2.5 px-3 text-right font-bold" style={{ color: alloc.allocated_amount > 0 ? 'var(--color-success)' : 'var(--color-text-faint)' }}>
-                        {alloc.allocated_amount > 0 ? `+ ${formatBRL(alloc.allocated_amount)}` : 'R$ 0,00'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-medium">{alloc.projected_weight_pct.toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Tabela 1: Distribuição por Classes */}
+            {simulateMutation.data.suggested_allocations.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-muted">Distribuição por Classes de Ativos</span>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                        <th className="py-2 px-3 text-muted font-medium">Classe</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">Valor Atual</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">% Atual</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">Meta %</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right font-semibold" style={{ color: 'var(--color-primary)' }}>Aporte Sugerido</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">% Projetada</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {simulateMutation.data.suggested_allocations.map(alloc => (
+                        <tr
+                          key={alloc.asset_type}
+                          style={{ borderBottom: '1px solid var(--color-divider)' }}
+                        >
+                          <td className="py-2.5 px-3 font-semibold">{alloc.label}</td>
+                          <td className="py-2.5 px-3 text-right">{formatBRL(alloc.current_value)}</td>
+                          <td className="py-2.5 px-3 text-right">{alloc.current_weight_pct.toFixed(1)}%</td>
+                          <td className="py-2.5 px-3 text-right text-muted">{alloc.target_weight_pct ? `${alloc.target_weight_pct.toFixed(1)}%` : '—'}</td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: alloc.allocated_amount > 0 ? 'var(--color-success)' : 'var(--color-text-faint)' }}>
+                            {alloc.allocated_amount > 0 ? `+ ${formatBRL(alloc.allocated_amount)}` : 'R$ 0,00'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-medium">{alloc.projected_weight_pct.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tabela 2: Ativos Recomendados para Aporte (Item 6) */}
+            {simulateMutation.data.suggested_assets && simulateMutation.data.suggested_assets.length > 0 && (
+              <div className="flex flex-col gap-2 pt-2">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                    Ativos Recomendados para Aporte ({simulateMutation.data.strategy === 'proventos' ? 'Foco em Proventos' : simulateMutation.data.strategy === 'performance' ? 'Foco em Performance' : 'Acúmulo de Patrimônio'})
+                  </span>
+                  <span className="text-[11px] text-muted">
+                    Ativos selecionados de acordo com sua meta
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                        <th className="py-2 px-3 text-muted font-medium">Ativo / Ticker</th>
+                        <th className="py-2 px-3 text-muted font-medium">Classe</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">Preço Atual</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right">Qtd. Estimada</th>
+                        <th className="py-2 px-3 text-muted font-medium text-right font-semibold" style={{ color: 'var(--color-primary)' }}>Aporte Sugerido</th>
+                        <th className="py-2 px-3 text-muted font-medium">Justificativa da Meta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {simulateMutation.data.suggested_assets.map((asset, idx) => (
+                        <tr
+                          key={`${asset.ticker}-${idx}`}
+                          style={{ borderBottom: '1px solid var(--color-divider)' }}
+                        >
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-col">
+                              <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{asset.ticker}</span>
+                              <span className="text-[10px] text-muted">{asset.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--color-surface-offset)', color: 'var(--color-text-muted)' }}>
+                              {asset.asset_type}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {asset.current_price > 0 ? formatBRL(asset.current_price) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-medium">
+                            {asset.suggested_quantity > 0 ? asset.suggested_quantity.toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold" style={{ color: 'var(--color-success)' }}>
+                            + {formatBRL(asset.suggested_amount)}
+                          </td>
+                          <td className="py-2.5 px-3 text-[11px] text-muted max-w-xs leading-tight">
+                            {asset.reason}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

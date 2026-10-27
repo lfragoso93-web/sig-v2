@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
@@ -33,6 +33,33 @@ class CryptoTransactionEligibilityError(ValueError):
         return detail
 
 
+
+_CRYPTO_NAME_TO_TICKER: dict[str, str] = {
+    "BITCOIN": "BTC",
+    "ETHEREUM": "ETH",
+    "TETHER": "USDT",
+    "BINANCE COIN": "BNB",
+    "BINANCECOIN": "BNB",
+    "BNB": "BNB",
+    "SOLANA": "SOL",
+    "RIPPLE": "XRP",
+    "CARDANO": "ADA",
+    "DOGECOIN": "DOGE",
+    "POLKADOT": "DOT",
+    "AVALANCHE": "AVAX",
+    "CHAINLINK": "LINK",
+    "POLYGON": "MATIC",
+    "SHIBA INU": "SHIB",
+    "SHIBA": "SHIB",
+    "LITECOIN": "LTC",
+    "UNISWAP": "UNI",
+    "STELLAR": "XLM",
+    "MONERO": "XMR",
+    "COSMOS": "ATOM",
+    "BITCOIN CASH": "BCH",
+    "USD COIN": "USDC",
+}
+
 async def require_catalog_crypto_asset(
     db: AsyncSession,
     ticker: str,
@@ -51,10 +78,21 @@ async def require_catalog_crypto_asset(
             reason="ticker vazio",
         )
 
+    candidate_tickers = [normalized_ticker]
+    mapped_ticker = _CRYPTO_NAME_TO_TICKER.get(normalized_ticker)
+    if mapped_ticker and mapped_ticker not in candidate_tickers:
+        candidate_tickers.append(mapped_ticker)
+
     asset_result = await db.execute(
         select(Asset)
         .where(Asset.asset_type == AssetType.CRIPTO.value)
-        .where(func.upper(Asset.ticker) == normalized_ticker)
+        .where(
+            or_(
+                func.upper(Asset.ticker).in_(candidate_tickers),
+                func.upper(Asset.name) == normalized_ticker,
+                func.upper(Asset.name).in_(candidate_tickers),
+            )
+        )
         .limit(1)
     )
     asset = asset_result.scalar_one_or_none()

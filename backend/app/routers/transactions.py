@@ -511,7 +511,7 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
         from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
         async with AsyncSessionLocal() as db:
-            deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
+            deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date, commit=True)
             log.info(
                 (
                     "[snapshot_backfill] portfolio=%s invalida a partir de %s "
@@ -529,6 +529,16 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
                 db=db,
                 portfolio_id=portfolio_id,
             )
+            remaining_tx_res = await db.execute(
+                select(Transaction.id).where(Transaction.portfolio_id == portfolio_id).limit(1)
+            )
+            if remaining_tx_res.scalar_one_or_none() is None:
+                from sqlalchemy import delete
+                from app.models.portfolio_snapshot import PortfolioSnapshot
+                from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
+                await db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id))
+                await db.execute(delete(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == portfolio_id))
+            await db.commit()
             await invalidate_rentabilidade_cache(portfolio_id)
             log.info(
                 "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",

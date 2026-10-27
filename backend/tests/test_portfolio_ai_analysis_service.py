@@ -14,6 +14,7 @@ from app.schemas.portfolio_analysis import (
     RebalanceAction,
     TopAssetConcentration,
 )
+from unittest.mock import patch, MagicMock
 from app.services.portfolio_ai_analysis_service import (
     DeterministicAuditExplainer,
     PortfolioAiAnalysisService,
@@ -182,7 +183,9 @@ async def test_portfolio_ai_analysis_service_orchestration():
 
 
 @pytest.mark.asyncio
-async def test_simulate_contribution_prioritizes_deficit_class():
+@patch("app.services.portfolio_ai_analysis_service.get_canonical_portfolio_positions")
+async def test_simulate_contribution_prioritizes_deficit_class(mock_get_positions):
+    mock_get_positions.return_value = MagicMock(groups=[])
     mock_db = AsyncMock()
     service = PortfolioAiAnalysisService(mock_db)
     service.analysis_service.get_portfolio_analysis = AsyncMock(return_value=_make_mock_analysis_dto())
@@ -219,3 +222,93 @@ async def test_ai_qa_answers_grounded_in_metrics():
     # Pergunta sobre aporte
     ans_aporte = await service.answer_ai_question(portfolio_id=1, user_id=10, question="Onde devo realizar meu próximo aporte?")
     assert "Ações" in ans_aporte.answer
+
+
+@pytest.mark.asyncio
+@patch("app.services.portfolio_ai_analysis_service.get_canonical_portfolio_positions")
+async def test_simulate_contribution_strategies_and_asset_recommendations(mock_get_positions):
+    # Simular posições abertas na classe Ações
+    pos_petr = MagicMock(
+        ticker="PETR4",
+        asset_label="Petrobras",
+        quantity=100.0,
+        current_price=30.0,
+        current_price_brl=30.0,
+        current_value=3000.0,
+        received_dividends=500.0,
+        variation_pct=15.0,
+        capital_result_value=400.0,
+    )
+    pos_vale = MagicMock(
+        ticker="VALE3",
+        asset_label="Vale",
+        quantity=50.0,
+        current_price=60.0,
+        current_price_brl=60.0,
+        current_value=3000.0,
+        received_dividends=200.0,
+        variation_pct=5.0,
+        capital_result_value=150.0,
+    )
+    group_acoes = MagicMock(
+        label="Ações",
+        positions=[pos_petr, pos_vale],
+    )
+    group_acoes.positions[0].asset_type = "ACAO"
+    mock_get_positions.return_value = MagicMock(groups=[group_acoes])
+    mock_db = AsyncMock()
+    service = PortfolioAiAnalysisService(mock_db)
+    service.analysis_service.get_portfolio_analysis = AsyncMock(return_value=_make_mock_analysis_dto())
+
+    # 1. Estratégia Proventos
+    sim_prov = await service.simulate_contribution(
+        portfolio_id=1, user_id=10, amount=5000.0, strategy="proventos"
+    )
+    assert sim_prov.strategy == "proventos"
+    assert len(sim_prov.suggested_assets) > 0
+    assert any("Proventos" in a.reason for a in sim_prov.suggested_assets)
+    assert sum(a.suggested_amount for a in sim_prov.suggested_assets) == pytest.approx(5000.0)
+
+    # 2. Estratégia Performance
+    sim_perf = await service.simulate_contribution(
+        portfolio_id=1, user_id=10, amount=5000.0, strategy="performance"
+    )
+    assert sim_perf.strategy == "performance"
+    assert len(sim_perf.suggested_assets) > 0
+    assert any("Performance" in a.reason for a in sim_perf.suggested_assets)
+    assert sum(a.suggested_amount for a in sim_perf.suggested_assets) == pytest.approx(5000.0)
+
+    # 3. Estratégia Patrimônio
+    sim_patr = await service.simulate_contribution(
+        portfolio_id=1, user_id=10, amount=5000.0, strategy="patrimonio"
+    )
+    assert sim_patr.strategy == "patrimonio"
+    assert len(sim_patr.suggested_assets) > 0
+    assert any("Patrimônio" in a.reason for a in sim_patr.suggested_assets)
+    assert sum(a.suggested_amount for a in sim_patr.suggested_assets) == pytest.approx(5000.0)
+
+
+@pytest.mark.asyncio
+async def test_simulate_contribution_empty_portfolio_with_and_without_targets():
+    mock_db = AsyncMock()
+    service = PortfolioAiAnalysisService(mock_db)
+
+    # Sem classes/metas
+    empty_dto = PortfolioConsolidatedAnalysisResponse(
+        portfolio_id=2,
+        portfolio_name="Carteira Vazia",
+        reference_date="2026-10-21",
+        total_value=0.0,
+        overall_health_score=70,
+        max_divergence_class=None,
+        classes_analyzed_count=0,
+        rebalance_priority_classes=[],
+        classes=[],
+    )
+    service.analysis_service.get_portfolio_analysis = AsyncMock(return_value=empty_dto)
+
+    sim_empty = await service.simulate_contribution(portfolio_id=2, user_id=10, amount=2000.0)
+    assert sim_empty.current_total_value == 0.0
+    assert len(sim_empty.suggested_allocations) == 0
+    assert len(sim_empty.suggested_assets) == 0
+    assert "Configure as metas" in sim_empty.overall_impact_summary

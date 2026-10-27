@@ -46,6 +46,10 @@ class ContributionSimulationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contribution_amount: float = Field(gt=0, description="Valor do aporte em reais (BRL)")
+    strategy: str = Field(
+        default="patrimonio",
+        description="Estratégia do aporte: 'patrimonio' (Acúmulo de Patrimônio), 'proventos' (Renda Passiva) ou 'performance' (Valorização)",
+    )
 
 
 class ClassContributionAllocation(BaseModel):
@@ -62,14 +66,30 @@ class ClassContributionAllocation(BaseModel):
     action_explanation: str
 
 
+class AssetContributionAllocation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ticker: str
+    name: str
+    asset_type: str
+    current_quantity: float = 0.0
+    current_price: float = 0.0
+    current_value: float = 0.0
+    suggested_amount: float
+    suggested_quantity: float
+    reason: str
+
+
 class ContributionSimulationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     portfolio_id: int
     contribution_amount: float
+    strategy: str = "patrimonio"
     current_total_value: float
     projected_total_value: float
     suggested_allocations: list[ClassContributionAllocation]
+    suggested_assets: list[AssetContributionAllocation] = Field(default_factory=list)
     overall_impact_summary: str
     metadata: AiExplanationMetadata
 

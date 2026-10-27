@@ -69,7 +69,7 @@ def parse_official_catalog_csv(text: str) -> list[dict[str, Any]]:
         catalog[symbol] = {
             "symbol": symbol,
             "bondType": title,
-            "name": f"{title} {maturity_dt.date().isoformat()}",
+            "name": f"{title} {maturity_dt.year}",
             "maturityYear": maturity_dt.year,
             "maturityDate": maturity_dt.date().isoformat(),
             "indexer": indexer,

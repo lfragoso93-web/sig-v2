@@ -72,7 +72,10 @@ def _compute_class_allocation(
 
         if gap_weight < -1.0:
             action = RebalanceAction.BUY
-            action_label = f"Aporte sugerido de R$ {abs(gap_val):,.2f} para convergir à meta de {target_pct:.1f}%"
+            if total_portfolio_value <= 0:
+                action_label = f"Aguardando primeiro aporte para meta de {target_pct:.1f}%"
+            else:
+                action_label = f"Aporte sugerido de R$ {abs(gap_val):,.2f} para convergir à meta de {target_pct:.1f}%"
         elif gap_weight > 1.0:
             action = RebalanceAction.REDUCE
             action_label = f"Excesso de R$ {abs(gap_val):,.2f} ({abs(gap_weight):.1f}% acima da meta)"
@@ -395,6 +398,54 @@ class PortfolioAnalysisService:
                     key_findings=findings,
                 )
             )
+
+        # Adicionar classes que possuem meta definida mas nenhuma posição aberta ainda
+        from app.services.class_target_service import _TYPE_LABEL
+
+        existing_types = {_asset_type_from_group(g).upper() for g in groups}
+        for target in target_records:
+            norm_target_type = target.asset_type.upper()
+            if norm_target_type not in existing_types and float(target.target_pct) > 0:
+                target_pct = float(target.target_pct)
+                class_label = _TYPE_LABEL.get(norm_target_type, target.asset_type)
+                allocation = _compute_class_allocation(0.0, total_portfolio_value, target_pct)
+                concentration = ClassConcentrationAnalysis(
+                    asset_count=0,
+                    top_asset=None,
+                    hhi_score=0.0,
+                    risk_level=ConcentrationRiskLevel.LOW,
+                    risk_label="Sem ativos",
+                    status_message="Nenhum ativo nesta classe ainda.",
+                )
+                income = ClassIncomeAnalysis(
+                    is_applicable=norm_target_type in {"ACAO", "ACAO_NACIONAL", "FII", "STOCK", "BDR"},
+                    total_proventos=0.0,
+                    status_label="Sem ativos",
+                )
+                fixed_income = ClassFixedIncomeAnalysis(
+                    is_applicable=norm_target_type in {"TESOURO_DIRETO", "RENDA_FIXA"},
+                )
+                health_score = 50
+                findings = [allocation.suggested_action_label]
+                if allocation.rebalance_action == RebalanceAction.BUY:
+                    priority_rebalance_classes.append(class_label)
+
+                if allocation.gap_weight_pct is not None and abs(allocation.gap_weight_pct) > max_divergence_val:
+                    max_divergence_val = abs(allocation.gap_weight_pct)
+                    max_divergence_class = class_label
+
+                class_details.append(
+                    ClassAnalysisDetail(
+                        asset_type=norm_target_type,
+                        label=class_label,
+                        health_score=health_score,
+                        allocation=allocation,
+                        concentration=concentration,
+                        income=income,
+                        fixed_income=fixed_income,
+                        key_findings=findings,
+                    )
+                )
 
         overall_score = round(total_weighted_score) if class_details and total_portfolio_value > 0 else 70
 

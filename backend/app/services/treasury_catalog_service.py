@@ -53,6 +53,88 @@ def slug_from_text(value: str | None) -> str:
     return normalize_treasury_text(value).replace(" ", "-")
 
 
+
+def format_friendly_treasury_title(name: str | None, ticker: str | None = None) -> str:
+    raw = (name or ticker or "").strip()
+    if not raw:
+        return ""
+
+    cleaned = re.sub(r"\s+aposentadoria\s+extra\b", "", raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\brenda\+", "Renda+", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\beduca\+", "Educa+", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    from_full_date = False
+    raw_year = None
+    dmy_match = re.search(r"\b\d{1,2}/\d{1,2}/(20\d{2})\b", cleaned)
+    if dmy_match:
+        from_full_date = True
+        raw_year = int(dmy_match.group(1))
+        cleaned = re.sub(r"\b\d{1,2}/\d{1,2}/20\d{2}\b", "", cleaned).strip()
+    else:
+        iso_match = re.search(r"\b(20\d{2})[-/]\d{2}[-/]\d{2}\b", cleaned)
+        if iso_match:
+            from_full_date = True
+            raw_year = int(iso_match.group(1))
+            cleaned = re.sub(r"\b20\d{2}[-/]\d{2}[-/]\d{2}\b", "", cleaned).strip()
+        else:
+            year_match = re.search(r"\b(20\d{2})\b", cleaned)
+            if year_match:
+                raw_year = int(year_match.group(1))
+                cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
+
+    remaining_year = re.search(r"\b(20\d{2})\b", cleaned)
+    if remaining_year:
+        if not raw_year:
+            raw_year = int(remaining_year.group(1))
+        cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
+
+    ticker_clean = (ticker or "").lower()
+    ticker_commercial_year = None
+    if ticker_clean:
+        tm = re.search(r"20\d{2}", ticker_clean)
+        if tm:
+            ticker_commercial_year = int(tm.group(0))
+
+    norm = cleaned.lower()
+    if "renda" in norm:
+        if ticker_commercial_year and 2030 <= ticker_commercial_year <= 2065 and ticker_commercial_year % 5 == 0:
+            final_year = ticker_commercial_year
+        elif raw_year:
+            if from_full_date and raw_year >= 2049:
+                final_year = raw_year - 19
+            elif raw_year >= 2049:
+                final_year = raw_year - 19
+            else:
+                final_year = raw_year
+        elif ticker_commercial_year:
+            final_year = ticker_commercial_year - 19 if ticker_commercial_year >= 2049 else ticker_commercial_year
+        else:
+            final_year = None
+        cleaned = "Tesouro Renda+"
+        return f"{cleaned} {final_year}" if final_year else cleaned
+
+    if "educa" in norm:
+        if ticker_commercial_year and 2026 <= ticker_commercial_year <= 2042:
+            final_year = ticker_commercial_year
+        elif raw_year:
+            if from_full_date and raw_year >= 2030:
+                final_year = raw_year - 4
+            elif raw_year > 2042:
+                final_year = raw_year - 4
+            else:
+                final_year = raw_year
+        elif ticker_commercial_year:
+            final_year = ticker_commercial_year
+        else:
+            final_year = None
+        cleaned = "Tesouro Educa+"
+        return f"{cleaned} {final_year}" if final_year else cleaned
+
+    final_year = raw_year or ticker_commercial_year
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return f"{cleaned} {final_year}" if final_year else cleaned
+
 def _symbol(item: dict) -> str:
     direct = str(
         item.get("symbol")
@@ -71,13 +153,23 @@ def _symbol(item: dict) -> str:
 
 def _name(item: dict, symbol: str) -> str:
     bond_type = str(item.get("bondType") or item.get("name") or item.get("title") or "").strip()
+    bond_type = re.sub(r"\s+aposentadoria\s+extra\b", "", bond_type, flags=re.IGNORECASE).strip()
     maturity_year = item.get("maturityYear")
     maturity = str(item.get("maturityDate") or item.get("dueDate") or item.get("expiresAt") or "").strip()
-    if bond_type and maturity:
-        return f"{bond_type} {maturity[:10]}"
-    if bond_type and maturity_year:
-        return f"{bond_type} {maturity_year}"
-    return bond_type or symbol
+
+    year = None
+    if maturity_year:
+        year = str(maturity_year).strip()
+    elif maturity and len(maturity) >= 4 and maturity[:4].isdigit():
+        year = maturity[:4]
+    elif symbol:
+        year_match = re.search(r"20\d{2}", symbol)
+        if year_match:
+            year = year_match.group(0)
+
+    if bond_type and year:
+        return f"{bond_type} {year}"
+    return format_friendly_treasury_title(bond_type or symbol, symbol)
 
 
 def _sector(item: dict) -> str:
@@ -136,8 +228,9 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
                 result.created += 1
                 continue
             changed = False
-            if name and existing.name != name:
-                existing.name = name
+            friendly_name = format_friendly_treasury_title(name, symbol)
+            if friendly_name and existing.name != friendly_name:
+                existing.name = friendly_name
                 changed = True
             if sector and existing.sector != sector:
                 existing.sector = sector

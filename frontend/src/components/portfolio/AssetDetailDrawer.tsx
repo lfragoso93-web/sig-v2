@@ -144,7 +144,7 @@ export default function AssetDetailDrawer({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '1rem',
+        padding: '0.5rem',
       }}
       onClick={e => {
         if (e.target === e.currentTarget) onClose()
@@ -178,99 +178,121 @@ export default function AssetDetailDrawer({
           }
         `}</style>
 
-        {/* Header Centralizado */}
+        {/* Header Centralizado e Responsivo */}
         <div
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-5"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '1.25rem 1.5rem',
             borderBottom: '1px solid var(--color-divider)',
             background: 'var(--color-surface-offset, rgba(255, 255, 255, 0.02))',
             flexShrink: 0,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {asset?.logo_url ? (
-              <img
-                src={asset.logo_url}
-                alt={activeTicker}
-                style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'contain' }}
-              />
-            ) : (
-              <div
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+              {asset?.logo_url ? (
+                <img
+                  src={asset.logo_url}
+                  alt={activeTicker}
+                  style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'contain', flexShrink: 0 }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    background: 'var(--color-primary-light, rgba(37, 99, 235, 0.1))',
+                    color: 'var(--color-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '0.95rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  {activeTicker.slice(0, 2)}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <h2
+                    style={{
+                      fontSize: 'var(--text-lg, 1.25rem)',
+                      fontWeight: 700,
+                      color: 'var(--color-text)',
+                      margin: 0,
+                    }}
+                  >
+                    {activeTicker}
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      background: 'var(--color-surface-offset)',
+                      color: 'var(--color-text-muted)',
+                      border: '1px solid var(--color-divider)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {asset?.asset_label ?? assetDetail?.asset_type ?? 'Ativo'}
+                  </span>
+                  {enrichment?.coverage_status && (
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        background:
+                          enrichment.coverage_status === 'FULL'
+                            ? 'rgba(34, 197, 94, 0.15)'
+                            : 'rgba(234, 179, 8, 0.15)',
+                        color:
+                          enrichment.coverage_status === 'FULL'
+                            ? 'var(--color-success)'
+                            : 'var(--color-warning)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {enrichment.coverage_status}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {assetDetail?.name ?? asset?.asset_label ?? 'Informações do Ativo'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex sm:hidden items-center gap-2">
+              <button
+                onClick={onClose}
+                aria-label="Fechar janela"
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '50%',
-                  background: 'var(--color-primary-light, rgba(37, 99, 235, 0.1))',
-                  color: 'var(--color-primary)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  padding: '0.4rem',
+                  borderRadius: 'var(--radius-md)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '1rem',
                 }}
               >
-                {activeTicker.slice(0, 2)}
-              </div>
-            )}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <h2
-                  style={{
-                    fontSize: 'var(--text-lg, 1.25rem)',
-                    fontWeight: 700,
-                    color: 'var(--color-text)',
-                    margin: 0,
-                  }}
-                >
-                  {activeTicker}
-                </h2>
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    background: 'var(--color-surface-offset)',
-                    color: 'var(--color-text-muted)',
-                    border: '1px solid var(--color-divider)',
-                  }}
-                >
-                  {asset?.asset_label ?? assetDetail?.asset_type ?? 'Ativo'}
-                </span>
-                {enrichment?.coverage_status && (
-                  <span
-                    style={{
-                      fontSize: '0.65rem',
-                      fontWeight: 600,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background:
-                        enrichment.coverage_status === 'FULL'
-                          ? 'rgba(34, 197, 94, 0.15)'
-                          : 'rgba(234, 179, 8, 0.15)',
-                      color:
-                        enrichment.coverage_status === 'FULL'
-                          ? 'var(--color-success)'
-                          : 'var(--color-warning)',
-                    }}
-                  >
-                    {enrichment.coverage_status}
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                {assetDetail?.name ?? asset?.asset_label ?? 'Informações do Ativo'}
-              </div>
+                <X size={20} />
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--color-divider)]">
             {assetDetail?.current_price != null && (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)' }}>
+              <div style={{ textAlign: 'left' }} className="sm:text-right">
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-text)' }}>
                   {formatBRL(assetDetail.current_price)}
                 </div>
                 <div
@@ -279,10 +301,10 @@ export default function AssetDetailDrawer({
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'flex-end',
                     gap: 2,
                     color: (weekVariation?.value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
                   }}
+                  className="sm:justify-end"
                 >
                   {(weekVariation?.value ?? 0) >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                   {formatPercent(weekVariation?.percent)} (7d)
@@ -292,6 +314,7 @@ export default function AssetDetailDrawer({
             <button
               onClick={onClose}
               aria-label="Fechar janela"
+              className="hidden sm:flex"
               style={{
                 background: 'none',
                 border: 'none',
@@ -299,7 +322,6 @@ export default function AssetDetailDrawer({
                 cursor: 'pointer',
                 padding: '0.5rem',
                 borderRadius: 'var(--radius-md)',
-                display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
@@ -311,14 +333,11 @@ export default function AssetDetailDrawer({
 
         {/* Tab Navigation */}
         <div
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 overflow-x-auto no-scrollbar"
           style={{
-            display: 'flex',
-            gap: '0.5rem',
-            padding: '0.5rem 1.5rem',
             borderBottom: '1px solid var(--color-divider)',
             background: 'var(--color-surface)',
             flexShrink: 0,
-            overflowX: 'auto',
           }}
         >
           <button
@@ -327,7 +346,7 @@ export default function AssetDetailDrawer({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '0.5rem 0.85rem',
+              padding: '0.4rem 0.75rem', whiteSpace: 'nowrap', flexShrink: 0,
               borderRadius: 'var(--radius-md)',
               fontSize: '0.85rem',
               fontWeight: 600,
@@ -347,7 +366,7 @@ export default function AssetDetailDrawer({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '0.5rem 0.85rem',
+              padding: '0.4rem 0.75rem', whiteSpace: 'nowrap', flexShrink: 0,
               borderRadius: 'var(--radius-md)',
               fontSize: '0.85rem',
               fontWeight: 600,
@@ -367,7 +386,7 @@ export default function AssetDetailDrawer({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '0.5rem 0.85rem',
+              padding: '0.4rem 0.75rem', whiteSpace: 'nowrap', flexShrink: 0,
               borderRadius: 'var(--radius-md)',
               fontSize: '0.85rem',
               fontWeight: 600,
@@ -387,7 +406,7 @@ export default function AssetDetailDrawer({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '0.5rem 0.85rem',
+              padding: '0.4rem 0.75rem', whiteSpace: 'nowrap', flexShrink: 0,
               borderRadius: 'var(--radius-md)',
               fontSize: '0.85rem',
               fontWeight: 600,
@@ -403,7 +422,7 @@ export default function AssetDetailDrawer({
         </div>
 
         {/* Corpo com Scroll */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem' }}>
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
           {/* TAB 1: VISÃO GERAL & PREÇO */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -411,7 +430,7 @@ export default function AssetDetailDrawer({
                 <div
                   style={{
                     background: 'var(--color-surface-offset)',
-                    padding: '1rem',
+                    padding: '0.5rem',
                     borderRadius: 'var(--radius-lg)',
                     border: '1px solid var(--color-divider)',
                   }}
@@ -477,7 +496,7 @@ export default function AssetDetailDrawer({
               ) : null}
 
               {/* Grid 4 KPIs Rápidos */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                 <div style={{ background: 'var(--color-surface-offset)', padding: '0.85rem', borderRadius: 'var(--radius-md)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.5rem' }}>
                     <DollarSign size={14} style={{ color: 'var(--color-primary)' }} />
@@ -533,7 +552,7 @@ export default function AssetDetailDrawer({
 
               {/* Eventos Corporativos (se houver) */}
               {corporateLifecycle.length > 0 && (
-                <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
                     <RefreshCw size={14} style={{ color: 'var(--color-primary)' }} />
                     <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
@@ -584,7 +603,7 @@ export default function AssetDetailDrawer({
 
               {/* Proventos */}
               {assetDividends.length > 0 && (
-                <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
                     <Zap size={14} style={{ color: 'var(--color-primary)' }} />
                     <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
@@ -623,7 +642,7 @@ export default function AssetDetailDrawer({
 
               {/* Transações */}
               {transactions.length > 0 && (
-                <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
                     <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
                     <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
@@ -667,8 +686,8 @@ export default function AssetDetailDrawer({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {position && position.is_held ? (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-md)' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Posição em Custódia</span>
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)', marginTop: 4 }}>
                         {formatNumber(position.quantity)} cotas
@@ -678,7 +697,7 @@ export default function AssetDetailDrawer({
                       </div>
                     </div>
 
-                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-md)' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Total Investido vs Atual</span>
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text)', marginTop: 4 }}>
                         {formatBRL(position.current_value)}
@@ -688,7 +707,7 @@ export default function AssetDetailDrawer({
                       </div>
                     </div>
 
-                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-md)' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Ganho de Capital</span>
                       <div
                         style={{
@@ -712,7 +731,7 @@ export default function AssetDetailDrawer({
                       </div>
                     </div>
 
-                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-md)' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Retorno Total (c/ Proventos)</span>
                       <div
                         style={{
@@ -742,7 +761,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Alocação e Pesos na Carteira
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: 4 }}>
                           <span style={{ color: 'var(--color-text-muted)' }}>Peso no Portfólio Global</span>
@@ -801,7 +820,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Indicadores Financeiros de FII
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/VP</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
@@ -833,7 +852,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Operações, Imóveis e Vacância
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Vacância Física</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: (fii.physical_vacancy ?? 0) > 10 ? 'var(--color-warning)' : 'var(--color-text)' }}>
@@ -867,7 +886,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Métricas de Valuation da Ação
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/L (Preço / Lucro)</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
@@ -899,7 +918,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Rentabilidade, Margens e Balanço
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>ROE</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>

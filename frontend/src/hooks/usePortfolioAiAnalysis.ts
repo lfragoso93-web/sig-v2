@@ -43,12 +43,28 @@ export interface ClassContributionAllocation {
   action_explanation: string
 }
 
+export type ContributionStrategy = 'patrimonio' | 'proventos' | 'performance'
+
+export interface AssetContributionAllocation {
+  ticker: string
+  name: string
+  asset_type: string
+  current_quantity: number
+  current_price: number
+  current_value: number
+  suggested_amount: number
+  suggested_quantity: number
+  reason: string
+}
+
 export interface ContributionSimulationResponse {
   portfolio_id: number
   contribution_amount: number
+  strategy: ContributionStrategy
   current_total_value: number
   projected_total_value: number
   suggested_allocations: ClassContributionAllocation[]
+  suggested_assets: AssetContributionAllocation[]
   overall_impact_summary: string
   metadata: AiExplanationMetadata
 }
@@ -75,13 +91,22 @@ export function usePortfolioAiAnalysis(portfolioId: number | null) {
   })
 }
 
+export interface SimulateContributionParams {
+  amount: number
+  strategy?: ContributionStrategy
+}
+
 export function useSimulateContribution(portfolioId: number | null) {
-  return useMutation<ContributionSimulationResponse, Error, number>({
-    mutationFn: async (amount: number) => {
+  return useMutation<ContributionSimulationResponse, Error, SimulateContributionParams | number>({
+    mutationFn: async (params) => {
       if (!portfolioId) throw new Error('Carteira não selecionada')
+      const payload = typeof params === 'number'
+        ? { contribution_amount: params, strategy: 'patrimonio' }
+        : { contribution_amount: params.amount, strategy: params.strategy || 'patrimonio' }
+
       const response = await api.post<ContributionSimulationResponse>(
         `/portfolios/${portfolioId}/ai-analysis/simulate-contribution`,
-        { contribution_amount: amount }
+        payload
       )
       return response.data
     },

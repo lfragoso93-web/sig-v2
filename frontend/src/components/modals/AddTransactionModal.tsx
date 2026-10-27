@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   X, TrendingUp, Building2, Globe, Landmark,
   Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle, Globe2,
@@ -26,16 +26,42 @@ type AssetTab = {
   brapiEnabled?: boolean; brapiSuggestType?: string
 }
 
+const CRYPTO_SYNONYMS: Record<string, string> = {
+  'BITCOIN': 'BTC',
+  'ETHEREUM': 'ETH',
+  'TETHER': 'USDT',
+  'BINANCE COIN': 'BNB',
+  'BINANCECOIN': 'BNB',
+  'BNB': 'BNB',
+  'SOLANA': 'SOL',
+  'RIPPLE': 'XRP',
+  'CARDANO': 'ADA',
+  'DOGECOIN': 'DOGE',
+  'POLKADOT': 'DOT',
+  'AVALANCHE': 'AVAX',
+  'CHAINLINK': 'LINK',
+  'POLYGON': 'MATIC',
+  'SHIBA INU': 'SHIB',
+  'SHIBA': 'SHIB',
+  'LITECOIN': 'LTC',
+  'UNISWAP': 'UNI',
+  'STELLAR': 'XLM',
+  'MONERO': 'XMR',
+  'COSMOS': 'ATOM',
+  'BITCOIN CASH': 'BCH',
+  'USD COIN': 'USDC',
+}
+
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'     },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={12} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'      },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={12} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'       },
-  { key: 'bdr',        label: 'BDR',        icon: <Globe2     size={12} />, assetType: 'BDR',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: NVDC34 ou AAPL34',      brapiEnabled: true,  brapiSuggestType: 'stock'     },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'stock_int' },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'etf_int'   },
+  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'ACAO'              },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={12} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'FII'               },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={12} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'ETF_NACIONAL'      },
+  { key: 'bdr',        label: 'BDR',        icon: <Globe2     size={12} />, assetType: 'BDR',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: NVDC34 ou AAPL34',      brapiEnabled: true,  brapiSuggestType: 'BDR'               },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'STOCK'             },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'ETF_INTERNACIONAL' },
   { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB Banco XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={12} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC ou Bitcoin',        brapiEnabled: true,  brapiSuggestType: 'cripto'    },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB Banco XP 110% CDI', brapiEnabled: false, extraFields: 'renda_fixa'     },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={12} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC ou Bitcoin',        brapiEnabled: true,  brapiSuggestType: 'CRIPTO'            },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
@@ -341,7 +367,14 @@ export default function AddTransactionModal({ onClose }: Props) {
       ? `Adicionar Lançamento — ${prefill.ticker}`
       : 'Novo Lançamento'
 
-  const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
+  const effectiveQuoteTicker = useMemo(() => {
+    const raw = ticker.trim().toUpperCase()
+    if (tab.assetType === 'CRIPTO') {
+      return CRYPTO_SYNONYMS[raw] || raw
+    }
+    return raw
+  }, [ticker, tab.assetType])
+  const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(effectiveQuoteTicker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading, error: tdSearchError } = useTesouroSearch(ticker, isTesouro && !isEditMode)
   const { items: rvItems, loading: rvLoading, error: rvSearchError } = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
   const { price: tdPrice, rate: tdRate, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
@@ -536,7 +569,10 @@ export default function AddTransactionModal({ onClose }: Props) {
       enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
 
-    const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
+    let finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
+    if (tab.assetType === 'CRIPTO') {
+      finalTicker = CRYPTO_SYNONYMS[finalTicker] || finalTicker
+    }
     const contractFields: {
       fixed_income_contract_id?: number | null
       fixed_income_contract?: FixedIncomeContractCreate | null

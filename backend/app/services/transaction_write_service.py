@@ -104,10 +104,17 @@ async def _add_catalog_asset_if_missing(
     if result.scalar_one_or_none() is not None:
         return
 
+    from app.services.asset_provider_verification_service import verify_market_asset_exists
+    exists, official_name = await verify_market_asset_exists(ticker, asset_type)
+    if not exists:
+        raise TransactionWriteError(
+            f"Ativo '{ticker}' ({asset_type}) não existe no catálogo e não foi encontrado nos provedores de mercado."
+        )
+
     db.add(
         Asset(
             ticker=ticker,
-            name=ticker,
+            name=official_name or ticker,
             asset_type=asset_type,
             currency=currency,
         )
@@ -173,9 +180,28 @@ async def add_transaction_record(
 
     if asset_type == "CRIPTO":
         try:
-            await require_catalog_crypto_asset(db, ticker)
-        except CryptoTransactionEligibilityError as exc:
-            raise TransactionWriteError(str(exc)) from exc
+            crypto_asset = await require_catalog_crypto_asset(db, ticker)
+            ticker = crypto_asset.ticker.upper()
+        except CryptoTransactionEligibilityError:
+            from app.services.asset_provider_verification_service import verify_market_asset_exists
+            from app.services.crypto_transaction_eligibility_service import _CRYPTO_NAME_TO_TICKER
+            resolved_ticker = _CRYPTO_NAME_TO_TICKER.get(ticker, ticker)
+            exists, official_name = await verify_market_asset_exists(resolved_ticker, "CRIPTO")
+            if not exists:
+                raise TransactionWriteError(
+                    f"Criptomoeda '{ticker}' não existe no catálogo e não foi encontrada nos provedores de mercado."
+                )
+            ticker = resolved_ticker
+            db.add(
+                Asset(
+                    ticker=ticker,
+                    name=official_name or ticker,
+                    asset_type="CRIPTO",
+                    currency=currency,
+                )
+            )
+            if flush:
+                await db.flush()
 
     if operation == OperationType.sell:
         current_qty = await _current_quantity(db, portfolio_id, ticker, asset_type)

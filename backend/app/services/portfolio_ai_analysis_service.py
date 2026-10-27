@@ -9,11 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.portfolio_ai_analysis import (
     AiExplanationMetadata,
     AiQuestionResponse,
+    AssetContributionAllocation,
     ClassContributionAllocation,
     ContributionScenarioDto,
     ContributionSimulationResponse,
     PortfolioAiAnalysisResponse,
 )
+from app.services.canonical_positions_service import get_canonical_portfolio_positions
+from app.services.portfolio_analysis_service import _asset_type_from_group
 from app.schemas.portfolio_analysis import (
     ClassAnalysisDetail,
     PortfolioConsolidatedAnalysisResponse,
@@ -23,6 +26,79 @@ from app.services.portfolio_analysis_service import PortfolioAnalysisService
 
 logger = logging.getLogger(__name__)
 
+
+
+
+
+def _normalize_asset_type(t: str) -> str:
+    norm = t.upper().replace("-", "_").replace(" ", "_")
+    if "ACAO" in norm or "AÇÕES" in norm or "ACOES" in norm:
+        return "ACAO"
+    if "FII" in norm:
+        return "FII"
+    if "TESOURO" in norm:
+        return "TESOURO_DIRETO"
+    if "RENDA_FIXA" in norm or norm == "RF":
+        return "RENDA_FIXA"
+    if "CRIPTO" in norm or "CRYPTO" in norm:
+        return "CRIPTO"
+    if "STOCK" in norm:
+        return "STOCK"
+    if "BDR" in norm:
+        return "BDR"
+    if "ETF_INT" in norm:
+        return "ETF_INTERNACIONAL"
+    if "ETF" in norm:
+        return "ETF_NACIONAL"
+    return norm
+
+REFERENCE_ASSETS: dict[str, dict[str, list[tuple[str, str, float, str]]]] = {
+    "ACAO": {
+        "patrimonio": [("ITUB4", "Itaú Unibanco PN", 35.0, "Acúmulo de Patrimônio: ativo defensivo de alta liquidez e histórico consolidado.")],
+        "proventos": [("BBAS3", "Banco do Brasil ON", 28.0, "Foco em Proventos: histórico consistente de proventos e dividend yield atrativo.")],
+        "performance": [("WEGE3", "WEG ON", 52.0, "Foco em Performance: líder em bens de capital com alto potencial de crescimento.")],
+    },
+    "FII": {
+        "patrimonio": [("HGLG11", "CSHG Logística FII", 160.0, "Acúmulo de Patrimônio: portfólio maduro de galpões logísticos de alto padrão.")],
+        "proventos": [("MXRF11", "Maxi Renda FII", 10.0, "Foco em Proventos: rendimentos mensais consistentes e ampla liquidez.")],
+        "performance": [("XPML11", "XP Malls FII", 105.0, "Foco em Performance: shoppings de alta renda com valorização de cotas.")],
+    },
+    "TESOURO_DIRETO": {
+        "patrimonio": [("TESOURO-SELIC-2029", "Tesouro Selic 2029", 150.0, "Acúmulo de Patrimônio: preservação do principal com liquidez diária.")],
+        "proventos": [("TESOURO-RENDA-MAIS-2030", "Tesouro Renda+ 2030", 1500.0, "Foco em Proventos: fluxo mensal previsível para aposentadoria.")],
+        "performance": [("TESOURO-IPCA-2035", "Tesouro IPCA+ 2035", 2500.0, "Foco em Performance: proteção contra inflação com potencial de marcação a mercado.")],
+    },
+    "RENDA_FIXA": {
+        "patrimonio": [("CDB-DI-LIQUIDEZ", "CDB 100% CDI Liquidez Diária", 1000.0, "Acúmulo de Patrimônio: segurança e liquidez para reserva de oportunidade.")],
+        "proventos": [("LCI-LCA-DI", "LCI/LCA DI", 1000.0, "Foco em Proventos: isenção de imposto de renda com rendimento líquido periódico.")],
+        "performance": [("CDB-PREFIXADO", "CDB Prefixado / IPCA+", 1000.0, "Foco em Performance: taxa travada para ganho real de capital no vencimento.")],
+    },
+    "CRIPTO": {
+        "patrimonio": [("BTC", "Bitcoin", 400000.0, "Acúmulo de Patrimônio: maior ativo digital descentralizado e reserva de valor.")],
+        "proventos": [("ETH", "Ethereum", 18000.0, "Foco em Proventos: principal rede de smart contracts com rendimento via staking.")],
+        "performance": [("BTC", "Bitcoin", 400000.0, "Foco em Performance: maior ativo digital com histórico de alta valorização.")],
+    },
+    "STOCK": {
+        "patrimonio": [("AAPL", "Apple Inc", 220.0, "Acúmulo de Patrimônio: liderança tecnológica e geração massiva de caixa operacional.")],
+        "proventos": [("KO", "Coca-Cola Co", 68.0, "Foco em Proventos: aristocrata de dividendos globais com histórico centenário.")],
+        "performance": [("NVDA", "NVIDIA Corporation", 130.0, "Foco em Performance: líder em infraestrutura de computação acelerada e IA.")],
+    },
+    "BDR": {
+        "patrimonio": [("IVVB11", "iShares S&P 500", 320.0, "Acúmulo de Patrimônio: diversificação nas 500 maiores empresas do mercado global.")],
+        "proventos": [("COCA34", "Coca-Cola BDR", 60.0, "Foco em Proventos: exposição internacional a fluxo constante de dividendos.")],
+        "performance": [("NVDC34", "Nvidia BDR", 18.0, "Foco em Performance: exposição direta à expansão da inteligência artificial.")],
+    },
+    "ETF_NACIONAL": {
+        "patrimonio": [("BOVA11", "iShares Ibovespa", 125.0, "Acúmulo de Patrimônio: exposição ampla às maiores companhias da B3.")],
+        "proventos": [("DIVO11", "It Now IDIV", 85.0, "Foco em Proventos: empresas com os maiores dividend yields da bolsa brasileira.")],
+        "performance": [("SMAL11", "iShares Small Caps", 110.0, "Foco em Performance: empresas de menor porte com elevado potencial de crescimento.")],
+    },
+    "ETF_INTERNACIONAL": {
+        "patrimonio": [("IVVB11", "iShares S&P 500", 320.0, "Acúmulo de Patrimônio: diversificação cambial e geográfica no mercado americano.")],
+        "proventos": [("VYM", "Vanguard High Dividend Yield", 120.0, "Foco em Proventos: carteira global de ativos de alta remuneração por proventos.")],
+        "performance": [("QQQ", "Invesco QQQ (Nasdaq 100)", 480.0, "Foco em Performance: tecnologia de ponta e crescimento internacional.")],
+    },
+}
 
 class AiExplainerProvider(Protocol):
     async def explain_analysis(
@@ -34,6 +110,8 @@ class AiExplainerProvider(Protocol):
         analysis: PortfolioConsolidatedAnalysisResponse,
         amount: float,
         allocations: list[ClassContributionAllocation],
+        strategy: str = "patrimonio",
+        suggested_assets: list[AssetContributionAllocation] | None = None,
     ) -> str: ...
 
     async def answer_question(
@@ -243,21 +321,34 @@ class DeterministicAuditExplainer:
         analysis: PortfolioConsolidatedAnalysisResponse,
         amount: float,
         allocations: list[ClassContributionAllocation],
+        strategy: str = "patrimonio",
+        suggested_assets: list[AssetContributionAllocation] | None = None,
     ) -> str:
+        strategy_labels = {
+            "patrimonio": "Acúmulo de Patrimônio",
+            "proventos": "Renda Passiva & Proventos",
+            "performance": "Performance & Crescimento",
+        }
+        strat_name = strategy_labels.get(strategy, "Acúmulo de Patrimônio")
         allocated_classes = [a.label for a in allocations if a.allocated_amount > 0]
         if not allocated_classes:
             return (
-                f"O aporte de R$ {amount:,.2f} pode ser distribuído proporcionalmente "
+                f"Para a estratégia '{strat_name}', o aporte de R$ {amount:,.2f} pode ser distribuído proporcionalmente "
                 "entre as metas existentes, pois não há classes com desvio negativo expressivo."
             )
 
         top_alloc = max(allocations, key=lambda a: a.allocated_amount)
+        asset_note = ""
+        if suggested_assets:
+            top_asset = max(suggested_assets, key=lambda a: a.suggested_amount)
+            asset_note = f" No nível de ativos, o destaque é {top_asset.ticker} ({top_asset.name}) com aporte sugerido de R$ {top_asset.suggested_amount:,.2f}."
+
         return (
-            f"Para o aporte simulado de R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            + f", o algoritmo de otimização recomenda direcionar a maior fatia para {top_alloc.label} "
+            f"Estratégia: {strat_name}. Para o aporte simulado de R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            + f", o algoritmo recomenda direcionar a maior fatia para {top_alloc.label} "
             f"(R$ {top_alloc.allocated_amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             + f"), elevando sua participação para {top_alloc.projected_weight_pct:.1f}% e "
-            f"recompondo a distância para a meta estratégica."
+            f"recompondo a distância para a meta estratégica.{asset_note}"
         )
 
     async def answer_question(
@@ -341,13 +432,35 @@ class PortfolioAiAnalysisService:
         return await self.explainer.explain_analysis(analysis)
 
     async def simulate_contribution(
-        self, portfolio_id: int, user_id: int, amount: float
+        self, portfolio_id: int, user_id: int, amount: float, strategy: str = "patrimonio"
     ) -> ContributionSimulationResponse:
         start_time = time.perf_counter()
         analysis = await self.analysis_service.get_portfolio_analysis(portfolio_id, user_id)
 
         current_total = analysis.total_value
         projected_total = current_total + amount
+
+        if not analysis.classes:
+            elapsed = (time.perf_counter() - start_time) * 1000
+            return ContributionSimulationResponse(
+                portfolio_id=portfolio_id,
+                contribution_amount=amount,
+                strategy=strategy,
+                current_total_value=0.0,
+                projected_total_value=amount,
+                suggested_allocations=[],
+                suggested_assets=[],
+                overall_impact_summary=(
+                    "A carteira não possui ativos nem metas de distribuição cadastradas. "
+                    "Configure as metas em Configurações > Distribuição para simular aportes inteligentes."
+                ),
+                metadata=AiExplanationMetadata(
+                    provider=getattr(self.explainer, "provider_name", "sgi-audit-explainer-v1"),
+                    model=getattr(self.explainer, "model_name", "deterministic-rule-engine"),
+                    is_mock_or_deterministic=True,
+                    execution_time_ms=round(elapsed, 2),
+                ),
+            )
 
         # Identificar classes com déficit (gap_value < 0 ou ação BUY)
         deficit_classes: list[tuple[ClassAnalysisDetail, float]] = []
@@ -407,15 +520,136 @@ class PortfolioAiAnalysisService:
                 )
             )
 
-        impact_summary = await self.explainer.explain_simulation(analysis, amount, allocations)
+        # Obter posições abertas para detalhamento no nível de ativos (Issue #6)
+        try:
+            canonical_positions = await get_canonical_portfolio_positions(self.db, portfolio_id, user_id)
+            groups = getattr(canonical_positions, "groups", [])
+        except Exception:
+            groups = []
+
+        positions_by_type: dict[str, list[Any]] = {}
+        for g in groups:
+            norm_t = _asset_type_from_group(g).upper()
+            positions_by_type[norm_t] = list(g.positions)
+
+        suggested_assets: list[AssetContributionAllocation] = []
+        for alloc in allocations:
+            if alloc.allocated_amount <= 0:
+                continue
+
+            class_type = _normalize_asset_type(alloc.asset_type)
+            class_amt = alloc.allocated_amount
+            pos_list = positions_by_type.get(class_type, [])
+
+            if pos_list:
+                if strategy == "proventos":
+                    sorted_pos = sorted(
+                        pos_list,
+                        key=lambda p: (
+                            getattr(p, "received_dividends", 0.0) or 0.0,
+                            getattr(p, "current_value", None) or getattr(p, "invested_value", 0.0) or 0.0,
+                        ),
+                        reverse=True,
+                    )
+                elif strategy == "performance":
+                    sorted_pos = sorted(
+                        pos_list,
+                        key=lambda p: (
+                            getattr(p, "variation_pct", None) if getattr(p, "variation_pct", None) is not None else 0.0,
+                            getattr(p, "capital_result_value", 0.0) or 0.0,
+                        ),
+                        reverse=True,
+                    )
+                else:  # patrimonio
+                    sorted_pos = sorted(
+                        pos_list,
+                        key=lambda p: (
+                            getattr(p, "current_value", None) if getattr(p, "current_value", None) is not None else getattr(p, "invested_value", 0.0) or 0.0,
+                        ),
+                    )
+
+                if len(sorted_pos) == 1 or class_amt < 1000.0:
+                    chosen = [(sorted_pos[0], class_amt)]
+                else:
+                    chosen = [
+                        (sorted_pos[0], round(class_amt * 0.6, 2)),
+                        (sorted_pos[1], round(class_amt * 0.4, 2)),
+                    ]
+
+                for p, p_amt in chosen:
+                    cur_p = getattr(p, "current_price_brl", None) or getattr(p, "current_price", None) or getattr(p, "average_price", 1.0) or 1.0
+                    cur_val = getattr(p, "current_value", None) or (getattr(p, "quantity", 0.0) * cur_p)
+                    sug_qty = round(p_amt / cur_p, 4) if cur_p > 0 else 1.0
+
+                    if strategy == "proventos":
+                        prov_val = getattr(p, "received_dividends", 0.0) or 0.0
+                        reason = f"Foco em Proventos: ativo gerador de renda na classe (R$ {prov_val:,.2f} recebidos)."
+                    elif strategy == "performance":
+                        var_val = getattr(p, "variation_pct", 0.0) or 0.0
+                        reason = f"Foco em Performance: destaque em valorização e retorno acumulado ({var_val:+.1f}%)."
+                    else:
+                        reason = f"Acúmulo de Patrimônio: menor valor atual na classe ({p.ticker}), reduzindo dispersão."
+
+                    suggested_assets.append(
+                        AssetContributionAllocation(
+                            ticker=p.ticker,
+                            name=getattr(p, "asset_label", None) or p.ticker,
+                            asset_type=alloc.asset_type,
+                            current_quantity=getattr(p, "quantity", 0.0),
+                            current_price=round(cur_p, 2),
+                            current_value=round(cur_val, 2),
+                            suggested_amount=round(p_amt, 2),
+                            suggested_quantity=sug_qty,
+                            reason=reason,
+                        )
+                    )
+            else:
+                class_refs = REFERENCE_ASSETS.get(class_type, {})
+                strategy_names = {
+                    "patrimonio": "Acúmulo de Patrimônio",
+                    "proventos": "Foco em Proventos",
+                    "performance": "Foco em Performance",
+                }
+                strat_display = strategy_names.get(strategy, "Acúmulo de Patrimônio")
+                strategy_refs = class_refs.get(strategy) or class_refs.get("patrimonio") or [
+                    (f"{class_type}-REF", f"Ativo de Referência {alloc.label}", 100.0, f"{strat_display}: ativo sugerido para iniciar posição.")
+                ]
+                ref_ticker, ref_name, ref_price, ref_reason = strategy_refs[0]
+                sug_qty = round(class_amt / ref_price, 4) if ref_price > 0 else 1.0
+
+                suggested_assets.append(
+                    AssetContributionAllocation(
+                        ticker=ref_ticker,
+                        name=ref_name,
+                        asset_type=alloc.asset_type,
+                        current_quantity=0.0,
+                        current_price=round(ref_price, 2),
+                        current_value=0.0,
+                        suggested_amount=round(class_amt, 2),
+                        suggested_quantity=sug_qty,
+                        reason=ref_reason,
+                    )
+                )
+
+        if suggested_assets:
+            total_asset_amt = sum(a.suggested_amount for a in suggested_assets)
+            diff_assets = round(amount - total_asset_amt, 2)
+            if diff_assets != 0:
+                suggested_assets[0].suggested_amount = round(suggested_assets[0].suggested_amount + diff_assets, 2)
+
+        impact_summary = await self.explainer.explain_simulation(
+            analysis, amount, allocations, strategy=strategy, suggested_assets=suggested_assets
+        )
         elapsed = (time.perf_counter() - start_time) * 1000
 
         return ContributionSimulationResponse(
             portfolio_id=portfolio_id,
             contribution_amount=amount,
+            strategy=strategy,
             current_total_value=round(current_total, 2),
             projected_total_value=round(projected_total, 2),
             suggested_allocations=allocations,
+            suggested_assets=suggested_assets,
             overall_impact_summary=impact_summary,
             metadata=AiExplanationMetadata(
                 provider=getattr(self.explainer, "provider_name", "sgi-audit-explainer-v1"),

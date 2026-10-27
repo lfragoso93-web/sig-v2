@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services import csv_import_service
 from app.services.asset_catalog_query_service import (
+    format_friendly_treasury_title,
     list_treasury_from_catalog,
     suggest_assets_from_catalog,
 )
@@ -315,7 +316,7 @@ async def search_treasury(
     items = await list_treasury_from_catalog(db, q)
     return [
         TreasuryItem(
-            name=item.name,
+            name=format_friendly_treasury_title(item.name, item.ticker),
             ticker=item.ticker,
             slug=item.ticker,
             indexer=_treasury_indexer(item.name),

@@ -262,7 +262,10 @@ async def run_system_bootstrap(
         ),
         (
             "corporate_events",
-            lambda: run_system_bootstrap_corporate_events_stage(context),
+            lambda: run_system_bootstrap_corporate_events_stage(
+                context,
+                authorized=True if (stages and "corporate_events" in stages) else None,
+            ),
         ),
     )
 
