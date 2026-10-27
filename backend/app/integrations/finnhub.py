@@ -38,7 +38,8 @@ async def fetch_finnhub_quote(ticker: str) -> Optional[float]:
     Retorna None se a API key nao estiver configurada, se o ticker nao for
     encontrado ou em caso de erro na requisicao.
     """
-    if not _is_configured():
+    key = _api_key()
+    if not key:
         logger.debug("[finnhub] FINNHUB_API_KEY nao configurada — pulando")
         return None
 
@@ -47,7 +48,7 @@ async def fetch_finnhub_quote(ticker: str) -> Optional[float]:
         return None
 
     url = f"{_BASE_URL}/quote"
-    headers = {"X-Finnhub-Token": _api_key()}
+    headers = {"X-Finnhub-Token": key}
     params = {"symbol": clean_ticker}
 
     try:
