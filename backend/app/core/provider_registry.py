@@ -24,6 +24,8 @@ class ProviderId(StrEnum):
     TESOURO_TRANSPARENTE = "tesouro_transparente"
     BACEN_SGS = "bacen_sgs"
     ALPHA_VANTAGE = "alpha_vantage"
+    FINNHUB = "finnhub"
+    TIINGO = "tiingo"
 
 
 class ProviderCapability(StrEnum):
@@ -180,6 +182,49 @@ PROVIDER_REGISTRY: dict[ProviderId, ProviderDefinition] = {
             "/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD"
             "&to_currency=BRL"
         ),
+    ),
+    ProviderId.FINNHUB: ProviderDefinition(
+        id=ProviderId.FINNHUB,
+        display_name="Finnhub Stock API",
+        description=(
+            "Cotacoes intraday em tempo real, status de mercado e perfis de ativos "
+            "internacionais (US Stocks, ETFs)."
+        ),
+        capabilities=(
+            ProviderCapability.QUOTES_INTRADAY,
+            ProviderCapability.QUOTES_HISTORICAL,
+        ),
+        default_base_url="https://finnhub.io/api/v1",
+        requires_auth=True,
+        env_key_var="FINNHUB_API_KEY",
+        is_official_authority=False,
+        default_timeout_seconds=15,
+        default_rate_limit_per_minute=60,
+        default_priority=5,
+        doc_url="https://finnhub.io/docs/api",
+        probe_endpoint_path="/quote?symbol=AAPL",
+    ),
+    ProviderId.TIINGO: ProviderDefinition(
+        id=ProviderId.TIINGO,
+        display_name="Tiingo",
+        description=(
+            "Precos historicos de fechamento (EOD) auditados, ajustes por splits e "
+            "proventos, IEX e dados de criptoativos/forex."
+        ),
+        capabilities=(
+            ProviderCapability.QUOTES_HISTORICAL,
+            ProviderCapability.QUOTES_INTRADAY,
+            ProviderCapability.DIVIDENDS,
+        ),
+        default_base_url="https://api.tiingo.com",
+        requires_auth=True,
+        env_key_var="TIINGO_API_KEY",
+        is_official_authority=False,
+        default_timeout_seconds=20,
+        default_rate_limit_per_minute=50,
+        default_priority=6,
+        doc_url="https://api.tiingo.com/documentation",
+        probe_endpoint_path="/tiingo/daily/aapl",
     ),
 }
 

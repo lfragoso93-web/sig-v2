@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     BRAPI_RATE_LIMIT: float = 2.0
     BRAPI_RATE_BURST: int = 5
     ALPHA_VANTAGE_API_KEY: Optional[str] = None
+    FINNHUB_API_KEY: Optional[str] = None
+    TIINGO_API_KEY: Optional[str] = None
 
     LOGIN_RATE_LIMIT: str = "10/minute"
     REGISTER_RATE_LIMIT: str = "5/minute"

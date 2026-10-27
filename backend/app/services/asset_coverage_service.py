@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.core.cache import cache_get, cache_set, get_redis
+from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -161,8 +162,8 @@ class AssetCoverageService:
 
         logger.info(
             "[coverage] Ticker %s capability '%s'=%s -> status=%s (ttl=%ds)",
-            normalized_ticker,
-            capability,
+            sanitize_log_value(normalized_ticker),
+            sanitize_log_value(capability),
             supported,
             status,
             ttl,

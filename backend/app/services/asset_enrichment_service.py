@@ -12,6 +12,7 @@ import logging
 from typing import Any, Optional
 
 from app.core.cache import get_redis
+from app.core.log_safety import sanitize_log_value
 from app.integrations.brapi_v2_client import (
     BrapiV2Client,
     CompanyFundamentalsDTO,
@@ -93,7 +94,7 @@ class AssetEnrichmentService:
                 )
                 return None
         except Exception as exc:
-            logger.warning("Falha ao enriquecer FII %s: %s", clean_ticker, exc)
+            logger.warning("Falha ao enriquecer FII %s: %s", sanitize_log_value(clean_ticker), sanitize_log_value(exc))
             await asset_coverage_service.record_capability(
                 clean_ticker, "indicators", False, error_code="ERROR"
             )
@@ -156,7 +157,7 @@ class AssetEnrichmentService:
                 )
                 return None
         except Exception as exc:
-            logger.warning("Falha ao buscar fundamentos de %s: %s", clean_ticker, exc)
+            logger.warning("Falha ao buscar fundamentos de %s: %s", sanitize_log_value(clean_ticker), sanitize_log_value(exc))
             await asset_coverage_service.record_capability(
                 clean_ticker, "indicators", False, error_code="ERROR"
             )
@@ -201,7 +202,7 @@ class AssetEnrichmentService:
                 await self._set_cached(cache_key, payload, TTL_MACRO_SECONDS)
             return points
         except Exception as exc:
-            logger.warning("Falha ao buscar serie macro %s: %s", clean_name, exc)
+            logger.warning("Falha ao buscar serie macro %s: %s", sanitize_log_value(clean_name), sanitize_log_value(exc))
             return []
 
     # -------------------------------------------------------------------------

@@ -70,3 +70,15 @@ alpha_vantage_limiter = TokenBucket(
     rate=4 / 60,
     burst=4,
 )
+
+# Finnhub - 60 req/min no plano gratuito (1 req/s, burst 10)
+finnhub_limiter = TokenBucket(
+    rate=60 / 60,
+    burst=10,
+)
+
+# Tiingo - 50 req/hora no plano gratuito (~0.014 tokens/s, burst 5)
+tiingo_limiter = TokenBucket(
+    rate=50 / 3600,
+    burst=5,
+)

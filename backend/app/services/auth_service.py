@@ -13,6 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.log_safety import sanitize_log_value
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -76,14 +77,14 @@ async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
     user = await get_user_by_email(db, email_clean)
     if not user:
         await register_failed_attempt(email_clean)
-        logger.warning("Login falhou: email inexistente (%s)", email_clean)
+        logger.warning("Login falhou: email inexistente (%s)", sanitize_log_value(email_clean))
         raise _INVALID_CREDENTIALS
 
     try:
         senha_ok = verify_password(data.password, user.hashed_password)
     except Exception as exc:
         await register_failed_attempt(email_clean)
-        logger.error("Erro ao verificar senha id=%s: %s", user.id, exc)
+        logger.error("Erro ao verificar senha id=%s: %s", user.id, sanitize_log_value(exc))
         raise _INVALID_CREDENTIALS from exc
 
     if not senha_ok:

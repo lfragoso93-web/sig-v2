@@ -248,13 +248,66 @@ async def _fetch_alpha_vantage_current(pairs: list[tuple[str, AssetType]]) -> di
     return results
 
 
+async def _fetch_finnhub_current(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
+    if _provider_in_cooldown("finnhub"):
+        return {}
+    from app.core.rate_limiter import finnhub_limiter
+    from app.integrations.finnhub import _is_configured, fetch_finnhub_quote
+
+    if not _is_configured():
+        return {}
+    results: dict[str, float] = {}
+    for ticker, _ in pairs:
+        await finnhub_limiter.acquire()
+        price = await fetch_finnhub_quote(ticker)
+        if price is not None:
+            results[ticker] = price
+    if pairs and not results:
+        _set_provider_cooldown("finnhub")
+    return results
+
+
+async def _fetch_tiingo_current(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
+    if _provider_in_cooldown("tiingo"):
+        return {}
+    from app.core.rate_limiter import tiingo_limiter
+    from app.integrations.tiingo import _is_configured, fetch_tiingo_quote
+
+    if not _is_configured():
+        return {}
+    results: dict[str, float] = {}
+    for ticker, _ in pairs:
+        await tiingo_limiter.acquire()
+        price = await fetch_tiingo_quote(ticker)
+        if price is not None:
+            results[ticker] = price
+    if pairs and not results:
+        _set_provider_cooldown("tiingo")
+    return results
+
+
 async def _fetch_intl(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
-    alpha = await _fetch_alpha_vantage_current(pairs)
-    missing = [(ticker, asset_type) for ticker, asset_type in pairs if ticker not in alpha]
+    # 1. Finnhub (Intraday em tempo real - 60 req/min)
+    finnhub = await _fetch_finnhub_current(pairs)
+    missing = [(ticker, asset_type) for ticker, asset_type in pairs if ticker not in finnhub]
+
+    # 2. Tiingo (EOD / IEX - 500 req/dia)
+    tiingo = await _fetch_tiingo_current(missing) if missing else {}
+    combined = {**finnhub, **tiingo}
+    missing = [(ticker, asset_type) for ticker, asset_type in pairs if ticker not in combined]
+
+    # 3. Yahoo Finance (Fallback resiliente sem auth)
     yahoo = await _with_retry(_fetch_yfinance, missing, label="yfinance") if missing else {}
-    if pairs and not alpha and not yahoo:
+    combined.update(yahoo)
+    missing = [(ticker, asset_type) for ticker, asset_type in pairs if ticker not in combined]
+
+    # 4. Alpha Vantage (Legado / ultimo recurso)
+    alpha = await _fetch_alpha_vantage_current(missing) if missing else {}
+    combined.update(alpha)
+
+    if pairs and not combined:
         _set_provider_cooldown("intl")
-    return {**alpha, **yahoo}
+    return combined
 
 
 async def _fetch_stale_for_pairs(

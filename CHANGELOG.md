@@ -4,6 +4,27 @@ Todas as mudanÃ§as relevantes do projeto sÃ£o documentadas aqui. O histÃ³rico de
 
 ## [Unreleased] - branch `stable-15jun`
 
+### 27/10/2026 - Correcoes de integridade, simulador de metas, tesouro, provedores internacionais e seguranca
+
+- **Validacao de Ativos Existentes (Item 1)**: Bloqueio de criacao de transacoes com tickers inexistentes no banco ou nos provedores externos (retorno 422 HTTP).
+- **Busca Unificada e Criptoativos (Itens 2 e 3)**: Busca unificada por ticker e nome comercial (Bitcoin / BTC, acoes, BDRs, FIIs); normalizacao automatica do nome para ticker oficial no cadastro e salvamento.
+- **IRPF e Layout Mobile (Itens 4 e 8)**: Ajustado contraste visual do seletor de ano-base no IRPF e responsividade do `AssetDetailDrawer` em telas menores/mobile.
+- **Exclusao de Transacoes (Item 5)**: Recalculo automatico dos snapshots de classe e invalidacao de cache de consulta ao excluir transacoes.
+- **Simulador de Aportes com Metas e Carteira Vazia (Itens 6 e 7)**:
+  - Adicionadas estrategias orientadas a metas: `patrimonio` (prioriza menor alocacao na classe em deficit), `proventos` (prioriza historico de dividendos) e `performance` (prioriza retorno de capital).
+  - Suporte a simulacao de aportes para carteiras com zero ativos com base nas metas percentuais de classe (`PortfolioClassTarget`).
+  - Redirecionamento direto com query param `?tab=distribuicao` para a aba de alocacao de carteira.
+- **Tesouro Direto**:
+  - Nomes amigaveis com remocao de dia/mes do titulo e de "Aposentadoria Extra".
+  - Regra de conversao de ano comercial para RendA+ (`ano_vencimento - 19`) e Educa+ (`ano_vencimento - 4`).
+- **Provedores Internacionais Finnhub e Tiingo (Item 10)**:
+  - Integracao dos adaptadores Finnhub (cotacoes intraday / 60 req/min) e Tiingo (fechamento EOD / IEX / 500 req/dia).
+  - Cascata hierarquica em `_fetch_intl`: Finnhub -> Tiingo -> Yahoo Finance -> Alpha Vantage.
+  - Registro no catalogo dinamico de provedores com rate limiters e testes dedicados.
+- **Seguranca e CodeQL (Item 9 e Code Scanning)**:
+  - Remediacao de 8 alertas do CodeQL: 7 de injecao de log (`py/log-injection`) via `sanitize_log_value` e 1 de SSRF parcial (`py/partial-ssrf`) em `brapi_v2_client.py`.
+  - Auditoria e unificacao de dependencias do Dependabot (`npm audit` com 0 vulnerabilidades).
+
 ### 17/10/2026 - contratos de Renda Fixa (#355), validacao isolada
 
 - Adicionados metadados portfolio-scoped, GET/POST da API e associacao nullable
@@ -639,7 +660,7 @@ estava disponivel para checagem visual.
 Adicionada regressao confirmando que contratos com termos e nome equivalentes
 continuam separados entre carteiras. Os 13 testes focados do servico passaram
 em SQLite em memoria. O runtime de testes foi atualizado; digests e escopo em
-`docs/USER_TEST_STACK.md`. A validação visual segue pendente de navegador.
+`docs/USER_TEST_STACK.md`. A validaï¿½ï¿½o visual segue pendente de navegador.
 
 A imagem backend apos o teste de isolamento por carteira esta ativa e saudavel
 (`sha256:700171073da7ac0fff016e3f64627f19dc0a72ff0aaf6ea90667c63d367e7708`).

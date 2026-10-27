@@ -8,6 +8,7 @@ import logging
 import time
 from fastapi import HTTPException, status
 from app.core.cache import get_redis
+from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ async def check_lockout(email: str) -> None:
                 minutes = (locked_ttl // 60) + 1
                 logger.warning(
                     "Tentativa de login bloqueada para %s (restam %ds)",
-                    email_clean,
+                    sanitize_log_value(email_clean),
                     locked_ttl,
                 )
                 raise HTTPException(
@@ -63,7 +64,7 @@ async def check_lockout(email: str) -> None:
         except HTTPException:
             raise
         except Exception as exc:
-            logger.warning("Falha ao consultar lockout no Redis: %s", exc)
+            logger.warning("Falha ao consultar lockout no Redis: %s", sanitize_log_value(exc))
 
     _clean_memory(email_clean)
     if email_clean in _memory_lockouts:
@@ -99,13 +100,13 @@ async def register_failed_attempt(email: str) -> None:
                 await redis_client.delete(f_key)
                 logger.warning(
                     "Conta %s bloqueada por %d segundos apos %d falhas.",
-                    email_clean,
+                    sanitize_log_value(email_clean),
                     LOCKOUT_DURATION_SECONDS,
                     attempts,
                 )
             return
         except Exception as exc:
-            logger.warning("Falha ao registrar tentativa no Redis: %s", exc)
+            logger.warning("Falha ao registrar tentativa no Redis: %s", sanitize_log_value(exc))
 
     now = time.time()
     _clean_memory(email_clean)

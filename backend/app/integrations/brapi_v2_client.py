@@ -8,6 +8,7 @@ circuit breaker por cobertura de ativo e tratamento gracioso de erros.
 from __future__ import annotations
 
 import asyncio
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import date, datetime
 import logging
@@ -197,7 +198,15 @@ class BrapiV2Client:
         params: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Executa requisicao GET com retry em falhas transientes e mapeamento de excecoes."""
+        if not path.startswith("/") or "://" in path or ".." in path:
+            raise ValueError(f"Caminho de requisicao BRAPI invalido: {path}")
+
         url = f"{self._base_url}{path}"
+        base_parsed = urllib.parse.urlsplit(self._base_url)
+        url_parsed = urllib.parse.urlsplit(url)
+        if url_parsed.scheme not in ("http", "https") or url_parsed.netloc != base_parsed.netloc:
+            raise ValueError(f"Destino de requisicao BRAPI invalido: {url}")
+
         last_exception: Optional[Exception] = None
 
         for attempt in range(self._max_retries + 1):
