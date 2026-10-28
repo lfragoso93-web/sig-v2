@@ -42,6 +42,10 @@ from app.routers import (
 )
 from app.routers.admin_bootstrap import router as admin_bootstrap_router
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 _PROVIDER_TERMS = (

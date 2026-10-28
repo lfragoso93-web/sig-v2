@@ -27,8 +27,8 @@ async def get_redis() -> redis.Redis | None:
             port=settings.REDIS_PORT,
             db=0,
             decode_responses=True,
-            socket_connect_timeout=1,
-            socket_timeout=1,
+            socket_connect_timeout=5,
+            socket_timeout=5,
         )
         await _redis_client.ping()
         logger.info("Redis conectado com sucesso")
@@ -39,7 +39,7 @@ async def get_redis() -> redis.Redis | None:
             sanitize_log_value(exc),
         )
         _redis_client = None
-        _redis_unavailable_until = time.time() + 60.0
+        _redis_unavailable_until = time.time() + 10.0
     return _redis_client
 
 

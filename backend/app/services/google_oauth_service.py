@@ -109,7 +109,7 @@ async def exchange_code_for_user_info(code: str) -> dict[str, Any]:
         "redirect_uri": redirect_uri,
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=15.0)) as client:
         token_resp = await client.post(GOOGLE_TOKEN_URL, data=token_payload)
         if token_resp.status_code != 200:
             logger.error(
