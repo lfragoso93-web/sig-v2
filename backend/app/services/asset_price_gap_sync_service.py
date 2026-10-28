@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
+from app.core.log_safety import sanitize_log_value
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
@@ -266,16 +267,38 @@ async def _fetch_range(
     elif asset_type == AssetType.CRIPTO:
         rows, source, effective_provider = await _fetch_crypto_history(ticker)
     elif asset_type in INTL_TYPES:
-        if initial_history:
-            rows = await _fetch_yf_max(ticker, asset_type)
-            source = "yfinance_period_max"
-            effective_provider = "yfinance"
-        else:
-            from app.services.price_history_backfill_service import _fetch_intl_history
+        date_from_str = missing_range.date_from.isoformat()
+        date_to_str = missing_range.date_to.isoformat()
+        try:
+            from app.core.rate_limiter import tiingo_limiter
+            from app.integrations.tiingo import (
+                fetch_tiingo_history,
+                _is_configured as tiingo_configured,
+            )
+            if tiingo_configured():
+                await tiingo_limiter.acquire()
+                rows = await fetch_tiingo_history(ticker, date_from_str, date_to_str)
+                if rows:
+                    source = "tiingo"
+                    effective_provider = "tiingo"
+        except Exception as exc:
+            logger.info(
+                "[price_gap_sync] tiingo indisponivel ticker=%s: %s",
+                sanitize_log_value(ticker),
+                sanitize_log_value(exc),
+            )
 
-            days = max((date.today() - missing_range.date_from).days + 1, 2)
-            rows, source = await _fetch_intl_history(ticker, asset_type, days)
-            effective_provider = "yfinance" if "yfinance" in str(source).lower() else "alpha_vantage"
+        if not rows:
+            if initial_history:
+                rows = await _fetch_yf_max(ticker, asset_type)
+                source = "yfinance_period_max"
+                effective_provider = "yfinance"
+            else:
+                from app.services.price_history_backfill_service import _fetch_intl_history
+
+                days = max((date.today() - missing_range.date_from).days + 1, 2)
+                rows, source = await _fetch_intl_history(ticker, asset_type, days)
+                effective_provider = "tiingo" if source == "tiingo" else ("yfinance" if "yfinance" in str(source).lower() else "alpha_vantage")
     else:
         from app.integrations.brapi import fetch_fii_historical_v2, fetch_stocks_historical_v2
 

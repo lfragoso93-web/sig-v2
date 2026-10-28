@@ -11,6 +11,8 @@ Plano gratuito:
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -88,3 +90,83 @@ async def fetch_tiingo_quote(ticker: str) -> Optional[float]:
             sanitize_log_value(exc),
         )
     return None
+
+
+_SAFE_TIINGO_TICKER_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
+
+
+async def fetch_tiingo_history(
+    ticker: str,
+    date_from: str,
+    date_to: Optional[str] = None,
+) -> list[tuple[datetime, float]]:
+    """Busca série histórica diária (EOD) auditada para um ativo internacional via Tiingo.
+
+    Retorna lista de (timestamp_utc, close_price) ordenada por data crescente.
+    Prioriza adjClose (ajustado por splits e proventos) com fallback para close.
+    """
+    if not _is_configured():
+        logger.debug("[tiingo] TIINGO_API_KEY nao configurada — pulando historico")
+        return []
+
+    clean_ticker = (ticker or "").strip().lower()
+    if not clean_ticker or not _SAFE_TIINGO_TICKER_RE.fullmatch(clean_ticker):
+        return []
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Token {_api_key()}",
+    }
+
+    params: dict[str, str] = {
+        "startDate": date_from[:10],
+        "columns": "date,adjClose,close",
+        "sort": "date",
+    }
+    if date_to:
+        params["endDate"] = date_to[:10]
+
+    daily_url = f"{_BASE_URL}/tiingo/daily/{clean_ticker}/prices"
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(daily_url, headers=headers, params=params)
+            if resp.status_code in (404, 400):
+                return []
+            if resp.status_code == 429:
+                logger.warning("[tiingo] Limite de requisicoes excedido (HTTP 429)")
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+
+            if not isinstance(data, list):
+                return []
+
+            rows: list[tuple[datetime, float]] = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                date_str = item.get("date")
+                if not date_str:
+                    continue
+                price = item.get("adjClose") or item.get("close")
+                if price is None or not isinstance(price, (int, float)) or price <= 0:
+                    continue
+
+                d_part = str(date_str)[:10]
+                dt = datetime(
+                    int(d_part[:4]),
+                    int(d_part[5:7]),
+                    int(d_part[8:10]),
+                    tzinfo=timezone.utc,
+                )
+                rows.append((dt, float(price)))
+
+            return rows
+    except Exception as exc:
+        logger.warning(
+            "[tiingo] Erro ao consultar historico de %s: %s",
+            sanitize_log_value(clean_ticker),
+            sanitize_log_value(exc),
+        )
+        return []

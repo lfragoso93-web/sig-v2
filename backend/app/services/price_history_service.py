@@ -43,6 +43,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import NO_QUOTE_TYPES, INTL_TYPES, yf_ticker
+from app.core.log_safety import sanitize_log_value
 from app.integrations.brapi import (
     fetch_stocks_historical_v2,
     fetch_fii_historical_v2,
@@ -288,20 +289,36 @@ async def persist_daily_prices(
 
     if is_intl:
         try:
-            from app.core.rate_limiter import alpha_vantage_limiter
-            from app.integrations.alpha_vantage import fetch_daily_history
-            await alpha_vantage_limiter.acquire()
-            rows = await fetch_daily_history(ticker, days_back)
-            source = "alpha_vantage"
+            from app.core.rate_limiter import tiingo_limiter
+            from app.integrations.tiingo import (
+                fetch_tiingo_history,
+                _is_configured as tiingo_configured,
+            )
+            if tiingo_configured():
+                await tiingo_limiter.acquire()
+                rows = await fetch_tiingo_history(ticker, date_from, date_to)
+                if rows:
+                    source = "tiingo"
         except Exception as e:
-            logger.warning("[PriceHistory] Alpha Vantage excecao para %s: %s", ticker, e)
+            logger.warning("[PriceHistory] Tiingo excecao para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
+
+        if not rows:
+            try:
+                from app.core.rate_limiter import alpha_vantage_limiter
+                from app.integrations.alpha_vantage import fetch_daily_history
+                await alpha_vantage_limiter.acquire()
+                rows = await fetch_daily_history(ticker, days_back)
+                if rows:
+                    source = "alpha_vantage"
+            except Exception as e:
+                logger.warning("[PriceHistory] Alpha Vantage excecao para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
 
         if not rows:
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
                 source = "yfinance_fallback"
             except Exception as e:
-                logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
+                logger.warning("[PriceHistory] yfinance excecao para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
 
         if not rows:
             rows = await _intl_stale_snapshot(db, ticker, asset_type)

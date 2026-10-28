@@ -46,6 +46,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import NO_QUOTE_TYPES, INTL_TYPES
+from app.core.log_safety import sanitize_log_value
 from app.core.database import AsyncSessionLocal
 from app.integrations.brapi import (
     fetch_stocks_historical_v2,
@@ -201,6 +202,25 @@ async def _fetch_intl_history(
 ) -> tuple[list[tuple[datetime, float]], str]:
     from app.services.price_history_service import _fetch_yf_history
 
+    date_from = (date.today() - timedelta(days=days)).isoformat()
+    date_to = date.today().isoformat()
+
+    # 1. Tiingo (Prioridade máxima para dados históricos auditados de Stocks e ETFs)
+    try:
+        from app.core.rate_limiter import tiingo_limiter
+        from app.integrations.tiingo import (
+            fetch_tiingo_history,
+            _is_configured as tiingo_configured,
+        )
+        if tiingo_configured():
+            await tiingo_limiter.acquire()
+            rows = await fetch_tiingo_history(ticker, date_from, date_to)
+            if rows:
+                return rows, "tiingo"
+    except Exception as e:
+        logger.warning("[Backfill] Tiingo erro para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
+
+    # 2. Alpha Vantage fallback
     try:
         from app.core.rate_limiter import alpha_vantage_limiter
         from app.integrations.alpha_vantage import fetch_daily_history
@@ -209,14 +229,15 @@ async def _fetch_intl_history(
         if rows:
             return rows, "alpha_vantage"
     except Exception as e:
-        logger.warning("[Backfill] Alpha Vantage erro para %s: %s", ticker, e)
+        logger.warning("[Backfill] Alpha Vantage erro para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
 
+    # 3. yfinance fallback
     try:
         rows = await _fetch_yf_history(ticker, asset_type, days)
         if rows:
             return rows, "yfinance_fallback"
     except Exception as e:
-        logger.warning("[Backfill] yfinance erro para %s: %s", ticker, e)
+        logger.warning("[Backfill] yfinance erro para %s: %s", sanitize_log_value(ticker), sanitize_log_value(e))
 
     return [], ""
 
