@@ -16,6 +16,7 @@ import httpx
 from app.integrations.brapi_treasury import _fetch_brapi_treasury_list
 from app.integrations.tesouro_transparente import (
     _canonical_symbol,
+    _commercial_year,
     _first,
     _normalize,
     _parse_date,
@@ -66,10 +67,18 @@ def parse_official_catalog_csv(text: str) -> list[dict[str, Any]]:
             continue
 
         indexer, coupon = _metadata(title)
+        comm_year = _commercial_year(title, maturity_dt)
+        if "renda" in symbol:
+            name = f"Tesouro Renda+ {comm_year}"
+        elif "educa" in symbol:
+            name = f"Tesouro Educa+ {comm_year}"
+        else:
+            name = f"{title} {comm_year}" if str(comm_year) not in title else title
+
         catalog[symbol] = {
             "symbol": symbol,
             "bondType": title,
-            "name": f"{title} {maturity_dt.year}",
+            "name": name,
             "maturityYear": maturity_dt.year,
             "maturityDate": maturity_dt.date().isoformat(),
             "indexer": indexer,

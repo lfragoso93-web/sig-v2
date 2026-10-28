@@ -45,25 +45,27 @@ _SYNTHETIC_LONG_TERM_BONDS: list[dict] = [
         {
             "symbol": f"tesouro-renda-mais-{year}",
             "bondType": "Tesouro RendA+ Aposentadoria Extra",
-            "name": f"Tesouro RendA+ Aposentadoria Extra {year}",
-            "maturityYear": year,
+            "name": f"Tesouro RendA+ {year}",
+            "maturityYear": year + 19,
+            "maturityDate": f"{year + 19}-12-15",
             "indexer": "IPCA",
             "couponType": "monthly_income",
             "source": "synthetic_treasury_long_term",
         }
-        for year in range(2030, 2070, 5)
+        for year in range(2030, 2075, 5)
     ],
     *[
         {
             "symbol": f"tesouro-educa-mais-{year}",
             "bondType": "Tesouro Educa+",
             "name": f"Tesouro Educa+ {year}",
-            "maturityYear": year,
+            "maturityYear": year + 4,
+            "maturityDate": f"{year + 4}-12-15",
             "indexer": "IPCA",
             "couponType": "monthly_income",
             "source": "synthetic_treasury_long_term",
         }
-        for year in range(2026, 2051)
+        for year in range(2026, 2044)
     ],
 ]
 
@@ -99,18 +101,112 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
         return None
 
     raw = value.strip().lower()
-    if is_brapi_treasury_symbol(raw):
+
+    # Preserve already-canonical RendA+ (commercial conversion years 2030, 2035, ...)
+    renda_canonical = re.match(r"^tesouro-renda-mais-(\d{4})$", raw)
+    if renda_canonical:
+        year_val = int(renda_canonical.group(1))
+        if year_val >= 2030 and year_val % 5 == 0:
+            return raw
+
+    # Preserve already-canonical Educa+ (commercial conversion years 2026..2043)
+    educa_canonical = re.match(r"^tesouro-educa-mais-(\d{4})$", raw)
+    if educa_canonical:
+        year_val = int(educa_canonical.group(1))
+        if 2026 <= year_val <= 2043:
+            return raw
+        if 2043 < year_val <= 2055:
+            return f"tesouro-educa-mais-{year_val - 4}"
+
+    # Preserve standard traditional symbols if already canonical
+    if is_brapi_treasury_symbol(raw) and "renda" not in raw and "educa" not in raw:
         return raw
 
     slug = _slug_text(value)
+
+    dmy_match = re.search(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\b", value)
+    iso_match = re.search(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", value)
+    digits_match = re.search(r"\b(\d{2})(\d{2})(20\d{2})\b", value)
+
+    full_date_year: Optional[int] = None
+    full_date_suffix: Optional[str] = None
+    cleaned_without_date = value
+
+    if dmy_match:
+        day, month, year_str = dmy_match.groups()
+        full_date_year = int(year_str)
+        full_date_suffix = f"{int(day):02d}{int(month):02d}{full_date_year:04d}"
+        cleaned_without_date = re.sub(r"\b\d{1,2}/\d{1,2}/20\d{2}\b", "", cleaned_without_date)
+    elif iso_match:
+        year_str, month, day = iso_match.groups()
+        full_date_year = int(year_str)
+        full_date_suffix = f"{int(day):02d}{int(month):02d}{full_date_year:04d}"
+        cleaned_without_date = re.sub(r"\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b", "", cleaned_without_date)
+    elif digits_match:
+        day, month, year_str = digits_match.groups()
+        full_date_year = int(year_str)
+        full_date_suffix = f"{int(day):02d}{int(month):02d}{full_date_year:04d}"
+        cleaned_without_date = re.sub(r"\b\d{8}\b", "", cleaned_without_date)
+
+    other_years = [int(m) for m in re.findall(r"\b(20\d{2})\b", cleaned_without_date)]
+
+    if "renda" in slug or "renda" in raw:
+        comm_years = [y for y in other_years if y >= 2030 and y % 5 == 0]
+        if comm_years:
+            return f"tesouro-renda-mais-{comm_years[0]}"
+
+        if full_date_year:
+            comm_year = full_date_year - 19 if full_date_year >= 2049 else full_date_year
+            return f"tesouro-renda-mais-{comm_year}"
+
+        if other_years:
+            y = other_years[0]
+            if y >= 2030 and y % 5 == 0:
+                return f"tesouro-renda-mais-{y}"
+            if y >= 2049 and y % 5 == 4:
+                return f"tesouro-renda-mais-{y - 19}"
+            return f"tesouro-renda-mais-{y}"
+
+        return None
+
+    if "educa" in slug or "educa" in raw:
+        comm_years = [y for y in other_years if 2026 <= y <= 2043]
+        if comm_years:
+            return f"tesouro-educa-mais-{comm_years[0]}"
+
+        if full_date_year:
+            comm_year = full_date_year - 4 if full_date_year >= 2030 else full_date_year
+            return f"tesouro-educa-mais-{comm_year}"
+
+        if other_years:
+            y = other_years[0]
+            if 2026 <= y <= 2043:
+                return f"tesouro-educa-mais-{y}"
+            if 2043 < y <= 2055:
+                return f"tesouro-educa-mais-{y - 4}"
+            return f"tesouro-educa-mais-{y}"
+
+        return None
+
+    if full_date_suffix:
+        if "selic" in slug:
+            return f"tesouro-selic-{full_date_suffix}"
+        if "prefixado" in slug and "juros-semestrais" in slug:
+            return f"tesouro-prefixado-com-juros-semestrais-{full_date_suffix}"
+        if "prefixado" in slug:
+            return f"tesouro-prefixado-{full_date_suffix}"
+        if "ipca" in slug and "juros-semestrais" in slug:
+            return f"tesouro-ipca-com-juros-semestrais-{full_date_suffix}"
+        if "ipca" in slug:
+            return f"tesouro-ipca-{full_date_suffix}"
+        if "igpm" in slug or "igp-m" in slug:
+            base = "tesouro-igpm-com-juros-semestrais" if "juros-semestrais" in slug else "tesouro-igpm"
+            return f"{base}-{full_date_suffix}"
+
     year = _year_from_text(value)
     if not year:
         return None
 
-    if "renda" in slug:
-        return f"tesouro-renda-mais-{year}"
-    if "educa" in slug:
-        return f"tesouro-educa-mais-{year}"
     if "selic" in slug:
         return f"tesouro-selic-0103{year}"
     if "prefixado" in slug and "juros-semestrais" in slug:
@@ -121,6 +217,9 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
         return f"tesouro-ipca-com-juros-semestrais-1508{year}"
     if "ipca" in slug:
         return f"tesouro-ipca-1508{year}"
+    if "igpm" in slug or "igp-m" in slug:
+        base = "tesouro-igpm-com-juros-semestrais" if "juros-semestrais" in slug else "tesouro-igpm"
+        return f"{base}-0101{year}"
     return None
 
 
@@ -274,15 +373,29 @@ def _parse_tesouro_csv(text: str) -> list[dict]:
         )
         maturity = row.get("Data Vencimento") or row.get("Vencimento") or ""
         year = _year_from_text(maturity) or _year_from_text(title)
-        symbol = canonical_treasury_symbol_from_text(f"{title} {year or ''}")
+        symbol = canonical_treasury_symbol_from_text(f"{title} {maturity or year or ''}")
         if not symbol or symbol in seen:
             continue
         seen.add(symbol)
+        sym_match = re.search(r"20\d{2}", symbol)
+        if sym_match and ("renda" in symbol or "educa" in symbol):
+            clean_title = re.sub(r"\s+aposentadoria\s+extra\b", "", title, flags=re.IGNORECASE).strip()
+            clean_title = re.sub(r"\b\d{1,2}/\d{1,2}/20\d{2}\b", "", clean_title).strip()
+            clean_title = re.sub(r"\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b", "", clean_title).strip()
+            clean_title = re.sub(r"\b20\d{2}\b", "", clean_title).strip()
+            clean_title = re.sub(r"\s+", " ", clean_title).strip()
+            name = f"{clean_title} {sym_match.group(0)}"
+        else:
+            clean_title = title.strip()
+            if year and str(year) not in clean_title:
+                name = f"{clean_title} {year}"
+            else:
+                name = clean_title or symbol
         items.append(
             {
                 "symbol": symbol,
                 "bondType": title.strip() or symbol,
-                "name": f"{title.strip()} {year}" if year else title.strip() or symbol,
+                "name": name,
                 "maturityYear": year,
                 "maturityDate": maturity,
                 "indexer": "IPCA" if symbol.startswith(("tesouro-renda-mais", "tesouro-educa-mais")) else None,

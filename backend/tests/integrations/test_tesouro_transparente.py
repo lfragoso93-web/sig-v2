@@ -50,8 +50,20 @@ def test_commercial_year_rules_for_renda_and_educa():
         "Tesouro Renda+ Aposentadoria Extra", "15/12/2084"
     ) == "tesouro-renda-mais-2065"
     assert _canonical_symbol(
+        "Tesouro Renda+ Aposentadoria Extra", "15/12/2089"
+    ) == "tesouro-renda-mais-2070"
+    assert _canonical_symbol(
+        "Tesouro Renda+ 2070", "15/12/2089"
+    ) == "tesouro-renda-mais-2070"
+    assert _canonical_symbol(
         "Tesouro Educa+", "15/12/2030"
     ) == "tesouro-educa-mais-2026"
+    assert _canonical_symbol(
+        "Tesouro Educa+", "15/12/2047"
+    ) == "tesouro-educa-mais-2043"
+    assert _canonical_symbol(
+        "Tesouro Educa+ 2043", "15/12/2047"
+    ) == "tesouro-educa-mais-2043"
 
 
 def test_common_treasury_text_resolves_to_full_canonical_symbols():

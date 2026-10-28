@@ -108,9 +108,9 @@ def _commercial_year(title: str, maturity_dt: datetime) -> int:
     """
     normalized = _normalize(title)
     if "renda" in normalized:
-        return maturity_dt.year - 19
+        return maturity_dt.year - 19 if maturity_dt.year >= 2049 else maturity_dt.year
     if "educa" in normalized:
-        return maturity_dt.year - 4
+        return maturity_dt.year - 4 if maturity_dt.year >= 2030 else maturity_dt.year
     return maturity_dt.year
 
 
@@ -128,6 +128,13 @@ def _legacy_maturity_symbol(title: str, maturity: str) -> str | None:
 
 
 def _canonical_symbol(title: str, maturity: str) -> str | None:
+    from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+
+    combined = f"{title or ''} {maturity or ''}".strip()
+    canonical = canonical_treasury_symbol_from_text(combined)
+    if canonical:
+        return canonical
+
     normalized = _normalize(title)
     maturity_dt = _parse_date(maturity)
     if maturity_dt is None:

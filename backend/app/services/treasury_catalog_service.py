@@ -64,74 +64,110 @@ def format_friendly_treasury_title(name: str | None, ticker: str | None = None) 
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     from_full_date = False
-    raw_year = None
+    full_date_year = None
     dmy_match = re.search(r"\b\d{1,2}/\d{1,2}/(20\d{2})\b", cleaned)
     if dmy_match:
         from_full_date = True
-        raw_year = int(dmy_match.group(1))
+        full_date_year = int(dmy_match.group(1))
         cleaned = re.sub(r"\b\d{1,2}/\d{1,2}/20\d{2}\b", "", cleaned).strip()
     else:
-        iso_match = re.search(r"\b(20\d{2})[-/]\d{2}[-/]\d{2}\b", cleaned)
+        iso_match = re.search(r"\b(20\d{2})[-/]\d{1,2}[-/]\d{1,2}\b", cleaned)
         if iso_match:
             from_full_date = True
-            raw_year = int(iso_match.group(1))
-            cleaned = re.sub(r"\b20\d{2}[-/]\d{2}[-/]\d{2}\b", "", cleaned).strip()
+            full_date_year = int(iso_match.group(1))
+            cleaned = re.sub(r"\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b", "", cleaned).strip()
         else:
-            year_match = re.search(r"\b(20\d{2})\b", cleaned)
-            if year_match:
-                raw_year = int(year_match.group(1))
-                cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
+            digits_match = re.search(r"\b\d{4}(20\d{2})\b", cleaned)
+            if digits_match:
+                from_full_date = True
+                full_date_year = int(digits_match.group(1))
+                cleaned = re.sub(r"\b\d{8}\b", "", cleaned).strip()
 
-    remaining_year = re.search(r"\b(20\d{2})\b", cleaned)
-    if remaining_year:
-        if not raw_year:
-            raw_year = int(remaining_year.group(1))
-        cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
+    name_years = [int(m) for m in re.findall(r"\b(20\d{2})\b", cleaned)]
+    cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
-    ticker_clean = (ticker or "").lower()
-    ticker_commercial_year = None
+    ticker_clean = (ticker or "").lower().strip()
+    ticker_full_date_year = None
+    ticker_years: list[int] = []
     if ticker_clean:
-        tm = re.search(r"20\d{2}", ticker_clean)
-        if tm:
-            ticker_commercial_year = int(tm.group(0))
+        tm_digits = re.search(r"\b\d{4}(20\d{2})\b", ticker_clean) or re.search(r"(\d{2})(\d{2})(20\d{2})", ticker_clean)
+        if tm_digits:
+            ticker_full_date_year = int(tm_digits.group(len(tm_digits.groups())))
+        ticker_without_digits = re.sub(r"\d{8}", "", ticker_clean)
+        ticker_years = [int(m) for m in re.findall(r"\b(20\d{2})\b", ticker_without_digits) or re.findall(r"(20\d{2})", ticker_without_digits)]
 
-    norm = cleaned.lower()
+    norm = f"{cleaned} {ticker_clean}".lower()
     if "renda" in norm:
-        if ticker_commercial_year and 2030 <= ticker_commercial_year <= 2065 and ticker_commercial_year % 5 == 0:
-            final_year = ticker_commercial_year
-        elif raw_year:
-            if from_full_date and raw_year >= 2049:
-                final_year = raw_year - 19
-            elif raw_year >= 2049:
-                final_year = raw_year - 19
-            else:
-                final_year = raw_year
-        elif ticker_commercial_year:
-            final_year = ticker_commercial_year - 19 if ticker_commercial_year >= 2049 else ticker_commercial_year
-        else:
-            final_year = None
-        cleaned = "Tesouro Renda+"
-        return f"{cleaned} {final_year}" if final_year else cleaned
+        final_year = None
+        # 1. Commercial year from ticker
+        comm_ticker = [y for y in ticker_years if y >= 2030 and y % 5 == 0]
+        if comm_ticker:
+            final_year = comm_ticker[0]
+        # 2. Commercial year from name
+        elif any(y >= 2030 and y % 5 == 0 for y in name_years):
+            final_year = [y for y in name_years if y >= 2030 and y % 5 == 0][0]
+        # 3. Full date in ticker (maturity date)
+        elif ticker_full_date_year:
+            final_year = ticker_full_date_year - 19 if ticker_full_date_year >= 2049 else ticker_full_date_year
+        # 4. Full date in name (maturity date)
+        elif from_full_date and full_date_year:
+            final_year = full_date_year - 19 if full_date_year >= 2049 else full_date_year
+        # 5. Maturity year in ticker
+        elif ticker_years:
+            y = ticker_years[0]
+            final_year = y - 19 if y >= 2049 and y % 5 == 4 else y
+        # 6. Maturity year in name
+        elif name_years:
+            y = name_years[0]
+            final_year = y - 19 if y >= 2049 and y % 5 == 4 else y
+
+        return f"Tesouro Renda+ {final_year}" if final_year else "Tesouro Renda+"
 
     if "educa" in norm:
-        if ticker_commercial_year and 2026 <= ticker_commercial_year <= 2042:
-            final_year = ticker_commercial_year
-        elif raw_year:
-            if from_full_date and raw_year >= 2030:
-                final_year = raw_year - 4
-            elif raw_year > 2042:
-                final_year = raw_year - 4
-            else:
-                final_year = raw_year
-        elif ticker_commercial_year:
-            final_year = ticker_commercial_year
-        else:
-            final_year = None
-        cleaned = "Tesouro Educa+"
-        return f"{cleaned} {final_year}" if final_year else cleaned
+        final_year = None
+        # 1. Commercial year from ticker
+        comm_ticker = [y for y in ticker_years if 2026 <= y <= 2043]
+        if comm_ticker:
+            final_year = comm_ticker[0]
+        # 2. Full date in ticker (e.g. tesouro-educa-15122030)
+        elif ticker_full_date_year:
+            final_year = ticker_full_date_year - 4 if ticker_full_date_year >= 2030 else ticker_full_date_year
+        # 3. Full date in name (maturity date, e.g. 15/12/2030)
+        elif from_full_date and full_date_year:
+            final_year = full_date_year - 4 if full_date_year >= 2030 else full_date_year
+        # 4. Commercial year from name (e.g. Tesouro Educa+ 2026 or Tesouro Educa+ 2030 without ticker)
+        elif any(2026 <= y <= 2043 for y in name_years):
+            final_year = [y for y in name_years if 2026 <= y <= 2043][0]
+        # 5. Maturity year > 2043 in ticker or name (e.g. 2046 -> 2042)
+        elif any(2043 < y <= 2055 for y in (ticker_years + name_years)):
+            y = [y for y in (ticker_years + name_years) if 2043 < y <= 2055][0]
+            final_year = y - 4
+        # 6. Ticker years fallback
+        elif ticker_years:
+            final_year = ticker_years[0]
+        # 7. Name years fallback
+        elif name_years:
+            final_year = name_years[0]
 
-    final_year = raw_year or ticker_commercial_year
+        return f"Tesouro Educa+ {final_year}" if final_year else "Tesouro Educa+"
+
+    final_year = (ticker_years[0] if ticker_years else None) or ticker_full_date_year or (name_years[0] if name_years else None) or full_date_year
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if cleaned.lower().startswith("tesouro-"):
+        slug_norm = cleaned.lower().strip("-")
+        if "selic" in slug_norm:
+            cleaned = "Tesouro Selic"
+        elif "prefixado" in slug_norm:
+            cleaned = "Tesouro Prefixado com Juros Semestrais" if "juros-semestrais" in slug_norm else "Tesouro Prefixado"
+        elif "ipca" in slug_norm:
+            cleaned = "Tesouro IPCA+ com Juros Semestrais" if "juros-semestrais" in slug_norm else "Tesouro IPCA+"
+        elif "igpm" in slug_norm or "igp-m" in slug_norm:
+            cleaned = "Tesouro IGPM com Juros Semestrais" if "juros-semestrais" in slug_norm else "Tesouro IGPM"
+    else:
+        cleaned = re.sub(r"-+$", "", cleaned).strip()
+
     return f"{cleaned} {final_year}" if final_year else cleaned
 
 
@@ -156,6 +192,16 @@ def _name(item: dict, symbol: str) -> str:
     bond_type = re.sub(r"\s+aposentadoria\s+extra\b", "", bond_type, flags=re.IGNORECASE).strip()
     maturity_year = item.get("maturityYear")
     maturity = str(item.get("maturityDate") or item.get("dueDate") or item.get("expiresAt") or "").strip()
+
+    raw_label = bond_type
+    if maturity:
+        raw_label = f"{raw_label} {maturity}"
+    elif maturity_year:
+        raw_label = f"{raw_label} {maturity_year}"
+
+    friendly = format_friendly_treasury_title(raw_label or symbol, symbol)
+    if friendly:
+        return friendly
 
     year = None
     if maturity_year:
@@ -206,6 +252,8 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
             continue
 
         name = _name(item, symbol)
+        friendly_name = format_friendly_treasury_title(name, symbol)
+        final_name = friendly_name or name
         sector = _sector(item)
         try:
             existing_result = await db.execute(
@@ -219,7 +267,7 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
                 db.add(
                     Asset(
                         ticker=symbol,
-                        name=name,
+                        name=final_name,
                         asset_type=_TREASURY_TYPE,
                         currency="BRL",
                         sector=sector,
@@ -228,9 +276,8 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
                 result.created += 1
                 continue
             changed = False
-            friendly_name = format_friendly_treasury_title(name, symbol)
-            if friendly_name and existing.name != friendly_name:
-                existing.name = friendly_name
+            if final_name and existing.name != final_name:
+                existing.name = final_name
                 changed = True
             if sector and existing.sector != sector:
                 existing.sector = sector

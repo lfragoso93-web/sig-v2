@@ -141,7 +141,11 @@ def _treasury_indexer(value: str) -> str:
 
 
 def _treasury_maturity_from_ticker(ticker: str) -> Optional[str]:
-    slash_match = re.search(r"(\d{2})/(\d{2})/(20\d{2})", ticker)
+    raw = (ticker or "").strip()
+    if not raw:
+        return None
+
+    slash_match = re.search(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\b", raw)
     if slash_match:
         day, month, year = slash_match.groups()
         try:
@@ -149,7 +153,7 @@ def _treasury_maturity_from_ticker(ticker: str) -> Optional[str]:
         except ValueError:
             return None
 
-    iso_match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", ticker)
+    iso_match = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", raw)
     if iso_match:
         year, month, day = iso_match.groups()
         try:
@@ -157,14 +161,60 @@ def _treasury_maturity_from_ticker(ticker: str) -> Optional[str]:
         except ValueError:
             return None
 
-    match = re.search(r"(\d{2})(\d{2})(20\d{2})$", ticker)
-    if not match:
-        return None
-    day, month, year = match.groups()
-    try:
-        return date_type(int(year), int(month), int(day)).isoformat()
-    except ValueError:
-        return None
+    digits_match = re.search(r"(\d{2})(\d{2})(20\d{2})$", raw)
+    if digits_match:
+        day, month, year = digits_match.groups()
+        try:
+            return date_type(int(year), int(month), int(day)).isoformat()
+        except ValueError:
+            return None
+
+    lower = raw.lower()
+    if "renda" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            if year >= 2030 and year % 5 == 0:
+                return date_type(year + 19, 12, 15).isoformat()
+            if year >= 2049 and year % 5 == 4:
+                return date_type(year, 12, 15).isoformat()
+            return date_type(year + 19, 12, 15).isoformat()
+
+    if "educa" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            if 2026 <= year <= 2043:
+                return date_type(year + 4, 12, 15).isoformat()
+            if 2043 < year <= 2055:
+                return date_type(year, 12, 15).isoformat()
+            return date_type(year + 4, 12, 15).isoformat()
+
+    if "selic" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            return date_type(year, 3, 1).isoformat()
+
+    if "prefixado" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            return date_type(year, 1, 1).isoformat()
+
+    if "ipca" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            return date_type(year, 8, 15).isoformat()
+
+    if "igpm" in lower or "igp-m" in lower:
+        year_match = re.search(r"\b(20\d{2})\b", raw) or re.search(r"(20\d{2})", raw)
+        if year_match:
+            year = int(year_match.group(1))
+            return date_type(year, 1, 1).isoformat()
+
+    return None
 
 
 def _crypto_candidate(ticker: str) -> str:

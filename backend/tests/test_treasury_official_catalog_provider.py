@@ -32,6 +32,17 @@ Tesouro Educa+;15/12/2034;08/08/2026
     }
     assert all(item["source"] == provider.OFFICIAL_SOURCE for item in items)
 
+    items_by_symbol = {item["symbol"]: item for item in items}
+    renda = items_by_symbol["tesouro-renda-mais-2030"]
+    assert renda["name"] == "Tesouro Renda+ 2030"
+    assert renda["maturityDate"] == "2049-12-15"
+    assert renda["maturityYear"] == 2049
+
+    educa = items_by_symbol["tesouro-educa-mais-2030"]
+    assert educa["name"] == "Tesouro Educa+ 2030"
+    assert educa["maturityDate"] == "2034-12-15"
+    assert educa["maturityYear"] == 2034
+
 
 @pytest.mark.asyncio
 async def test_official_catalog_prevents_brapi_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,5 +86,9 @@ def test_format_friendly_treasury_title_conversions() -> None:
     assert format_friendly_treasury_title('Tesouro IPCA+ com Juros Semestrais 2035 15/05/2035') == 'Tesouro IPCA+ com Juros Semestrais 2035'
     assert format_friendly_treasury_title('Tesouro RendA+ Aposentadoria Extra 15/12/2049') == 'Tesouro Renda+ 2030'
     assert format_friendly_treasury_title('Tesouro RendA+ 2030') == 'Tesouro Renda+ 2030'
+    assert format_friendly_treasury_title('Tesouro RendA+ 2065') == 'Tesouro Renda+ 2065'
+    assert format_friendly_treasury_title('Tesouro RendA+ Aposentadoria Extra 15/12/2084') == 'Tesouro Renda+ 2065'
     assert format_friendly_treasury_title('Tesouro Educa+ 15/12/2034') == 'Tesouro Educa+ 2030'
     assert format_friendly_treasury_title('Tesouro Educa+ 2030') == 'Tesouro Educa+ 2030'
+    assert format_friendly_treasury_title('Tesouro Educa+ 2026') == 'Tesouro Educa+ 2026'
+    assert format_friendly_treasury_title('Tesouro Educa+ 15/12/2030') == 'Tesouro Educa+ 2026'

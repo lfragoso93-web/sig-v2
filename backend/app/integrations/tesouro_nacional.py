@@ -30,6 +30,8 @@ from typing import Optional
 
 import httpx
 
+from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+
 logger = logging.getLogger(__name__)
 
 # URL da API publica da STN - precos em tempo real
@@ -268,6 +270,19 @@ def _find_best_match(
     Encontra o melhor match no catalogo TN para um ticker do usuario.
     Retorna o dict do titulo com maior score >= min_score, ou None.
     """
+    user_canonical = canonical_treasury_symbol_from_text(ticker)
+    if user_canonical:
+        for tn_slug, item in catalog.items():
+            item_canonical = canonical_treasury_symbol_from_text(
+                f"{item.get('name', '')} {item.get('maturityDate', '')}"
+            )
+            if item_canonical and item_canonical.lower() == user_canonical.lower():
+                logger.info(
+                    "[TN] match exato canonico: %r -> %r",
+                    ticker, item["name"],
+                )
+                return item
+
     user_slug = _slug_tn(ticker)
     best_score = 0
     best_item  = None
@@ -349,6 +364,7 @@ async def fetch_tn_price_by_date(
             # O CSV da STN usa encoding latin-1 e separador ;
             content = resp.content.decode("latin-1", errors="replace")
 
+        user_canonical = canonical_treasury_symbol_from_text(ticker)
         user_slug  = _slug_tn(ticker)
         target     = date.fromisoformat(date_str)
         best_price: Optional[float] = None
@@ -369,15 +385,31 @@ async def fetch_tn_price_by_date(
             if not bond_name:
                 continue
 
-            tn_slug = _slug_tn(bond_name)
-            if _score_match(user_slug, tn_slug) < 60:
-                continue
-
-            # Data da linha
-            raw_date = (
+            maturity = (
                 row.get("Data Vencimento")
-                or row.get("Data Base")
+                or row.get("Vencimento")
+                or ""
+            ).strip()
+
+            row_symbol = None
+            if maturity:
+                row_symbol = canonical_treasury_symbol_from_text(f"{bond_name} {maturity}")
+
+            if row_symbol and user_canonical:
+                if row_symbol.lower() != user_canonical.lower():
+                    continue
+            else:
+                tn_slug = _slug_tn(bond_name)
+                if _score_match(user_slug, tn_slug) < 60:
+                    continue
+
+            # Data de cotacao da linha (Data Base)
+            raw_date = (
+                row.get("Data Base")
                 or row.get("Data")
+                or row.get("Data Referencia")
+                or row.get("Data Referência")
+                or row.get("Data Vencimento")
                 or ""
             ).strip()
             if not raw_date:

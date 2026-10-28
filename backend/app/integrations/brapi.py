@@ -152,6 +152,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "TESOURO RENDA+ 2050":                        "tesouro-renda-mais-2050",
     "TESOURO RENDA+ 2055":                        "tesouro-renda-mais-2055",
     "TESOURO RENDA+ 2060":                        "tesouro-renda-mais-2060",
+    "TESOURO RENDA+ 2065":                        "tesouro-renda-mais-2065",
     "TESOURO RENDA MAIS 2030":                    "tesouro-renda-mais-2030",
     "TESOURO RENDA MAIS 2035":                    "tesouro-renda-mais-2035",
     "TESOURO RENDA MAIS 2040":                    "tesouro-renda-mais-2040",
@@ -159,13 +160,46 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "TESOURO RENDA MAIS 2050":                    "tesouro-renda-mais-2050",
     "TESOURO RENDA MAIS 2055":                    "tesouro-renda-mais-2055",
     "TESOURO RENDA MAIS 2060":                    "tesouro-renda-mais-2060",
+    "TESOURO RENDA MAIS 2065":                    "tesouro-renda-mais-2065",
+    "TESOURO RENDA+ 2070":                        "tesouro-renda-mais-2070",
+    "TESOURO RENDA MAIS 2070":                    "tesouro-renda-mais-2070",
     # ── Tesouro Educa+ ──────────────────────────────────────────────────────────────────
     "TESOURO EDUCA+ 2026":                        "tesouro-educa-mais-2026",
+    "TESOURO EDUCA+ 2027":                        "tesouro-educa-mais-2027",
+    "TESOURO EDUCA+ 2028":                        "tesouro-educa-mais-2028",
     "TESOURO EDUCA+ 2029":                        "tesouro-educa-mais-2029",
+    "TESOURO EDUCA+ 2030":                        "tesouro-educa-mais-2030",
     "TESOURO EDUCA+ 2031":                        "tesouro-educa-mais-2031",
+    "TESOURO EDUCA+ 2032":                        "tesouro-educa-mais-2032",
+    "TESOURO EDUCA+ 2033":                        "tesouro-educa-mais-2033",
+    "TESOURO EDUCA+ 2034":                        "tesouro-educa-mais-2034",
+    "TESOURO EDUCA+ 2035":                        "tesouro-educa-mais-2035",
+    "TESOURO EDUCA+ 2036":                        "tesouro-educa-mais-2036",
+    "TESOURO EDUCA+ 2037":                        "tesouro-educa-mais-2037",
+    "TESOURO EDUCA+ 2038":                        "tesouro-educa-mais-2038",
+    "TESOURO EDUCA+ 2039":                        "tesouro-educa-mais-2039",
+    "TESOURO EDUCA+ 2040":                        "tesouro-educa-mais-2040",
+    "TESOURO EDUCA+ 2041":                        "tesouro-educa-mais-2041",
+    "TESOURO EDUCA+ 2042":                        "tesouro-educa-mais-2042",
+    "TESOURO EDUCA+ 2043":                        "tesouro-educa-mais-2043",
     "TESOURO EDUCA MAIS 2026":                    "tesouro-educa-mais-2026",
+    "TESOURO EDUCA MAIS 2027":                    "tesouro-educa-mais-2027",
+    "TESOURO EDUCA MAIS 2028":                    "tesouro-educa-mais-2028",
     "TESOURO EDUCA MAIS 2029":                    "tesouro-educa-mais-2029",
+    "TESOURO EDUCA MAIS 2030":                    "tesouro-educa-mais-2030",
     "TESOURO EDUCA MAIS 2031":                    "tesouro-educa-mais-2031",
+    "TESOURO EDUCA MAIS 2032":                    "tesouro-educa-mais-2032",
+    "TESOURO EDUCA MAIS 2033":                    "tesouro-educa-mais-2033",
+    "TESOURO EDUCA MAIS 2034":                    "tesouro-educa-mais-2034",
+    "TESOURO EDUCA MAIS 2035":                    "tesouro-educa-mais-2035",
+    "TESOURO EDUCA MAIS 2036":                    "tesouro-educa-mais-2036",
+    "TESOURO EDUCA MAIS 2037":                    "tesouro-educa-mais-2037",
+    "TESOURO EDUCA MAIS 2038":                    "tesouro-educa-mais-2038",
+    "TESOURO EDUCA MAIS 2039":                    "tesouro-educa-mais-2039",
+    "TESOURO EDUCA MAIS 2040":                    "tesouro-educa-mais-2040",
+    "TESOURO EDUCA MAIS 2041":                    "tesouro-educa-mais-2041",
+    "TESOURO EDUCA MAIS 2042":                    "tesouro-educa-mais-2042",
+    "TESOURO EDUCA MAIS 2043":                    "tesouro-educa-mais-2043",
 }
 
 # Regex para detectar se o ticker ja tem formato de slug BRAPI
@@ -213,6 +247,12 @@ def _normalize_treasury_ticker(ticker: str, catalog: Optional[dict[str, str]] = 
         resolved = _TREASURY_NAME_MAP[t_upper]
         logger.debug("[treasury] Camada 1 (mapa): %s -> %s", ticker, resolved)
         return resolved
+
+    from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+
+    canon = canonical_treasury_symbol_from_text(ticker)
+    if canon:
+        return canon
 
     t_lower = ticker.strip().lower()
     if _TREASURY_SLUG_RE.match(t_lower):

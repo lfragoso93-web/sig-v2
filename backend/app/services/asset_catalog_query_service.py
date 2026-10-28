@@ -15,6 +15,7 @@ from app.models.asset_alias import AssetAlias
 from app.services.asset_universe_membership_service import (
     CRYPTO_SYNTHETIC_CERTIFICATION_PROVIDER,
 )
+from app.services.treasury_catalog_service import format_friendly_treasury_title
 
 
 @dataclass(frozen=True)
@@ -139,76 +140,6 @@ async def suggest_assets_from_catalog(
             )
         )
     return suggestions
-
-
-def format_friendly_treasury_title(name: str | None, ticker: str | None = None) -> str:
-    raw = (name or ticker or "").strip()
-    if not raw:
-        return ""
-
-    import re
-    cleaned = re.sub(r"\s+aposentadoria\s+extra\b", "", raw, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\brenda\+", "Renda+", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\beduca\+", "Educa+", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
-    raw_year = None
-    dmy_match = re.search(r"\b\d{1,2}/\d{1,2}/(20\d{2})\b", cleaned)
-    if dmy_match:
-        raw_year = int(dmy_match.group(1))
-        cleaned = re.sub(r"\b\d{1,2}/\d{1,2}/20\d{2}\b", "", cleaned).strip()
-    else:
-        iso_match = re.search(r"\b(20\d{2})[-/]\d{2}[-/]\d{2}\b", cleaned)
-        if iso_match:
-            raw_year = int(iso_match.group(1))
-            cleaned = re.sub(r"\b20\d{2}[-/]\d{2}[-/]\d{2}\b", "", cleaned).strip()
-        else:
-            year_match = re.search(r"\b(20\d{2})\b", cleaned)
-            if year_match:
-                raw_year = int(year_match.group(1))
-                cleaned = re.sub(r"\b20\d{2}\b", "", cleaned).strip()
-
-    ticker_clean = (ticker or "").lower()
-    ticker_commercial_year = None
-    if ticker_clean:
-        tm = re.search(r"20\d{2}", ticker_clean)
-        if tm:
-            ticker_commercial_year = int(tm.group(0))
-
-    norm = cleaned.lower()
-    if "renda" in norm:
-        if ticker_commercial_year and 2030 <= ticker_commercial_year <= 2065 and ticker_commercial_year % 5 == 0:
-            final_year = ticker_commercial_year
-        elif raw_year:
-            if raw_year >= 2049:
-                final_year = raw_year - 19
-            else:
-                final_year = raw_year
-        elif ticker_commercial_year:
-            final_year = ticker_commercial_year - 19 if ticker_commercial_year >= 2049 else ticker_commercial_year
-        else:
-            final_year = None
-        cleaned = "Tesouro Renda+"
-        return f"{cleaned} {final_year}" if final_year else cleaned
-
-    if "educa" in norm:
-        if ticker_commercial_year and 2026 <= ticker_commercial_year <= 2042:
-            final_year = ticker_commercial_year
-        elif raw_year:
-            if raw_year >= 2030 and (raw_year > 2042 or (ticker_commercial_year and ticker_commercial_year == raw_year - 4)):
-                final_year = raw_year - 4
-            else:
-                final_year = raw_year
-        elif ticker_commercial_year:
-            final_year = ticker_commercial_year
-        else:
-            final_year = None
-        cleaned = "Tesouro Educa+"
-        return f"{cleaned} {final_year}" if final_year else cleaned
-
-    final_year = raw_year or ticker_commercial_year
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return f"{cleaned} {final_year}" if final_year else cleaned
 
 
 async def list_treasury_from_catalog(
