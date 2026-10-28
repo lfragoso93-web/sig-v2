@@ -28,7 +28,7 @@ _DEFAULT_MAX_RETRIES = 2
 
 _SAFE_SYMBOL_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
 _SAFE_MACRO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}\Z")
-_SAFE_PATH_RE = re.compile(r"^/(api/quote/[A-Za-z0-9^.,-]+|v2/(tickers/resolve|prime/macro/[A-Za-z0-9_.-]+))\Z")
+_SAFE_PATH_RE = re.compile(r"^/(api/quote/[A-Za-z0-9^.,-]+|api/v2/fii/(indicators|properties|list)|v2/(tickers/resolve|prime/macro/[A-Za-z0-9_.-]+))\Z")
 
 
 # -----------------------------------------------------------------------------
@@ -137,12 +137,21 @@ class FIIIndicatorDTO:
     symbol: str
     pvp: Optional[float] = None
     dividend_yield: Optional[float] = None
+    dividend_yield_1m: Optional[float] = None
     net_worth: Optional[float] = None
+    nav_per_share: Optional[float] = None
     share_holders: Optional[int] = None
+    shares_outstanding: Optional[int] = None
     physical_vacancy: Optional[float] = None
     financial_vacancy: Optional[float] = None
     properties_count: Optional[int] = None
+    total_area_m2: Optional[float] = None
     segment: Optional[str] = None
+    segment_type: Optional[str] = None
+    management_type: Optional[str] = None
+    administrator_name: Optional[str] = None
+    administrator_cnpj: Optional[str] = None
+    cnpj: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -151,16 +160,34 @@ class CompanyFundamentalsDTO:
 
     symbol: str
     pe: Optional[float] = None  # P/L
+    forward_pe: Optional[float] = None  # P/L Projetado
     pb: Optional[float] = None  # P/VP
     dividend_yield: Optional[float] = None
     eps: Optional[float] = None  # LPA
     market_cap: Optional[float] = None
+    enterprise_value: Optional[float] = None
+    enterprise_to_ebitda: Optional[float] = None
     net_revenue: Optional[float] = None
     net_income: Optional[float] = None
     ebitda: Optional[float] = None
     net_margin: Optional[float] = None
+    operating_margin: Optional[float] = None
+    gross_margin: Optional[float] = None
     roe: Optional[float] = None
+    roa: Optional[float] = None
     net_debt: Optional[float] = None
+    total_debt: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    book_value: Optional[float] = None
+    peg_ratio: Optional[float] = None
+    beta: Optional[float] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    description: Optional[str] = None
+    website: Optional[str] = None
+    employees: Optional[int] = None
+    recommendation: Optional[str] = None
+    target_price: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -512,28 +539,115 @@ class BrapiV2Client:
         if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
-        path = f"/api/quote/{clean_symbol}"
-        params = {"fundamental": "true"}
-
         if client is not None:
-            return await self._fetch_fii_indicators_with_client(client, clean_symbol, path, params)
+            return await self._fetch_fii_indicators_with_client(client, clean_symbol)
 
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as owned_client:
-            return await self._fetch_fii_indicators_with_client(owned_client, clean_symbol, path, params)
+            return await self._fetch_fii_indicators_with_client(owned_client, clean_symbol)
 
     async def _fetch_fii_indicators_with_client(
         self,
         client: httpx.AsyncClient,
         symbol: str,
-        path: str,
-        params: dict[str, Any],
     ) -> Optional[FIIIndicatorDTO]:
+        # 1. Tenta endpoint dedicado de FIIs: /api/v2/fii/indicators
+        fii_entry: Optional[dict[str, Any]] = None
+        fii_props_entry: Optional[dict[str, Any]] = None
         try:
-            payload = await self._request_with_retry(client, path, params=params)
+            indicators_payload = await self._request_with_retry(
+                client, "/api/v2/fii/indicators", params={"symbols": symbol}
+            )
+            fiis_list = (
+                indicators_payload.get("indexes")
+                or indicators_payload.get("fiis")
+                or indicators_payload.get("results")
+            )
+            if isinstance(fiis_list, list) and fiis_list and isinstance(fiis_list[0], dict):
+                fii_entry = fiis_list[0]
+        except (BrapiV2Error, Exception) as exc:
+            logger.debug("Endpoint /api/v2/fii/indicators indisponivel para %s: %s", symbol, exc)
+
+        # Se encontrou no endpoint v2 de FIIs, tenta tambem /api/v2/fii/properties para vacancia e imoveis
+        if fii_entry is not None:
+            try:
+                props_payload = await self._request_with_retry(
+                    client, "/api/v2/fii/properties", params={"symbols": symbol}
+                )
+                props_fiis = (
+                    props_payload.get("properties")
+                    or props_payload.get("fiis")
+                    or props_payload.get("results")
+                )
+                if isinstance(props_fiis, list) and props_fiis and isinstance(props_fiis[0], dict):
+                    fii_props_entry = props_fiis[0]
+            except Exception as exc:
+                logger.debug("Endpoint /api/v2/fii/properties indisponivel para %s: %s", symbol, exc)
+
+            props_summary = fii_props_entry.get("summary", {}) if isinstance(fii_props_entry, dict) else {}
+
+            pvp = self._safe_float(fii_entry.get("priceToNav") or fii_entry.get("pvp"))
+            dy_12m = self._normalize_percentage(
+                self._safe_float(fii_entry.get("dividendYield12m") or fii_entry.get("dividendYield"))
+            )
+            dy_1m = self._normalize_percentage(self._safe_float(fii_entry.get("dividendYield1m")))
+            net_worth = self._safe_float(fii_entry.get("equity") or fii_entry.get("netWorth"))
+            nav_per_share = self._safe_float(fii_entry.get("navPerShare"))
+            share_holders = self._safe_int(
+                fii_entry.get("totalInvestors") or fii_entry.get("shareHolders") or fii_entry.get("quotaHolders")
+            )
+            shares_outstanding = self._safe_int(fii_entry.get("sharesOutstanding"))
+
+            physical_vacancy = self._normalize_percentage(
+                self._safe_float(props_summary.get("vacancyRate") or fii_entry.get("physicalVacancy"))
+            )
+            financial_vacancy = self._normalize_percentage(
+                self._safe_float(props_summary.get("financialVacancy") or fii_entry.get("financialVacancy"))
+            )
+            properties_count = self._safe_int(
+                props_summary.get("count") or fii_entry.get("propertiesCount") or fii_entry.get("realEstateCount")
+            )
+            total_area = self._safe_float(props_summary.get("totalArea"))
+
+            segment = str(fii_entry.get("segmentoAtuacao") or fii_entry.get("segment") or fii_entry.get("sector") or "") or None
+            segment_type = str(fii_entry.get("segmentType") or "") or None
+            management_type = str(fii_entry.get("tipoGestao") or "") or None
+            administrator_name = str(fii_entry.get("administratorName") or "") or None
+            administrator_cnpj = str(fii_entry.get("administratorCnpj") or "") or None
+            cnpj = str(fii_entry.get("cnpj") or "") or None
+
+            return FIIIndicatorDTO(
+                symbol=symbol,
+                pvp=pvp,
+                dividend_yield=dy_12m,
+                dividend_yield_1m=dy_1m,
+                net_worth=net_worth,
+                nav_per_share=nav_per_share,
+                share_holders=share_holders,
+                shares_outstanding=shares_outstanding,
+                physical_vacancy=physical_vacancy,
+                financial_vacancy=financial_vacancy,
+                properties_count=properties_count,
+                total_area_m2=total_area,
+                segment=segment,
+                segment_type=segment_type,
+                management_type=management_type,
+                administrator_name=administrator_name,
+                administrator_cnpj=administrator_cnpj,
+                cnpj=cnpj,
+            )
+
+        # 2. Fallback para /api/quote/{symbol}?modules=defaultKeyStatistics,summaryProfile
+        # (cobre planos sem acesso ao v2 FII e mocks de testes unitarios)
+        try:
+            quote_payload = await self._request_with_retry(
+                client, f"/api/quote/{symbol}", params={"modules": "defaultKeyStatistics,summaryProfile"}
+            )
         except BrapiV2NotFoundError:
             return None
+        except Exception:
+            return None
 
-        raw_results = payload.get("results")
+        raw_results = quote_payload.get("results")
         if not isinstance(raw_results, list) or not raw_results:
             return None
 
@@ -541,16 +655,29 @@ class BrapiV2Client:
         if not isinstance(entry, dict):
             return None
 
+        dks = entry.get("defaultKeyStatistics") if isinstance(entry.get("defaultKeyStatistics"), dict) else {}
+        sp = entry.get("summaryProfile") if isinstance(entry.get("summaryProfile"), dict) else {}
+
+        pvp = self._safe_float(dks.get("priceToBook") or entry.get("priceToBook") or entry.get("pvp"))
+        dy_raw = self._safe_float(dks.get("dividendYield") or entry.get("dividendYield"))
+        dividend_yield = self._normalize_percentage(dy_raw)
+        net_worth = self._safe_float(dks.get("bookValue") or entry.get("netWorth") or entry.get("equity"))
+        share_holders = self._safe_int(entry.get("shareHolders") or entry.get("quotaHolders"))
+        physical_vacancy = self._safe_float(entry.get("physicalVacancy"))
+        financial_vacancy = self._safe_float(entry.get("financialVacancy"))
+        properties_count = self._safe_int(entry.get("propertiesCount") or entry.get("realEstateCount"))
+        segment = str(sp.get("sector") or entry.get("segment") or entry.get("sector") or "") or None
+
         return FIIIndicatorDTO(
             symbol=symbol,
-            pvp=self._safe_float(entry.get("priceToBook") or entry.get("pvp")),
-            dividend_yield=self._safe_float(entry.get("dividendYield")),
-            net_worth=self._safe_float(entry.get("netWorth") or entry.get("equity")),
-            share_holders=self._safe_int(entry.get("shareHolders") or entry.get("quotaHolders")),
-            physical_vacancy=self._safe_float(entry.get("physicalVacancy")),
-            financial_vacancy=self._safe_float(entry.get("financialVacancy")),
-            properties_count=self._safe_int(entry.get("propertiesCount") or entry.get("realEstateCount")),
-            segment=str(entry.get("segment") or entry.get("sector") or "") or None,
+            pvp=pvp,
+            dividend_yield=dividend_yield,
+            net_worth=net_worth,
+            share_holders=share_holders,
+            physical_vacancy=physical_vacancy,
+            financial_vacancy=financial_vacancy,
+            properties_count=properties_count,
+            segment=segment,
         )
 
     # -------------------------------------------------------------------------
@@ -569,7 +696,7 @@ class BrapiV2Client:
             return None
 
         path = f"/api/quote/{clean_symbol}"
-        params = {"fundamental": "true"}
+        params = {"modules": "summaryProfile,financialData,defaultKeyStatistics"}
 
         if client is not None:
             return await self._fetch_fundamentals_with_client(client, clean_symbol, path, params)
@@ -597,19 +724,92 @@ class BrapiV2Client:
         if not isinstance(entry, dict):
             return None
 
+        # Suporta tanto payload aninhado em modules (producao) quanto payload plano (mocks/testes)
+        fd = entry.get("financialData") if isinstance(entry.get("financialData"), dict) else {}
+        dks = entry.get("defaultKeyStatistics") if isinstance(entry.get("defaultKeyStatistics"), dict) else {}
+        sp = entry.get("summaryProfile") if isinstance(entry.get("summaryProfile"), dict) else {}
+
+        pe = self._safe_float(dks.get("trailingPE") or entry.get("priceEarnings") or entry.get("pe"))
+        forward_pe = self._safe_float(dks.get("forwardPE") or entry.get("forwardPE"))
+        pb = self._safe_float(dks.get("priceToBook") or entry.get("priceToBook") or entry.get("pb"))
+
+        dy_raw = self._safe_float(dks.get("dividendYield") or entry.get("dividendYield"))
+        dividend_yield = self._normalize_percentage(dy_raw)
+
+        eps = self._safe_float(dks.get("trailingEps") or entry.get("earningsPerShare") or entry.get("lpa"))
+        market_cap = self._safe_float(dks.get("marketCap") or entry.get("marketCap"))
+        enterprise_value = self._safe_float(dks.get("enterpriseValue") or entry.get("enterpriseValue"))
+        enterprise_to_ebitda = self._safe_float(dks.get("enterpriseToEbitda") or entry.get("enterpriseToEbitda"))
+
+        net_revenue = self._safe_float(fd.get("totalRevenue") or entry.get("netRevenue") or entry.get("revenue"))
+        net_income = self._safe_float(dks.get("netIncomeToCommon") or entry.get("netIncome") or entry.get("lucroLiquido"))
+        ebitda = self._safe_float(fd.get("ebitda") or entry.get("ebitda"))
+
+        net_margin_raw = self._safe_float(fd.get("profitMargins") or entry.get("netMargin") or entry.get("margemLiquida"))
+        net_margin = self._normalize_percentage(net_margin_raw)
+
+        operating_margin_raw = self._safe_float(fd.get("operatingMargins") or entry.get("operatingMargin"))
+        operating_margin = self._normalize_percentage(operating_margin_raw)
+
+        gross_margin_raw = self._safe_float(fd.get("grossMargins") or entry.get("grossMargin"))
+        gross_margin = self._normalize_percentage(gross_margin_raw)
+
+        roe_raw = self._safe_float(fd.get("returnOnEquity") or entry.get("returnOnEquity") or entry.get("roe"))
+        roe = self._normalize_percentage(roe_raw)
+
+        roa_raw = self._safe_float(fd.get("returnOnAssets") or entry.get("returnOnAssets") or entry.get("roa"))
+        roa = self._normalize_percentage(roa_raw)
+
+        total_debt = self._safe_float(fd.get("totalDebt") or entry.get("totalDebt"))
+        total_cash = self._safe_float(fd.get("totalCash") or entry.get("totalCash"))
+        net_debt = self._safe_float(entry.get("netDebt") or entry.get("dividaLiquida"))
+        if net_debt is None and total_debt is not None:
+            net_debt = total_debt - (total_cash or 0.0)
+
+        free_cash_flow = self._safe_float(fd.get("freeCashflow") or entry.get("freeCashflow"))
+        book_value = self._safe_float(dks.get("bookValue") or entry.get("bookValue"))
+        peg_ratio = self._safe_float(dks.get("pegRatio") or entry.get("pegRatio"))
+        beta = self._safe_float(dks.get("beta") or entry.get("beta"))
+
+        sector = str(sp.get("sector") or entry.get("sector") or "").strip() or None
+        industry = str(sp.get("industry") or entry.get("industry") or "").strip() or None
+        description = str(sp.get("longBusinessSummary") or sp.get("description") or entry.get("description") or "").strip() or None
+        website = str(sp.get("website") or entry.get("website") or "").strip() or None
+        employees = self._safe_int(sp.get("fullTimeEmployees") or entry.get("fullTimeEmployees") or entry.get("employees"))
+        recommendation = str(fd.get("recommendationKey") or entry.get("recommendationKey") or "").strip() or None
+        target_price = self._safe_float(fd.get("targetMeanPrice") or entry.get("targetMeanPrice"))
+
         return CompanyFundamentalsDTO(
             symbol=symbol,
-            pe=self._safe_float(entry.get("priceEarnings") or entry.get("pe")),
-            pb=self._safe_float(entry.get("priceToBook") or entry.get("pb")),
-            dividend_yield=self._safe_float(entry.get("dividendYield")),
-            eps=self._safe_float(entry.get("earningsPerShare") or entry.get("lpa")),
-            market_cap=self._safe_float(entry.get("marketCap")),
-            net_revenue=self._safe_float(entry.get("netRevenue") or entry.get("revenue")),
-            net_income=self._safe_float(entry.get("netIncome") or entry.get("lucroLiquido")),
-            ebitda=self._safe_float(entry.get("ebitda")),
-            net_margin=self._safe_float(entry.get("netMargin") or entry.get("margemLiquida")),
-            roe=self._safe_float(entry.get("returnOnEquity") or entry.get("roe")),
-            net_debt=self._safe_float(entry.get("netDebt") or entry.get("dividaLiquida")),
+            pe=pe,
+            forward_pe=forward_pe,
+            pb=pb,
+            dividend_yield=dividend_yield,
+            eps=eps,
+            market_cap=market_cap,
+            enterprise_value=enterprise_value,
+            enterprise_to_ebitda=enterprise_to_ebitda,
+            net_revenue=net_revenue,
+            net_income=net_income,
+            ebitda=ebitda,
+            net_margin=net_margin,
+            operating_margin=operating_margin,
+            gross_margin=gross_margin,
+            roe=roe,
+            roa=roa,
+            net_debt=net_debt,
+            total_debt=total_debt,
+            free_cash_flow=free_cash_flow,
+            book_value=book_value,
+            peg_ratio=peg_ratio,
+            beta=beta,
+            sector=sector,
+            industry=industry,
+            description=description,
+            website=website,
+            employees=employees,
+            recommendation=recommendation,
+            target_price=target_price,
         )
 
     # -------------------------------------------------------------------------
@@ -845,6 +1045,14 @@ class BrapiV2Client:
             return float(val)
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def _normalize_percentage(val: Optional[float]) -> Optional[float]:
+        if val is None:
+            return None
+        if abs(val) <= 2.0 and val != 0.0:
+            return round(val * 100.0, 4)
+        return val
 
     @staticmethod
     def _safe_int(val: Any) -> Optional[int]:

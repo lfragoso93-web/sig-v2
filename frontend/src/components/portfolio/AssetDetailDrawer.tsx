@@ -16,6 +16,11 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
+  Globe,
+  ExternalLink,
+  Activity,
+  Scale,
+  Compass,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
@@ -240,6 +245,22 @@ export default function AssetDetailDrawer({
                   >
                     {asset?.asset_label ?? assetDetail?.asset_type ?? 'Ativo'}
                   </span>
+                  {(stock?.sector || fii?.segment_type) && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: 'rgba(37, 99, 235, 0.1)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(37, 99, 235, 0.25)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {stock?.sector ?? `FII ${fii?.segment_type}`}
+                    </span>
+                  )}
                   {enrichment?.coverage_status && (
                     <span
                       style={{
@@ -550,6 +571,84 @@ export default function AssetDetailDrawer({
                 </div>
               </div>
 
+              {/* Perfil & Sobre o Ativo */}
+              {(stock?.description || stock?.sector || fii?.administrator_name || fii?.segment) && (
+                <div
+                  style={{
+                    background: 'var(--color-surface-offset)',
+                    padding: '1rem 1.25rem',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--color-divider)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Building2 size={16} style={{ color: 'var(--color-primary)' }} />
+                      <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                        {fii ? 'Perfil do FII & Gestão' : 'Perfil Corporativo'}
+                      </h3>
+                    </div>
+                    {stock?.website && (
+                      <a
+                        href={stock.website.startsWith('http') ? stock.website : `https://${stock.website}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '0.75rem',
+                          color: 'var(--color-primary)',
+                          textDecoration: 'none',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Globe size={13} />
+                        Site de RI
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
+                  {stock?.description && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', lineHeight: 1.5, margin: '0 0 0.75rem 0' }}>
+                      {stock.description}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                    {stock?.industry && (
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Indústria / Subsetor: </span>
+                        {stock.industry}
+                      </div>
+                    )}
+                    {stock?.employees != null && (
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Funcionários: </span>
+                        {stock.employees.toLocaleString('pt-BR')}
+                      </div>
+                    )}
+                    {fii?.administrator_name && (
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Administrador: </span>
+                        {fii.administrator_name}
+                      </div>
+                    )}
+                    {fii?.management_type && (
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Tipo de Gestão: </span>
+                        {fii.management_type}
+                      </div>
+                    )}
+                    {fii?.segment && (
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Segmento: </span>
+                        {fii.segment}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Eventos Corporativos (se houver) */}
               {corporateLifecycle.length > 0 && (
                 <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
@@ -820,28 +919,40 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Indicadores Financeiros de FII
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/VP</span>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: (fii.pvp ?? 1) <= 1 ? 'var(--color-success)' : 'var(--color-text)' }}>
                           {fii.pvp != null ? formatNumber(fii.pvp) : '-'}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Dividend Yield</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>DY (12M)</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-success)' }}>
                           {fii.dividend_yield != null ? `${formatNumber(fii.dividend_yield)}%` : '-'}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Patrimônio Líquido</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>DY (1 Mês)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {fii.dividend_yield_1m != null ? `${formatNumber(fii.dividend_yield_1m)}%` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>VP por Cota</span>
                         <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {fii.nav_per_share != null ? formatBRL(fii.nav_per_share) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Patrimônio Líquido</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
                           {fii.net_worth != null ? formatBRL(fii.net_worth) : '-'}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Cotistas</span>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
                           {fii.share_holders != null ? fii.share_holders.toLocaleString('pt-BR') : '-'}
                         </div>
                       </div>
@@ -852,7 +963,7 @@ export default function AssetDetailDrawer({
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
                       Operações, Imóveis e Vacância
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Vacância Física</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: (fii.physical_vacancy ?? 0) > 10 ? 'var(--color-warning)' : 'var(--color-text)' }}>
@@ -872,13 +983,48 @@ export default function AssetDetailDrawer({
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Segmento</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Área Bruta (ABL)</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {fii.total_area_m2 != null ? `${formatNumber(fii.total_area_m2, 0)} m²` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Tipo de FII</span>
                         <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                          {fii.segment ?? '-'}
+                          {fii.segment_type ?? fii.segment ?? '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Gestão</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {fii.management_type ?? '-'}
                         </div>
                       </div>
                     </div>
                   </div>
+
+                  {(fii.administrator_name || fii.cnpj) && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 0.5rem 0' }}>
+                        Governança & Administração
+                      </h3>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                        {fii.administrator_name && (
+                          <div>
+                            <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Administrador: </span>
+                            {fii.administrator_name}
+                            {fii.administrator_cnpj ? ` (${fii.administrator_cnpj})` : ''}
+                          </div>
+                        )}
+                        {fii.cnpj && (
+                          <div>
+                            <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>CNPJ do Fundo: </span>
+                            {fii.cnpj}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : stock ? (
                 <>
@@ -894,6 +1040,12 @@ export default function AssetDetailDrawer({
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/L Projetado (Forward)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.forward_pe != null ? formatNumber(stock.forward_pe) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/VP</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
                           {stock.pb != null ? formatNumber(stock.pb) : '-'}
@@ -906,9 +1058,27 @@ export default function AssetDetailDrawer({
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>EV / EBITDA</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.enterprise_to_ebitda != null ? formatNumber(stock.enterprise_to_ebitda) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>LPA (Lucro p/ Ação)</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
                           {stock.eps != null ? formatBRL(stock.eps) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>PEG Ratio</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.peg_ratio != null ? formatNumber(stock.peg_ratio) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Beta</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.beta != null ? formatNumber(stock.beta) : '-'}
                         </div>
                       </div>
                     </div>
@@ -916,13 +1086,19 @@ export default function AssetDetailDrawer({
 
                   <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
-                      Rentabilidade, Margens e Balanço
+                      Rentabilidade e Margens Operacionais
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>ROE</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
                           {stock.roe != null ? `${formatNumber(stock.roe)}%` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>ROA</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.roa != null ? `${formatNumber(stock.roa)}%` : '-'}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
@@ -932,19 +1108,113 @@ export default function AssetDetailDrawer({
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>EBITDA</span>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                          {stock.ebitda != null ? formatBRL(stock.ebitda) : '-'}
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Margem Operacional</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.operating_margin != null ? `${formatNumber(stock.operating_margin)}%` : '-'}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Valor de Mercado</span>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
-                          {stock.market_cap != null ? formatBRL(stock.market_cap) : '-'}
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Margem Bruta</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.gross_margin != null ? `${formatNumber(stock.gross_margin)}%` : '-'}
                         </div>
                       </div>
                     </div>
                   </div>
+
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Balanço Patrimonial, Dívida e Caixa
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Valor de Mercado</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.market_cap != null ? formatBRL(stock.market_cap) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Enterprise Value (EV)</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.enterprise_value != null ? formatBRL(stock.enterprise_value) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>EBITDA</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.ebitda != null ? formatBRL(stock.ebitda) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Receita Líquida</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.net_revenue != null ? formatBRL(stock.net_revenue) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Dívida Total</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.total_debt != null ? formatBRL(stock.total_debt) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Fluxo de Caixa Livre</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.free_cash_flow != null ? formatBRL(stock.free_cash_flow) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>VPA (Valor Patrimonial / Ação)</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.book_value != null ? formatBRL(stock.book_value) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Dívida Líquida</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {stock.net_debt != null ? formatBRL(stock.net_debt) : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {(stock.recommendation || stock.target_price != null) && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 0.5rem 0' }}>
+                        Consenso de Mercado
+                      </h3>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', fontSize: '0.85rem' }}>
+                        {stock.recommendation && (
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted)' }}>Recomendação dos Analistas: </span>
+                            <span style={{ fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary)' }}>
+                              {stock.recommendation}
+                            </span>
+                          </div>
+                        )}
+                        {stock.target_price != null && (
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted)' }}>Preço Alvo Médio: </span>
+                            <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                              {formatBRL(stock.target_price)}
+                            </span>
+                            {assetDetail?.current_price && (
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  color: stock.target_price >= assetDetail.current_price ? 'var(--color-success)' : 'var(--color-danger)',
+                                }}
+                              >
+                                ({(((stock.target_price - assetDetail.current_price) / assetDetail.current_price) * 100).toFixed(1)}% potencial)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)' }}>

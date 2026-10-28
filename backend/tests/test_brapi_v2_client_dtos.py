@@ -252,6 +252,158 @@ async def test_fetch_fii_indicators() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fetch_fii_indicators_v2_endpoints() -> None:
+    """Valida a consulta especializada de FIIs via /api/v2/fii/indicators e properties."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v2/fii/indicators":
+            return httpx.Response(
+                200,
+                json={
+                    "indexes": [
+                        {
+                            "symbol": "HGLG11",
+                            "priceToNav": 1.05,
+                            "dividendYield12m": 0.0895,
+                            "dividendYield1m": 0.0078,
+                            "equity": 3600000000.0,
+                            "navPerShare": 158.40,
+                            "totalInvestors": 410000,
+                            "sharesOutstanding": 22700000,
+                            "segmentType": "Tijolo",
+                            "segmentoAtuacao": "Logística e Galpões",
+                            "tipoGestao": "Ativa",
+                            "administratorName": "Credit Suisse Hedging-Griffo",
+                            "administratorCnpj": "61.809.182/0001-30",
+                            "cnpj": "11.728.688/0001-47",
+                        }
+                    ]
+                },
+            )
+        elif request.url.path == "/api/v2/fii/properties":
+            return httpx.Response(
+                200,
+                json={
+                    "properties": [
+                        {
+                            "symbol": "HGLG11",
+                            "summary": {
+                                "count": 25,
+                                "totalArea": 920000.5,
+                                "vacancyRate": 0.038,
+                            },
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    client = BrapiV2Client(base_url="https://market.example", token=None)
+    async with _mock_client(handler) as http_client:
+        fii = await client.fetch_fii_indicators("HGLG11", client=http_client)
+
+    assert isinstance(fii, FIIIndicatorDTO)
+    assert fii.symbol == "HGLG11"
+    assert fii.pvp == 1.05
+    assert fii.dividend_yield == 8.95
+    assert fii.dividend_yield_1m == 0.78
+    assert fii.net_worth == 3600000000.0
+    assert fii.nav_per_share == 158.40
+    assert fii.share_holders == 410000
+    assert fii.shares_outstanding == 22700000
+    assert fii.properties_count == 25
+    assert fii.physical_vacancy == 3.8
+    assert fii.total_area_m2 == 920000.5
+    assert fii.segment == "Logística e Galpões"
+    assert fii.segment_type == "Tijolo"
+    assert fii.management_type == "Ativa"
+    assert fii.administrator_name == "Credit Suisse Hedging-Griffo"
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_fundamentals_modules() -> None:
+    """Valida a consulta completa de acoes via módulos summaryProfile, financialData e defaultKeyStatistics."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/quote/PETR4"
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "symbol": "PETR4",
+                        "summaryProfile": {
+                            "sector": "Energia",
+                            "industry": "Petróleo, Gás e Biocombustíveis",
+                            "longBusinessSummary": "Petróleo Brasileiro S.A. - Petrobras explora, produz e comercializa petróleo e gás.",
+                            "website": "https://petrobras.com.br",
+                            "fullTimeEmployees": 45000,
+                        },
+                        "financialData": {
+                            "totalRevenue": 511000000000.0,
+                            "ebitda": 262000000000.0,
+                            "profitMargins": 0.245,
+                            "operatingMargins": 0.420,
+                            "grossMargins": 0.510,
+                            "returnOnEquity": 0.325,
+                            "returnOnAssets": 0.125,
+                            "totalDebt": 280000000000.0,
+                            "freeCashflow": 140000000000.0,
+                            "recommendationKey": "buy",
+                            "targetMeanPrice": 44.50,
+                        },
+                        "defaultKeyStatistics": {
+                            "trailingPE": 4.85,
+                            "forwardPE": 4.20,
+                            "priceToBook": 1.15,
+                            "enterpriseToEbitda": 2.80,
+                            "trailingEps": 7.42,
+                            "dividendYield": 0.145,
+                            "marketCap": 480000000000.0,
+                            "enterpriseValue": 620000000000.0,
+                            "beta": 0.95,
+                            "pegRatio": 0.85,
+                            "bookValue": 31.50,
+                        },
+                    }
+                ]
+            },
+        )
+
+    client = BrapiV2Client(base_url="https://market.example", token=None)
+    async with _mock_client(handler) as http_client:
+        fund = await client.fetch_company_fundamentals("PETR4", client=http_client)
+
+    assert isinstance(fund, CompanyFundamentalsDTO)
+    assert fund.symbol == "PETR4"
+    assert fund.pe == 4.85
+    assert fund.forward_pe == 4.20
+    assert fund.pb == 1.15
+    assert fund.dividend_yield == 14.5
+    assert fund.eps == 7.42
+    assert fund.market_cap == 480000000000.0
+    assert fund.enterprise_value == 620000000000.0
+    assert fund.enterprise_to_ebitda == 2.80
+    assert fund.net_revenue == 511000000000.0
+    assert fund.ebitda == 262000000000.0
+    assert fund.net_margin == 24.5
+    assert fund.operating_margin == 42.0
+    assert fund.gross_margin == 51.0
+    assert fund.roe == 32.5
+    assert fund.roa == 12.5
+    assert fund.total_debt == 280000000000.0
+    assert fund.free_cash_flow == 140000000000.0
+    assert fund.book_value == 31.50
+    assert fund.peg_ratio == 0.85
+    assert fund.beta == 0.95
+    assert fund.sector == "Energia"
+    assert fund.industry == "Petróleo, Gás e Biocombustíveis"
+    assert "Petrobras explora" in (fund.description or "")
+    assert fund.website == "https://petrobras.com.br"
+    assert fund.employees == 45000
+    assert fund.recommendation == "buy"
+    assert fund.target_price == 44.50
+
+
+@pytest.mark.asyncio
 async def test_fetch_company_fundamentals() -> None:
     """Valida o Bloco 6: fundamentos de acoes."""
     def handler(request: httpx.Request) -> httpx.Response:

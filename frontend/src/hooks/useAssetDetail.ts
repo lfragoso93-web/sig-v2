@@ -68,26 +68,53 @@ export function useAssetCorporateLifecycle(
 export interface FIIIndicators {
   pvp: number | null
   dividend_yield: number | null
+  dividend_yield_1m?: number | null
   net_worth: number | null
+  nav_per_share?: number | null
   share_holders: number | null
+  shares_outstanding?: number | null
   physical_vacancy: number | null
   financial_vacancy: number | null
   properties_count: number | null
+  total_area_m2?: number | null
   segment: string | null
+  segment_type?: string | null
+  management_type?: string | null
+  administrator_name?: string | null
+  administrator_cnpj?: string | null
+  cnpj?: string | null
 }
 
 export interface StockFundamentals {
   pe: number | null
+  forward_pe?: number | null
   pb: number | null
   dividend_yield: number | null
   eps: number | null
   market_cap: number | null
+  enterprise_value?: number | null
+  enterprise_to_ebitda?: number | null
   net_revenue: number | null
   net_income: number | null
   ebitda: number | null
   net_margin: number | null
+  operating_margin?: number | null
+  gross_margin?: number | null
   roe: number | null
+  roa?: number | null
   net_debt: number | null
+  total_debt?: number | null
+  free_cash_flow?: number | null
+  book_value?: number | null
+  peg_ratio?: number | null
+  beta?: number | null
+  sector?: string | null
+  industry?: string | null
+  description?: string | null
+  website?: string | null
+  employees?: number | null
+  recommendation?: string | null
+  target_price?: number | null
 }
 
 export interface AssetEnrichment {

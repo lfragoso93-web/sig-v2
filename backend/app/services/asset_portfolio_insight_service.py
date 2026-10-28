@@ -217,13 +217,29 @@ class AssetPortfolioInsightService:
 
         # Papel Estratégico
         tipo = (pos.class_name or "").upper()
+        valuation_note = ""
         if "FII" in tipo:
-            strategic_role = "Vetor de renda passiva mensal recorrente e diversificação imobiliária."
+            seg_info = f" ({fii_data.get('segment') or fii_data.get('segment_type')})" if fii_data and (fii_data.get('segment') or fii_data.get('segment_type')) else ""
+            strategic_role = f"Vetor de renda passiva mensal recorrente e diversificação imobiliária{seg_info}."
+            if fii_data and fii_data.get("pvp") is not None:
+                pvp_val = float(fii_data["pvp"])
+                discount = (1.0 - pvp_val) * 100
+                if discount > 2.0:
+                    valuation_note = f" Negociando com desconto patrimonial de {discount:.1f}% (P/VP {pvp_val:.2f})."
+                elif discount < -2.0:
+                    valuation_note = f" Negociando com ágio patrimonial de {abs(discount):.1f}% (P/VP {pvp_val:.2f})."
+                else:
+                    valuation_note = f" Negociando em linha com o valor patrimonial (P/VP {pvp_val:.2f})."
         elif "ACAO" in tipo or "STOCK" in tipo or "BDR" in tipo:
+            sector_info = f" do setor de {stock_data.get('sector')}" if stock_data and stock_data.get("sector") else ""
             if market_dy and market_dy >= 6.0:
-                strategic_role = "Empresa madura e geradora de caixa com distribuição relevante de dividendos/JCP."
+                strategic_role = f"Empresa madura e geradora de caixa{sector_info} com distribuição relevante de dividendos/JCP."
             else:
-                strategic_role = "Ativo com potencial de crescimento dos lucros e valorização do capital."
+                strategic_role = f"Ativo com potencial de crescimento dos lucros e valorização do capital{sector_info}."
+            if stock_data and stock_data.get("pe") is not None:
+                pe_val = float(stock_data["pe"])
+                roe_str = f" e ROE de {float(stock_data['roe']):.1f}%" if stock_data.get("roe") is not None else ""
+                valuation_note = f" Apresenta múltiplo P/L de {pe_val:.1f}x{roe_str}."
         elif "CRIPTO" in tipo:
             strategic_role = "Reserva descentralizada e alta assimetria de valorização."
         elif "RENDA_FIXA" in tipo or "TESOURO" in tipo:
@@ -236,12 +252,13 @@ class AssetPortfolioInsightService:
             summary = (
                 f"{ticker} cumpre o papel de {strategic_role.lower()} Com peso de {pos.portfolio_weight_percent:.1f}% "
                 f"no portfólio, apresenta retorno total de {pos.total_return_percent:+.2f}% "
-                f"(Ganho: {pos.capital_gain_percent:+.2f}%, Proventos: R$ {pos.dividends_received:,.2f}). "
+                f"(Ganho: {pos.capital_gain_percent:+.2f}%, Proventos: R$ {pos.dividends_received:,.2f})."
+                f"{valuation_note} "
                 f"{concentration_msg}"
             )
         else:
             summary = (
-                f"{ticker} atua como {strategic_role.lower()} Atualmente não compõe a custódia desta carteira."
+                f"{ticker} atua como {strategic_role.lower()}{valuation_note} Atualmente não compõe a custódia desta carteira."
             )
 
         return AIAssetInsight(
