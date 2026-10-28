@@ -45,6 +45,7 @@ async def fetch_crypto_catalog_all(limit: int = 500) -> list[dict]:
     """Busca e normaliza o catálogo BRAPI de cripto para registros estruturados."""
     headers = _auth_headers()
     all_coins: list[dict] = []
+    seen_coins: set[str] = set()
     page = 1
 
     while True:
@@ -81,11 +82,22 @@ async def fetch_crypto_catalog_all(limit: int = 500) -> list[dict]:
         if not items:
             break
 
-        all_coins.extend(items)
+        new_items: list[dict] = []
+        for item in items:
+            coin = str(item.get("coin") or item.get("symbol") or "").strip().upper()
+            if coin and coin not in seen_coins:
+                seen_coins.add(coin)
+                new_items.append(item)
+
+        if not new_items:
+            # Nenhuma moeda nova nesta página — fim da paginação ou endpoint estático
+            break
+
+        all_coins.extend(new_items)
         logger.info(
             "[market_data] crypto catalog page=%d: %d moedas válidas (%d acumuladas)",
             page,
-            len(items),
+            len(new_items),
             len(all_coins),
         )
 
