@@ -28,7 +28,7 @@ _DEFAULT_MAX_RETRIES = 2
 
 _SAFE_SYMBOL_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
 _SAFE_MACRO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}\Z")
-_SAFE_PATH_RE = re.compile(r"^/(api/quote/[A-Za-z0-9^.,-]+|api/v2/fii/(indicators|properties|list)|v2/(tickers/resolve|prime/macro/[A-Za-z0-9_.-]+))\Z")
+_SAFE_PATH_RE = re.compile(r"^/(?:api/)?(quote/[A-Za-z0-9^.,-]+|v2/(tickers/resolve|fii/(indicators|properties|list)|prime/macro/[A-Za-z0-9_.-]+))\Z")
 
 
 # -----------------------------------------------------------------------------
@@ -214,7 +214,10 @@ class BrapiV2Client:
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         max_retries: int = _DEFAULT_MAX_RETRIES,
     ) -> None:
-        self._base_url = (base_url or settings.BRAPI_BASE_URL).rstrip("/")
+        raw_base = (base_url or settings.BRAPI_BASE_URL).rstrip("/")
+        if not raw_base.endswith("/api"):
+            raw_base = f"{raw_base}/api"
+        self._base_url = raw_base
         self._token = token if token is not None else settings.BRAPI_TOKEN
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
@@ -234,7 +237,8 @@ class BrapiV2Client:
         if not path.startswith("/") or "://" in path or ".." in path or not _SAFE_PATH_RE.fullmatch(path):
             raise ValueError(f"Caminho de requisicao BRAPI invalido: {path}")
 
-        url = f"{self._base_url}{path}"
+        req_path = path[4:] if path.startswith("/api/") else path
+        url = f"{self._base_url}{req_path}"
         base_parsed = urllib.parse.urlsplit(self._base_url)
         url_parsed = urllib.parse.urlsplit(url)
         if url_parsed.scheme not in ("http", "https") or url_parsed.netloc != base_parsed.netloc:
@@ -367,7 +371,7 @@ class BrapiV2Client:
 
         for index in range(0, len(symbols), _MAX_TICKERS_PER_REQUEST):
             chunk = symbols[index:index + _MAX_TICKERS_PER_REQUEST]
-            path = f"/api/quote/{','.join(chunk)}"
+            path = f"/quote/{','.join(chunk)}"
             try:
                 payload = await self._request_with_retry(client, path)
             except BrapiV2NotFoundError:
@@ -406,7 +410,7 @@ class BrapiV2Client:
         if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
-        path = f"/api/quote/{clean_symbol}"
+        path = f"/quote/{clean_symbol}"
         params = {"range": range_val, "interval": interval}
 
         if client is not None:
@@ -465,7 +469,7 @@ class BrapiV2Client:
         if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return [], []
 
-        path = f"/api/quote/{clean_symbol}"
+        path = f"/quote/{clean_symbol}"
         params = {"dividends": "true"}
 
         if client is not None:
@@ -550,12 +554,12 @@ class BrapiV2Client:
         client: httpx.AsyncClient,
         symbol: str,
     ) -> Optional[FIIIndicatorDTO]:
-        # 1. Tenta endpoint dedicado de FIIs: /api/v2/fii/indicators
+        # 1. Tenta endpoint dedicado de FIIs: /v2/fii/indicators
         fii_entry: Optional[dict[str, Any]] = None
         fii_props_entry: Optional[dict[str, Any]] = None
         try:
             indicators_payload = await self._request_with_retry(
-                client, "/api/v2/fii/indicators", params={"symbols": symbol}
+                client, "/v2/fii/indicators", params={"symbols": symbol}
             )
             fiis_list = (
                 indicators_payload.get("indexes")
@@ -565,13 +569,13 @@ class BrapiV2Client:
             if isinstance(fiis_list, list) and fiis_list and isinstance(fiis_list[0], dict):
                 fii_entry = fiis_list[0]
         except (BrapiV2Error, Exception) as exc:
-            logger.debug("Endpoint /api/v2/fii/indicators indisponivel para %s: %s", symbol, exc)
+            logger.debug("Endpoint /v2/fii/indicators indisponivel para %s: %s", symbol, exc)
 
-        # Se encontrou no endpoint v2 de FIIs, tenta tambem /api/v2/fii/properties para vacancia e imoveis
+        # Se encontrou no endpoint v2 de FIIs, tenta tambem /v2/fii/properties para vacancia e imoveis
         if fii_entry is not None:
             try:
                 props_payload = await self._request_with_retry(
-                    client, "/api/v2/fii/properties", params={"symbols": symbol}
+                    client, "/v2/fii/properties", params={"symbols": symbol}
                 )
                 props_fiis = (
                     props_payload.get("properties")
@@ -581,7 +585,7 @@ class BrapiV2Client:
                 if isinstance(props_fiis, list) and props_fiis and isinstance(props_fiis[0], dict):
                     fii_props_entry = props_fiis[0]
             except Exception as exc:
-                logger.debug("Endpoint /api/v2/fii/properties indisponivel para %s: %s", symbol, exc)
+                logger.debug("Endpoint /v2/fii/properties indisponivel para %s: %s", symbol, exc)
 
             props_summary = fii_props_entry.get("summary", {}) if isinstance(fii_props_entry, dict) else {}
 
@@ -636,11 +640,11 @@ class BrapiV2Client:
                 cnpj=cnpj,
             )
 
-        # 2. Fallback para /api/quote/{symbol}?modules=defaultKeyStatistics,summaryProfile
+        # 2. Fallback para /quote/{symbol}?modules=defaultKeyStatistics,summaryProfile
         # (cobre planos sem acesso ao v2 FII e mocks de testes unitarios)
         try:
             quote_payload = await self._request_with_retry(
-                client, f"/api/quote/{symbol}", params={"modules": "defaultKeyStatistics,summaryProfile"}
+                client, f"/quote/{symbol}", params={"modules": "defaultKeyStatistics,summaryProfile"}
             )
         except BrapiV2NotFoundError:
             return None
@@ -695,7 +699,7 @@ class BrapiV2Client:
         if not clean_symbol or not _SAFE_SYMBOL_RE.fullmatch(clean_symbol):
             return None
 
-        path = f"/api/quote/{clean_symbol}"
+        path = f"/quote/{clean_symbol}"
         params = {"modules": "summaryProfile,financialData,defaultKeyStatistics"}
 
         if client is not None:

@@ -447,7 +447,7 @@ async def test_fetch_company_fundamentals() -> None:
 async def test_fetch_macro_series() -> None:
     """Valida o Bloco 7: series macroeconomicas."""
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v2/prime/macro/SELIC"
+        assert request.url.path == "/api/v2/prime/macro/SELIC"
         return httpx.Response(
             200,
             json={
