@@ -144,9 +144,21 @@ def _parse_date(value: object, *, field: str) -> date:
         raise CorporateActionNormalizationError(f"{field} inválido: {text}") from exc
 
 
+def _clean_decimal_text(value: object) -> str:
+    text = str(value).strip().replace(" ", "")
+    if "," in text and "." in text:
+        if text.rfind(".") > text.rfind(","):
+            text = text.replace(",", "")
+        else:
+            text = text.replace(".", "").replace(",", ".")
+    elif "," in text:
+        text = text.replace(",", ".")
+    return text
+
+
 def _positive_decimal(value: object, *, field: str) -> Decimal:
     try:
-        parsed = Decimal(str(value))
+        parsed = Decimal(_clean_decimal_text(value))
     except Exception as exc:
         raise CorporateActionNormalizationError(f"{field} inválido") from exc
     if not parsed.is_finite() or parsed <= 0:
@@ -156,7 +168,7 @@ def _positive_decimal(value: object, *, field: str) -> Decimal:
 
 def _decimal_value(value: object, *, field: str) -> Decimal:
     try:
-        parsed = Decimal(str(value))
+        parsed = Decimal(_clean_decimal_text(value))
     except Exception as exc:
         raise CorporateActionNormalizationError(f"{field} invalido") from exc
     if not parsed.is_finite():
@@ -668,7 +680,11 @@ def normalize_b3_corporate_actions(
                 kind = CorporateActionKind.REVERSE_SPLIT
             elif "DESDOBRAMENTO" in label or "SPLIT" in label:
                 kind = CorporateActionKind.SPLIT
-            elif "BONIFICACAO" not in label:
+            elif "BONIFICACAO" in label:
+                kind = CorporateActionKind.STOCK_BONUS
+            elif label in _B3_COMPLEX_ACTION_LABELS:
+                continue
+            else:
                 raise CorporateActionNormalizationError(
                     f"B3 stockDividends.label nao suportado: {label or 'ausente'}"
                 )

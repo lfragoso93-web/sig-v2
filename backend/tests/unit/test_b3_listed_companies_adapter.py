@@ -236,7 +236,7 @@ def test_b3_unknown_stock_action_label_fails_closed() -> None:
     payload = {
         "code": "TEST",
         "stockDividends": [{
-            "label": "CIS RED CAP", "factor": "100", "lastDatePrior": "01/02/2025",
+            "label": "ROTULO DESCONHECIDO", "factor": "100", "lastDatePrior": "01/02/2025",
             "isinCode": "BRTESTACNOR0",
         }],
         "subscriptions": [],
@@ -244,3 +244,39 @@ def test_b3_unknown_stock_action_label_fails_closed() -> None:
 
     with pytest.raises(CorporateActionNormalizationError, match="label nao suportado"):
         normalize_b3_corporate_actions("TEST3", payload)
+
+
+def test_b3_complex_action_label_skipped_in_simple_normalizer() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [
+            {
+                "label": "BONIFICACAO", "factor": "10", "lastDatePrior": "01/02/2025",
+                "isinCode": "BRTESTACNOR0",
+            },
+            {
+                "label": "CIS RED CAP", "factor": "100", "lastDatePrior": "01/02/2020",
+                "isinCode": "BRTESTACNOR0",
+            },
+        ],
+        "subscriptions": [],
+    }
+
+    actions = normalize_b3_corporate_actions("TEST3", payload)
+    assert len(actions) == 1
+    assert actions[0].kind == CorporateActionKind.STOCK_BONUS
+
+
+def test_b3_factor_with_thousands_separator_and_commas() -> None:
+    payload = {
+        "code": "TEST",
+        "stockDividends": [{
+            "label": "DESDOBRAMENTO", "factor": "4,900.00000000000", "lastDatePrior": "01/02/2025",
+            "isinCode": "BRTESTACNOR0",
+        }],
+        "subscriptions": [],
+    }
+
+    action, = normalize_b3_corporate_actions("TEST3", payload)
+    assert action.kind == CorporateActionKind.SPLIT
+    assert action.quantity_factor == Decimal("50")
