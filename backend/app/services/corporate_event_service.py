@@ -134,6 +134,13 @@ async def fetch_b3_corporate_actions(
             )
             return payload
     except B3ListedCompaniesError as exc:
+        if "sem codigo de emissor resolvivel" in str(exc):
+            logger.warning(
+                "[corporate_events] Ticker %s sem codigo de emissor B3 resolvivel; pulando consulta B3: %s",
+                ticker,
+                exc,
+            )
+            return None
         raise CorporateActionCollectionError(f"{ticker}/b3: {exc}") from exc
 
 

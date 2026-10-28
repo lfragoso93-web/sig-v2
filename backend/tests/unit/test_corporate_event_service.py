@@ -159,3 +159,11 @@ async def test_sync_skips_crypto_without_provider_calls() -> None:
     yahoo_fetcher.assert_not_awaited()
     b3_fetcher.assert_not_awaited()
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_b3_corporate_actions_returns_none_for_unresolvable_ticker() -> None:
+    from app.services.corporate_event_service import fetch_b3_corporate_actions
+
+    result = await fetch_b3_corporate_actions("BRADESCO", "ACAO")
+    assert result is None
