@@ -354,6 +354,11 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
             new=AsyncMock(),
         ),
         patch(
+            "app.services.transaction_write_service."
+            "load_global_corporate_actions_by_ticker",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
             "app.services.csv_import_service.invalidate_portfolio_cache",
             new=AsyncMock(),
         ) as invalidate_cache,

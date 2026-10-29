@@ -323,7 +323,7 @@ async def test_sell_quantity_respects_corporate_action_splits() -> None:
     db.execute = AsyncMock(side_effect=[alias_result, tx_rows, asset_result])
 
     with patch(
-        "app.services.corporate_action_position_reader.load_global_corporate_actions_by_ticker",
+        "app.services.transaction_write_service.load_global_corporate_actions_by_ticker",
         new_callable=AsyncMock,
         return_value={"PETR4": (split_action,)},
     ):
@@ -345,7 +345,7 @@ async def test_sell_quantity_respects_corporate_action_splits() -> None:
     # Selling 250 when available is 200 must fail
     db.execute = AsyncMock(side_effect=[alias_result, tx_rows, asset_result])
     with patch(
-        "app.services.corporate_action_position_reader.load_global_corporate_actions_by_ticker",
+        "app.services.transaction_write_service.load_global_corporate_actions_by_ticker",
         new_callable=AsyncMock,
         return_value={"PETR4": (split_action,)},
     ):

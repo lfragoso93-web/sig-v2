@@ -7,6 +7,8 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from decimal import Decimal
+
 from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
 from app.models.asset_alias import AssetAlias
@@ -22,6 +24,14 @@ from app.services.fixed_income_contract_service import (
     WRITE_FIXED_INCOME_CONTRACTS,
     create_fixed_income_contract,
     require_fixed_income_contract,
+)
+from app.services.corporate_action_position_reader import (
+    load_global_corporate_actions_by_ticker,
+)
+from app.services.position_timeline_projection import (
+    PositionMovement,
+    PositionMovementKind,
+    project_position_timeline,
 )
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
@@ -97,9 +107,6 @@ async def _current_quantity(
     actions = ()
     if asset_type in {"ACAO", "FII", "BDR", "ETF"}:
         try:
-            from app.services.corporate_action_position_reader import (
-                load_global_corporate_actions_by_ticker,
-            )
             actions_by_ticker = await load_global_corporate_actions_by_ticker(
                 db,
                 [ticker.strip().upper()],
@@ -109,12 +116,6 @@ async def _current_quantity(
             actions = ()
 
     if actions:
-        from decimal import Decimal
-        from app.services.position_timeline_projection import (
-            PositionMovement,
-            PositionMovementKind,
-            project_position_timeline,
-        )
         movements: list[PositionMovement] = []
         for row in rows:
             op_raw = row[0]
