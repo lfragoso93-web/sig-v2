@@ -6,13 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.limiter import limiter
+from app.core.limiter import get_client_ip, limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
 )
-from app.core.token_blacklist import blacklist_token, is_blacklisted
+from app.core.token_blacklist import (
+    blacklist_token,
+    is_blacklisted,
+    is_user_session_revoked,
+)
 from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -35,6 +39,20 @@ from app.services import auth_service
 from app.services.user_service import get_user_by_id
 
 router = APIRouter(tags=["auth"])
+
+
+def _extract_request_metadata(
+    request: Request,
+) -> tuple[str | None, str | None]:
+    """Extrai IP real e User-Agent da requisicao para trilha de auditoria."""
+    try:
+        ip_address = get_client_ip(request)
+    except Exception:
+        ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("User-Agent")
+    if user_agent:
+        user_agent = user_agent[:500]
+    return ip_address, user_agent
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -64,31 +82,45 @@ async def register(
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-@limiter.limit(settings.LOGIN_RATE_LIMIT)
+@limiter.limit(settings.FORGOT_PASSWORD_RATE_LIMIT)
 async def request_password_reset(
     request: Request,
     data: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Inicia recuperacao de senha e envia e-mail transacional."""
-    reset_token = await auth_service.forgot_password(db, data.email)
+    """Inicia recuperacao de senha apenas para usuarios existentes e envia link por e-mail."""
+    ip_address, user_agent = _extract_request_metadata(request)
+    await auth_service.forgot_password(
+        db,
+        data.email,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    await db.commit()
     return ForgotPasswordResponse(
         message=(
-            "Se o e-mail existir, as instrucoes de recuperacao serao enviadas."
+            "Instrucoes de recuperacao foram enviadas para o seu e-mail."
         ),
-        reset_token=reset_token,
+        reset_token=None,
     )
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-@limiter.limit(settings.LOGIN_RATE_LIMIT)
+@limiter.limit(settings.RESET_PASSWORD_RATE_LIMIT)
 async def confirm_password_reset(
     request: Request,
     data: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Redefine a senha usando token de recuperacao valido."""
-    await auth_service.reset_password(db, data.token, data.new_password)
+    """Redefine a senha usando token de recuperacao valido e de uso unico."""
+    ip_address, user_agent = _extract_request_metadata(request)
+    await auth_service.reset_password(
+        db,
+        data.token,
+        data.new_password,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
     await db.commit()
     return MessageResponse(message="Senha redefinida com sucesso")
 
@@ -122,9 +154,16 @@ async def refresh(
             detail="Refresh token ja utilizado ou revogado.",
         )
 
+    user_id = int(payload["sub"])
+    if await is_user_session_revoked(user_id, payload):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessao revogada por alteracao de senha. Faca login novamente.",
+        )
+
     await blacklist_token(jti, payload["exp"])
 
-    user = await get_user_by_id(db, int(payload["sub"]))
+    user = await get_user_by_id(db, user_id)
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

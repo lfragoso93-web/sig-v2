@@ -21,6 +21,12 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.token_blacklist import (
+    blacklist_token,
+    is_blacklisted,
+    is_user_session_revoked,
+    revoke_user_sessions,
+)
 from app.models.user import User, UserRole
 from app.schemas.auth import (
     LoginRequest,
@@ -31,6 +37,7 @@ from app.schemas.auth import (
 )
 from app.schemas.password_policy import validate_strong_password
 from app.schemas.user import UserCreate
+from app.services.audit_log_service import AuditLogService
 from app.services.email_service import (
     send_password_changed_email,
     send_password_reset_email,
@@ -77,14 +84,21 @@ async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
     user = await get_user_by_email(db, email_clean)
     if not user:
         await register_failed_attempt(email_clean)
-        logger.warning("Login falhou: email inexistente (%s)", sanitize_log_value(email_clean))
+        logger.warning(
+            "Login falhou: email inexistente (%s)",
+            sanitize_log_value(email_clean),
+        )
         raise _INVALID_CREDENTIALS
 
     try:
         senha_ok = verify_password(data.password, user.hashed_password)
     except Exception as exc:
         await register_failed_attempt(email_clean)
-        logger.error("Erro ao verificar senha id=%s: %s", user.id, sanitize_log_value(exc))
+        logger.error(
+            "Erro ao verificar senha id=%s: %s",
+            user.id,
+            sanitize_log_value(exc),
+        )
         raise _INVALID_CREDENTIALS from exc
 
     if not senha_ok:
@@ -233,9 +247,11 @@ async def disable_mfa(db: AsyncSession, user: User, code: str) -> bool:
 
 def get_mfa_status(user: User) -> MfaStatusResponse:
     """Retorna o status atual de MFA e o provedor de autenticacao."""
+    is_superadmin = getattr(user, "role", None) == UserRole.superadmin
     return MfaStatusResponse(
         mfa_enabled=bool(user.totp_enabled),
         auth_provider=user.auth_provider or "local",
+        mfa_recommended=bool(is_superadmin and not user.totp_enabled),
     )
 
 
@@ -358,8 +374,13 @@ async def refresh_access_token(db: AsyncSession, refresh_token: str) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token invalido ou expirado",
         )
-    user_id = payload.get("sub")
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user_id = int(payload.get("sub"))
+    if await is_user_session_revoked(user_id, payload):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessao revogada por alteracao de senha. Faca login novamente.",
+        )
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(
@@ -369,39 +390,98 @@ async def refresh_access_token(db: AsyncSession, refresh_token: str) -> str:
     return create_access_token(str(user.id))
 
 
-async def forgot_password(db: AsyncSession, email: str) -> str:
-    """Gera token de recuperacao e dispara e-mail via Brevo/SMTP."""
-    user = await get_user_by_email(db, email.strip().lower())
+async def forgot_password(
+    db: AsyncSession,
+    email: str,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> str:
+    """Valida existencia do usuario, gera token de uso unico e dispara e-mail via Brevo."""
+    email_clean = email.strip().lower()
+    user = await get_user_by_email(db, email_clean)
     if not user or not user.is_active:
-        return "usuario-nao-encontrado-token-invalido"
+        logger.warning(
+            "Tentativa de recuperacao de senha para conta inexistente ou inativa: email=%s ip=%s",
+            sanitize_log_value(email_clean),
+            sanitize_log_value(ip_address or "unknown"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma conta ativa encontrada com este e-mail.",
+        )
 
     reset_token = create_access_token(
         subject=str(user.id),
         expires_delta=timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
         token_type="reset",
     )
+
+    try:
+        await AuditLogService.log_action(
+            db=db,
+            user_id=user.id,
+            action="UPDATE",
+            resource_type="PasswordResetRequest",
+            resource_id=user.id,
+            new_values={"event": "forgot_password_requested"},
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status="SUCCESS",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Falha ao registrar audit_log de solicitacao de reset id=%s: %s",
+            user.id,
+            sanitize_log_value(exc),
+        )
+
     try:
         await send_password_reset_email(user.email, reset_token)
     except Exception as exc:
         logger.error(
             "Erro ao enviar email de reset para usuario id=%s: %s",
             user.id,
-            exc,
+            sanitize_log_value(exc),
         )
     return reset_token
 
 
 async def reset_password(
-    db: AsyncSession, token: str, new_password: str
+    db: AsyncSession,
+    token: str,
+    new_password: str,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> None:
-    """Valida token e atualiza senha cumprindo a politica de seguranca."""
+    """Valida token de uso unico, atualiza senha, revoga sessoes e notifica o titular."""
     payload = decode_token(token)
     if not payload or payload.get("type") != "reset":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token invalido ou expirado",
         )
+
+    jti = payload.get("jti")
+    if jti and await is_blacklisted(jti):
+        logger.warning(
+            "Tentativa de reutilizacao de token de reset bloqueada: jti=%s ip=%s",
+            sanitize_log_value(jti),
+            sanitize_log_value(ip_address or "unknown"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este link de recuperacao ja foi utilizado ou expirou.",
+        )
+
     user_id = payload.get("sub")
+    if not user_id or not str(user_id).isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token invalido ou expirado",
+        )
+
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
@@ -409,6 +489,7 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token invalido ou expirado",
         )
+
     try:
         validate_strong_password(new_password)
     except ValueError as exc:
@@ -416,12 +497,37 @@ async def reset_password(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
     await db.execute(
         update(User)
         .where(User.id == user.id)
         .values(hashed_password=hash_password(new_password))
     )
     await db.flush()
+
+    if jti and "exp" in payload:
+        await blacklist_token(jti, float(payload["exp"]))
+    await revoke_user_sessions(user.id)
+
+    try:
+        await AuditLogService.log_action(
+            db=db,
+            user_id=user.id,
+            action="UPDATE",
+            resource_type="UserPassword",
+            resource_id=user.id,
+            new_values={"origin": "recuperacao_por_link_email"},
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status="SUCCESS",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Falha ao registrar audit_log de reset de senha id=%s: %s",
+            user.id,
+            sanitize_log_value(exc),
+        )
+
     try:
         await send_password_changed_email(
             user.email,
@@ -432,5 +538,5 @@ async def reset_password(
         logger.warning(
             "Falha ao enviar aviso de senha redefinida id=%s: %s",
             user.id,
-            exc,
+            sanitize_log_value(exc),
         )

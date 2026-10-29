@@ -1,12 +1,15 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.auth import get_current_user
+from app.core.limiter import get_client_ip
 from app.core.security import hash_password, verify_password
+from app.core.token_blacklist import revoke_user_sessions
 from app.models.user import User
 from app.schemas.user import UserPasswordUpdate, UserResponse, UserUpdate
 from app.schemas.auth import MessageResponse
+from app.services.audit_log_service import AuditLogService
 from app.services.email_service import (
     send_account_deleted_email,
     send_password_changed_email,
@@ -34,6 +37,7 @@ async def update_me(
 
 @router.patch("/me/password", response_model=MessageResponse)
 async def change_my_password(
+    request: Request,
     data: UserPasswordUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -45,7 +49,29 @@ async def change_my_password(
         )
 
     current_user.hashed_password = hash_password(data.new_password)
+    try:
+        ip_address = get_client_ip(request)
+    except Exception:
+        ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("User-Agent")
+
+    try:
+        await AuditLogService.log_action(
+            db=db,
+            user_id=current_user.id,
+            action="UPDATE",
+            resource_type="UserPassword",
+            resource_id=current_user.id,
+            new_values={"origin": "alteracao_configuracoes_conta"},
+            ip_address=ip_address,
+            user_agent=user_agent[:500] if user_agent else None,
+            status="SUCCESS",
+        )
+    except Exception as exc:
+        logger.warning("Falha ao registrar audit_log de senha alterada: %s", exc)
+
     await db.commit()
+    await revoke_user_sessions(current_user.id)
     try:
         await send_password_changed_email(
             current_user.email,

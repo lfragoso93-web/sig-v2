@@ -78,3 +78,4 @@ class MfaVerifyRequest(BaseModel):
 class MfaStatusResponse(BaseModel):
     mfa_enabled: bool
     auth_provider: str
+    mfa_recommended: bool = False

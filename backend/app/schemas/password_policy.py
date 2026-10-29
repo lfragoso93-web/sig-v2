@@ -2,6 +2,14 @@ import re
 
 PASSWORD_MIN_LENGTH = 10
 PASSWORD_SPECIAL_CHARS = r"!@#$%^&*(),.?\":{}|<>"
+WEAK_PASSWORD_SUBSTRINGS = (
+    "123456",
+    "abcdef",
+    "qwerty",
+    "password",
+    "senha123",
+    "admin123",
+)
 
 
 def validate_strong_password(value: str) -> str:
@@ -18,4 +26,10 @@ def validate_strong_password(value: str) -> str:
             "Senha deve conter pelo menos um caractere especial "
             f"({PASSWORD_SPECIAL_CHARS})"
         )
+    lowered = value.lower()
+    for pattern in WEAK_PASSWORD_SUBSTRINGS:
+        if pattern in lowered:
+            raise ValueError(
+                "Senha contem sequencia obvia ou comum nao permitida por seguranca"
+            )
     return value
