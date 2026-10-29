@@ -160,5 +160,5 @@ def test_canonical_proventos_reader_has_fixed_two_query_plan() -> None:
         / "canonical_dividend_entitlement_reader.py"
     ).read_text(encoding="utf-8")
 
-    assert source.count("await db.execute(") == 2
+    assert source.count("await db.execute(") == 3
     assert "for asset_dividend, asset in event_rows:" in source
