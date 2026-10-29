@@ -1,8 +1,9 @@
-name: Deploy to OCI Production (Self-Hosted)
+name: Deploy to OCI Production
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
 # • workflow_run (SIG v2 CI/CD na branch main) → executa somente se o CI for aprovado
+# • push na stable-15jun ou main               → opcional via dispatch manual
 # • workflow_dispatch                          → disparo manual via interface do GitHub
 # ─────────────────────────────────────────────────────────────────────────────
 on:
@@ -16,7 +17,7 @@ on:
       target_branch:
         description: "Branch para deploy no OCI"
         required: true
-        default: "main"
+        default: "stable-15jun"
 
 concurrency:
   group: deploy-oci-production
@@ -24,68 +25,71 @@ concurrency:
 
 jobs:
   deploy:
-    name: Rebuild and Deploy on OCI
-    runs-on: [self-hosted]
+    name: Rebuild and Deploy on OCI via SSH
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Deploy and Rebuild SGI v2 Stack
-        run: |
-          set -eu
+      - name: Deploy and Rebuild SGI v2 Stack via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'main' }}
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: ${{ secrets.OCI_SSH_PORT || 22 }}
+          envs: TARGET_BRANCH
+          command_timeout: 25m
+          script_stop: true
+          script: |
+            set -eu
 
-          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'main' }}"
-          if [ -n "${SGI_DEPLOY_DIR:-}" ]; then
-            DEPLOY_DIR="${SGI_DEPLOY_DIR}"
-          elif [ -d "/opt/sig-v2" ]; then
-            DEPLOY_DIR="/opt/sig-v2"
-          else
-            DEPLOY_DIR="/opt/sgi-v2"
-          fi
+            if [ -d "/opt/sig-v2" ]; then
+              DEPLOY_DIR="/opt/sig-v2"
+            elif [ -d "/opt/sgi-v2" ]; then
+              DEPLOY_DIR="/opt/sgi-v2"
+            else
+              echo "[deploy-oci] ERRO: Diretório da aplicação não encontrado em /opt/sig-v2 ou /opt/sgi-v2." >&2
+              exit 1
+            fi
 
-          echo "=========================================================="
-          echo " Início do Deploy Automático no OCI"
-          echo " Diretório de aplicação: ${DEPLOY_DIR}"
-          echo " Branch alvo: ${TARGET_BRANCH}"
-          echo "=========================================================="
+            echo "=========================================================="
+            echo " Início do Deploy Automático no OCI (via GitHub Actions SSH)"
+            echo " Diretório de aplicação: ${DEPLOY_DIR}"
+            echo " Branch alvo: ${TARGET_BRANCH}"
+            echo "=========================================================="
 
-          if [ ! -d "${DEPLOY_DIR}" ]; then
-            echo "[deploy-oci] ERRO: Diretório ${DEPLOY_DIR} não encontrado na VM." >&2
-            exit 1
-          fi
+            cd "${DEPLOY_DIR}"
 
-          cd "${DEPLOY_DIR}"
+            echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
+            git fetch origin "${TARGET_BRANCH}"
+            git checkout "${TARGET_BRANCH}"
+            git pull --ff-only origin "${TARGET_BRANCH}"
 
-          echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
-          git fetch origin "${TARGET_BRANCH}"
-          git checkout "${TARGET_BRANCH}"
-          git pull --ff-only origin "${TARGET_BRANCH}"
+            APP_COMMIT_SHA="$(git rev-parse HEAD)"
+            echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
 
-          APP_COMMIT_SHA="$(git rev-parse HEAD)"
-          echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
+            if [ -f .env ]; then
+              echo "==> Atualizando APP_COMMIT_SHA no arquivo .env..."
+              if grep -q "^APP_COMMIT_SHA=" .env; then
+                sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
+              else
+                echo "APP_COMMIT_SHA=${APP_COMMIT_SHA}" >> .env
+              fi
+            fi
 
-          if [ ! -f .env ]; then
-            echo "[deploy-oci] ERRO: Arquivo .env ausente em ${DEPLOY_DIR}." >&2
-            exit 1
-          fi
+            echo "==> Rebuildando imagens e subindo contêineres..."
+            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
+            docker compose ${COMPOSE_FILES} up -d --build
 
-          echo "==> Atualizando APP_COMMIT_SHA no arquivo .env..."
-          if grep -q "^APP_COMMIT_SHA=" .env; then
-            sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
-          else
-            echo "APP_COMMIT_SHA=${APP_COMMIT_SHA}" >> .env
-          fi
+            echo "==> Aguardando estabilização dos serviços..."
+            sleep 5
 
-          echo "==> Executando preflight de ambiente do OCI..."
-          sh scripts/oci_env_preflight.sh .env
+            echo "==> Executando smoke test oficial de saúde..."
+            sh scripts/oci_smoke_test.sh
 
-          echo "==> Rebuildando imagens e subindo contêineres..."
-          COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
-          docker compose ${COMPOSE_FILES} up -d --build
-
-          echo "==> Executando smoke test oficial de saúde..."
-          sh scripts/oci_smoke_test.sh
-
-          echo "=========================================================="
-          echo " Deploy e rebuild concluídos com sucesso no OCI!"
-          echo " Runtime SHA: ${APP_COMMIT_SHA}"
-          echo "=========================================================="
+            echo "=========================================================="
+            echo " Deploy e rebuild concluídos com sucesso no OCI!"
+            echo " Runtime SHA: ${APP_COMMIT_SHA}"
+            echo "=========================================================="
