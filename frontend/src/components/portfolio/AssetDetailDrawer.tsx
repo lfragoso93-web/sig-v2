@@ -80,6 +80,16 @@ function formatNumber(value: number | null | undefined, decimals = 2) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
+function formatUnitValue(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return '-'
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  })
+}
+
 export default function AssetDetailDrawer({
   asset,
   ticker,
@@ -752,14 +762,38 @@ export default function AssetDetailDrawer({
                 </div>
               )}
 
-              {/* Proventos */}
+              {/* Proventos Recebidos pelo Usuário na Carteira */}
               {assetDividends.length > 0 && (
-                <div style={{ background: 'var(--color-surface-offset)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
-                    <Zap size={14} style={{ color: 'var(--color-primary)' }} />
-                    <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
-                      Proventos ({assetDividends.length})
-                    </h3>
+                <div style={{ background: 'var(--color-surface-offset)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Zap size={14} style={{ color: 'var(--color-primary)' }} />
+                      <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                        Proventos ({assetDividends.length})
+                      </h3>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+                        (Creditados nesta carteira)
+                      </span>
+                    </div>
+                    {dividendHistory.length > 0 && (
+                      <button
+                        onClick={() => setActiveTab('fundamentals')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--color-primary)',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        Ver Histórico Oficial por Cota ({dividendHistory.length}) →
+                      </button>
+                    )}
                   </div>
                   <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                     {assetDividends.map((div, i) => (
@@ -946,6 +980,89 @@ export default function AssetDetailDrawer({
                       </div>
                     </div>
                   </div>
+
+                  {/* Proventos Recebidos na Carteira */}
+                  {assetDividends.length > 0 && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Zap size={14} style={{ color: 'var(--color-primary)' }} />
+                          <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                            Proventos Recebidos na Carteira ({assetDividends.length})
+                          </h3>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-success)' }}>
+                          Total: {formatBRL(totalDividends)}
+                        </span>
+                      </div>
+                      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                        {assetDividends.map((div, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '0.5rem 0',
+                              borderBottom: i < assetDividends.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                              fontSize: 'var(--text-xs)',
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--color-text)', marginBottom: 2 }}>
+                                {div.type}
+                              </div>
+                              <div style={{ color: 'var(--color-text-muted)' }}>
+                                {formatReferenceDate(div.payment_date) ?? '-'}
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-success)', textAlign: 'right' }}>
+                              {formatBRL(div.amount)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transações na Carteira */}
+                  {transactions.length > 0 && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
+                        <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
+                        <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                          Transações na Carteira ({transactions.length})
+                        </h3>
+                      </div>
+                      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                        {transactions.map((tx, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '0.5rem 0',
+                              borderBottom: i < transactions.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                              fontSize: 'var(--text-xs)',
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--color-text)', marginBottom: 2 }}>
+                                {tx.operation.toUpperCase()} {tx.quantity} @ {formatBRL(tx.price)}
+                              </div>
+                              <div style={{ color: 'var(--color-text-muted)' }}>
+                                {new Date(tx.date).toLocaleDateString('pt-BR')}
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', textAlign: 'right' }}>
+                              {formatBRL(tx.quantity * tx.price)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--color-text-muted)' }}>
@@ -1593,7 +1710,7 @@ export default function AssetDetailDrawer({
               )}
 
               {/* SEÇÃO COMPARTILHADA: HISTÓRICO OFICIAL DE PROVENTOS DECLARADOS */}
-              {dividendHistory.length > 0 && (
+              {dividendHistory.length > 0 ? (
                 <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
@@ -1628,66 +1745,84 @@ export default function AssetDetailDrawer({
                     )}
                   </div>
 
-                  <div style={{ overflowX: 'auto', maxHeight: '280px', overflowY: 'auto' }}>
+                  <div style={{ overflowX: 'auto', maxHeight: '360px', overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
-                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Tipo</th>
-                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Data Com</th>
-                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Pagamento</th>
-                          <th style={{ padding: '0.5rem', fontWeight: 600, textAlign: 'right' }}>Valor por Cota</th>
+                          <th style={{ padding: '0.6rem 0.75rem', fontWeight: 600 }}>Tipo</th>
+                          <th style={{ padding: '0.6rem 0.75rem', fontWeight: 600 }}>Data Com</th>
+                          <th style={{ padding: '0.6rem 0.75rem', fontWeight: 600 }}>Data Pag</th>
+                          <th style={{ padding: '0.6rem 0.75rem', fontWeight: 600, textAlign: 'right' }}>Valor Unitário</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {dividendHistory.slice(0, 15).map((divItem, idx) => (
-                          <tr
-                            key={`${divItem.payment_date || divItem.record_date || idx}-${idx}`}
-                            style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(255,255,255,0.05))' }}
-                          >
-                            <td style={{ padding: '0.5rem' }}>
-                              <span
-                                style={{
-                                  padding: '0.2rem 0.5rem',
-                                  borderRadius: 4,
-                                  fontSize: '0.7rem',
-                                  fontWeight: 700,
-                                  background:
-                                    divItem.type === 'JCP'
+                        {dividendHistory.map((divItem, idx) => {
+                          const isJCP = divItem.type?.toUpperCase().includes('JCP')
+                          const isRend = divItem.type?.toUpperCase().includes('REND')
+                          const typeLabel = isJCP ? 'JCP' : isRend ? 'Rendimento' : 'Dividendo'
+
+                          return (
+                            <tr
+                              key={`${divItem.payment_date || divItem.record_date || idx}-${idx}`}
+                              style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(255,255,255,0.05))' }}
+                            >
+                              <td style={{ padding: '0.6rem 0.75rem' }}>
+                                <span
+                                  style={{
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: 4,
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    background: isJCP
                                       ? 'rgba(234, 179, 8, 0.15)'
-                                      : divItem.type === 'RENDIMENTO'
+                                      : isRend
                                       ? 'rgba(59, 130, 246, 0.15)'
                                       : 'rgba(34, 197, 94, 0.15)',
-                                  color:
-                                    divItem.type === 'JCP'
+                                    color: isJCP
                                       ? 'var(--color-warning, #eab308)'
-                                      : divItem.type === 'RENDIMENTO'
+                                      : isRend
                                       ? 'var(--color-primary, #3b82f6)'
                                       : 'var(--color-success, #22c55e)',
-                                }}
-                              >
-                                {divItem.type}
-                              </span>
-                            </td>
-                            <td style={{ padding: '0.5rem', color: 'var(--color-text-muted)' }}>
-                              {divItem.record_date
-                                ? new Date(divItem.record_date + 'T00:00:00').toLocaleDateString('pt-BR')
-                                : '-'}
-                            </td>
-                            <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                              {divItem.payment_date
-                                ? new Date(divItem.payment_date + 'T00:00:00').toLocaleDateString('pt-BR')
-                                : '-'}
-                            </td>
-                            <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: 'var(--color-success)' }}>
-                              {formatBRL(divItem.value)}
-                            </td>
-                          </tr>
-                        ))}
+                                  }}
+                                >
+                                  {typeLabel}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.6rem 0.75rem', color: 'var(--color-text)' }}>
+                                {divItem.record_date
+                                  ? new Date(divItem.record_date + 'T00:00:00').toLocaleDateString('pt-BR')
+                                  : divItem.ex_date
+                                  ? new Date(divItem.ex_date + 'T00:00:00').toLocaleDateString('pt-BR')
+                                  : '-'}
+                              </td>
+                              <td style={{ padding: '0.6rem 0.75rem', fontWeight: 500, color: 'var(--color-text)' }}>
+                                {divItem.payment_date
+                                  ? new Date(divItem.payment_date + 'T00:00:00').toLocaleDateString('pt-BR')
+                                  : '-'}
+                              </td>
+                              <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--color-success)' }}>
+                                {formatUnitValue(divItem.value)}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              )}
+              ) : !crypto && !treasury ? (
+                <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: '0.5rem', color: 'var(--color-text-muted)' }}>
+                    <Zap size={16} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Histórico de Proventos Declarados</span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                    {etf?.dividend_policy?.includes('Reinvestimento')
+                      ? 'Este ETF não distribui proventos em conta (reinvestimento automático no patrimônio do fundo).'
+                      : `Nenhum histórico recente de dividendos ou JCP registrado para ${activeTicker}.`}
+                  </p>
+                </div>
+              ) : null}
             </div>
           )}
 

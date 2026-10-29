@@ -227,6 +227,12 @@ describe('AssetDetailDrawer corporate lifecycle', () => {
     expect(screen.getByText('Últimas distribuições de dividendos, JCP ou rendimentos por cota')).toBeTruthy()
     expect(screen.getByText('1 proventos')).toBeTruthy()
     expect(screen.getByText('Eventual')).toBeTruthy()
+    expect(screen.getByText('Data Com')).toBeTruthy()
+    expect(screen.getByText('Data Pag')).toBeTruthy()
+    expect(screen.getByText('Valor Unitário')).toBeTruthy()
+    expect(screen.getByText('15/04/2026')).toBeTruthy()
+    expect(screen.getByText('20/05/2026')).toBeTruthy()
+    expect(screen.getAllByText(/R\$\s*1,35/)).toHaveLength(2)
   })
 
 })

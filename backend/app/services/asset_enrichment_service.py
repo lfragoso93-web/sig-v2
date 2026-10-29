@@ -842,37 +842,72 @@ class AssetEnrichmentService:
                         AssetDividend.record_date.desc().nullslast(),
                         AssetDividend.ex_date.desc(),
                     )
-                    .limit(30)
+                    .limit(60)
                 )
                 res = await db.execute(stmt)
                 db_dividends = res.scalars().all()
                 for div in db_dividends:
+                    raw_type = (div.dividend_type.value if hasattr(div.dividend_type, "value") else str(div.dividend_type)).upper()
+                    if "JCP" in raw_type or "JUROS" in raw_type:
+                        norm_type = "JCP"
+                    elif "REND" in raw_type:
+                        norm_type = "RENDIMENTO"
+                    elif "AMORT" in raw_type:
+                        norm_type = "AMORTIZACAO"
+                    else:
+                        norm_type = "DIVIDENDO"
+
+                    rec_date = div.record_date or div.ex_date
                     history.append({
                         "payment_date": div.payment_date.isoformat() if div.payment_date else None,
-                        "record_date": div.record_date.isoformat() if div.record_date else None,
+                        "record_date": rec_date.isoformat() if rec_date else None,
                         "ex_date": div.ex_date.isoformat() if div.ex_date else None,
-                        "type": div.dividend_type.value if hasattr(div.dividend_type, "value") else str(div.dividend_type),
+                        "type": norm_type,
                         "value": float(div.value_per_unit),
                         "gross_value": float(div.gross_value_per_unit) if div.gross_value_per_unit is not None else None,
                     })
             except Exception as exc:
                 logger.debug("Falha ao consultar AssetDividend no DB para %s: %s", sanitize_log_value(clean_ticker), sanitize_log_value(exc))
 
-        # 2. Se DB não tiver proventos, tenta buscar do provedor BRAPI
-        if not history:
+        # 2. Se DB não tiver proventos suficientes, complementa com provedor BRAPI
+        if len(history) < 3:
             try:
                 cash_divs, _ = await self._client.fetch_dividends_and_events(clean_ticker)
+                seen_dates = {
+                    (h.get("payment_date"), h.get("record_date"), h.get("type"))
+                    for h in history
+                }
                 for cd in cash_divs:
-                    history.append({
-                        "payment_date": cd.payment_date.isoformat() if cd.payment_date else None,
-                        "record_date": cd.last_date_prior.isoformat() if cd.last_date_prior else None,
-                        "ex_date": cd.last_date_prior.isoformat() if cd.last_date_prior else None,
-                        "type": cd.label or "DIVIDENDO",
-                        "value": float(cd.rate),
-                        "gross_value": float(cd.rate),
-                    })
+                    raw_type = (cd.label or "DIVIDENDO").upper()
+                    if "JCP" in raw_type or "JUROS" in raw_type:
+                        norm_type = "JCP"
+                    elif "REND" in raw_type:
+                        norm_type = "RENDIMENTO"
+                    elif "AMORT" in raw_type:
+                        norm_type = "AMORTIZACAO"
+                    else:
+                        norm_type = "DIVIDENDO"
+
+                    pay_dt = cd.payment_date.isoformat() if cd.payment_date else None
+                    rec_dt = cd.last_date_prior.isoformat() if cd.last_date_prior else None
+                    sig = (pay_dt, rec_dt, norm_type)
+                    if sig not in seen_dates:
+                        seen_dates.add(sig)
+                        history.append({
+                            "payment_date": pay_dt,
+                            "record_date": rec_dt,
+                            "ex_date": rec_dt,
+                            "type": norm_type,
+                            "value": float(cd.rate),
+                            "gross_value": float(cd.rate),
+                        })
             except Exception:
                 pass
+
+        history.sort(
+            key=lambda x: (x.get("payment_date") or x.get("record_date") or "1900-01-01"),
+            reverse=True,
+        )
 
         # 3. Calcula métricas consolidadas dos últimos 12 meses
         metrics: Optional[dict[str, Any]] = None
