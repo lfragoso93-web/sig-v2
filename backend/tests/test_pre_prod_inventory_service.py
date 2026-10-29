@@ -138,6 +138,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
         ("irpf_reports", "preserved"),
         ("corporate_event_reconciliation_evidence", "preserved"),
         ("real_data_certification_events", "preserved"),
+        ("provider_configurations", "preserved"),
         ("transactions", "export_before_cleanup"),
         ("corporate_events", "export_before_cleanup"),
         ("fixed_income_investments", "export_before_cleanup"),
