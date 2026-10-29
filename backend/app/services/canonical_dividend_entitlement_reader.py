@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import and_, func, or_, select
@@ -18,6 +18,7 @@ from app.services.canonical_dividend_entitlement import (
     DividendEvent,
     PositionMovement,
     calculate_dividend_entitlement,
+    effective_entitlement_date,
 )
 
 _TYPE_ALIASES: dict[str, str] = {
@@ -103,16 +104,6 @@ async def load_portfolio_dividend_entitlements(
     )
     transactions = (await db.execute(movements_stmt)).scalars().all()
 
-    usd_ref_dates = [
-        asset_dividend.payment_date or asset_dividend.ex_date
-        for asset_dividend, asset in event_rows
-        if str(asset.currency or "").strip().upper() == "USD"
-    ]
-    fx_dates: list[date] = []
-    fx_rates: list[Decimal] = []
-    if usd_ref_dates:
-        fx_dates, fx_rates = await load_usd_brl_rates(db, max(usd_ref_dates))
-
     movements_by_asset: dict[tuple[str, str], list[PositionMovement]] = {}
     for transaction in transactions:
         t_ticker = str(transaction.ticker or "").strip().upper()
@@ -123,6 +114,32 @@ async def load_portfolio_dividend_entitlements(
                 operation=_enum_value(transaction.operation),
                 quantity=Decimal(str(transaction.quantity)),
             )
+        )
+
+    usd_ref_dates: list[date] = []
+    for asset_dividend, asset in event_rows:
+        if str(asset.currency or "").strip().upper() != "USD":
+            continue
+        norm_ticker = str(asset.ticker or "").strip().upper()
+        norm_type = _normalize_asset_type(asset.asset_type)
+        movements = movements_by_asset.get((norm_ticker, norm_type), ())
+        if not movements:
+            movements = movements_by_asset.get(
+                (norm_ticker, str(asset.asset_type).strip().upper()), ()
+            )
+        ent_date = effective_entitlement_date(
+            asset_dividend.record_date, asset_dividend.ex_date
+        )
+        if movements and ent_date is not None and ent_date >= movements[0].transaction_date:
+            usd_ref_dates.append(asset_dividend.payment_date or asset_dividend.ex_date)
+
+    fx_dates: list[date] = []
+    fx_rates: list[Decimal] = []
+    if usd_ref_dates:
+        fx_dates, fx_rates = await load_usd_brl_rates(
+            db,
+            max(usd_ref_dates),
+            min_date=min(usd_ref_dates) - timedelta(days=15),
         )
 
     results: list[PortfolioDividendEntitlement] = []
@@ -194,13 +211,17 @@ async def load_portfolio_dividend_entitlements(
 async def load_usd_brl_rates(
     db: AsyncSession,
     max_date: date,
+    *,
+    min_date: date | None = None,
 ) -> tuple[list[date], list[Decimal]]:
-    """Load persisted USD-BRL rates up to max_date in a single batch query."""
-    fx_stmt = (
-        select(FxRate.rate_date, FxRate.rate)
-        .where(FxRate.pair == "USD-BRL", FxRate.rate_date <= max_date)
-        .order_by(FxRate.rate_date.asc(), FxRate.id.asc())
+    """Load persisted USD-BRL rates in [min_date, max_date] in a single batch query."""
+    fx_stmt = select(FxRate.rate_date, FxRate.rate).where(
+        FxRate.pair == "USD-BRL",
+        FxRate.rate_date <= max_date,
     )
+    if min_date is not None:
+        fx_stmt = fx_stmt.where(FxRate.rate_date >= min_date)
+    fx_stmt = fx_stmt.order_by(FxRate.rate_date.asc(), FxRate.id.asc())
     fx_rows = (await db.execute(fx_stmt)).all()
     by_date: dict[date, Decimal] = {}
     for row in fx_rows:
