@@ -633,25 +633,60 @@ async def fetch_treasury_history(
 
 async def fetch_treasury_bond_detail(ticker_or_name: str) -> Optional[dict[str, Any]]:
     """Consulta indicadores detalhados de um título do Tesouro Direto por slug ou nome."""
-    raw = (ticker_or_name or "").strip()
+    raw = (ticker_or_name or "").strip().lower()
     if not raw:
         return None
 
-    symbol = raw.lower() if is_brapi_treasury_symbol(raw) else canonical_treasury_symbol_from_text(raw)
+    symbol = raw if is_brapi_treasury_symbol(raw) else canonical_treasury_symbol_from_text(raw)
     if not symbol:
-        return None
+        symbol = raw
 
-    # Tenta obter indicadores atualizados
-    indicators = await fetch_treasury_indicators([symbol])
-    item = indicators.get(symbol)
+    treasury_list = await fetch_treasury_list()
+    item: Optional[dict[str, Any]] = None
+    canonical_sym: str = symbol
 
-    # Se não encontrou em indicators, tenta na lista de títulos disponíveis
+    # 1. Match exato na lista consolidada
+    for t in treasury_list:
+        sym = _symbol_from_item(t) or str(t.get("symbol", "")).lower()
+        if sym == symbol:
+            item = t
+            canonical_sym = sym
+            break
+
+    # 2. Match por ano e tipo de título
     if not item:
-        treasury_list = await fetch_treasury_list()
+        year_match = re.search(r"20\d{2}", symbol)
+        target_year = year_match.group(0) if year_match else None
+        has_juros = "semestrais" in symbol or "juros" in symbol
         for t in treasury_list:
-            if _symbol_from_item(t) == symbol or str(t.get("symbol", "")).lower() == symbol:
-                item = t
-                break
+            sym = _symbol_from_item(t) or str(t.get("symbol", "")).lower()
+            if target_year and target_year in sym:
+                if "selic" in symbol and "selic" in sym:
+                    item = t
+                    canonical_sym = sym
+                    break
+                elif "ipca" in symbol and "ipca" in sym:
+                    t_has_juros = "semestrais" in sym or "juros" in sym
+                    if has_juros == t_has_juros:
+                        item = t
+                        canonical_sym = sym
+                        break
+                elif "prefixado" in symbol and "prefixado" in sym:
+                    t_has_juros = "semestrais" in sym or "juros" in sym
+                    if has_juros == t_has_juros:
+                        item = t
+                        canonical_sym = sym
+                        break
+
+    # 3. Tenta enriquecer com indicadores ao vivo se disponíveis
+    if canonical_sym:
+        try:
+            indicators = await fetch_treasury_indicators([canonical_sym])
+            ind_item = indicators.get(canonical_sym)
+            if ind_item:
+                item = {**(item or {}), **ind_item}
+        except Exception:
+            pass
 
     if not item:
         return None
