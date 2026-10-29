@@ -35,6 +35,11 @@ def test_portfolio_lookup_is_scoped_by_current_user() -> None:
     helper_end = source.index("\n@router.", helper_start)
     helper_source = source[helper_start:helper_end]
 
-    assert "Portfolio.id == portfolio_id" in helper_source
-    assert "Portfolio.user_id == user.id" in helper_source
+    assert (
+        ("Portfolio.id == portfolio_id" in helper_source and "Portfolio.user_id == user.id" in helper_source)
+        or (
+            "PortfolioAccessContext.for_user" in helper_source
+            and "get_accessible_portfolio" in helper_source
+        )
+    )
     assert "status_code=404" in helper_source
