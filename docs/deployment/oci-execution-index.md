@@ -166,6 +166,7 @@ OCI for retomada:
 Use:
 
 - `docs/deployment/oci-operations-runbook.md`
+- `docs/deployment/oci-self-hosted-runner-runbook.md`
 - `docs/deployment/oci-disaster-recovery-runbook.md`
 
 Rollback deve preservar volumes e voltar para commit conhecido + backup verificado. Nunca usar `docker compose down -v` sem autorizacao e backup.

@@ -197,6 +197,27 @@ async def test_list_items_with_filters(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_items_with_asset_type_alias_filter(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(event_id=1, ticker="AREA11", asset_type="ETF_NACIONAL"),
+            canonical_item(event_id=2, ticker="PETR4", asset_type="ACAO"),
+        ],
+    )
+
+    # Filter with 'ETF' should match 'ETF_NACIONAL'
+    result_etf = await list_items(object(), portfolio_id=1, asset_type="ETF")
+    assert result_etf["total"] == 1
+    assert result_etf["items"][0]["ticker"] == "AREA11"
+
+    # Filter with 'ETF_NACIONAL' should match 'ETF_NACIONAL'
+    result_etf_nac = await list_items(object(), portfolio_id=1, asset_type="ETF_NACIONAL")
+    assert result_etf_nac["total"] == 1
+    assert result_etf_nac["items"][0]["ticker"] == "AREA11"
+
+
+@pytest.mark.asyncio
 async def test_get_monthly_history_empty(monkeypatch):
     install_items(monkeypatch, [])
 

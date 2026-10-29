@@ -11,6 +11,8 @@ describe('passwordPolicy', () => {
     ['missing lowercase', 'AA1!AAAAAA', 'Inclua ao menos uma letra minuscula.'],
     ['missing number', 'Aa!!aaaaaa', 'Inclua ao menos um numero.'],
     ['missing special', 'Aa11aaaaaa', 'Inclua ao menos um caractere especial.'],
+    ['common sequence 123456', 'Aa!123456a', 'Senha contem sequencia obvia ou comum nao permitida.'],
+    ['common sequence qwerty', 'Qwerty123!', 'Senha contem sequencia obvia ou comum nao permitida.'],
   ])('rejects %s', (_case, password, message) => {
     expect(getPasswordPolicyError(password)).toBe(message)
     expect(strongPasswordSchema.safeParse(password).success).toBe(false)

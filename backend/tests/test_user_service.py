@@ -93,7 +93,7 @@ class TestCreateUser:
         data = UserCreate(
             name="New User",
             email="new@example.com",
-            password="Password123!",
+            password="Segura#2026!",
         )
         
         with patch('app.services.user_service.hash_password', return_value="hashed_password"):
@@ -116,7 +116,7 @@ class TestCreateUser:
         data = UserCreate(
             name="Duplicate",
             email="existing@example.com",
-            password="Password123!",
+            password="Segura#2026!",
         )
         
         from fastapi import HTTPException
@@ -136,7 +136,7 @@ class TestCreateUser:
         data = UserCreate(
             name="Admin User",
             email="admin@example.com",
-            password="Password123!",
+            password="Segura#2026!",
         )
         
         with patch('app.services.user_service.hash_password', return_value="hashed_password"):

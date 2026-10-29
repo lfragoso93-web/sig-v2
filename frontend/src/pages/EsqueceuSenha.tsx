@@ -50,12 +50,11 @@ const errorStyle: React.CSSProperties = {
 
 export default function EsqueceuSenha() {
   const [searchParams] = useSearchParams()
-  const tokenFromUrl = searchParams.get('token')
+  const tokenFromUrl = searchParams.get('token')?.trim() ?? ''
 
-  const [step, setStep] = useState<'email' | 'reset' | 'done'>(
+  const [step, setStep] = useState<'email' | 'sent' | 'reset' | 'done'>(
     tokenFromUrl ? 'reset' : 'email'
   )
-  const [resetToken, setResetToken] = useState(tokenFromUrl ?? '')
   const [emailSent, setEmailSent] = useState('')
 
   const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) })
@@ -63,22 +62,36 @@ export default function EsqueceuSenha() {
 
   const onRequestReset = async (data: EmailForm) => {
     try {
-      const res = await api.post('/auth/forgot-password', { email: data.email })
-      setResetToken(res.data.reset_token)
+      await api.post('/auth/forgot-password', { email: data.email })
       setEmailSent(data.email)
-      setStep('reset')
-    } catch {
-      emailForm.setError('root', { message: 'Erro ao solicitar recuperação. Tente novamente.' })
+      setStep('sent')
+    } catch (error: unknown) {
+      emailForm.setError('root', {
+        message:
+          getApiErrorDetail(error) ??
+          'Erro ao solicitar recuperação. Tente novamente.',
+      })
     }
   }
 
   const onResetPassword = async (data: ResetForm) => {
+    if (!tokenFromUrl) {
+      resetForm.setError('root', {
+        message: 'Link de recuperação ausente ou inválido. Solicite um novo link por e-mail.',
+      })
+      return
+    }
     try {
-      await api.post('/auth/reset-password', { token: resetToken, new_password: data.new_password })
+      await api.post('/auth/reset-password', {
+        token: tokenFromUrl,
+        new_password: data.new_password,
+      })
       setStep('done')
     } catch (error: unknown) {
       resetForm.setError('root', {
-        message: getApiErrorDetail(error) ?? 'Token inválido ou expirado. Solicite um novo link.',
+        message:
+          getApiErrorDetail(error) ??
+          'Token inválido ou expirado. Solicite um novo link.',
       })
     }
   }
@@ -88,7 +101,7 @@ export default function EsqueceuSenha() {
       <form onSubmit={emailForm.handleSubmit(onRequestReset)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ marginBottom: '0.25rem' }}>
           <h2 style={titleStyle}>Recuperar senha</h2>
-          <p style={subtitleStyle}>Informe seu e-mail para receber as instruções.</p>
+          <p style={subtitleStyle}>Informe seu e-mail cadastrado para receber o link de redefinição.</p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
@@ -106,7 +119,7 @@ export default function EsqueceuSenha() {
         {emailForm.formState.errors.root && <p style={errorStyle}>{emailForm.formState.errors.root.message}</p>}
 
         <button type="submit" disabled={emailForm.formState.isSubmitting} className="btn btn-primary w-full" style={{ fontWeight: 600, marginTop: '0.25rem' }}>
-          {emailForm.formState.isSubmitting ? 'Enviando...' : 'Enviar instruções'}
+          {emailForm.formState.isSubmitting ? 'Enviando...' : 'Enviar link de recuperação'}
         </button>
 
         <p style={{ fontSize: 'var(--text-xs)', textAlign: 'center', color: 'var(--color-text-muted)', margin: 0 }}>
@@ -116,17 +129,29 @@ export default function EsqueceuSenha() {
     )
   }
 
+  if (step === 'sent') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'center' }}>
+        <div className="text-4xl">📧</div>
+        <h2 style={{ ...titleStyle, textAlign: 'center' }}>Verifique seu e-mail</h2>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', margin: 0 }}>
+          Enviamos um link seguro de redefinição de senha para <strong>{emailSent}</strong>.
+          O link é de uso único e válido por 30 minutos.
+        </p>
+        <Link to="/auth/login" className="btn btn-primary block w-full font-semibold text-center">
+          Voltar para o login
+        </Link>
+      </div>
+    )
+  }
+
   if (step === 'reset') {
     return (
       <form onSubmit={resetForm.handleSubmit(onResetPassword)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ marginBottom: '0.25rem' }}>
           <h2 style={titleStyle}>Nova senha</h2>
           <p style={subtitleStyle}>
-            {emailSent ? (
-              <>Defina uma nova senha para <strong>{emailSent}</strong>.</>
-            ) : (
-              'Defina uma nova senha segura para a sua conta.'
-            )}
+            Defina uma nova senha segura para a sua conta.
           </p>
         </div>
 

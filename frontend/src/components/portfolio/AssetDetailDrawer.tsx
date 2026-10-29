@@ -1223,7 +1223,7 @@ export default function AssetDetailDrawer({
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>DY (12M)</span>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: (etf.dividend_yield ?? 0) > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                          {etf.dividend_yield != null ? `${formatNumber(etf.dividend_yield)}%` : 'Reinvestido'}
+                          {etf.dividend_yield != null ? `${formatNumber(etf.dividend_yield)}%` : (dividendHistory.length > 0 ? '-' : 'Reinvestido')}
                         </div>
                       </div>
                       <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
@@ -1245,11 +1245,11 @@ export default function AssetDetailDrawer({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 4 }}>
                       <Layers size={16} style={{ color: 'var(--color-primary)' }} />
                       <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
-                        Política de Proventos: {etf.dividend_policy ?? 'Reinvestimento Automático de Proventos'}
+                        Política de Proventos: {etf.dividend_policy ?? (dividendHistory.length > 0 ? 'Distribuição Periódica de Proventos' : 'Reinvestimento Automático de Proventos')}
                       </span>
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                      {etf.dividend_policy?.includes('Distribuição')
+                      {etf.dividend_policy?.includes('Distribuição') || (dividendHistory.length > 0 && !etf.dividend_policy?.includes('Reinvestimento'))
                         ? 'Este ETF distribui proventos periodicamente aos cotistas de acordo com os dividendos recebidos dos ativos da carteira teórica.'
                         : 'Este ETF não distribui proventos em conta: todos os dividendos e juros sobre capital próprio pagos pelas empresas subjacentes são automaticamente reinvestidos na compra de novas ações do índice, valorizando o patrimônio e a cota do fundo sem incidência imediata de IR sobre proventos.'}
                     </p>

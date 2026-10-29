@@ -14,6 +14,9 @@ from app.schemas.user import AdminResetPasswordRequest, UserCreate, UserPassword
         ("AA1!AAAAAA", "minuscula"),
         ("Aa!!aaaaaa", "numero"),
         ("Aa11aaaaaa", "caractere especial"),
+        ("Aa!123456a", "sequencia obvia"),
+        ("Qwerty123!", "sequencia obvia"),
+        ("Senha123!a", "sequencia obvia"),
     ],
 )
 def test_password_policy_rejects_weak_passwords(password: str, message: str):

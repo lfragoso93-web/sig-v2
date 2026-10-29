@@ -104,6 +104,8 @@ $$\text{Valor Bruto}_t = \text{Principal} \times \prod_{d=t_0 + 1}^{t} \text{Tax
 ### 3.3 Proventos e Direitos (Dividendos e JCP)
 * **Persistência Centralizada:** Os eventos de proventos dos ativos são gravados em `asset_dividends` com: Data-Com (*cut-off date*), Data de Pagamento, Tipo de Provento (Dividendo, JCP, Rendimento FII) e Valor por Cota.
 * **Projeção Sob Demanda:** Os direitos de cada carteira são calculados multiplicando o valor unitário pela quantidade de cotas que a carteira possuía na data-com do evento.
+* **Data-Com e Prevenção de Vazamento (Anti-Leak):** A data de corte prioritária é a `record_date`. Quando omitida por provedores de mercado (como em feeds de ETFs e ativos do Yahoo Finance), o motor deriva a Data-Com econômica como o dia útil anterior à Data Ex (`previous_business_day(ex_date)`). Compras realizadas na Data Ex ou depois não recebem provento (`NO_POSITION`).
+* **Resolução de Aliases:** Classes de ativos com nomenclaturas sinônimas (como `ETF` e `ETF_NACIONAL`) são normalizadas bidirecionalmente na reconciliação de transações e nos filtros da interface.
 * **Retenção Fiscal:**
   - **Dividendos / Rendimentos FII:** Isentos de IR para pessoa física (conforme legislação vigente).
   - **JCP (Juros sobre Capital Próprio):** Retenção automática de 15% de IRPF na fonte.

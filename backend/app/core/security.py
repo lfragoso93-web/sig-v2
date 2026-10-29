@@ -1,10 +1,23 @@
 from datetime import datetime, timedelta, timezone
+import time
 from typing import Optional
 import uuid
 import jwt
 import jwt.exceptions
 import bcrypt
 from app.core.config import settings
+
+_last_monotonic_ts: float = 0.0
+
+
+def monotonic_timestamp() -> float:
+    """Retorna epoch float estritamente crescente para revogacao deterministica."""
+    global _last_monotonic_ts
+    now = time.time()
+    if now <= _last_monotonic_ts:
+        now = _last_monotonic_ts + 1e-6
+    _last_monotonic_ts = now
+    return now
 
 
 def hash_password(password: str) -> str:
@@ -53,18 +66,29 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None,
     token_type: str = "access",
 ) -> str:
-    expire = datetime.now(timezone.utc) + (
+    now = datetime.now(timezone.utc)
+    expire = now + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload = {"sub": subject, "exp": expire, "type": token_type}
+    payload = {
+        "sub": subject,
+        "iat": int(now.timestamp()),
+        "iat_ts": monotonic_timestamp(),
+        "exp": expire,
+        "type": token_type,
+        "jti": str(uuid.uuid4()),
+    }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_refresh_token(subject: str) -> str:
     """Cria refresh token com jti (UUID) para suporte a blacklist."""
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": subject,
+        "iat": int(now.timestamp()),
+        "iat_ts": monotonic_timestamp(),
         "exp": expire,
         "type": "refresh",
         "jti": str(uuid.uuid4()),  # identificador unico para blacklist

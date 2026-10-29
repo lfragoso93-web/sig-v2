@@ -8,6 +8,14 @@ const UPPERCASE_RE = /[A-Z]/
 const LOWERCASE_RE = /[a-z]/
 const NUMBER_RE = /\d/
 const SPECIAL_RE = /[!@#$%^&*(),.?":{}|<>]/
+const WEAK_SUBSTRINGS = [
+  '123456',
+  'abcdef',
+  'qwerty',
+  'password',
+  'senha123',
+  'admin123',
+]
 
 export function getPasswordPolicyError(password: string): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) {
@@ -24,6 +32,10 @@ export function getPasswordPolicyError(password: string): string | null {
   }
   if (!SPECIAL_RE.test(password)) {
     return 'Inclua ao menos um caractere especial.'
+  }
+  const lowered = password.toLowerCase()
+  if (WEAK_SUBSTRINGS.some((sub) => lowered.includes(sub))) {
+    return 'Senha contem sequencia obvia ou comum nao permitida.'
   }
   return null
 }
