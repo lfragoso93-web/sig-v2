@@ -9,10 +9,10 @@ Endpoints:
   GET /portfolios/{portfolio_id}/rentabilidade/reconciliation
 """
 import logging
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import PortfolioAccessContext
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.core.database import get_db
 from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.core.auth import get_current_user
@@ -37,9 +37,12 @@ async def _assert_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> No
         portfolio_id=portfolio_id,
         permissions=frozenset({READ_PORTFOLIO_RENTABILIDADE}),
     )
-    await get_accessible_portfolio(
-        db, access, required_permission=READ_PORTFOLIO_RENTABILIDADE
-    )
+    try:
+        await get_accessible_portfolio(
+            db, access, required_permission=READ_PORTFOLIO_RENTABILIDADE
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.") from exc
 
 
 @router.get(
