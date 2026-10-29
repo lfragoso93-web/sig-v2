@@ -659,8 +659,10 @@ class BrapiV2Client:
         if not isinstance(entry, dict):
             return None
 
-        dks = entry.get("defaultKeyStatistics") if isinstance(entry.get("defaultKeyStatistics"), dict) else {}
-        sp = entry.get("summaryProfile") if isinstance(entry.get("summaryProfile"), dict) else {}
+        raw_dks = entry.get("defaultKeyStatistics")
+        dks: dict[str, Any] = raw_dks if isinstance(raw_dks, dict) else {}
+        raw_sp = entry.get("summaryProfile")
+        sp: dict[str, Any] = raw_sp if isinstance(raw_sp, dict) else {}
 
         pvp = self._safe_float(dks.get("priceToBook") or entry.get("priceToBook") or entry.get("pvp"))
         dy_raw = self._safe_float(dks.get("dividendYield") or entry.get("dividendYield"))
@@ -729,9 +731,12 @@ class BrapiV2Client:
             return None
 
         # Suporta tanto payload aninhado em modules (producao) quanto payload plano (mocks/testes)
-        fd = entry.get("financialData") if isinstance(entry.get("financialData"), dict) else {}
-        dks = entry.get("defaultKeyStatistics") if isinstance(entry.get("defaultKeyStatistics"), dict) else {}
-        sp = entry.get("summaryProfile") if isinstance(entry.get("summaryProfile"), dict) else {}
+        raw_fd = entry.get("financialData")
+        fd: dict[str, Any] = raw_fd if isinstance(raw_fd, dict) else {}
+        raw_dks = entry.get("defaultKeyStatistics")
+        dks: dict[str, Any] = raw_dks if isinstance(raw_dks, dict) else {}
+        raw_sp = entry.get("summaryProfile")
+        sp: dict[str, Any] = raw_sp if isinstance(raw_sp, dict) else {}
 
         pe = self._safe_float(dks.get("trailingPE") or entry.get("priceEarnings") or entry.get("pe"))
         forward_pe = self._safe_float(dks.get("forwardPE") or entry.get("forwardPE"))
