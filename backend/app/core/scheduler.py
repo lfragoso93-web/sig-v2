@@ -299,6 +299,42 @@ def start_scheduler() -> None:
                         exc,
                     )
 
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=21, minute=30),
+        id="refresh_asset_fundamentals_daily",
+        name="Atualizar indicadores fundamentalistas, métricas e consenso de ativos",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def refresh_asset_fundamentals_daily():
+        """Atualiza indicadores e métricas diárias dos ativos das carteiras e catálogo."""
+        from app.core.database import AsyncSessionLocal
+        from app.services.asset_fundamentals_refresh_service import (
+            run_asset_fundamentals_refresh,
+        )
+
+        async with distributed_job_lock(
+            job_name="refresh_asset_fundamentals_daily",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    stats = await run_asset_fundamentals_refresh(
+                        db, force_refresh=True
+                    )
+                    logger.info(
+                        "[scheduler] Indicadores fundamentalistas atualizados: %s",
+                        stats,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro ao atualizar indicadores fundamentalistas: %s",
+                        exc,
+                    )
+
     if settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
 
         @scheduler.scheduled_job(

@@ -1,7 +1,7 @@
 /**
  * BootstrapPanel — Central de Bootstrap por etapas para SuperAdmin (Issue #253)
  *
- * Permite visualizar o status dos 10 estágios canônicos do system-bootstrap.v4,
+ * Permite visualizar o status dos estágios canônicos do system-bootstrap.v4,
  * dependências, última execução e disparar execuções completas ou seletivas
  * com confirmação explícita e prevenção contra duplo disparo.
  */
@@ -384,7 +384,7 @@ export default function BootstrapPanel() {
             </div>
 
             <p className="text-xs text-zinc-300 leading-relaxed">
-              Esta ação executará <strong>todos os 10 estágios canônicos</strong> do <code>system-bootstrap.v4</code> em sequência estrita, consultando provedores de mercado e sincronizando catálogos, cotações, benchmarks, câmbio, proventos (inclusive retroativos) e eventos corporativos.
+              Esta ação executará <strong>todos os estágios canônicos</strong> do <code>system-bootstrap.v4</code> em sequência estrita, consultando provedores de mercado e sincronizando catálogos, cotações, benchmarks, câmbio, proventos, eventos corporativos e indicadores fundamentalistas.
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">

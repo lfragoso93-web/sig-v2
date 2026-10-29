@@ -399,6 +399,8 @@ class AssetEnrichmentService:
         self,
         ticker: str,
         asset_type: Optional[str] = None,
+        *,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         """Retorna diagnostico e dados consolidados conforme a classe do ativo."""
         clean_ticker = ticker.strip().upper()
@@ -427,7 +429,7 @@ class AssetEnrichmentService:
             or clean_ticker.endswith(("-USD", "-BRL", "USDT"))
         )
         if is_crypto:
-            result["crypto_indicators"] = await self.get_crypto_indicators(clean_ticker)
+            result["crypto_indicators"] = await self.get_crypto_indicators(clean_ticker, force_refresh=force_refresh)
             return result
 
         # 2. Tesouro Direto / Renda Fixa Pública
@@ -437,13 +439,13 @@ class AssetEnrichmentService:
             or "tesouro" in clean_ticker.lower()
         )
         if is_treasury:
-            result["treasury_indicators"] = await self.get_treasury_indicators(clean_ticker)
+            result["treasury_indicators"] = await self.get_treasury_indicators(clean_ticker, force_refresh=force_refresh)
             return result
 
         # 3. Fundos Imobiliários (FII)
         is_fii = tipo == "FII" or (not tipo and (clean_ticker.endswith("11") and not clean_ticker.startswith("B") and not clean_ticker.startswith("IVV")))
         if is_fii:
-            fii_dto = await self.get_fii_indicators(clean_ticker)
+            fii_dto = await self.get_fii_indicators(clean_ticker, force_refresh=force_refresh)
             if fii_dto:
                 result["fii_indicators"] = {
                     "pvp": fii_dto.pvp,
@@ -472,14 +474,14 @@ class AssetEnrichmentService:
             or (not tipo and bool(re.match(r"^[A-Z]{1,5}$", clean_ticker)) and not bool(re.search(r"\d", clean_ticker)))
         )
         if is_intl:
-            intl_data = await self.get_international_fundamentals(clean_ticker)
+            intl_data = await self.get_international_fundamentals(clean_ticker, force_refresh=force_refresh)
             if intl_data:
                 result["stock_fundamentals"] = intl_data.get("stock_fundamentals")
                 result["international_profile"] = intl_data.get("international_profile")
                 return result
 
         # 5. Ações Nacionais (Default / Ações B3)
-        stock_dto = await self.get_stock_fundamentals(clean_ticker)
+        stock_dto = await self.get_stock_fundamentals(clean_ticker, force_refresh=force_refresh)
         if stock_dto:
             result["stock_fundamentals"] = {
                 "pe": stock_dto.pe,

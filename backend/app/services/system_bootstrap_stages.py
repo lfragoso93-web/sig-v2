@@ -107,4 +107,15 @@ CANONICAL_BOOTSTRAP_STAGES: tuple[BootstrapStageDefinition, ...] = (
         provider_dependent=True,
         destructive=False,
     ),
+    BootstrapStageDefinition(
+        id="asset_fundamentals",
+        name="Fundamentos e Indicadores de Ativos",
+        description=(
+            "Coleta e pré-aquecimento de indicadores fundamentalistas, "
+            "métricas cripto e títulos públicos"
+        ),
+        dependencies=("asset_catalog", "treasury_catalog"),
+        provider_dependent=True,
+        destructive=False,
+    ),
 )

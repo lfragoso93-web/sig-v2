@@ -25,6 +25,7 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
             "portfolio_snapshot_auto_maintenance",
             "update_quotes_intraday_full_hour",
             "update_quotes_intraday_half_hour",
+            "refresh_asset_fundamentals_daily",
         }
         if scheduler_module.settings.ENABLE_DAILY_BENCHMARK_SYNC:
             expected.add("sync_benchmark_rates_daily")
@@ -258,5 +259,39 @@ async def test_snapshot_maintenance_skips_work_when_distributed_lock_is_refused(
         assert job is not None
         await job.func()
         maintenance.assert_not_awaited()
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_asset_fundamentals_daily_skips_work_when_distributed_lock_is_refused(
+    monkeypatch,
+) -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def refused_lock(**kwargs):
+        assert kwargs == {
+            "job_name": "refresh_asset_fundamentals_daily",
+            "period": "daily",
+            "ttl_seconds": 7200,
+        }
+        yield False
+
+    refresh_mock = AsyncMock()
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", refused_lock)
+    monkeypatch.setattr(
+        "app.services.asset_fundamentals_refresh_service.run_asset_fundamentals_refresh",
+        refresh_mock,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("refresh_asset_fundamentals_daily")
+        assert job is not None
+        await job.func()
+        refresh_mock.assert_not_awaited()
     finally:
         scheduler.shutdown(wait=False)

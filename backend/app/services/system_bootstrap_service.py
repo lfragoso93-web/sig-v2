@@ -211,6 +211,25 @@ async def _bootstrap_benchmarks() -> str:
     return str(result)
 
 
+async def _bootstrap_asset_fundamentals() -> str:
+    from app.core.database import AsyncSessionLocal
+    from app.services.asset_fundamentals_refresh_service import (
+        run_asset_fundamentals_refresh,
+    )
+
+    async with AsyncSessionLocal() as db:
+        stats = await run_asset_fundamentals_refresh(db, force_refresh=True)
+    return (
+        f"total={stats.get('total', 0)} "
+        f"acoes_b3={stats.get('stock', 0)} "
+        f"fiis={stats.get('fii', 0)} "
+        f"internacional={stats.get('intl', 0)} "
+        f"cripto={stats.get('crypto', 0)} "
+        f"tesouro={stats.get('treasury', 0)} "
+        f"erros={stats.get('errors', 0)}"
+    )
+
+
 async def run_system_bootstrap(
     *,
     commit_sha: str | None = None,
@@ -267,6 +286,7 @@ async def run_system_bootstrap(
                 authorized=True if (stages and "corporate_events" in stages) else None,
             ),
         ),
+        ("asset_fundamentals", _bootstrap_asset_fundamentals),
     )
 
     is_selective = bool(stages)
