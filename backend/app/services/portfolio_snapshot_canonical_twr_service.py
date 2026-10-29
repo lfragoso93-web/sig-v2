@@ -79,7 +79,7 @@ async def backfill_canonical_snapshots_with_returns(
         await load_portfolio_dividend_entitlements(db, portfolio_id)
     )
 
-    upper_bound = end_date or clock.today()
+    upper_bound = end_date or (clock.today() if clock is not SYSTEM_CLOCK else date.today())
     start = transactions[0].date
 
     previous_value = _ZERO

@@ -45,7 +45,7 @@ async def get_rentabilidade_kpis(
     """Retorna o contrato ``rentabilidade.v2`` validado em runtime."""
     summary = await get_canonical_portfolio_summary(db, portfolio_id, user_id)
 
-    today = clock.today()
+    today = clock.today() if clock is not SYSTEM_CLOCK else date.today()
     points = await get_enriched_daily_evolution(db, portfolio_id, days=0)
     latest = points[-1] if points else None
 
