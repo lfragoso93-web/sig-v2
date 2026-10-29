@@ -117,12 +117,61 @@ export interface StockFundamentals {
   target_price?: number | null
 }
 
+export interface CryptoIndicators {
+  coin: string
+  coin_name: string
+  price_usd: number | null
+  price_brl: number | null
+  change_24h_pct: number | null
+  volume_24h: number | null
+  market_cap_brl: number | null
+  market_cap_rank: number | null
+  day_low: number | null
+  day_high: number | null
+  currency_rate_usd: number | null
+  logo_url: string | null
+}
+
+export interface TreasuryIndicators {
+  symbol: string
+  bond_type: string
+  name: string
+  indexer: string | null
+  coupon_type: string | null
+  maturity_date: string | null
+  duration_days: number | null
+  buy_rate: number | null
+  sell_rate: number | null
+  buy_price: number | null
+  sell_price: number | null
+  base_price: number | null
+}
+
+export interface InternationalProfile {
+  country: string | null
+  currency: string | null
+  exchange: string | null
+  industry: string | null
+  weburl: string | null
+  logo: string | null
+  market_cap_usd: number | null
+  consensus: string | null
+  strong_buy: number | null
+  buy: number | null
+  hold: number | null
+  sell: number | null
+  strong_sell: number | null
+}
+
 export interface AssetEnrichment {
   ticker: string
   coverage_status: string
   capabilities?: Record<string, boolean>
   fii_indicators: FIIIndicators | null
   stock_fundamentals: StockFundamentals | null
+  crypto_indicators?: CryptoIndicators | null
+  treasury_indicators?: TreasuryIndicators | null
+  international_profile?: InternationalProfile | null
 }
 
 export interface AssetPortfolioPositionInsight {
@@ -186,4 +235,3 @@ export function useAssetPortfolioInsights(portfolioId: number | null, ticker: st
     staleTime: 5 * 60 * 1000,
   })
 }
-

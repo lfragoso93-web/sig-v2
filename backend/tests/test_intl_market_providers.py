@@ -130,3 +130,86 @@ async def test_fetch_tiingo_history_skips_when_unconfigured_or_invalid(monkeypat
     monkeypatch.setattr("app.integrations.tiingo._is_configured", lambda: True)
     # Malicious ticker rejected by safe regex
     assert await fetch_tiingo_history("AAPL; DROP TABLE", "2026-10-01") == []
+
+
+
+@pytest.mark.asyncio
+async def test_fetch_finnhub_profile_and_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.integrations.finnhub import (
+        fetch_finnhub_profile,
+        fetch_finnhub_metrics,
+        fetch_finnhub_recommendations,
+        fetch_finnhub_enrichment,
+    )
+
+    monkeypatch.setattr("app.integrations.finnhub._is_configured", lambda: True)
+    monkeypatch.setattr("app.integrations.finnhub._api_key", lambda: "fake-finnhub-key")
+
+    def mock_get(url, **kwargs):
+        resp = AsyncMock()
+        resp.status_code = 200
+        if "stock/profile2" in url:
+            resp.json = lambda: {
+                "country": "US",
+                "currency": "USD",
+                "exchange": "NASDAQ",
+                "finnhubIndustry": "Technology",
+                "logo": "https://logo.png",
+                "marketCapitalization": 3000000.0,
+                "name": "Apple Inc",
+                "ticker": "AAPL",
+                "weburl": "https://apple.com",
+            }
+        elif "stock/metric" in url:
+            resp.json = lambda: {
+                "metric": {
+                    "peTTM": 32.5,
+                    "pbAnnual": 45.0,
+                    "dividendYieldIndicatedAnnual": 0.55,
+                    "roeTTM": 140.0,
+                    "netProfitMarginTTM": 26.5,
+                    "epsTTM": 6.8,
+                    "beta": 1.1,
+                }
+            }
+        elif "stock/recommendation" in url:
+            resp.json = lambda: [
+                {
+                    "buy": 20,
+                    "hold": 8,
+                    "period": "2026-10-01",
+                    "sell": 1,
+                    "strongBuy": 10,
+                    "strongSell": 0,
+                    "symbol": "AAPL",
+                }
+            ]
+        else:
+            resp.json = lambda: {}
+        return resp
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=mock_get)
+    mock_client.__aenter__.return_value = mock_client
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        profile = await fetch_finnhub_profile("AAPL")
+        assert profile is not None
+        assert profile["name"] == "Apple Inc"
+        assert profile["market_cap"] == 3000000.0 * 1_000_000.0
+
+        metrics = await fetch_finnhub_metrics("AAPL")
+        assert metrics is not None
+        assert metrics["pe"] == 32.5
+        assert metrics["roe"] == 140.0
+
+        recs = await fetch_finnhub_recommendations("AAPL")
+        assert recs is not None
+        assert recs["strong_buy"] == 10
+        assert recs["consensus"] == "STRONG_BUY"
+
+        enrichment = await fetch_finnhub_enrichment("AAPL")
+        assert enrichment is not None
+        assert enrichment["profile"]["name"] == "Apple Inc"
+        assert enrichment["metrics"]["pe"] == 32.5
+        assert enrichment["recommendations"]["consensus"] == "STRONG_BUY"

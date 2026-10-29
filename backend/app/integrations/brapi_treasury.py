@@ -629,3 +629,74 @@ async def fetch_treasury_history(
                 output[symbol] = rows
 
     return output
+
+
+async def fetch_treasury_bond_detail(ticker_or_name: str) -> Optional[dict[str, Any]]:
+    """Consulta indicadores detalhados de um título do Tesouro Direto por slug ou nome."""
+    raw = (ticker_or_name or "").strip()
+    if not raw:
+        return None
+
+    symbol = raw.lower() if is_brapi_treasury_symbol(raw) else canonical_treasury_symbol_from_text(raw)
+    if not symbol:
+        return None
+
+    # Tenta obter indicadores atualizados
+    indicators = await fetch_treasury_indicators([symbol])
+    item = indicators.get(symbol)
+
+    # Se não encontrou em indicators, tenta na lista de títulos disponíveis
+    if not item:
+        treasury_list = await fetch_treasury_list()
+        for t in treasury_list:
+            if _symbol_from_item(t) == symbol or str(t.get("symbol", "")).lower() == symbol:
+                item = t
+                break
+
+    if not item:
+        return None
+
+    def _flt(val: Any) -> Optional[float]:
+        return float(val) if isinstance(val, (int, float)) else None
+
+    indexer = item.get("indexer")
+    if not indexer:
+        if "ipca" in symbol or "renda" in symbol or "educa" in symbol:
+            indexer = "IPCA"
+        elif "selic" in symbol:
+            indexer = "SELIC"
+        elif "prefixado" in symbol:
+            indexer = "PREFIXADO"
+        elif "igpm" in symbol or "igp-m" in symbol:
+            indexer = "IGP-M"
+
+    coupon_type = item.get("couponType")
+    if not coupon_type:
+        if "juros-semestrais" in symbol:
+            coupon_type = "Com juros semestrais"
+        elif "renda" in symbol or "educa" in symbol:
+            coupon_type = "Renda mensal"
+        else:
+            coupon_type = "Sem juros semestrais"
+
+    buy_price = _price_from_item(item)
+    sell_price = _flt(item.get("sellPrice")) or _flt(item.get("PU Venda Manha")) or _flt(item.get("PU Venda Tarde"))
+    base_price = _flt(item.get("basePrice")) or _flt(item.get("PU Base Manha")) or _flt(item.get("PU Base Tarde"))
+    buy_rate = _flt(item.get("buyRate")) or _flt(item.get("Taxa Compra Manha")) or _flt(item.get("Taxa Compra Tarde"))
+    sell_rate = _flt(item.get("sellRate")) or _flt(item.get("Taxa Venda Manha")) or _flt(item.get("Taxa Venda Tarde"))
+    duration_days = item.get("durationDays")
+
+    return {
+        "symbol": symbol,
+        "bond_type": str(item.get("bondType") or item.get("name") or symbol),
+        "name": str(item.get("name") or item.get("bondType") or symbol),
+        "indexer": indexer,
+        "coupon_type": coupon_type,
+        "maturity_date": str(item.get("maturityDate") or ""),
+        "duration_days": int(duration_days) if isinstance(duration_days, (int, float)) else None,
+        "buy_rate": buy_rate,
+        "sell_rate": sell_rate,
+        "buy_price": buy_price,
+        "sell_price": sell_price,
+        "base_price": base_price,
+    }

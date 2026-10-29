@@ -125,3 +125,84 @@ async def test_get_asset_enrichment_unifies_report(enrichment_service, mock_v2_c
     assert enrichment["fii_indicators"]["pvp"] == 1.01
     assert enrichment["fii_indicators"]["properties_count"] == 18
     assert enrichment["stock_fundamentals"] is None
+
+
+
+@pytest.mark.asyncio
+async def test_get_asset_enrichment_crypto(enrichment_service) -> None:
+    from unittest.mock import patch
+    crypto_payload = {
+        "coin": "BTC",
+        "coin_name": "Bitcoin",
+        "price_brl": 385000.0,
+        "price_usd": 65000.0,
+        "market_cap_rank": 1,
+    }
+    with patch("app.services.asset_enrichment_service.fetch_crypto_quote_and_metrics", return_value=crypto_payload):
+        enrichment = await enrichment_service.get_asset_enrichment("BTC", asset_type="CRIPTO")
+        assert enrichment["ticker"] == "BTC"
+        assert enrichment["crypto_indicators"] is not None
+        assert enrichment["crypto_indicators"]["price_brl"] == 385000.0
+        assert enrichment["crypto_indicators"]["market_cap_rank"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_asset_enrichment_treasury(enrichment_service) -> None:
+    from unittest.mock import patch
+    treasury_payload = {
+        "symbol": "tesouro-ipca-2035",
+        "bond_type": "Tesouro IPCA+",
+        "name": "Tesouro IPCA+ 2035",
+        "indexer": "IPCA",
+        "buy_rate": 6.25,
+        "buy_price": 2450.50,
+    }
+    with patch("app.services.asset_enrichment_service.fetch_treasury_bond_detail", return_value=treasury_payload):
+        enrichment = await enrichment_service.get_asset_enrichment("tesouro-ipca-2035", asset_type="TESOURO_DIRETO")
+        assert enrichment["ticker"] == "TESOURO-IPCA-2035"
+        assert enrichment["treasury_indicators"] is not None
+        assert enrichment["treasury_indicators"]["indexer"] == "IPCA"
+        assert enrichment["treasury_indicators"]["buy_rate"] == 6.25
+
+
+@pytest.mark.asyncio
+async def test_get_asset_enrichment_international(enrichment_service) -> None:
+    from unittest.mock import patch
+    finnhub_payload = {
+        "profile": {
+            "country": "US",
+            "currency": "USD",
+            "exchange": "NASDAQ",
+            "industry": "Technology",
+            "name": "Apple Inc",
+            "logo": "https://logo.png",
+            "market_cap": 3000000000000.0,
+            "weburl": "https://apple.com",
+        },
+        "metrics": {
+            "pe": 32.5,
+            "pb": 45.0,
+            "dividend_yield": 0.55,
+            "roe": 140.0,
+            "net_margin": 26.5,
+            "eps": 6.8,
+            "beta": 1.1,
+        },
+        "recommendations": {
+            "strong_buy": 10,
+            "buy": 20,
+            "hold": 8,
+            "sell": 1,
+            "strong_sell": 0,
+            "consensus": "STRONG_BUY",
+        },
+    }
+    with patch("app.services.asset_enrichment_service.fetch_finnhub_enrichment", return_value=finnhub_payload):
+        enrichment = await enrichment_service.get_asset_enrichment("AAPL", asset_type="STOCK")
+        assert enrichment["ticker"] == "AAPL"
+        assert enrichment["stock_fundamentals"] is not None
+        assert enrichment["stock_fundamentals"]["pe"] == 32.5
+        assert enrichment["stock_fundamentals"]["sector"] == "Technology"
+        assert enrichment["international_profile"] is not None
+        assert enrichment["international_profile"]["country"] == "US"
+        assert enrichment["international_profile"]["consensus"] == "STRONG_BUY"

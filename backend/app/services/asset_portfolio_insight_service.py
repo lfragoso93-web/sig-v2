@@ -137,11 +137,42 @@ class AssetPortfolioInsightService:
         pos: AssetPortfolioPositionInsight,
         enrichment: dict[str, Any],
     ) -> AIAssetInsight:
+        tipo = (pos.class_name or "").upper()
+        crypto_data = enrichment.get("crypto_indicators")
+        treasury_data = enrichment.get("treasury_indicators")
+        intl_profile = enrichment.get("international_profile")
+        fii_data = enrichment.get("fii_indicators")
+        stock_data = enrichment.get("stock_fundamentals")
+
         # Concentração
         if not pos.is_held:
             concentration_level = "LOW"
             concentration_msg = (
                 f"{ticker} não está presente na carteira atualmente. Sem risco de concentração."
+            )
+        elif "CRIPTO" in tipo or crypto_data:
+            if pos.portfolio_weight_percent > 10.0:
+                concentration_level = "HIGH"
+                concentration_msg = (
+                    f"Atenção: A exposição ao criptoativo {ticker} é de {pos.portfolio_weight_percent:.1f}%, "
+                    f"superando o limite prudencial recomendado (5% a 10%) para ativos de alta volatilidade."
+                )
+            elif pos.portfolio_weight_percent >= 5.0:
+                concentration_level = "WARNING"
+                concentration_msg = (
+                    f"{ticker} representa {pos.portfolio_weight_percent:.1f}% da carteira. Posição expressiva "
+                    f"em criptoativo; monitore a volatilidade dos ciclos de mercado."
+                )
+            else:
+                concentration_level = "BALANCED"
+                concentration_msg = (
+                    f"Posição equilibrada em criptoativo: {ticker} representa {pos.portfolio_weight_percent:.1f}% do portfólio."
+                )
+        elif "TESOURO" in tipo or "RENDA_FIXA" in tipo or treasury_data:
+            concentration_level = "BALANCED"
+            concentration_msg = (
+                f"{ticker} compõe {pos.portfolio_weight_percent:.1f}% da carteira como âncora de segurança "
+                f"e liquidez com risco soberano."
             )
         elif pos.portfolio_weight_percent > 15.0:
             concentration_level = "HIGH"
@@ -164,14 +195,20 @@ class AssetPortfolioInsightService:
 
         # Geração de Renda / YoC
         market_dy: Optional[float] = None
-        fii_data = enrichment.get("fii_indicators")
-        stock_data = enrichment.get("stock_fundamentals")
         if fii_data and fii_data.get("dividend_yield") is not None:
             market_dy = float(fii_data["dividend_yield"])
         elif stock_data and stock_data.get("dividend_yield") is not None:
             market_dy = float(stock_data["dividend_yield"])
 
-        if pos.is_held and pos.yield_on_cost_percent is not None and pos.dividends_received > 0:
+        if "CRIPTO" in tipo or crypto_data:
+            income_assessment = "Criptoativos não distribuem proventos regulares; seu retorno decorre primordialmente da valorização de capital."
+        elif "TESOURO" in tipo or "RENDA_FIXA" in tipo or treasury_data:
+            coupon_type = str(treasury_data.get("coupon_type", "") if treasury_data else "").lower()
+            if "juros" in coupon_type:
+                income_assessment = "Título com pagamento semestral de cupons de juros, propiciando fluxo de renda passiva intermediário."
+            else:
+                income_assessment = "Rendimentos acumulados e capitalizados automaticamente até o vencimento ou resgate antecipado."
+        elif pos.is_held and pos.yield_on_cost_percent is not None and pos.dividends_received > 0:
             if market_dy is not None and pos.yield_on_cost_percent >= market_dy:
                 income_assessment = (
                     f"Excelente geração de renda: seu Yield on Cost acumulado é de "
@@ -215,10 +252,27 @@ class AssetPortfolioInsightService:
         else:
             rebalancing_guidance = "Metas de alocação por classe ainda não definidas para esta carteira."
 
-        # Papel Estratégico
-        tipo = (pos.class_name or "").upper()
+        # Papel Estratégico & Valuation Note
         valuation_note = ""
-        if "FII" in tipo:
+        if "CRIPTO" in tipo or crypto_data:
+            rank_str = f" (Rank #{crypto_data.get('market_cap_rank')} global)" if crypto_data and crypto_data.get("market_cap_rank") else ""
+            strategic_role = f"Reserva descentralizada e alta assimetria de valorização{rank_str}."
+            if crypto_data and crypto_data.get("change_24h_pct") is not None:
+                chg = float(crypto_data["change_24h_pct"])
+                valuation_note = f" Variação nas últimas 24h: {chg:+.2f}%."
+        elif "TESOURO" in tipo or "RENDA_FIXA" in tipo or treasury_data:
+            indexer = treasury_data.get("indexer") if treasury_data else "Pós-fixado"
+            if indexer == "IPCA":
+                strategic_role = "Proteção contra a inflação com rentabilidade real garantida até o vencimento."
+            elif indexer == "SELIC":
+                strategic_role = "Preservação de capital, liquidez diária e remuneração atrelada à taxa básica de juros."
+            else:
+                strategic_role = "Previsibilidade de fluxo financeiro e rentabilidade prefixada pactuada."
+            if treasury_data and treasury_data.get("buy_rate") is not None:
+                rate = float(treasury_data["buy_rate"])
+                mat = f" (vencimento {treasury_data.get('maturity_date')})" if treasury_data.get("maturity_date") else ""
+                valuation_note = f" Taxa indicativa de compra: {rate:.2f}% a.a.{mat}."
+        elif "FII" in tipo:
             seg_info = f" ({fii_data.get('segment') or fii_data.get('segment_type')})" if fii_data and (fii_data.get('segment') or fii_data.get('segment_type')) else ""
             strategic_role = f"Vetor de renda passiva mensal recorrente e diversificação imobiliária{seg_info}."
             if fii_data and fii_data.get("pvp") is not None:
@@ -230,7 +284,15 @@ class AssetPortfolioInsightService:
                     valuation_note = f" Negociando com ágio patrimonial de {abs(discount):.1f}% (P/VP {pvp_val:.2f})."
                 else:
                     valuation_note = f" Negociando em linha com o valor patrimonial (P/VP {pvp_val:.2f})."
-        elif "ACAO" in tipo or "STOCK" in tipo or "BDR" in tipo:
+        elif intl_profile or "STOCK" in tipo:
+            industry_str = f" do setor de {intl_profile.get('industry')}" if intl_profile and intl_profile.get("industry") else ""
+            strategic_role = f"Internacionalização do patrimônio e diversificação em moeda forte (USD){industry_str}."
+            if stock_data and stock_data.get("pe") is not None:
+                pe_val = float(stock_data["pe"])
+                roe_str = f" e ROE de {float(stock_data['roe']):.1f}%" if stock_data.get("roe") is not None else ""
+                rec_str = f" Consenso de Wall Street: {intl_profile.get('consensus')}." if intl_profile and intl_profile.get("consensus") else ""
+                valuation_note = f" Apresenta múltiplo P/L de {pe_val:.1f}x{roe_str}.{rec_str}"
+        elif "ACAO" in tipo or "BDR" in tipo:
             sector_info = f" do setor de {stock_data.get('sector')}" if stock_data and stock_data.get("sector") else ""
             if market_dy and market_dy >= 6.0:
                 strategic_role = f"Empresa madura e geradora de caixa{sector_info} com distribuição relevante de dividendos/JCP."
@@ -240,10 +302,6 @@ class AssetPortfolioInsightService:
                 pe_val = float(stock_data["pe"])
                 roe_str = f" e ROE de {float(stock_data['roe']):.1f}%" if stock_data.get("roe") is not None else ""
                 valuation_note = f" Apresenta múltiplo P/L de {pe_val:.1f}x{roe_str}."
-        elif "CRIPTO" in tipo:
-            strategic_role = "Reserva descentralizada e alta assimetria de valorização."
-        elif "RENDA_FIXA" in tipo or "TESOURO" in tipo:
-            strategic_role = "Preservação de capital, liquidez e âncora de segurança da carteira."
         else:
             strategic_role = "Ativo de diversificação patrimonial."
 

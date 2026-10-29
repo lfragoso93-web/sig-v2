@@ -129,6 +129,9 @@ export default function AssetDetailDrawer({
   const aiInsights = portfolioInsight?.ai_insights
   const fii = enrichment?.fii_indicators
   const stock = enrichment?.stock_fundamentals
+  const crypto = enrichment?.crypto_indicators
+  const treasury = enrichment?.treasury_indicators
+  const intlProfile = enrichment?.international_profile
 
   if (!activeTicker) return null
 
@@ -256,6 +259,54 @@ export default function AssetDetailDrawer({
                       }}
                     >
                       {stock?.sector ?? `FII ${fii?.segment_type}`}
+                    </span>
+                  )}
+                  {crypto && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: 'rgba(234, 179, 8, 0.12)',
+                        color: 'var(--color-warning)',
+                        border: '1px solid rgba(234, 179, 8, 0.25)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {crypto.market_cap_rank ? `Rank #${crypto.market_cap_rank}` : 'Criptoativo'}
+                    </span>
+                  )}
+                  {treasury && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: 'rgba(34, 197, 94, 0.12)',
+                        color: 'var(--color-success)',
+                        border: '1px solid rgba(34, 197, 94, 0.25)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Tesouro {treasury.indexer ?? 'Direto'}
+                    </span>
+                  )}
+                  {intlProfile && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: 'rgba(99, 102, 241, 0.12)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {intlProfile.exchange ?? (intlProfile.country ? `${intlProfile.country} • USD` : 'Internacional')}
                     </span>
                   )}
                   {enrichment?.coverage_status && (
@@ -1023,6 +1074,168 @@ export default function AssetDetailDrawer({
                     </div>
                   )}
                 </>
+              ) : treasury ? (
+                <>
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Características do Título Público (Tesouro Direto)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Indexador</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.indexer ?? '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Tipo de Cupom</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {treasury.coupon_type ?? 'Sem juros semestrais'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Data de Vencimento</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.maturity_date || '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Prazo até Vencimento</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.duration_days != null ? `${treasury.duration_days.toLocaleString('pt-BR')} dias` : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Taxas Indicativas e Preços Unitários (PU)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Taxa Indicativa Compra</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-success)' }}>
+                          {treasury.buy_rate != null ? `${formatNumber(treasury.buy_rate)}% a.a.` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Taxa Indicativa Resgate</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.sell_rate != null ? `${formatNumber(treasury.sell_rate)}% a.a.` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Preço Unitário Compra (PU)</span>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.buy_price != null ? formatBRL(treasury.buy_price) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Preço Unitário Resgate (PU)</span>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {treasury.sell_price != null ? formatBRL(treasury.sell_price) : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 4 }}>
+                      <ShieldCheck size={16} style={{ color: 'var(--color-success)' }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                        Risco Soberano e Liquidez Diária
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                      Títulos públicos federais contam com garantia soberana integral da União (Tesouro Nacional) e recompra garantida nos dias úteis pelo Governo Federal.
+                    </p>
+                  </div>
+                </>
+              ) : crypto ? (
+                <>
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Cotação e Métricas de Mercado (Criptoativo)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Preço (BRL)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.price_brl != null ? formatBRL(crypto.price_brl) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Preço (USD)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.price_usd != null ? `$ ${crypto.price_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Variação (24h)</span>
+                        <div
+                          style={{
+                            fontSize: '1.1rem',
+                            fontWeight: 700,
+                            color: (crypto.change_24h_pct ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
+                          }}
+                        >
+                          {formatPercent(crypto.change_24h_pct)}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Ranking Global</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-warning)' }}>
+                          {crypto.market_cap_rank != null ? `#${crypto.market_cap_rank}` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Volume 24h</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.volume_24h != null ? formatBRL(crypto.volume_24h) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Capitalização (Cap)</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.market_cap_brl != null ? formatBRL(crypto.market_cap_brl) : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Faixa Diária e Câmbio de Conversão
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Mínima do Dia (24h)</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.day_low != null ? formatBRL(crypto.day_low) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Máxima do Dia (24h)</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.day_high != null ? formatBRL(crypto.day_high) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Taxa USD/BRL</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {crypto.currency_rate_usd != null ? formatBRL(crypto.currency_rate_usd) : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Moeda / Rede</span>
+                        <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {crypto.coin_name} ({crypto.coin})
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
               ) : stock ? (
                 <>
                   <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
@@ -1174,6 +1387,36 @@ export default function AssetDetailDrawer({
                       </div>
                     </div>
                   </div>
+
+                  {intlProfile && (intlProfile.consensus || intlProfile.strong_buy != null) && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 0.5rem 0' }}>
+                        Consenso de Wall Street (Analistas Globais)
+                      </h3>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.85rem' }}>
+                        <div>
+                          <span style={{ color: 'var(--color-text-muted)' }}>Consenso Geral: </span>
+                          <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>
+                            {intlProfile.consensus ?? 'HOLD'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>
+                            Compra Forte: {intlProfile.strong_buy ?? 0}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                            Compra: {intlProfile.buy ?? 0}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                            Manter: {intlProfile.hold ?? 0}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-danger)', fontWeight: 600 }}>
+                            Venda: {intlProfile.sell ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {(stock.recommendation || stock.target_price != null) && (
                     <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>

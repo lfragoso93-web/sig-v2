@@ -1,24 +1,28 @@
 """Servico de enriquecimento de ativos, fundamentos e dados macroeconomicos (Issue #130).
 
-Gerencia consultas tipadas a FIIs (Bloco 5), fundamentos de acoes (Bloco 6)
-e dados macroeconomicos/cambio (Bloco 7), respeitando cache, TTLs e diagnostico
-de cobertura do AssetCoverageService.
+Gerencia consultas tipadas a FIIs (Bloco 5), fundamentos de acoes (Bloco 6),
+dados macroeconomicos/cambio (Bloco 7), alem de ativos internacionais (Finnhub),
+criptoativos (BRAPI + CoinGecko) e Tesouro Direto.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from app.core.cache import get_redis
 from app.core.log_safety import sanitize_log_value
+from app.integrations.brapi_crypto_catalog import fetch_crypto_quote_and_metrics
+from app.integrations.brapi_treasury import fetch_treasury_bond_detail
 from app.integrations.brapi_v2_client import (
     BrapiV2Client,
     CompanyFundamentalsDTO,
     FIIIndicatorDTO,
     MacroSeriesPointDTO,
 )
+from app.integrations.finnhub import fetch_finnhub_enrichment
 from app.services.asset_coverage_service import asset_coverage_service
 
 logger = logging.getLogger(__name__)
@@ -26,6 +30,8 @@ logger = logging.getLogger(__name__)
 # TTLs de cache para dados enriquecidos
 TTL_FUNDAMENTALS_SECONDS = 86400  # 24 horas para fundamentos e indicadores
 TTL_MACRO_SECONDS = 43200  # 12 horas para series macroeconomicas
+TTL_CRYPTO_SECONDS = 600  # 10 minutos para criptoativos
+TTL_TREASURY_SECONDS = 43200  # 12 horas para títulos públicos
 
 
 class AssetEnrichmentService:
@@ -60,7 +66,7 @@ class AssetEnrichmentService:
         cache_key = f"fii_indicators:{clean_ticker}"
         if not force_refresh:
             cached = await self._get_cached(cache_key)
-            if cached is not None:
+            if cached is not None and isinstance(cached, dict):
                 return FIIIndicatorDTO(**cached)
 
         # 3. Consulta ao provedor via cliente tipado v2
@@ -134,7 +140,7 @@ class AssetEnrichmentService:
         cache_key = f"stock_fundamentals:{clean_ticker}"
         if not force_refresh:
             cached = await self._get_cached(cache_key)
-            if cached is not None:
+            if cached is not None and isinstance(cached, dict):
                 return CompanyFundamentalsDTO(**cached)
 
         # 3. Consulta ao provedor via cliente tipado v2
@@ -188,6 +194,159 @@ class AssetEnrichmentService:
             await asset_coverage_service.record_capability(
                 clean_ticker, "indicators", False, error_code="ERROR"
             )
+            return None
+
+    # -------------------------------------------------------------------------
+    # Ativos Internacionais: Finnhub Enrichment
+    # -------------------------------------------------------------------------
+
+    async def get_international_fundamentals(
+        self,
+        ticker: str,
+        *,
+        force_refresh: bool = False,
+    ) -> Optional[dict[str, Any]]:
+        """Obtém fundamentos e consenso internacional consolidando Finnhub."""
+        clean_ticker = ticker.strip().upper()
+        if not clean_ticker:
+            return None
+
+        cache_key = f"intl_fundamentals:{clean_ticker}"
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached is not None and isinstance(cached, dict):
+                return cached
+
+        try:
+            finnhub_raw = await fetch_finnhub_enrichment(clean_ticker)
+            if not finnhub_raw:
+                return None
+
+            raw_p = finnhub_raw.get("profile")
+            profile: dict[str, Any] = raw_p if isinstance(raw_p, dict) else {}
+            raw_m = finnhub_raw.get("metrics")
+            metrics: dict[str, Any] = raw_m if isinstance(raw_m, dict) else {}
+            raw_r = finnhub_raw.get("recommendations")
+            recs: dict[str, Any] = raw_r if isinstance(raw_r, dict) else {}
+
+            stock_fundamentals = {
+                "pe": metrics.get("pe"),
+                "forward_pe": None,
+                "pb": metrics.get("pb"),
+                "dividend_yield": metrics.get("dividend_yield"),
+                "eps": metrics.get("eps"),
+                "market_cap": profile.get("market_cap"),
+                "enterprise_value": None,
+                "enterprise_to_ebitda": None,
+                "net_revenue": None,
+                "net_income": None,
+                "ebitda": None,
+                "net_margin": metrics.get("net_margin"),
+                "operating_margin": metrics.get("operating_margin"),
+                "gross_margin": None,
+                "roe": metrics.get("roe"),
+                "roa": metrics.get("roa"),
+                "net_debt": None,
+                "total_debt": None,
+                "free_cash_flow": None,
+                "book_value": None,
+                "peg_ratio": None,
+                "beta": metrics.get("beta"),
+                "sector": profile.get("industry"),
+                "industry": profile.get("industry"),
+                "description": f"{profile.get('name', clean_ticker)} é uma empresa listada em {profile.get('exchange', 'Bolsa Global')} ({profile.get('country', 'Exterior')}).",
+                "website": profile.get("weburl"),
+                "employees": None,
+                "recommendation": recs.get("consensus"),
+                "target_price": None,
+            }
+
+            intl_profile = {
+                "country": profile.get("country"),
+                "currency": profile.get("currency"),
+                "exchange": profile.get("exchange"),
+                "industry": profile.get("industry"),
+                "weburl": profile.get("weburl"),
+                "logo": profile.get("logo"),
+                "market_cap_usd": profile.get("market_cap"),
+                "consensus": recs.get("consensus"),
+                "strong_buy": recs.get("strong_buy"),
+                "buy": recs.get("buy"),
+                "hold": recs.get("hold"),
+                "sell": recs.get("sell"),
+                "strong_sell": recs.get("strong_sell"),
+            }
+
+            data = {
+                "stock_fundamentals": stock_fundamentals,
+                "international_profile": intl_profile,
+            }
+            await self._set_cached(cache_key, data, TTL_FUNDAMENTALS_SECONDS)
+            return data
+        except Exception as exc:
+            logger.warning("Falha ao enriquecer internacional %s: %s", sanitize_log_value(clean_ticker), sanitize_log_value(exc))
+            return None
+
+    # -------------------------------------------------------------------------
+    # Criptoativos: BRAPI + CoinGecko
+    # -------------------------------------------------------------------------
+
+    async def get_crypto_indicators(
+        self,
+        coin: str,
+        *,
+        force_refresh: bool = False,
+    ) -> Optional[dict[str, Any]]:
+        """Obtém dados ao vivo e indicadores operacionais de criptomoeda."""
+        clean_coin = coin.strip().upper()
+        if not clean_coin:
+            return None
+
+        cache_key = f"crypto_indicators:{clean_coin}"
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached is not None and isinstance(cached, dict):
+                return cached
+
+        try:
+            data = await fetch_crypto_quote_and_metrics(clean_coin)
+            if data is not None:
+                await self._set_cached(cache_key, data, TTL_CRYPTO_SECONDS)
+                return data
+            return None
+        except Exception as exc:
+            logger.warning("Falha ao buscar indicadores cripto %s: %s", sanitize_log_value(clean_coin), sanitize_log_value(exc))
+            return None
+
+    # -------------------------------------------------------------------------
+    # Tesouro Direto: BRAPI Treasury
+    # -------------------------------------------------------------------------
+
+    async def get_treasury_indicators(
+        self,
+        symbol_or_name: str,
+        *,
+        force_refresh: bool = False,
+    ) -> Optional[dict[str, Any]]:
+        """Obtém taxas indicativas, PU e características de título público."""
+        raw = symbol_or_name.strip()
+        if not raw:
+            return None
+
+        cache_key = f"treasury_indicators:{raw.lower()}"
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached is not None and isinstance(cached, dict):
+                return cached
+
+        try:
+            data = await fetch_treasury_bond_detail(raw)
+            if data is not None:
+                await self._set_cached(cache_key, data, TTL_TREASURY_SECONDS)
+                return data
+            return None
+        except Exception as exc:
+            logger.warning("Falha ao buscar indicadores do Tesouro %s: %s", sanitize_log_value(raw), sanitize_log_value(exc))
             return None
 
     # -------------------------------------------------------------------------
@@ -255,9 +414,35 @@ class AssetEnrichmentService:
             "capabilities": capabilities,
             "fii_indicators": None,
             "stock_fundamentals": None,
+            "crypto_indicators": None,
+            "treasury_indicators": None,
+            "international_profile": None,
         }
 
-        if tipo == "FII" or (not tipo and (clean_ticker.endswith("11") and not clean_ticker.startswith("B"))):
+        # 1. Criptoativos
+        known_cryptos = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "DOT", "LINK", "LTC", "BNB"}
+        is_crypto = (
+            tipo in ("CRIPTO", "CRYPTO")
+            or clean_ticker in known_cryptos
+            or clean_ticker.endswith(("-USD", "-BRL", "USDT"))
+        )
+        if is_crypto:
+            result["crypto_indicators"] = await self.get_crypto_indicators(clean_ticker)
+            return result
+
+        # 2. Tesouro Direto / Renda Fixa Pública
+        is_treasury = (
+            tipo in ("TESOURO_DIRETO", "RENDA_FIXA")
+            or clean_ticker.lower().startswith("tesouro-")
+            or "tesouro" in clean_ticker.lower()
+        )
+        if is_treasury:
+            result["treasury_indicators"] = await self.get_treasury_indicators(clean_ticker)
+            return result
+
+        # 3. Fundos Imobiliários (FII)
+        is_fii = tipo == "FII" or (not tipo and (clean_ticker.endswith("11") and not clean_ticker.startswith("B") and not clean_ticker.startswith("IVV")))
+        if is_fii:
             fii_dto = await self.get_fii_indicators(clean_ticker)
             if fii_dto:
                 result["fii_indicators"] = {
@@ -279,40 +464,54 @@ class AssetEnrichmentService:
                     "administrator_cnpj": fii_dto.administrator_cnpj,
                     "cnpj": fii_dto.cnpj,
                 }
-        else:
-            stock_dto = await self.get_stock_fundamentals(clean_ticker)
-            if stock_dto:
-                result["stock_fundamentals"] = {
-                    "pe": stock_dto.pe,
-                    "forward_pe": stock_dto.forward_pe,
-                    "pb": stock_dto.pb,
-                    "dividend_yield": stock_dto.dividend_yield,
-                    "eps": stock_dto.eps,
-                    "market_cap": stock_dto.market_cap,
-                    "enterprise_value": stock_dto.enterprise_value,
-                    "enterprise_to_ebitda": stock_dto.enterprise_to_ebitda,
-                    "net_revenue": stock_dto.net_revenue,
-                    "net_income": stock_dto.net_income,
-                    "ebitda": stock_dto.ebitda,
-                    "net_margin": stock_dto.net_margin,
-                    "operating_margin": stock_dto.operating_margin,
-                    "gross_margin": stock_dto.gross_margin,
-                    "roe": stock_dto.roe,
-                    "roa": stock_dto.roa,
-                    "net_debt": stock_dto.net_debt,
-                    "total_debt": stock_dto.total_debt,
-                    "free_cash_flow": stock_dto.free_cash_flow,
-                    "book_value": stock_dto.book_value,
-                    "peg_ratio": stock_dto.peg_ratio,
-                    "beta": stock_dto.beta,
-                    "sector": stock_dto.sector,
-                    "industry": stock_dto.industry,
-                    "description": stock_dto.description,
-                    "website": stock_dto.website,
-                    "employees": stock_dto.employees,
-                    "recommendation": stock_dto.recommendation,
-                    "target_price": stock_dto.target_price,
-                }
+            return result
+
+        # 4. Ativos Internacionais (Stocks e ETFs globais)
+        is_intl = (
+            tipo in ("STOCK", "ETF_INT")
+            or (not tipo and bool(re.match(r"^[A-Z]{1,5}$", clean_ticker)) and not bool(re.search(r"\d", clean_ticker)))
+        )
+        if is_intl:
+            intl_data = await self.get_international_fundamentals(clean_ticker)
+            if intl_data:
+                result["stock_fundamentals"] = intl_data.get("stock_fundamentals")
+                result["international_profile"] = intl_data.get("international_profile")
+                return result
+
+        # 5. Ações Nacionais (Default / Ações B3)
+        stock_dto = await self.get_stock_fundamentals(clean_ticker)
+        if stock_dto:
+            result["stock_fundamentals"] = {
+                "pe": stock_dto.pe,
+                "forward_pe": stock_dto.forward_pe,
+                "pb": stock_dto.pb,
+                "dividend_yield": stock_dto.dividend_yield,
+                "eps": stock_dto.eps,
+                "market_cap": stock_dto.market_cap,
+                "enterprise_value": stock_dto.enterprise_value,
+                "enterprise_to_ebitda": stock_dto.enterprise_to_ebitda,
+                "net_revenue": stock_dto.net_revenue,
+                "net_income": stock_dto.net_income,
+                "ebitda": stock_dto.ebitda,
+                "net_margin": stock_dto.net_margin,
+                "operating_margin": stock_dto.operating_margin,
+                "gross_margin": stock_dto.gross_margin,
+                "roe": stock_dto.roe,
+                "roa": stock_dto.roa,
+                "net_debt": stock_dto.net_debt,
+                "total_debt": stock_dto.total_debt,
+                "free_cash_flow": stock_dto.free_cash_flow,
+                "book_value": stock_dto.book_value,
+                "peg_ratio": stock_dto.peg_ratio,
+                "beta": stock_dto.beta,
+                "sector": stock_dto.sector,
+                "industry": stock_dto.industry,
+                "description": stock_dto.description,
+                "website": stock_dto.website,
+                "employees": stock_dto.employees,
+                "recommendation": stock_dto.recommendation,
+                "target_price": stock_dto.target_price,
+            }
 
         return result
 
