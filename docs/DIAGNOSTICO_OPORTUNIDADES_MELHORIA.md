@@ -648,11 +648,12 @@ Para viabilizar a execução ordenada dessas oportunidades sem gerar disrupçõe
                                                 |
                                                 v
 +-----------------------------------------------------------------------------------------------+
-| FASE 4: Otimização de Performance, Escalabilidade e Manutenibilidade                          |
-| - OP-11: Introduzir get_read_db() sem commit automático em leituras puras.                   |
-| - OP-12: Migrar cache_delete_pattern de Redis KEYS para scan_iter assíncrono.                 |
-| - OP-14: Ajustar pool Vitest (vmThreads / isolate: false) para acelerar testes frontend.     |
-| - OP-13: Estruturar repositórios dedicados para queries recorrentes em app/repositories/.      |
+| FASE 4: Otimização de Performance, Escalabilidade e Manutenibilidade [CONCLUÍDA]              |
+| - OP-11: Introduzido get_read_db() sem commit automático em sessões somente leitura.          |
+| - OP-12: Migrado cache_delete_pattern para cursor scan_iter não bloqueante no Redis.          |
+| - OP-14: Otimizado pool Vitest com vmThreads (redução de 101s para ~14s na suíte frontend).  |
+| - OP-13: Criado AssetRepository em app/repositories/ para desacoplamento de catálogo.        |
+| - OP-15: Criado docs/README.md com catálogo e índice temático de toda a documentação.         |
 +-----------------------------------------------------------------------------------------------+
 ```
 
