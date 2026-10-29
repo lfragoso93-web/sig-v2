@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -30,6 +31,7 @@ from app.services.portfolio_snapshot_canonical_twr_service import (
 )
 
 logger = logging.getLogger(__name__)
+MAINTAIN_PORTFOLIO_SNAPSHOTS = "maintain:portfolio_snapshots"
 _MONEY_TOLERANCE = Decimal("0.01")
 _RETURN_TOLERANCE = Decimal("0.000001")
 
@@ -192,18 +194,28 @@ async def maintain_twr_snapshots_for_active_portfolios(
 
     for portfolio_id in portfolio_ids:
         try:
-            rebuild_consolidated = await _portfolio_needs_twr_rebuild(db, portfolio_id)
-            rebuild_classes = await _portfolio_needs_class_twr_rebuild(db, portfolio_id)
+            access = PortfolioAccessContext.for_system(
+                portfolio_id=portfolio_id,
+                permissions=frozenset({MAINTAIN_PORTFOLIO_SNAPSHOTS}),
+                purpose="background_nightly_twr_maintenance",
+            )
+            rebuild_consolidated = await _portfolio_needs_twr_rebuild(db, access.portfolio_id)
+            rebuild_classes = await _portfolio_needs_class_twr_rebuild(db, access.portfolio_id)
             if not rebuild_consolidated and not rebuild_classes:
                 skipped += 1
                 continue
+            logger.info(
+                "[snapshot_twr_auto] portfolio=%s executando manutencao (purpose=%s)",
+                access.portfolio_id,
+                access.purpose,
+            )
             if rebuild_consolidated:
                 snapshots += await backfill_canonical_snapshots_with_returns(
                     db,
-                    portfolio_id,
+                    access.portfolio_id,
                 )
             if rebuild_classes:
-                class_snapshots += await rebuild_class_snapshots(db, portfolio_id)
+                class_snapshots += await rebuild_class_snapshots(db, access.portfolio_id)
             processed += 1
         except Exception as exc:
             await db.rollback()

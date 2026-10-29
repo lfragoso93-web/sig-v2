@@ -160,3 +160,19 @@ async def test_http_controller_hides_cross_portfolio_denial(monkeypatch) -> None
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Carteira nao encontrada ou sem permissao"
+
+
+def test_system_maintenance_declares_system_context() -> None:
+    from app.services.portfolio_snapshot_twr_maintenance_service import (
+        MAINTAIN_PORTFOLIO_SNAPSHOTS,
+    )
+
+    access = PortfolioAccessContext.for_system(
+        portfolio_id=12,
+        permissions=frozenset({MAINTAIN_PORTFOLIO_SNAPSHOTS}),
+        purpose="background_nightly_twr_maintenance",
+    )
+    assert access.portfolio_id == 12
+    assert access.user_id is None
+    assert access.purpose == "background_nightly_twr_maintenance"
+    assert MAINTAIN_PORTFOLIO_SNAPSHOTS in access.permissions

@@ -11,7 +11,17 @@ from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividen
 router = APIRouter(tags=["dividends"])
 
 
-@router.get("/{portfolio_id}/dividends", response_model=list[DividendResponse])
+@router.get(
+    "/{portfolio_id}/dividends",
+    response_model=list[DividendResponse],
+    deprecated=True,
+    summary="Listar dividendos da carteira (DEPRECATED)",
+    description=(
+        "Endpoint legado mantido para compatibilidade. Para novas implementações e "
+        "telas completas de proventos, utilize a superfície unificada "
+        "/api/v1/portfolios/{portfolio_id}/proventos."
+    ),
+)
 async def get_dividends(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
