@@ -621,20 +621,20 @@ Para viabilizar a execução ordenada dessas oportunidades sem gerar disrupçõe
                                                 |
                                                 v
 +-----------------------------------------------------------------------------------------------+
-| FASE 1: Governança, Alinhamento de Branch e Documentação Integral                             |
-| - OP-03: Sincronizar stable-15jun com main (merge commit dea616ee) e alternar checkout.       |
-| - OP-04 / OP-16 / OP-17 / OP-18: Atualizar README.md, docs/architecture.md, specs do scheduler.|
-| - OP-15: Criar frontend/README.md, backend/README.md e docs/README.md.                        |
-| - OP-19: Adicionar cabeçalho histórico em documentos de auditoria passados.                   |
+| FASE 1: Governança, Documentação Integral & Melhorias Canônicas [CONCLUÍDA - PR #453]        |
+| - OP-03: Governança em stable-15jun e PR formal para main.                                    |
+| - OP-04 / OP-15 / OP-16 / OP-17 / OP-18 / OP-19: Documentação integral e novos manuais.       |
+| - OP-01: Validação de venda de ativos com suporte a splits em transaction_write_service.      |
+| - OP-02 (Parcial): PortfolioAccessContext em proventos.py com get_accessible_portfolio.       |
+| - OP-05: Global Exception Handler para PortfolioAccessDenied no FastAPI (HTTP 404).           |
+| - OP-06 (Parcial): Injeção de Clock canônico em FixedIncome e Goals.                          |
 +-----------------------------------------------------------------------------------------------+
                                                 |
                                                 v
 +-----------------------------------------------------------------------------------------------+
-| FASE 2: Integridade Contábil e Segurança Canônica                                             |
-| - OP-01: Corrigir validação de venda de ativos em transaction_write_service (suporte a splits).|
-| - OP-02: Concluir migração de PortfolioAccessContext em Proventos, IRPF, Rentabilidade e Jobs.|
-| - OP-05: Implementar Global Exception Handler para PortfolioAccessDenied no FastAPI.          |
-| - OP-08: Remover rota duplicada de IRPF em app/main.py.                                       |
+| FASE 2: Segurança Canônica e Unificação de Superfícies [CONCLUÍDA]                            |
+| - OP-02 (Conclusão): PortfolioAccessContext em irpf.py, rentabilidade.py e jobs (scheduler). |
+| - OP-10: Unificação de superfícies de proventos: dividends.py marcado como deprecated.        |
 +-----------------------------------------------------------------------------------------------+
                                                 |
                                                 v
