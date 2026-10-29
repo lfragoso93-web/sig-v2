@@ -1,6 +1,8 @@
 # Arquitetura — SGI v2
 
-> Last updated: 18/10/2026.
+> **Última Atualização:** 29/10/2026.
+> **Relatório Oficial de Oportunidades de Melhoria:** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+> **Manuais dos Subprojetos:** [`backend/README.md`](../backend/README.md) | [`frontend/README.md`](../frontend/README.md).
 
 ## Objetivo
 
@@ -9,22 +11,21 @@ O SGI v2 calcula patrimônio, posição, custo, resultado, Proventos, rentabilid
 ## Fluxo financeiro principal
 
 ```text
-bootstrap / sincronizadores autorizados
+bootstrap / sincronizadores autorizados (assíncronos com Redis lock)
         ↓
-assets + asset_prices + rate_history + fx_rates
-asset_dividends + corporate_events
+assets + asset_prices + rate_history + fx_rates + asset_dividends + corporate_events
         ↓
-transactions
+transactions (livro-razão canônico único)
         ↓
 projeções canônicas de posição, custo e realizações
         ↓
-valuation dedicado por classe
+valuation dedicado por classe (Ações, FIIs, Renda Fixa, Tesouro, Cripto, Internacional)
         ↓
-PortfolioSnapshot + PortfolioClassSnapshot
+PortfolioSnapshot + PortfolioClassSnapshot (escritor único canônico)
         ↓
-summary.v2 + rentabilidade.v2 + leitores históricos
+summary.v2 + rentabilidade.v2 + leitores históricos + Analysis Engine (#360)
         ↓
-Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
+Resumo / Patrimônio / Rentabilidade / Proventos / IRPF / AnalisePage (IA #361) / AssetDetailDrawer (#58)
 ```
 
 `transactions` é a fonte canônica do lifecycle financeiro, inclusive Renda Fixa e Tesouro Direto. Não reintroduzir projeção paralela em `fixed_income_investments`.
@@ -171,27 +172,33 @@ O desenho definitivo deve decidir:
 - concentração/diversificação/rebalanceamento;
 - integração com Analysis Engine #360.
 
-### Analysis Engine #360
+### Analysis Engine (#360) — Implementado
 
-Deve ser determinístico, DB-first e consumir contratos financeiros existentes sem duplicá-los.
+O Analysis Engine opera de modo determinístico e DB-first, consumindo `summary.v2`, posições consolidadas e retornos históricos para calcular alocação por classes, diversificação e métricas de risco sem duplicar regras contábeis nem consultar provedores externos.
 
-### IA #361
+### Camada de IA (#361) — Implementada
 
-Somente depois do Analysis Engine. IA é camada explicativa sobre DTO estruturado; não calcula números financeiros e não acessa banco/provider de forma irrestrita.
+A camada de Inteligência Artificial opera como explicador e sintetizador executivo em linguagem natural sobre o DTO estruturado gerado pelo Analysis Engine (`AnalisePage.tsx`). A IA não computa valores financeiros, não gera alucinações matemáticas e não possui autoridade para consultar o banco de dados ou a internet de forma irrestrita.
 
-## Ferramentas de simulacao
+### Autenticação Google OAuth 2.0 e MFA TOTP (#97) — Implementado
 
-As ferramentas da #359 sao simulacoes isoladas, sem leitura ou escrita da
-carteira. A comparacao de Renda Fixa calcula o tratamento tributario pelo tipo
-de produto usando a mesma taxonomia exibida no cadastro; a isencao pressupoe
-emissao e titular elegiveis. Taxas e premissas sao informadas pelo usuario. As
-formulas, fontes e limites estao em `docs/TOOLS_CALCULATORS.md`.
+Suporte a autenticação moderna via Google OAuth 2.0 e Segundo Fator de Autenticação (MFA via app autenticador / TOTP) governado no backend e persistido no schema Alembic sob a revisão `20261022_auth_oauth_mfa`.
 
-## Asset Detail
+## Ferramentas de Simulação (#359) — Implementadas
 
-A superfície de detalhe de ativo já existe parcialmente e foi exercitada com histórico, Proventos e preço médio canônico. #58 permanece aberta para completar cobertura, DY, metadados, iconografia e responsividade junto da #351.
+As ferramentas da #359 operam como simulações isoladas na rota `/carteira/ferramentas/*` (`IncomeCalculatorPage.tsx` e `FixedIncomeCalculatorPage.tsx`), sem efetuar leitura ou escrita no estado persistido da carteira:
+- **Calculadora de Rendimentos:** Projeta juros compostos e aportes futuros.
+- **Simulador de Renda Fixa:** Compara títulos calculando o tratamento tributário regressivo ou isenção de forma automática pelo tipo de produto (conforme taxonomia canônica). Premissas, fontes e fórmulas estão documentadas em `docs/TOOLS_CALCULATORS.md`.
 
-Nenhum provider deve ser chamado no render/read path para completar logos, histórico ou métricas.
+## Asset Detail Drawer (#58 / #351) — Implementado
+
+A gaveta consolidada lateral `AssetDetailDrawer.tsx` provê inspeção completa de qualquer ativo sob custódia, estruturada em abas:
+- **Visão Geral:** Cotação corrente, variação diária, preço médio e métricas da posição.
+- **Indicadores Fundamentalistas:** Painel de indicadores adaptados por classe de ativo (Ações, FIIs, BDRs, ETFs e Tesouro Direto), com histórico de proventos e múltiplos de mercado.
+- **Gráfico de Preços:** Séries temporais persistidas com seletor de períodos (1M, 6M, 1A, Tudo).
+- **Proventos & Eventos Corporativos:** Histórico oficial do ativo e split/grupamento.
+
+Nenhum provedor externo é acionado no fluxo de renderização (`read path`) para completar logos, cotações ou indicadores.
 
 ## Bootstrap e rebuild
 
@@ -289,16 +296,22 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
 As Issues #365 e #364 foram fechadas em 08/10/2026; não fazem mais parte da
 sequência corrente. A higiene de dependências priorizada também foi integrada.
 
-## Backlog pós-GO por padrão
+## Backlog pós-GO e Status de Implementação
 
-- #149 — posição elegível por carteira e tributação por lote de cupons/amortizações;
-- #351/#90/#58 — UX/detalhe de ativo;
-- #355–#359 — features auxiliares;
-- #246/#360 — Metas + Analysis Engine;
-- #361 — IA;
-- #97 — OAuth.
-
-#352 foi fechada apos validacao manual do seletor `Tipo de ativo` no modal de lancamento. #354 foi fechada após alinhamento da política de senha frontend/backend e só deve reabrir com regressão comprovada.
+Com as entregas consolidadas no branch `stable-15jun`:
+- **Implementados:**
+  - Analysis Engine (#360) e Camada de IA (#361) com `AnalisePage.tsx`;
+  - Autenticação Google OAuth 2.0 e MFA TOTP (#97);
+  - Gaveta consolidada de Detalhe de Ativo (#58 / #351);
+  - Taxonomia de Renda Fixa e associadores (#355);
+  - Simuladores e calculadoras financeiras (#359) em `/carteira/ferramentas/*`;
+  - Catálogo e histórico de ativos internacionais (`366ae927`);
+  - Tabela oficial de proventos (`dea616ee`).
+- **Fechadas com validação:** #352 (seletor de tipo de ativo), #354 (alinhamento de senha), #363, #364, #365.
+- **Backlog Técnico Vigente (Oportunidades Mapeadas):**
+  - O backlog arquitetural, de integridade contábil e resiliência está formalizado em [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) (19 oportunidades catalogadas, OP-01 a OP-19).
+  - #149 — Posição elegível por carteira e tributação por lote de cupons/amortizações.
+  - #284 — Homologação da infraestrutura em nuvem OCI (preservada como backlog futuro).
 
 
 ## Lancamentos de cripto e historico de mercado

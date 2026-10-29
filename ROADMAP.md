@@ -1,15 +1,21 @@
 # Roadmap - SGI v2
 
-> Ultima atualizacao: 19/10/2026.
+> **Última Atualização:** 29/10/2026.
+> **Relatório Oficial de Oportunidades de Melhoria (Backlog Técnico Vigente):** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+> **Alembic Head Vigente:** `20261022_auth_oauth_mfa` (67 revisões lineares encadeadas).
+> **Branch Mandatória:** `stable-15jun`.
 
-## Rebaseline de segurança e continuidade — 19/10/2026
+## Baseline Vigente e Entregas Consolidadas — 29/10/2026
 
-- Checkout `stable-15jun` e remoto estão no SHA `a517e8871e42142cc77943d08f59bcc0d3a6946e`; a branch está 41 commits à frente e 0 atrás de `main` (`4948b6b609ddf2e9a0ea51fbec0be4677f4f9985`).
-- O deep scan executado hoje passou CodeQL para Python/TypeScript e Trivy da imagem backend em `main`, não no SHA estável. O `gh` local está sem autenticação válida e a integração GitHub não oferece dispatch nem consulta de alertas Code Scanning. #408 permanece aberta até haver evidência de scanner/alertas para a identidade correta.
-- CI manual de `main` falhou em Gitleaks por uma fingerprint histórica de texto documental detectada como `generic-api-key`. A PR draft #433 adicionou a exceção exata; sua CI completa, incluindo Gitleaks, passou. A atualização textual local em `stable-15jun` também foi mantida.
-- PRs abertas #426–#432 são Dependabot, todas para `main`. Em branches das próprias PRs, #427 atualizou o teste de contrato para SQLAlchemy 2.1.4 e #430 reteve TypeScript 6.0.3, compatível com `typescript-eslint`; as duas CIs completas passaram e os PRs continuam abertos, sem merge. PR draft #433 adiciona somente a fingerprint histórica Gitleaks em `.gitleaksignore`; sua CI passou os gates completos no SHA `5fc214738eb5fe430c9a3c970e2e6ec6cd0f424c`. Não transplantar bumps automaticamente para `stable-15jun`.
-- Próximos blocos: (1) executar deep scan em `stable-15jun` com autorização GitHub válida e reconciliar alertas da #408; (2) revisar a PR #433 e decidir sua integração; (3) acompanhar/revisar os PRs #427 e #430, agora verdes; (4) continuar integração segura dos eventos complexos da #370; (5) validar visualmente #355/#359 e alinhar o critério remoto da #355.
-- Docker local não autorizou acesso à API; nenhum estado do runtime foi confirmado nesta auditoria. Não houve deploy, mudança financeira ou certificação.
+- **Funcionalidades de Produto Entregues em `stable-15jun`:**
+  - **Analysis Engine (#360) & Camada de IA (#361):** Motor determinístico DB-first de diagnóstico de diversificação e concentração integrado à camada de IA explicativa em linguagem natural (`frontend/src/pages/AnalisePage.tsx`).
+  - **Autenticação Google OAuth 2.0 e MFA TOTP (#97):** Login social e segundo fator via TOTP implementados e migrados no schema (`20261022_auth_oauth_mfa`).
+  - **Gaveta Consolidada de Detalhe de Ativo (#58 / #351):** `frontend/src/components/portfolio/AssetDetailDrawer.tsx` com abas dinâmicas de visão geral, indicadores adaptados por classe, histórico e proventos.
+  - **Simuladores e Calculadoras Financeiras (#359):** Calculadora de aportes futuros (`IncomeCalculatorPage.tsx`) e comparador de Renda Fixa (`FixedIncomeCalculatorPage.tsx`) operando em `/carteira/ferramentas/*`.
+  - **Taxonomia Canônica de Renda Fixa (#355):** Normalização fiscal automática derivada do tipo de produto, títulos com emissores integrados e liquidez diária.
+  - **Catálogo e Cotações Internacionais (`366ae927`):** Suporte nativo a Stocks e ETFs globais no bootstrap e pipeline de preços.
+  - **Tabela Oficial de Proventos (`dea616ee`):** Exibição de proventos com tipo, data com, data pagamento e valor unitário líquido.
+- **Relatório de Diagnóstico de Melhorias:** As 19 oportunidades técnicas mapeadas para as próximas rodadas estão detalhadas em [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md), com prioridades categorizadas de P1 a P3 (incluindo saldo de vendas pós-split e expansão do `PortfolioAccessContext`).
 
 ## Proximo bloco ativo - fechar experiencia de Renda Fixa e priorizar ferramentas
 
@@ -282,27 +288,27 @@ para eventual `MATCHED`.
 
 | Issue | Estado | Relação com primeiro GO |
 |---|---|---|
-| #58 detalhe global do ativo | parcialmente implementada | não blocker automático |
+| #58 detalhe global do ativo | implementada | consolidada na gaveta `AssetDetailDrawer.tsx` |
 | #90 UX Patrimônio | planejada | pós-GO |
 | #246 Metas + Análise | Metas operacional parcial; macroprojeto planejado | não blocker automático |
-| #351 UI/UX V2 | planejada | pós-GO |
+| #351 UI/UX V2 | implementada | entregue junto ao `AssetDetailDrawer.tsx` |
 | #352 seleção de classe | fechado | validada manualmente; nao blocker |
 | #353 scroll | bug UX P2 | não blocker automático |
 | #354 senha | fechado | não blocker enquanto frontend/backend seguirem alinhados |
-| #355 taxonomia RF | planejada | pós-GO |
+| #355 taxonomia RF | implementada | normalização fiscal e títulos unificados |
 | #356 paginação | planejada | pós-GO |
 | #357 export | planejada | pós-GO |
 | #358 import B3 | planejada | pós-GO |
-| #359 calculadoras | planejada | pós-GO |
-| #360 Analysis Engine | planejada | pós-GO / depende #246 |
-| #361 IA | planejada | pós-GO / depende #360/#246 |
-| #97 OAuth | planejada | pós-GO |
+| #359 calculadoras | implementada | entregue em `/carteira/ferramentas/*` |
+| #360 Analysis Engine | implementada | motor determinístico de análise |
+| #361 IA | implementada | camada de síntese em linguagem natural (`AnalisePage.tsx`) |
+| #97 OAuth | implementada | Google OAuth 2.0 e MFA TOTP (`20261022_auth_oauth_mfa`) |
 
 ## Estado por domínio
 
 | Domínio | Estado |
 |---|---|
-| Core/Autenticação | 🟢 funcional em validação assistida |
+| Core/Autenticação | 🟢 funcional com Google OAuth 2.0 e MFA TOTP (#97) |
 | DB-first/provider boundary | 🟢 consolidado |
 | Transações/lifecycle | 🟢 canônico |
 | CSV | 🟢 certificado |
@@ -316,7 +322,9 @@ para eventual `MATCHED`.
 | Eventos corporativos | 🟠 sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF suportado | 🟢 funcional |
 | Metas operacional | 🟢 básico funcional |
-| Análise/IA | ⚪ planejado |
+| Análise/IA | 🟢 implementado (#360 / #361) |
+| Detalhe de Ativo | 🟢 implementado (#58 / #351) |
+| Calculadoras & Simulação | 🟢 implementado (#359) |
 | Usuários assistidos | 🟢 GO_ASSISTED |
 | Dados reais amplos | 🟢 GO somente para a identidade runtime certificada pela #384; fail-closed em qualquer divergência |
 

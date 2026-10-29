@@ -1,10 +1,12 @@
 # Documentação do Sistema — SGI (Sistema de Gestão de Investimentos)
 
-> **Versão do Sistema:** Produção (Consolidada)  
-> **Última Atualização:** 23/10/2026  
-> **Status Operacional:** Produtivo (OCI Cloud + Cloudflare Tunnel)  
-> **Repositório Central:** `github.com/adrianop/sig-v2`  
-> **Branches Oficiais:** `stable-15jun` (desenvolvimento contínuo) | `main` (produção certificada)
+> **Versão do Sistema:** Desenvolvimento Contínuo / Pré-Produção
+> **Última Atualização:** 29/10/2026
+> **Status Operacional:** Ambiente Local Ativo (`docker-compose.yml`, stack `sig-v2`); OCI Cloud em Backlog (#284)
+> **Repositório Central:** `github.com/adrianop/sig-v2`
+> **Branches Oficiais:** `stable-15jun` (desenvolvimento contínuo obrigatório) | `main` (produção certificada via PR auditada)
+> **Relatório Oficial de Oportunidades de Melhoria:** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md)
+> **Subprojetos e Guias de Componentes:** Backend em [`backend/README.md`](../backend/README.md) | Frontend em [`frontend/README.md`](../frontend/README.md)
 
 ---
 
@@ -39,7 +41,7 @@ O sistema unifica e trata de forma especializada as seguintes classes do mercado
 
 ---
 
-## 2. Princípios Arquiteturais Obrigatórios
+## 2. Princípios Arquiteturais e Invariantes
 
 A integridade do SGI é garantida por sete pilares técnicos inegociáveis:
 
@@ -49,24 +51,32 @@ A integridade do SGI é garantida por sete pilares técnicos inegociáveis:
 * Ingestão externa de cotações, proventos e taxas ocorre estritamente por meio de jobs agendados, comandos de sincronização ou bootstrap assíncrono explicitamente autenticado.
 * **Proibição de Preços ou Taxas Inventadas:** Se um ativo não possui cotação ou taxa de fechamento registrada para uma data, o sistema expõe explicitamente a pendência em vez de assumir valor zero, paridade 1:1 ou estimativa não fundamentada.
 
-### 2.2 Fonte Canônica Única (`transactions`)
-* O livro contábil da aplicação é a tabela `transactions`. Todas as movimentações do ciclo de vida dos investimentos residem nela:
+### 2.2 Fonte Canônica Única de Transações (`TransactionWriteService` e `transactions`)
+* O livro contábil da aplicação é a tabela `transactions`. Apenas o `TransactionWriteService` possui autoridade para persistir e modificar lançamentos contábeis nessa tabela. Todas as movimentações do ciclo de vida dos investimentos residem nela:
   - `BUY` (Compra / Aplicação)
   - `SELL` (Venda / Resgate)
   - `AMORTIZATION` (Amortização de principal ou rendimento de capital)
   - `DEPOSIT` / `WITHDRAW` (Aporte e retirada financeira da conta corrente)
 * Nenhuma projeção paralela deve ser criada para classes específicas (ex: não há tabelas isoladas como `fixed_income_investments` alimentando o patrimônio; toda a posição deriva de `transactions`).
 
-### 2.3 Recálculo Cronológico em Cadeia e Determinismo Temporal
+### 2.3 Ponto Único Canônico de Escrita de Snapshots (`PortfolioSnapshotWriterService` — Regra SGI004)
+* Apenas o serviço canônico `PortfolioSnapshotWriterService` (`portfolio_snapshot_canonical_twr_service.py`) é autorizado a materializar, atualizar e persistir snapshots patrimoniais nas tabelas `portfolio_snapshots` e `portfolio_class_snapshots`.
+* O serviço auxiliar `portfolio_snapshot_service.py` atua exclusivamente no escopo de invalidação sob demanda (`invalidate_snapshots_from`), sendo estritamente vedada qualquer operação de escrita direta (`_upsert_snapshot`, `pg_insert` ou rotinas paralelas de recálculo).
+* Esta política de escritor único (*Single Writer Policy*) é fiscalizada ativamente pelo Architecture Doctor sob a regra **`SGI004`** e validada pela suíte `test_portfolio_snapshot_single_writer_policy.py`, garantindo consistência estrita no cálculo da rentabilidade ponderada pelo tempo (TWR) e blindagem contra *race conditions*.
+
+### 2.4 Recálculo Cronológico em Cadeia e Determinismo Temporal (`Clock`)
 * Quando uma transação no passado é criada, editada ou removida, o sistema recalcula de maneira ordenada todas as posições, custos médios ponderados e resultados subsequentes a partir daquela data efetiva.
 * Motores de cálculo sensíveis a datas utilizam serviços de relógio unificados (`Clock` / `FrozenClock`) para garantir que execuções de testes automatizados e reconciliações contábeis sejam 100% reproduzíveis.
 
-### 2.4 Bloqueio Distribuído com Redis (Lease Seguro)
+### 2.5 Bloqueio Distribuído com Redis (Lease Seguro)
 * Rotinas em segundo plano e cron jobs que efetuam escritas massivas de cotações ou consolidação contábil utilizam travas distribuídas no Redis (`lease`) com tempo de expiração (TTL) e token seguro de liberação, prevenindo concorrência mesmo sob réplicas de contêineres.
 
-### 2.5 Isolamento de Contexto e Autorização por Carteira (`PortfolioAccessContext`)
+### 2.6 Isolamento de Contexto e Autorização por Carteira (`PortfolioAccessContext`)
 * Todo endpoint que acessa dados de carteira valida se o usuário autenticado é proprietário da carteira solicitada (`portfolio_id`), impedindo acesso horizontal não autorizado.
-* Execuções sistêmicas e rotinas agendadas utilizam identificadores explícitos de sistema, sendo vedado o desvio (*bypass*) tácito de segurança.
+* Execuções sistêmicas e rotinas agendadas utilizam identificadores explícitos de sistema (`PortfolioAccessContext.for_system`), sendo vedado o desvio (*bypass*) tácito de segurança.
+
+### 2.7 Tetos de Execução SQL e Proteção N+1 (`assert_max_queries`)
+* Leituras financeiras de alta frequência contam com orçamentos explícitos de consultas SQL (`assert_max_queries`), impedindo a introdução de regressões de desempenho do tipo N+1 em consultas relacionais complexas.
 
 ---
 
@@ -120,16 +130,19 @@ $$\text{Valor Bruto}_t = \text{Principal} \times \prod_{d=t_0 + 1}^{t} \text{Tax
 
 ## 4. Automação em Segundo Plano (Scheduler)
 
-O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/app/core/scheduler.py`). Todas as rotinas operam no fuso horário oficial de Brasília (`America/Sao_Paulo`):
+O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/app/core/scheduler.py`). Todas as rotinas operam no fuso horário oficial de Brasília (`America/Sao_Paulo`) e utilizam bloqueio distribuído no Redis via `distributed_job_lock` com comportamento *fail-closed*, prevenindo conflitos concorrentes entre múltiplas instâncias ou workers:
 
-| Horário (BRT) | Nome do Job | Função Técnica | Provedor / Destino |
-| :--- | :--- | :--- | :--- |
-| **Dias úteis a cada 30m (10h-18h30)** | `intraday_quotes` | Atualiza preços correntes de ações e FIIs em negociação durante o pregão. | BRAPI / Yahoo Finance |
-| **Dias úteis às 19:15** | `daily_close_quotes` | Grava o preço oficial de fechamento diário de todos os ativos da B3 em custódia. | BRAPI / Yahoo Finance |
-| **Dias úteis às 19:30** | `daily_treasury_rates` | Sincroniza taxas e preços de fechamento de todos os títulos do Tesouro Direto. | Tesouro Transparente (CKAN API) |
-| **Dias úteis às 20:40** | `sync_benchmark_rates_daily` | Sincroniza taxas diárias de CDI (série 12), Selic (série 11) e IPCA (série 433) com headers anti-WAF. | Banco Central do Brasil (SGS) |
-| **Dias úteis às 20:42** | `sync_ibov_benchmark_daily` | Sincroniza a cotação oficial e calcula o retorno diário do índice IBOVESPA (`^BVSP`). | BRAPI / Yahoo Finance |
-| **Dias úteis às 21:00** | `daily_portfolio_snapshots` | Executa a consolidação patrimonial diária gerando os snapshots históricos de todas as carteiras. | Banco de Dados local (`portfolio_snapshots`) |
+| Horário (BRT) | ID do Job | Função Técnica | Provedor / Destino | Bloqueio / Lock |
+| :--- | :--- | :--- | :--- | :--- |
+| **Dias úteis a cada 90m (09h-18h)** | `update_quotes_intraday_full_hour`<br>`update_quotes_intraday_half_hour` | Atualiza preços correntes de ativos negociados (Ações, FIIs, BDRs, ETFs, Stocks, Cripto, Tesouro) durante o pregão (09:00, 10:30, 12:00, 13:30, 15:00, 16:30, 18:00). | Provedores de mercado / Banco local (`asset_prices`) | Redis Lock (TTL 7200s) |
+| **Dias úteis às 08:30** | `notify_daily_dividend_payments` | Envia notificação matinal por e-mail contendo o resumo dos proventos que têm pagamento previsto para o dia. | Notificação transacional / E-mail | Redis Lock (TTL 3600s) |
+| **Dias úteis às 20:40** | `sync_benchmark_rates_daily` | Sincroniza taxas diárias de CDI (série 12), Selic (série 11) e IPCA (série 433) com headers anti-WAF (sob flag `ENABLE_DAILY_BENCHMARK_SYNC`). | Banco Central do Brasil (SGS) / `rate_history` | Redis Lock (TTL 3600s) |
+| **Dias úteis às 20:42** | `sync_ibov_benchmark_daily` | Sincroniza a cotação oficial e calcula o retorno diário do índice IBOVESPA (`^BVSP`) (sob flag `ENABLE_DAILY_BENCHMARK_SYNC`). | Provedor de cotações / `asset_prices` | Redis Lock (TTL 3600s) |
+| **Dias úteis às 20:45** | `persist_daily_close_prices` | Grava o preço oficial de fechamento diário de todos os ativos da B3 e internacionais sob custódia. | Provedor de cotações / `asset_prices` | Redis Lock (TTL 7200s) |
+| **Dias úteis às 20:50** | `persist_treasury_daily_close` | Sincroniza taxas e preços de fechamento de todos os títulos do Tesouro Direto. | Tesouro Transparente (CKAN API) / `asset_prices` | Redis Lock (TTL 7200s) |
+| **Dias úteis às 21:00** | `portfolio_snapshot_auto_maintenance` | Executa a consolidação patrimonial diária gerando os snapshots históricos e calculando a rentabilidade TWR de todas as carteiras. | Banco de Dados local (`portfolio_snapshots`) | Redis Lock (TTL 7200s) |
+| **Dias úteis às 21:30** | `refresh_asset_fundamentals_daily` | Atualiza indicadores fundamentalistas, métricas financeiras e consenso de analistas para os ativos em custódia e catálogo. | Provedores fundamentalistas / Banco local | Redis Lock (TTL 7200s) |
+| **Dia 01 do mês às 08:15** | `audit_b3_market_calendar_monthly` | Realiza auditoria read-only da fonte oficial do calendário de negociação da B3 para detectar divergências de feriados e dias úteis (sob flag `ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT`). | Calendário Oficial B3 / Log e relatório de auditoria | Redis Lock (TTL 300s) |
 
 ---
 
@@ -137,7 +150,7 @@ O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/ap
 
 ### 5.1 Banco Central do Brasil — Sistema Gerenciador de Séries Temporais (BCB SGS)
 * **Módulo:** `backend/app/integrations/bcb_sgs.py`
-* **Séries Monitoradas:** 
+* **Séries Monitoradas:**
   - `12`: CDI diário (em % ao dia).
   - `11`: Selic diária (em % ao dia).
   - `433`: IPCA mensal (em % ao mês).
@@ -153,7 +166,7 @@ O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/ap
 * **Uso:** Cotações históricas diárias, dividendos declarados e cotações correntes.
 
 ### 5.4 B3 COTA HIST
-* **Módulo:** `backend/app/integrations/cotahist.py`
+* **Módulo:** `backend/app/integrations/b3_cotahist.py`
 * **Uso:** Importação de arquivos anuais padronizados da B3 para carga retroativa auditada e conciliação de preços históricos de pregão.
 
 ---
@@ -161,11 +174,15 @@ O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/ap
 ## 6. Frontend e Experiência do Usuário
 
 ### 6.1 Stack Tecnológico
-* **Core:** React 18, TypeScript 5, Vite 5.
-* **Estilização e Design System:** TailwindCSS, Lucide React (ícones), sistema unificado de tokens escuros/claros.
-* **Gráficos e Visualizações:** Recharts (evolução patrimonial, alocação de classes, proventos mensais).
-* **Formulários e Validação:** React Hook Form e validação de schemas com Zod.
-* **Gerenciamento de Estado de Rede:** TanStack Query (React Query) com invalidação de cache e revalidação de dados.
+* **Core:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`), Vite 8 (`^8.3.4`).
+* **Estilização e Design System:** Tailwind CSS v4 (`^4.3.3`), Lucide React (`^1.59.0`), sistema unificado de tokens escuros/claros.
+* **Gráficos e Visualizações:** Recharts 3 (`^3.10.1`) (evolução patrimonial, alocação de classes, proventos mensais).
+* **Formulários e Validação:** React Hook Form 7 (`^7.90.0`) e validação de schemas com Zod 4 (`^4.5.4`).
+* **Gerenciamento de Estado de Rede:** TanStack Query v5 (`^5.104.4`) com invalidação de cache e revalidação de dados.
+* **Gerenciamento de Estado Global:** Zustand 5 (`^5.0.15`).
+* **Roteamento:** React Router 7 (`^7.18.4`) sob a hierarquia canônica `/carteira/*`.
+* **Suíte de Testes:** Vitest 5 (`^5.0.5`) com Testing Library e JSDOM 29.
+* **Guia Dedicado do Frontend:** [`frontend/README.md`](../frontend/README.md).
 
 ### 6.2 Segurança, Autenticação e Aceite de Termos
 * **Fluxo de Autenticação:** JWT com Access Token e Refresh Token seguro. Suporte completo a Segundo Fator de Autenticação (MFA via aplicativo autenticador / TOTP).
@@ -176,10 +193,15 @@ O agendador da aplicação opera via APScheduler no backend FastAPI (`backend/ap
 
 ---
 
-## 7. Infraestrutura e Implantação em Produção
+## 7. Infraestrutura e Implantação
 
-### 7.1 Arquitetura de Contêineres (OCI)
-A aplicação está implantada na Oracle Cloud Infrastructure (OCI) sob a seguinte composição Docker:
+### 7.1 Runtime de Desenvolvimento e Validação Local (`docker-compose.yml`)
+O ambiente primário e oficial de desenvolvimento, testes e validação é a composição Docker local (`docker-compose.yml`, stack `sig-v2`):
+- Composição: `frontend` (porta 5173/80), `backend` (FastAPI na porta 8000), `db` (PostgreSQL 16 na porta 5432) e `redis` (Redis 7 na porta 6379).
+- Toda validação com usuários e testes assistidos é conduzida nesta stack única (`sig-v2`). Stacks isoladas anteriores (como `sgi-usertest`) foram descontinuadas.
+
+### 7.2 Arquitetura de Nuvem (OCI — Backlog #284)
+A topologia de nuvem em Oracle Cloud Infrastructure (OCI) e Cloudflare Tunnel está documentada como alvo de infraestrutura e backlog (#284):
 
 ```text
                                 Cloudflare Network
@@ -213,29 +235,12 @@ A aplicação está implantada na Oracle Cloud Infrastructure (OCI) sob a seguin
 4. **`sig-v2-redis-1`**: Servidor Redis 7 com verificação periódica de saúde (`redis-cli ping`).
 5. **`sig-v2-cloudflared-1`**: Conector oficial Cloudflare Tunnel que conecta a instância à nuvem sem necessidade de abrir portas públicas ou alocar IP público de entrada.
 
-### 7.2 Comandos Operacionais no Host OCI
-* **Diretório da Aplicação:** `/opt/sgi` (symlink para `/opt/sig-v2`).
-* **Verificação de Contêineres:**
-  ```bash
-  sudo docker ps
-  ```
-* **Logs da Aplicação:**
-  ```bash
-  sudo docker logs -f --tail 100 sig-v2-backend-1
-  sudo docker logs -f --tail 100 sig-v2-frontend-1
-  ```
-* **Rebuild e Reinício de Serviços:**
-  ```bash
-  cd /opt/sgi
-  sudo docker compose up -d --build backend frontend
-  ```
-
 ---
 
 ## 8. Governança e Ciclo de Desenvolvimento
 
-* **Branching Model:**
-  - `stable-15jun`: Branch principal de desenvolvimento contínuo, integração e homologação.
-  - `main`: Branch de código estável e certificado que espelha os deploys de produção.
-* **Garantia de Sincronização:** Todas as alterações realizadas no código-fonte devem ser commitadas, testadas com a suíte de testes (Vitest para frontend e Pytest para backend) e imediatamente sincronizadas com o GitHub via `git push origin stable-15jun` e `git push origin main`.
-* **Semântica de Migrations:** Toda e qualquer alteração de schema de banco de dados deve ser governada exclusivamente por scripts de migração do Alembic no diretório `backend/alembic/versions/`. Migrações DDL em produção são executadas automaticamente de modo seguro na inicialização do contêiner backend.
+* **Branching Model e Fluxo de PR:**
+  - `stable-15jun`: Branch principal e mandatória de desenvolvimento contínuo, integração e homologação. Todas as alterações, branches de trabalho e commits locais devem ter como base e destino `stable-15jun`.
+  - `main`: Branch de código estável e certificado que espelha os deploys de produção. `main` recebe exclusivamente macroblocos promovidos via Pull Request formal e auditada. **É terminantemente vedado efetuar `git push` direto para `main`**.
+* **Garantia de Qualidade Pré-Commit:** Todas as alterações realizadas no código-fonte devem ser commitadas em `stable-15jun`, testadas com as suítes locais completas (Vitest para frontend, Pytest, Mypy, Flake8 e Architecture Doctor para backend) e sincronizadas com o repositório remoto via `git push origin stable-15jun`.
+* **Semântica de Migrations:** Toda e qualquer alteração de schema de banco de dados deve ser governada exclusivamente por scripts de migração do Alembic no diretório `backend/alembic/versions/`. Migrações DDL em produção são executadas automaticamente de modo seguro na inicialização do contêiner backend (`entrypoint.sh`). A cabeça linear ativa é `20261022_auth_oauth_mfa`.
