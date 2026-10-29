@@ -286,3 +286,78 @@ async def test_create_crypto_rejects_non_existent_crypto() -> None:
         ):
             with pytest.raises(sut.TransactionWriteError, match="não existe no catálogo e não foi encontrada nos provedores"):
                 await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+
+
+@pytest.mark.asyncio
+async def test_sell_quantity_respects_corporate_action_splits() -> None:
+    from datetime import date
+    from decimal import Decimal
+    from app.services.corporate_action_engine import NormalizedCorporateAction, CorporateActionKind
+
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    # Mock asset check in catalog
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = object()
+
+    # Buy 100 on 2026-01-01
+    tx_rows = MagicMock()
+    tx_rows.all.return_value = [("buy", 100.0, date(2026, 1, 1))]
+
+    split_action = NormalizedCorporateAction(
+        source="test",
+        source_event_id="evt-split-1",
+        ticker="PETR4",
+        event_date=date(2026, 1, 10),
+        kind=CorporateActionKind.SPLIT,
+        quantity_factor=Decimal("2.0"),
+        raw_payload={},
+    )
+
+    alias_result = MagicMock()
+    alias_result.scalar_one_or_none.return_value = None
+
+    db.execute = AsyncMock(side_effect=[alias_result, tx_rows, asset_result])
+
+    with patch(
+        "app.services.corporate_action_position_reader.load_global_corporate_actions_by_ticker",
+        new_callable=AsyncMock,
+        return_value={"PETR4": (split_action,)},
+    ):
+        # Selling 150 after 1:2 split (original 100 becomes 200) must succeed
+        payload_150 = TransactionCreate(
+            ticker="PETR4",
+            asset_type="ACAO",
+            operation="sell",
+            quantity=150,
+            price=30,
+            fees=0,
+            date="2026-01-15",
+            currency="BRL",
+        )
+        tx = await sut.create_transaction_record(db, portfolio_id=303, payload=payload_150)
+        assert tx.quantity == 150
+        assert tx.ticker == "PETR4"
+
+    # Selling 250 when available is 200 must fail
+    db.execute = AsyncMock(side_effect=[alias_result, tx_rows, asset_result])
+    with patch(
+        "app.services.corporate_action_position_reader.load_global_corporate_actions_by_ticker",
+        new_callable=AsyncMock,
+        return_value={"PETR4": (split_action,)},
+    ):
+        payload_250 = TransactionCreate(
+            ticker="PETR4",
+            asset_type="ACAO",
+            operation="sell",
+            quantity=250,
+            price=30,
+            fees=0,
+            date="2026-01-15",
+            currency="BRL",
+        )
+        with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente para venda de PETR4. Posicao atual: 200.0000 | Tentativa: 250.0000"):
+            await sut.create_transaction_record(db, portfolio_id=303, payload=payload_250)

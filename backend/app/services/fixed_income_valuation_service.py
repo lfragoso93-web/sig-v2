@@ -32,6 +32,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import SYSTEM_CLOCK, Clock
 from app.core.log_safety import sanitize_log_value
 from app.models.transaction import OperationType, Transaction
 from app.services.benchmark_rate_service import (
@@ -459,8 +460,10 @@ async def get_fixed_income_valuations(
     db: AsyncSession,
     portfolio_id: int,
     target_date: Optional[date] = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> list[FixedIncomeValuation]:
-    target = target_date or date.today()
+    target = target_date or clock.today()
     txs = await _load_fixed_income_transactions(db, portfolio_id)
     return await get_fixed_income_valuations_from_transactions(db, txs, target)
 
@@ -556,8 +559,10 @@ async def get_fixed_income_valuations_with_coverage_fallback(
     db: AsyncSession,
     portfolio_id: int,
     target_date: Optional[date] = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> tuple[list[FixedIncomeValuation], date | None]:
-    target = target_date or date.today()
+    target = target_date or clock.today()
     try:
         return await get_fixed_income_valuations(db, portfolio_id, target), target
     except IncompleteBenchmarkCoverageError as exc:
@@ -576,11 +581,14 @@ async def get_fixed_income_totals_with_coverage_fallback(
     db: AsyncSession,
     portfolio_id: int,
     target_date: Optional[date] = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> tuple[dict[str, Decimal], date | None]:
     valuations, effective_date = await get_fixed_income_valuations_with_coverage_fallback(
         db,
         portfolio_id,
         target_date,
+        clock=clock,
     )
     invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
     current = _money(sum((v.current_value for v in valuations), Decimal("0")))

@@ -1,5 +1,5 @@
 import logging
-from datetime import date as DateType
+from datetime import date, date as DateType
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -41,6 +41,7 @@ from app.services.transaction_service import (
     list_transactions_paginated,
 )
 from app.services.transaction_write_service import (
+    _current_quantity,
     TransactionWriteError,
     create_transaction_record,
     resolve_fixed_income_contract_for_write,
@@ -98,26 +99,16 @@ async def _calc_current_quantity(
     ticker: str,
     asset_type: str,
     exclude_tx_id: int | None = None,
+    as_of_date: date | None = None,
 ) -> float:
-    stmt = select(Transaction.operation, Transaction.quantity).where(
-        Transaction.portfolio_id == portfolio_id,
-        Transaction.ticker == ticker,
-        Transaction.asset_type == asset_type,
+    return await _current_quantity(
+        db,
+        portfolio_id,
+        ticker,
+        asset_type,
+        as_of_date=as_of_date,
+        exclude_tx_id=exclude_tx_id,
     )
-    if exclude_tx_id is not None:
-        stmt = stmt.where(Transaction.id != exclude_tx_id)
-
-    result = await db.execute(stmt)
-    rows = result.all()
-
-    qty = 0.0
-    for op, q in rows:
-        op_val = op.value if isinstance(op, OperationType) else str(op)
-        if op_val == "buy":
-            qty += float(q)
-        elif op_val == "sell":
-            qty -= float(q)
-    return max(qty, 0.0)
 
 
 async def _validate_sell(
@@ -127,13 +118,15 @@ async def _validate_sell(
     asset_type: str,
     quantity: float,
     exclude_tx_id: int | None = None,
+    as_of_date: date | None = None,
 ) -> None:
     current_qty = await _calc_current_quantity(
         db,
         portfolio_id,
         ticker,
         asset_type,
-        exclude_tx_id,
+        exclude_tx_id=exclude_tx_id,
+        as_of_date=as_of_date,
     )
     if quantity > current_qty:
         raise HTTPException(
@@ -410,6 +403,7 @@ async def update_transaction(
             asset_type,
             quantity,
             exclude_tx_id=transaction_id,
+            as_of_date=tx_date,
         )
 
     if asset_type == "RENDA_FIXA" and (

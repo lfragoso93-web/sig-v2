@@ -14,12 +14,13 @@ Projeção de data:
 from __future__ import annotations
 
 from typing import Optional
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.clock import SYSTEM_CLOCK, Clock
 from app.models.goal import Goal
 from app.schemas.goal import GoalCreate, GoalUpdate
 from app.services.portfolio_service import get_portfolio_summary
@@ -37,6 +38,8 @@ def _calc_projection(
     current: float,
     target: float,
     monthly: Optional[float],
+    *,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> tuple[Optional[float], Optional[datetime]]:
     """Retorna (months_to_goal, projected_date) ou (None, None)."""
     if not target or target <= 0:
@@ -46,11 +49,16 @@ def _calc_projection(
     if not monthly or monthly <= 0:
         return None, None  # sem aporte projetado
     months = (target - current) / monthly
-    proj = datetime.now(timezone.utc) + relativedelta(months=+round(months))
+    proj = clock.now() + relativedelta(months=+round(months))
     return round(months, 1), proj
 
 
-def _enrich(goal: Goal, current_value: float | None = None) -> dict:
+def _enrich(
+    goal: Goal,
+    current_value: float | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+) -> dict:
     resolved_current_value = (
         float(goal.current_value or 0.0)
         if current_value is None
@@ -69,6 +77,7 @@ def _enrich(goal: Goal, current_value: float | None = None) -> dict:
         resolved_current_value,
         target_val,
         goal.monthly_contribution,
+        clock=clock,
     )
 
     return {

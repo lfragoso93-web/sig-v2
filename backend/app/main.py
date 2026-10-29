@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
+from app.core.access_context import PortfolioAccessDenied
 from app.core.cache import get_redis
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
@@ -125,6 +126,11 @@ def _rate_limit_handler(request: Request, exc: Exception) -> Response:
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(PortfolioAccessDenied)
+async def portfolio_access_denied_handler(request: Request, exc: PortfolioAccessDenied) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(Exception)
