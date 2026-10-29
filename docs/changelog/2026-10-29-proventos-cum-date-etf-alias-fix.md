@@ -42,6 +42,9 @@ Adicionalmente, o modal de detalhes do ETF exibia a mensagem contraditória *"Po
    - A consulta de câmbio é realizada em lote único (`load_usd_brl_rates`) apenas quando há eventos em `USD`, preservando zero queries extras para carteiras 100% em `BRL` e comportamento *fail-closed* caso não haja cobertura cambial anterior à data de referência.
 5. **Filtragem Estrita de Eventos Elegíveis e Pagáveis na Aba de Proventos (`proventos_service.py`, `canonical_dividend_entitlement.py`):**
    - `list_items` e `_eligible_cash` exibem exclusivamente proventos monetários elegíveis (`EntitlementReason.ELIGIBLE`), com `payment_date IS NOT NULL` e `net_amount > 0`, eliminando eventos corporativos não-caixa (`OUTROS`/`BONIFICACAO` com quantidade zero) e observações incompletas sem data de pagamento que inflavam indevidamente os proventos a receber.
+6. **Alinhamento em Largura Total e Gráfico Horizontal na Página de Proventos (`ProventosDonutChart.tsx`, `proventos-responsive.css`):**
+   - O gráfico de distribuição por ativo passa a ser exibido em formato horizontal no topo da seção (rosca à esquerda e legenda em grid de cards com percentual e valor em `R$` à direita).
+   - As tabelas **Histórico mensal** e **Meus proventos** ocupam 100% da largura útil abaixo do gráfico, exibindo todas as colunas de datas e meses sem corte lateral.
 
 ---
 

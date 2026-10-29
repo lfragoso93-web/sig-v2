@@ -51,40 +51,55 @@ function CustomTooltip({ active, payload }: {
 export default function ProventosDonutChart({ data }: { data: ProventoDistribution[] }) {
   const top = data.slice(0, 10)
   return (
-    <div className="flex flex-col gap-3">
-      <ResponsiveContainer width="100%" height={160}>
-        <PieChart>
-          <Pie
-            data={top}
-            dataKey="total"
-            nameKey="ticker"
-            cx="50%" cy="50%"
-            innerRadius={45}
-            outerRadius={70}
-            paddingAngle={2}
-          >
-            {top.map((entry, i) => (
-              <Cell key={entry.ticker} fill={PALETTE[i % PALETTE.length]} />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="flex flex-col md:flex-row md:items-center gap-6 py-2">
+      <div className="w-full md:w-[220px] shrink-0">
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie
+              data={top}
+              dataKey="total"
+              nameKey="ticker"
+              cx="50%" cy="50%"
+              innerRadius={52}
+              outerRadius={80}
+              paddingAngle={2}
+            >
+              {top.map((entry, i) => (
+                <Cell key={entry.ticker} fill={PALETTE[i % PALETTE.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
-      {/* Legenda manual */}
-      <div className="flex flex-col gap-1.5">
+      {/* Legenda horizontal em grid */}
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-2.5">
         {top.map((entry, i) => (
-          <div key={entry.ticker} className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
-              />
-              <span style={{ color: 'var(--color-text-muted)' }}>{entry.ticker}</span>
+          <div
+            key={entry.ticker}
+            className="flex flex-col gap-1 p-2.5 rounded-lg"
+            style={{ background: 'var(--color-surface-offset)' }}
+          >
+            <div className="flex items-center justify-between text-xs gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+                />
+                <span className="font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                  {entry.ticker}
+                </span>
+              </div>
+              <span className="font-medium tabular-nums shrink-0" style={{ color: 'var(--color-primary)' }}>
+                {entry.percentage.toFixed(2)}%
+              </span>
             </div>
-            <span className="font-medium tabular-nums" style={{ color: 'var(--color-text)' }}>
-              {entry.percentage.toFixed(2)}%
-            </span>
+            <div className="flex items-center justify-between text-[11px] pl-4.5">
+              <span className="tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                {formatBRL(entry.total)}
+              </span>
+            </div>
           </div>
         ))}
       </div>
