@@ -95,9 +95,14 @@ async def cache_delete_pattern(pattern: str) -> None:
     if not client:
         return
     try:
-        keys = await client.keys(pattern)
-        if keys:
-            await client.delete(*keys)
+        batch: list[str] = []
+        async for key in client.scan_iter(match=pattern, count=100):
+            batch.append(key)
+            if len(batch) >= 500:
+                await client.delete(*batch)
+                batch.clear()
+        if batch:
+            await client.delete(*batch)
     except Exception as exc:
         logger.warning(
             "Falha ao excluir cache pattern=%s: %s: %s",

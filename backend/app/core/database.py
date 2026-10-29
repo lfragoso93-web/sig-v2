@@ -38,3 +38,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+async def get_read_db() -> AsyncGenerator[AsyncSession, None]:
+    """Sessao assincrona de leitura sem commit automatico no ciclo de vida."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
