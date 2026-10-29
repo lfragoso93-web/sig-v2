@@ -639,11 +639,11 @@ Para viabilizar a execução ordenada dessas oportunidades sem gerar disrupçõe
                                                 |
                                                 v
 +-----------------------------------------------------------------------------------------------+
-| FASE 3: Runtime Determinístico, Qualidade e Ferramental DX                                    |
-| - OP-06: Injetar Clock em fixed_income_valuation, rentabilidade_kpi, portfolio_analysis.       |
-| - OP-07: Criar testes com assert_max_queries para leituras financeiras reais (SGI013).         |
-| - OP-09: Criar backend/ruff.toml alinhado com .flake8 e validar no README.                    |
-| - OP-10: Unificar endpoints de dividends e proventos com depreciação controlada.             |
+| FASE 3: Runtime Determinístico, Qualidade e Ferramental DX [CONCLUÍDA]                        |
+| - OP-06 (Conclusão): Injetar Clock em rentabilidade_kpi, portfolio_analysis, snapshot_twr.    |
+| - OP-07: Testes com assert_max_queries para leituras financeiras reais (SGI007 / SGI013).     |
+| - OP-09: Configurado backend/ruff.toml 100% alinhado com .flake8 e documentado no README.     |
+| - OP-10: Unificação de proventos com depreciação OpenAPI em dividends.py.                    |
 +-----------------------------------------------------------------------------------------------+
                                                 |
                                                 v

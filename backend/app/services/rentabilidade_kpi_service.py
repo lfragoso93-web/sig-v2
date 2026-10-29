@@ -10,6 +10,7 @@ from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import SYSTEM_CLOCK, Clock
 from app.schemas.rentabilidade import RentabilidadeKpisResponse
 from app.services.portfolio_snapshot_read_service import get_enriched_daily_evolution
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
@@ -39,11 +40,12 @@ async def get_rentabilidade_kpis(
     db: AsyncSession,
     portfolio_id: int,
     user_id: int,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> dict:
     """Retorna o contrato ``rentabilidade.v2`` validado em runtime."""
     summary = await get_canonical_portfolio_summary(db, portfolio_id, user_id)
 
-    today = date.today()
+    today = clock.today() if clock is not SYSTEM_CLOCK else date.today()
     points = await get_enriched_daily_evolution(db, portfolio_id, days=0)
     latest = points[-1] if points else None
 

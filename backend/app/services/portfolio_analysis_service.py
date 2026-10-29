@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import SYSTEM_CLOCK, Clock
+
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_target import PortfolioClassTarget
 from app.schemas.portfolio_analysis import (
@@ -205,6 +207,7 @@ def _compute_class_fixed_income(
     positions: list[PositionItemResponse],
     asset_type: str,
     class_total_value: float,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> ClassFixedIncomeAnalysis:
     is_applicable = asset_type in {"TESOURO_DIRETO", "RENDA_FIXA"}
     if not is_applicable or not positions or class_total_value <= 0:
@@ -221,7 +224,7 @@ def _compute_class_fixed_income(
     ipca_val = 0.0
     pre_val = 0.0
     maturing_12m = 0.0
-    today = datetime.date.today()
+    today = clock.today()
     limit_12m = today + datetime.timedelta(days=365)
 
     for p in positions:
@@ -309,14 +312,17 @@ def _compute_class_health_score(
 
 
 class PortfolioAnalysisService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, clock: Clock = SYSTEM_CLOCK):
         self.db = db
+        self.clock = clock
 
     async def get_portfolio_analysis(
         self,
         portfolio_id: int,
         user_id: int,
+        clock: Clock | None = None,
     ) -> PortfolioConsolidatedAnalysisResponse:
+        active_clock = clock or self.clock
         # 1. Carregar portfólio
         portfolio = await self.db.get(Portfolio, portfolio_id)
         if not portfolio or portfolio.user_id != user_id:
@@ -358,7 +364,7 @@ class PortfolioAnalysisService:
             allocation = _compute_class_allocation(class_val, total_portfolio_value, target_pct)
             concentration = _compute_class_concentration(group.positions, class_val, total_portfolio_value)
             income = _compute_class_income(group.positions, asset_type, class_val)
-            fixed_income = _compute_class_fixed_income(group.positions, asset_type, class_val)
+            fixed_income = _compute_class_fixed_income(group.positions, asset_type, class_val, clock=active_clock)
 
             health_score = _compute_class_health_score(allocation, concentration, income, fixed_income)
 
@@ -452,7 +458,7 @@ class PortfolioAnalysisService:
         return PortfolioConsolidatedAnalysisResponse(
             portfolio_id=portfolio_id,
             portfolio_name=portfolio.name,
-            reference_date=datetime.date.today().isoformat(),
+            reference_date=active_clock.today().isoformat(),
             total_value=total_portfolio_value,
             overall_health_score=min(100, max(0, overall_score)),
             max_divergence_class=max_divergence_class,
