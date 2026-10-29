@@ -109,7 +109,23 @@ async def test_returns_empty_without_loading_movements_when_no_event_matches():
 
 
 @pytest.mark.asyncio
-async def test_keeps_event_without_record_date_non_materializable():
+async def test_derives_economic_cum_date_when_record_date_is_missing():
+    # Transaction on 2026-01-08 is before ex_date 2026-01-12 (economic cum-date 2026-01-09)
+    db = Session(
+        [(event(record_date=None), asset())],
+        [transaction(date=date(2026, 1, 8))],
+    )
+
+    results = await load_portfolio_dividend_entitlements(db, 3)
+
+    assert results[0].entitlement.is_eligible
+    assert results[0].entitlement.entitlement_date == date(2026, 1, 9)
+    assert results[0].entitlement.eligible_quantity == Decimal("10")
+
+
+@pytest.mark.asyncio
+async def test_anti_leak_on_ex_date_when_record_date_is_missing():
+    # Transaction ON ex_date 2026-01-12 does not confer rights
     db = Session(
         [(event(record_date=None), asset())],
         [transaction(date=date(2026, 1, 12))],
@@ -119,7 +135,7 @@ async def test_keeps_event_without_record_date_non_materializable():
 
     assert (
         results[0].entitlement.reason
-        is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
+        is EntitlementReason.NO_POSITION
     )
 
 

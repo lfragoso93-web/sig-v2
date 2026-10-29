@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -17,6 +17,26 @@ from app.services.canonical_dividend_entitlement import (
     PositionMovement,
     calculate_dividend_entitlement,
 )
+
+_TYPE_ALIASES: dict[str, str] = {
+    "ETF": "ETF_NACIONAL",
+    "ETF_BR": "ETF_NACIONAL",
+    "ETF_INT": "ETF_INTERNACIONAL",
+    "ACAO_NACIONAL": "ACAO",
+    "ACOES": "ACAO",
+    "STOCKS": "STOCK",
+    "TESOURO": "TESOURO_DIRETO",
+    "CRIPTOMOEDA": "CRIPTO",
+}
+
+
+def normalize_asset_type(val: object) -> str:
+    raw = getattr(val, "value", val)
+    s = str(raw or "").strip().upper()
+    return _TYPE_ALIASES.get(s, s)
+
+
+_normalize_asset_type = normalize_asset_type
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,8 +69,13 @@ async def load_portfolio_dividend_entitlements(
         .join(
             Transaction,
             and_(
-                Transaction.ticker == Asset.ticker,
-                Transaction.asset_type == Asset.asset_type,
+                func.upper(func.trim(Transaction.ticker)) == func.upper(func.trim(Asset.ticker)),
+                or_(
+                    Transaction.asset_type == Asset.asset_type,
+                    and_(Transaction.asset_type == "ETF", Asset.asset_type == "ETF_NACIONAL"),
+                    and_(Transaction.asset_type == "ETF_NACIONAL", Asset.asset_type == "ETF"),
+                    and_(Transaction.asset_type == "ETF_INT", Asset.asset_type == "ETF_INTERNACIONAL"),
+                ),
             ),
         )
         .where(Transaction.portfolio_id == portfolio_id)
@@ -75,8 +100,9 @@ async def load_portfolio_dividend_entitlements(
 
     movements_by_asset: dict[tuple[str, str], list[PositionMovement]] = {}
     for transaction in transactions:
-        key = (transaction.ticker, transaction.asset_type)
-        movements_by_asset.setdefault(key, []).append(
+        t_ticker = str(transaction.ticker or "").strip().upper()
+        t_type = _normalize_asset_type(transaction.asset_type)
+        movements_by_asset.setdefault((t_ticker, t_type), []).append(
             PositionMovement(
                 transaction_date=transaction.date,
                 operation=_enum_value(transaction.operation),
@@ -98,7 +124,13 @@ async def load_portfolio_dividend_entitlements(
             value_per_unit=Decimal(str(asset_dividend.value_per_unit)),
             currency=currency,
         )
-        key = (asset.ticker, asset.asset_type)
+        norm_ticker = str(asset.ticker or "").strip().upper()
+        norm_type = _normalize_asset_type(asset.asset_type)
+        key = (norm_ticker, norm_type)
+        movements = movements_by_asset.get(key, ())
+        if not movements:
+            movements = movements_by_asset.get((norm_ticker, str(asset.asset_type).strip().upper()), ())
+
         results.append(
             PortfolioDividendEntitlement(
                 ticker=asset.ticker,
@@ -106,7 +138,7 @@ async def load_portfolio_dividend_entitlements(
                 event=event,
                 entitlement=calculate_dividend_entitlement(
                     event,
-                    movements_by_asset.get(key, ()),
+                    movements,
                 ),
                 approved_on=asset_dividend.approved_on,
                 gross_value_per_unit=_optional_decimal(

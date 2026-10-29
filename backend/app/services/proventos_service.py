@@ -16,6 +16,7 @@ from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
     load_portfolio_dividend_entitlements,
+    normalize_asset_type,
 )
 
 _MONEY_STEP = Decimal("0.01")
@@ -52,7 +53,11 @@ def _matches(
     return (
         (status is None or _payment_status(item, today=today) is status)
         and (year is None or _event_year(item) == year)
-        and (asset_type is None or item.asset_type.upper() == asset_type.upper())
+        and (
+            asset_type is None
+            or normalize_asset_type(item.asset_type)
+            == normalize_asset_type(asset_type)
+        )
         and (
             dividend_type is None
             or item.event.event_type.upper() == dividend_type.value.upper()

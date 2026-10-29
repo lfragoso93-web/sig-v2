@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable
@@ -35,7 +35,7 @@ class PositionMovement:
 class DividendEvent:
     event_id: int
     record_date: date | None
-    ex_date: date
+    ex_date: date | None
     payment_date: date | None
     event_type: str
     value_per_unit: Decimal
@@ -56,6 +56,30 @@ class DividendEntitlement:
     @property
     def is_eligible(self) -> bool:
         return self.reason is EntitlementReason.ELIGIBLE
+
+
+def previous_business_day(d: date) -> date:
+    """Return the closest business day strictly preceding ``d``."""
+    prev = d - timedelta(days=1)
+    while prev.weekday() >= 5:  # 5: Saturday, 6: Sunday
+        prev -= timedelta(days=1)
+    return prev
+
+
+def effective_entitlement_date(event: DividendEvent) -> date | None:
+    """Resolve the economic cum-date (Data Com) for an event.
+
+    If ``record_date`` is known, it is authoritative.
+    If ``record_date`` is absent (e.g. providers that only report ex-date),
+    the economic cum-date is derived as the business day immediately
+    preceding ``ex_date``. This prevents purchases on the ex-date from
+    receiving rights while correctly recognizing legitimate holdings.
+    """
+    if event.record_date is not None:
+        return event.record_date
+    if event.ex_date is not None:
+        return previous_business_day(event.ex_date)
+    return None
 
 
 def historical_position(
@@ -94,8 +118,9 @@ def calculate_dividend_entitlement(
 ) -> DividendEntitlement:
     """Calculate one entitlement without database access or side effects.
 
-    ``record_date`` is the only accepted entitlement date. Falling back to
-    ``ex_date`` could grant rights to a purchase made on the ex-date.
+    If ``record_date`` is missing, ``previous_business_day(ex_date)`` is used
+    as the economic cum-date to protect against purchases on the ex-date.
+    If neither date is present, the event is marked ambiguous.
     """
     event_type = event.event_type.upper().strip()
     currency = event.currency.upper().strip()
@@ -105,11 +130,13 @@ def calculate_dividend_entitlement(
     if value_per_unit < ZERO:
         raise ValueError("value per unit cannot be negative")
 
+    entitlement_date = effective_entitlement_date(event)
+
     if event_type not in CASH_EVENT_TYPES:
         return _empty_entitlement(
-            event, EntitlementReason.NON_CASH_EVENT, event.record_date, currency
+            event, EntitlementReason.NON_CASH_EVENT, entitlement_date, currency
         )
-    if event.record_date is None:
+    if entitlement_date is None:
         return _empty_entitlement(
             event,
             EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE,
@@ -118,21 +145,21 @@ def calculate_dividend_entitlement(
         )
 
     try:
-        quantity = historical_position(movements, event.record_date)
+        quantity = historical_position(movements, entitlement_date)
     except ValueError as exc:
         logger.warning(
-            "historical_position failed for event_id=%s record_date=%s: %s",
+            "historical_position failed for event_id=%s entitlement_date=%s: %s",
             event.event_id,
-            event.record_date,
+            entitlement_date,
             exc,
         )
         return _empty_entitlement(
-            event, EntitlementReason.NO_POSITION, event.record_date, currency
+            event, EntitlementReason.NO_POSITION, entitlement_date, currency
         )
 
     if quantity == ZERO:
         return _empty_entitlement(
-            event, EntitlementReason.NO_POSITION, event.record_date, currency
+            event, EntitlementReason.NO_POSITION, entitlement_date, currency
         )
 
     gross_amount = quantity * value_per_unit
@@ -144,7 +171,7 @@ def calculate_dividend_entitlement(
     return DividendEntitlement(
         event_id=event.event_id,
         reason=EntitlementReason.ELIGIBLE,
-        entitlement_date=event.record_date,
+        entitlement_date=entitlement_date,
         eligible_quantity=quantity,
         gross_amount=gross_amount,
         withholding_tax=gross_amount - net_amount,

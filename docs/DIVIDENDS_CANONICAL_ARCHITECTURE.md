@@ -129,8 +129,14 @@ definem a arquitetura alvo.
 
 - Implementado o núcleo puro `canonical_dividend_entitlement.py`, sem acesso a
   banco, endpoints ou efeitos colaterais.
-- `record_date` confiável é a única data aceita para calcular a posição. Evento
-  sem Data Com permanece ambíguo e não usa Data Ex como fallback.
+- `record_date` confiável é a data prioritária para calcular a posição. Quando
+  ausente na fonte externa (como em provedores globais como Yahoo Finance),
+  o cálculo deriva a Data Com econômica como o dia útil anterior à `ex_date`
+  (`previous_business_day(ex_date)`). Apenas eventos sem nenhuma das duas datas
+  permanecem como `AMBIGUOUS_ENTITLEMENT_DATE`. Compras efetuadas na Data Ex
+  ou após ela não geram direito (`NO_POSITION`), preservando a regra anti-leak.
+- Aliases de tipo de ativo (`ETF` / `ETF_NACIONAL`, `ETF_INT` / `ETF_INTERNACIONAL`,
+  etc.) são normalizados de forma bidirecional no leitor e nos filtros da API.
 - Dividendos, JCP, rendimentos e amortizações são monetários; bonificações,
   subscrições e `OUTROS` não entram automaticamente em agregados de caixa.
 - O resultado explicita quantidade elegível, bruto, retenção, líquido, moeda e
@@ -166,7 +172,8 @@ A leitura pública de Proventos foi migrada para o adaptador canônico:
 - quantidade, bruto, retenção e líquido são derivados da posição histórica;
 - `RECEBIDO` e `A_RECEBER` são derivados de `payment_date` em relação à data
   corrente, sem depender do status materializado;
-- evento monetário sem `record_date` não aparece como direito da carteira;
+- evento monetário sem `record_date` utiliza a Data Com econômica derivada do dia
+  útil anterior à Data Ex; se ambas forem nulas, o evento é excluído por ambiguidade;
 - bonificação e subscrição continuam visíveis como eventos não monetários,
   sem contaminar totais financeiros;
 - filtros, paginação, histórico e distribuição operam sobre o mesmo conjunto

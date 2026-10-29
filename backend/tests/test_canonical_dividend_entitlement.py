@@ -69,12 +69,40 @@ def test_repurchase_does_not_create_retroactive_right() -> None:
     assert not result.is_eligible
 
 
-def test_missing_record_date_is_ambiguous_instead_of_using_ex_date() -> None:
-    result = calculate_dividend_entitlement(
+def test_missing_record_date_uses_previous_business_day_before_ex_date() -> None:
+    # Eligible when bought before ex_date (economic cum-date)
+    eligible_res = calculate_dividend_entitlement(
+        event(record_date=None),
+        [movement(8, "buy", "10")],
+    )
+    assert eligible_res.is_eligible
+    assert eligible_res.entitlement_date == date(2026, 1, 9)
+    assert eligible_res.eligible_quantity == Decimal("10")
+
+    # Anti-leak protection: bought ON ex_date does not receive entitlement
+    ex_date_res = calculate_dividend_entitlement(
         event(record_date=None),
         [movement(12, "buy", "10")],
     )
+    assert ex_date_res.reason is EntitlementReason.NO_POSITION
+    assert ex_date_res.entitlement_date == date(2026, 1, 9)
+    assert ex_date_res.eligible_quantity == Decimal("0")
 
+
+def test_missing_both_record_date_and_ex_date_is_ambiguous() -> None:
+    ev = DividendEvent(
+        event_id=7,
+        record_date=None,
+        ex_date=None,
+        payment_date=date(2026, 1, 20),
+        event_type="DIVIDENDO",
+        value_per_unit=Decimal("1.25"),
+        currency="brl",
+    )
+    result = calculate_dividend_entitlement(
+        ev,
+        [movement(8, "buy", "10")],
+    )
     assert result.reason is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
     assert result.entitlement_date is None
     assert result.eligible_quantity == Decimal("0")
