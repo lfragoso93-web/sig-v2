@@ -4,6 +4,9 @@ services:
     environment:
       ENVIRONMENT: production
       APP_DEBUG: "false"
+    healthcheck:
+      start_period: 90s
+      retries: 5
 
   frontend:
     build:
