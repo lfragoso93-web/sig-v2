@@ -10,7 +10,9 @@ from fastapi.responses import Response
 from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
@@ -37,21 +39,22 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+READ_PORTFOLIO_IRPF = "read:portfolio_irpf"
+
+
 async def _get_portfolio(
     portfolio_id: int,
     user: User,
     db: AsyncSession,
 ) -> Portfolio:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user.id,
-        )
+    access = PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_IRPF}),
     )
-    portfolio = result.scalar_one_or_none()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return portfolio
+    return await get_accessible_portfolio(
+        db, access, required_permission=READ_PORTFOLIO_IRPF
+    )
 
 
 @router.get("/{portfolio_id}/irpf/anos", response_model=list[int])
