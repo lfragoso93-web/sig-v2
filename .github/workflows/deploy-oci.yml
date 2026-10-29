@@ -79,13 +79,23 @@ jobs:
               fi
             fi
 
-            echo "==> Rebuildando imagens e atualizando backend e frontend..."
+            echo "==> Rebuildando imagens sequencialmente (otimizado para 1 OCPU)..."
             COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
             docker ps -a --format '{{.Names}}' | grep -E '_sig-v2-(backend|frontend)-1$' | xargs -r docker rm -f
-            docker compose ${COMPOSE_FILES} up -d --build backend frontend
+            docker compose ${COMPOSE_FILES} build backend
+            docker compose ${COMPOSE_FILES} build frontend
 
-            echo "==> Aguardando estabilização dos serviços..."
-            sleep 5
+            echo "==> Atualizando containers backend e frontend..."
+            docker compose ${COMPOSE_FILES} up -d --no-deps backend
+            docker compose ${COMPOSE_FILES} up -d --no-deps frontend
+
+            echo "==> Aguardando estabilização do backend..."
+            for i in $(seq 1 15); do
+              if docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
 
             echo "==> Validando saúde dos serviços..."
             docker compose ${COMPOSE_FILES} ps
