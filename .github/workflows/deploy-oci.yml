@@ -79,15 +79,19 @@ jobs:
               fi
             fi
 
-            echo "==> Rebuildando imagens e subindo contêineres..."
+            echo "==> Rebuildando imagens e atualizando backend e frontend..."
             COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
-            docker compose ${COMPOSE_FILES} up -d --build
+            docker compose ${COMPOSE_FILES} up -d --build backend frontend
 
             echo "==> Aguardando estabilização dos serviços..."
             sleep 5
 
-            echo "==> Executando smoke test oficial de saúde..."
-            sh scripts/oci_smoke_test.sh
+            echo "==> Validando saúde dos serviços..."
+            docker compose ${COMPOSE_FILES} ps
+            docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health
+            echo ""
+            docker compose ${COMPOSE_FILES} exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
+            docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping | grep -q PONG
 
             echo "=========================================================="
             echo " Deploy e rebuild concluídos com sucesso no OCI!"
