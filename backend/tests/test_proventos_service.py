@@ -26,20 +26,23 @@ def canonical_item(
     asset_type: str = "STOCK",
     event_type: str = "DIVIDENDO",
     payment_date: date | None = None,
+    explicit_none_payment_date: bool = False,
     gross: str = "250",
     net: str = "250",
     quantity: str = "100",
     reason: EntitlementReason = EntitlementReason.ELIGIBLE,
 ) -> PortfolioDividendEntitlement:
     today = date.today()
-    payment_date = payment_date or today - timedelta(days=5)
+    if not explicit_none_payment_date and payment_date is None:
+        payment_date = today - timedelta(days=5)
+    qty_dec = Decimal(quantity)
     event = DividendEvent(
         event_id=event_id,
         record_date=today - timedelta(days=30),
         ex_date=today - timedelta(days=29),
         payment_date=payment_date,
         event_type=event_type,
-        value_per_unit=Decimal(gross) / Decimal(quantity),
+        value_per_unit=(Decimal(gross) / qty_dec) if qty_dec > 0 else Decimal("0"),
         currency="BRL",
     )
     entitlement = DividendEntitlement(
@@ -215,6 +218,46 @@ async def test_list_items_with_asset_type_alias_filter(monkeypatch):
     result_etf_nac = await list_items(object(), portfolio_id=1, asset_type="ETF_NACIONAL")
     assert result_etf_nac["total"] == 1
     assert result_etf_nac["items"][0]["ticker"] == "AREA11"
+
+
+@pytest.mark.asyncio
+async def test_list_items_and_summary_exclude_non_cash_and_unpayable_events(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(
+                event_id=1,
+                ticker="VALE3",
+                gross="150",
+                net="150",
+            ),
+            canonical_item(
+                event_id=2,
+                ticker="WEGE3",
+                event_type="OUTROS",
+                gross="0",
+                net="0",
+                quantity="0",
+                reason=EntitlementReason.NON_CASH_EVENT,
+            ),
+            canonical_item(
+                event_id=3,
+                ticker="DIVD11",
+                explicit_none_payment_date=True,
+                gross="79.83",
+                net="79.83",
+                reason=EntitlementReason.ELIGIBLE,
+            ),
+        ],
+    )
+
+    items_res = await list_items(object(), portfolio_id=1)
+    assert items_res["total"] == 1
+    assert [it["ticker"] for it in items_res["items"]] == ["VALE3"]
+
+    summary_res = await get_summary(object(), portfolio_id=1)
+    assert summary_res["total_recebido"] == 150.0
+    assert summary_res["total_a_receber"] == 0.0
 
 
 @pytest.mark.asyncio

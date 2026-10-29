@@ -98,7 +98,11 @@ def _eligible_cash(
     items: Iterable[PortfolioDividendEntitlement],
 ) -> list[PortfolioDividendEntitlement]:
     return [
-        item for item in items if item.entitlement.reason is EntitlementReason.ELIGIBLE
+        item
+        for item in items
+        if item.entitlement.reason is EntitlementReason.ELIGIBLE
+        and item.event.payment_date is not None
+        and item.entitlement.net_amount > 0
     ]
 
 
@@ -185,12 +189,7 @@ async def list_items(
         dividend_type=dividend_type,
         clock=clock,
     )
-    visible = [
-        item
-        for item in items
-        if item.entitlement.reason
-        in {EntitlementReason.ELIGIBLE, EntitlementReason.NON_CASH_EVENT}
-    ]
+    visible = _eligible_cash(items)
     visible.sort(
         key=lambda item: (
             item.event.payment_date or date.min,

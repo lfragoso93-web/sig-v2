@@ -72,12 +72,13 @@ def effective_entitlement_date(event: DividendEvent) -> date | None:
     If ``record_date`` is known, it is authoritative.
     If ``record_date`` is absent (e.g. providers that only report ex-date),
     the economic cum-date is derived as the business day immediately
-    preceding ``ex_date``. This prevents purchases on the ex-date from
-    receiving rights while correctly recognizing legitimate holdings.
+    preceding ``ex_date`` only when ``payment_date`` is confirmed.
+    Unconfirmed observations missing both ``record_date`` and ``payment_date``
+    return ``None``.
     """
     if event.record_date is not None:
         return event.record_date
-    if event.ex_date is not None:
+    if event.ex_date is not None and getattr(event, "payment_date", None) is not None:
         return previous_business_day(event.ex_date)
     return None
 

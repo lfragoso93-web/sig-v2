@@ -108,6 +108,25 @@ def test_missing_both_record_date_and_ex_date_is_ambiguous() -> None:
     assert result.eligible_quantity == Decimal("0")
 
 
+def test_missing_both_record_date_and_payment_date_is_ambiguous() -> None:
+    ev = DividendEvent(
+        event_id=8,
+        record_date=None,
+        ex_date=date(2026, 1, 12),
+        payment_date=None,
+        event_type="DIVIDENDO",
+        value_per_unit=Decimal("1.25"),
+        currency="brl",
+    )
+    result = calculate_dividend_entitlement(
+        ev,
+        [movement(8, "buy", "10")],
+    )
+    assert result.reason is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
+    assert result.entitlement_date is None
+    assert result.eligible_quantity == Decimal("0")
+
+
 @pytest.mark.parametrize("event_type", ["BONIFICACAO", "SUBSCRICAO", "OUTROS"])
 def test_non_cash_or_unknown_event_does_not_enter_cash_totals(
     event_type: str,

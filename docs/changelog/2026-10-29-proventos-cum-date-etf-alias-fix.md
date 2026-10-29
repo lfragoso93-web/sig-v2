@@ -40,6 +40,8 @@ Adicionalmente, o modal de detalhes do ETF exibia a mensagem contraditória *"Po
 4. **Conversão Cambial DB-First (`USD` -> `BRL`) para Proventos Internacionais (`canonical_dividend_entitlement_reader.py`, `dividend_service.py`, `asset_enrichment_service.py`):**
    - Eventos de ativos internacionais (`currency = 'USD'`, como `IVV`, `TFLO`, `INTR`, `NVDA`) passam a ser convertidos em Reais (`BRL`) no momento da leitura canônica utilizando a última taxa `USD-BRL` persistida em `fx_rates` na data de pagamento (`payment_date`) ou na Data Ex (`ex_date`).
    - A consulta de câmbio é realizada em lote único (`load_usd_brl_rates`) apenas quando há eventos em `USD`, preservando zero queries extras para carteiras 100% em `BRL` e comportamento *fail-closed* caso não haja cobertura cambial anterior à data de referência.
+5. **Filtragem Estrita de Eventos Elegíveis e Pagáveis na Aba de Proventos (`proventos_service.py`, `canonical_dividend_entitlement.py`):**
+   - `list_items` e `_eligible_cash` exibem exclusivamente proventos monetários elegíveis (`EntitlementReason.ELIGIBLE`), com `payment_date IS NOT NULL` e `net_amount > 0`, eliminando eventos corporativos não-caixa (`OUTROS`/`BONIFICACAO` com quantidade zero) e observações incompletas sem data de pagamento que inflavam indevidamente os proventos a receber.
 
 ---
 
