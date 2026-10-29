@@ -1,0 +1,85 @@
+name: Deploy to OCI Production (Self-Hosted)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DISPAROS
+# • workflow_run (SIG v2 CI/CD na branch main) → executa somente se o CI for aprovado
+# • workflow_dispatch                          → disparo manual via interface do GitHub
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_run:
+    workflows: ["SIG v2 CI/CD"]
+    branches: ["main"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch para deploy no OCI"
+        required: true
+        default: "main"
+
+concurrency:
+  group: deploy-oci-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Rebuild and Deploy on OCI
+    runs-on: [self-hosted]
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Deploy and Rebuild SGI v2 Stack
+        run: |
+          set -eu
+
+          TARGET_BRANCH="${{ github.event.inputs.target_branch || 'main' }}"
+          DEPLOY_DIR="${SGI_DEPLOY_DIR:-/opt/sgi-v2}"
+
+          echo "=========================================================="
+          echo " Início do Deploy Automático no OCI"
+          echo " Diretório de aplicação: ${DEPLOY_DIR}"
+          echo " Branch alvo: ${TARGET_BRANCH}"
+          echo "=========================================================="
+
+          if [ ! -d "${DEPLOY_DIR}" ]; then
+            echo "[deploy-oci] ERRO: Diretório ${DEPLOY_DIR} não encontrado na VM." >&2
+            exit 1
+          fi
+
+          cd "${DEPLOY_DIR}"
+
+          echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
+          git fetch origin "${TARGET_BRANCH}"
+          git checkout "${TARGET_BRANCH}"
+          git pull --ff-only origin "${TARGET_BRANCH}"
+
+          APP_COMMIT_SHA="$(git rev-parse HEAD)"
+          echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
+
+          if [ ! -f .env ]; then
+            echo "[deploy-oci] ERRO: Arquivo .env ausente em ${DEPLOY_DIR}." >&2
+            exit 1
+          fi
+
+          echo "==> Atualizando APP_COMMIT_SHA no arquivo .env..."
+          if grep -q "^APP_COMMIT_SHA=" .env; then
+            sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
+          else
+            echo "APP_COMMIT_SHA=${APP_COMMIT_SHA}" >> .env
+          fi
+
+          echo "==> Executando preflight de ambiente do OCI..."
+          sh scripts/oci_env_preflight.sh .env
+
+          echo "==> Rebuildando imagens e subindo contêineres..."
+          COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
+          docker compose ${COMPOSE_FILES} up -d --build
+
+          echo "==> Executando smoke test oficial de saúde..."
+          sh scripts/oci_smoke_test.sh
+
+          echo "=========================================================="
+          echo " Deploy e rebuild concluídos com sucesso no OCI!"
+          echo " Runtime SHA: ${APP_COMMIT_SHA}"
+          echo "=========================================================="
