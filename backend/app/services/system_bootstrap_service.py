@@ -211,6 +211,37 @@ async def _bootstrap_benchmarks() -> str:
     return str(result)
 
 
+async def _bootstrap_international_catalog() -> str:
+    from app.core.database import AsyncSessionLocal
+    from app.services.international_catalog_service import (
+        seed_international_catalog,
+    )
+
+    async with AsyncSessionLocal() as db:
+        result = await seed_international_catalog(db)
+    return (
+        f"total={result.total} created={result.created} "
+        f"updated={result.updated} unchanged={result.unchanged} "
+        f"errors={result.errors}"
+    )
+
+
+async def _bootstrap_international_price_history() -> str:
+    from app.core.database import AsyncSessionLocal
+    from app.services.international_price_history_service import (
+        run_international_price_history_backfill,
+    )
+
+    async with AsyncSessionLocal() as db:
+        result = await run_international_price_history_backfill(db)
+    return (
+        f"tickers={result.get('total_tickers', 0)} "
+        f"inserted={result.get('inserted', 0)} "
+        f"audited={result.get('audited', 0)} "
+        f"errors={result.get('errors', 0)}"
+    )
+
+
 async def _bootstrap_asset_fundamentals() -> str:
     from app.core.database import AsyncSessionLocal
     from app.services.asset_fundamentals_refresh_service import (
@@ -269,10 +300,12 @@ async def run_system_bootstrap(
     operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
         ("b3_baseline", _bootstrap_b3_baseline),
         ("asset_catalog", _bootstrap_asset_catalog),
+        ("international_catalog", _bootstrap_international_catalog),
         ("treasury_catalog", _bootstrap_treasury_catalog),
         ("treasury_reconciliation", _bootstrap_treasury_reconciliation),
         ("treasury_history", _bootstrap_treasury_history),
         ("asset_price_history", _bootstrap_asset_price_history),
+        ("international_price_history", _bootstrap_international_price_history),
         ("benchmarks", _bootstrap_benchmarks),
         ("fx_rates", lambda: run_system_bootstrap_fx_stage(context)),
         (

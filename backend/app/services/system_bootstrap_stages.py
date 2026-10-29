@@ -108,13 +108,29 @@ CANONICAL_BOOTSTRAP_STAGES: tuple[BootstrapStageDefinition, ...] = (
         destructive=False,
     ),
     BootstrapStageDefinition(
+        id="international_catalog",
+        name="Catálogo de Ativos Internacionais",
+        description="Sincronização de Stocks e ETFs globais com metadados e moeda USD",
+        dependencies=(),
+        provider_dependent=True,
+        destructive=False,
+    ),
+    BootstrapStageDefinition(
+        id="international_price_history",
+        name="Histórico de Preços Internacionais",
+        description="Carga histórica de cotações para Stocks e ETFs internacionais",
+        dependencies=("international_catalog",),
+        provider_dependent=True,
+        destructive=False,
+    ),
+    BootstrapStageDefinition(
         id="asset_fundamentals",
         name="Fundamentos e Indicadores de Ativos",
         description=(
             "Coleta e pré-aquecimento de indicadores fundamentalistas, "
             "métricas cripto e títulos públicos"
         ),
-        dependencies=("asset_catalog", "treasury_catalog"),
+        dependencies=("asset_catalog", "treasury_catalog", "international_catalog"),
         provider_dependent=True,
         destructive=False,
     ),

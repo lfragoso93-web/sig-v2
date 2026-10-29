@@ -53,7 +53,7 @@ def _reset_state():
 async def test_canonical_bootstrap_stages_inventory():
     """Garante que os 10 estágios canônicos estão inventariados."""
     stage_ids = [s.id for s in CANONICAL_BOOTSTRAP_STAGES]
-    assert len(stage_ids) == 11
+    assert len(stage_ids) == 13
     expected = [
         "b3_baseline",
         "asset_catalog",
@@ -65,6 +65,8 @@ async def test_canonical_bootstrap_stages_inventory():
         "fx_rates",
         "asset_dividends",
         "corporate_events",
+        "international_catalog",
+        "international_price_history",
         "asset_fundamentals",
     ]
     assert stage_ids == expected
@@ -83,7 +85,7 @@ async def test_admin_bootstrap_status_exposes_stages():
         data = resp.json()
 
         assert "stages" in data
-        assert len(data["stages"]) == 11
+        assert len(data["stages"]) == 13
         assert (
             data["schema_version"] is None
             or data["schema_version"] == BOOTSTRAP_SCHEMA_VERSION
