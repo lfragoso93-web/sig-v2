@@ -34,7 +34,13 @@ jobs:
           set -eu
 
           TARGET_BRANCH="${{ github.event.inputs.target_branch || 'main' }}"
-          DEPLOY_DIR="${SGI_DEPLOY_DIR:-/opt/sgi-v2}"
+          if [ -n "${SGI_DEPLOY_DIR:-}" ]; then
+            DEPLOY_DIR="${SGI_DEPLOY_DIR}"
+          elif [ -d "/opt/sig-v2" ]; then
+            DEPLOY_DIR="/opt/sig-v2"
+          else
+            DEPLOY_DIR="/opt/sgi-v2"
+          fi
 
           echo "=========================================================="
           echo " Início do Deploy Automático no OCI"
