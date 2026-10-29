@@ -10,13 +10,13 @@ Endpoints:
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.core.database import get_db
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.core.auth import get_current_user
 from app.models.user import User
-from app.models.portfolio import Portfolio
 from app.schemas.rentabilidade import RentabilidadeKpisResponse
 from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
 from app.services.rentabilidade_asset_result_service import get_canonical_asset_results
@@ -28,15 +28,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rentabilidade"])
 
 
+READ_PORTFOLIO_RENTABILIDADE = "read:portfolio_rentabilidade"
+
+
 async def _assert_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user_id,
-        )
+    access = PortfolioAccessContext.for_user(
+        user_id=user_id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_RENTABILIDADE}),
     )
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
+    try:
+        await get_accessible_portfolio(
+            db, access, required_permission=READ_PORTFOLIO_RENTABILIDADE
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.") from exc
 
 
 @router.get(

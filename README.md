@@ -1,22 +1,22 @@
 # SGI — Sistema de Gestão de Investimentos
 
-> **Documentação Completa da Aplicação:** Consulte o manual técnico unificado em [docs/DOCUMENTACAO_DO_SISTEMA.md](docs/DOCUMENTACAO_DO_SISTEMA.md).
+> **Documentação Completa da Aplicação:** Consulte o manual técnico unificado em [`docs/DOCUMENTACAO_DO_SISTEMA.md`](docs/DOCUMENTACAO_DO_SISTEMA.md).
+> **Relatório Oficial de Oportunidades de Melhoria:** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+> **Guias Técnicos Dedicados:** Backend em [`backend/README.md`](backend/README.md) | Frontend em [`frontend/README.md`](frontend/README.md).
+
+Plataforma corporativa e determinística para acompanhamento, consolidação patrimonial, rentabilidade ponderada pelo tempo (TWR), Proventos, apuração fiscal de IRPF e simulação financeira de carteiras multiclasse.
+- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261022_auth_oauth_mfa`), PostgreSQL 16, Redis 7 e APScheduler.
+- **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`), Vite 8 (`^8.3.4`), Tailwind CSS v4 (`^4.3.3`), TanStack Query v5, Zustand e Vitest.
 
 ## Ambiente de validação com usuários
 
-O runtime único de testes assistidos é o projeto Compose existente `sig-v2`,
-publicado pelo Cloudflare Tunnel. Toda alteração de produto validada com
-usuários deve ser incorporada às imagens backend/frontend dessa stack. Não
-iniciar `sgi-usertest`; o procedimento atual está em
-[`docs/USER_VALIDATION_RUNBOOK.md`](docs/USER_VALIDATION_RUNBOOK.md).
+O runtime único de desenvolvimento, testes e validação com usuários é o projeto Compose existente `docker-compose.yml` (`sig-v2`), publicado localmente ou via Cloudflare Tunnel. Toda alteração de produto validada com usuários deve ser incorporada às imagens backend/frontend dessa stack. Não iniciar `sgi-usertest`; o procedimento atual está em [`docs/USER_VALIDATION_RUNBOOK.md`](docs/USER_VALIDATION_RUNBOOK.md).
 
-## Simulacoes
+## Simulações e Calculadoras
 
-A calculadora de aportes esta em `/carteira/ferramentas/rendimentos`; o simulador de Renda Fixa esta em `/carteira/ferramentas/renda-fixa`. No simulador, o tratamento de IR e derivado automaticamente do tipo de produto. Ambos usam premissas informadas pelo usuario e nao modificam a carteira. Formulas, fontes, hipoteses e limites estao em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
+A calculadora de aportes está em `/carteira/ferramentas/rendimentos`; o simulador de Renda Fixa está em `/carteira/ferramentas/renda-fixa`. No simulador, o tratamento de IR é derivado automaticamente da taxonomia do produto. Ambos usam premissas informadas pelo usuário, operam em memória e não modificam a carteira. Fórmulas, fontes e limites estão em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
 
-No cadastro de Renda Fixa, o nome do titulo inclui o emissor, o tipo do produto define o tratamento fiscal e a carencia some com liquidez diaria. A taxonomia e as regras estao descritas em [`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
-
-Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e evolução patrimonial de carteiras multiclasse, com backend FastAPI e frontend React + TypeScript.
+No cadastro de Renda Fixa, o nome do título inclui o emissor, o tipo do produto define o tratamento fiscal e a carência é omitida sob liquidez diária. A taxonomia e as regras estão descritas em [`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
 
 ## Branch e governança
 
@@ -26,112 +26,23 @@ Plataforma para acompanhamento, consolidação, rentabilidade, Proventos, IRPF e
 - antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
 - README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
 
-## Snapshot historico do projeto — 16/10/2026
+## Status do Projeto e Entregas Recentes — 29/10/2026
 
-O SGI v2 está em **pós-GO e hardening arquitetural**. A baseline funcional foi
-promovida para `main` pela PR #362 e a certificação persistente para dados reais
-foi concluída pela #384 para uma identidade runtime específica. Este status
-histórico não certifica o checkout atual nem confirma a identidade atualmente
-implantada.
+O SGI v2 opera sobre o branch obrigatório `stable-15jun`, com o banco de dados governado pelo Alembic na cabeça **`20261022_auth_oauth_mfa`** (67 revisões lineares encadeadas) e runtime unificado local no Docker Compose (`sig-v2`).
 
-Registro histórico da identidade certificada em 06/10/2026, não aplicável ao
-runtime observado nesta baseline:
+### Funcionalidades Implementadas e Ativas
 
-```text
-test_ready=true
-user-test-readiness.v1=GO_ASSISTED
-go_for_assisted_user_tests=true
-ready_for_real_data=true
-/health=200
-/ready=200
-```
+- **Motor de Análise (#360) e Camada de IA (#361):** Análise determinística de diversificação patrimonial e concentração de ativos combinada com geração de resumos executivos e diagnósticos explicativos em linguagem natural (`frontend/src/pages/AnalisePage.tsx`).
+- **Autenticação Google OAuth 2.0 & MFA TOTP (#97):** Login federado com Google e proteção com segundo fator (TOTP) integrados no fluxo de autenticação e no schema de banco.
+- **Gaveta Consolidada de Detalhe de Ativo (#58 / #351):** `AssetDetailDrawer.tsx` com visualização detalhada em abas dinâmicas: visão geral, múltiplos fundamentalistas adaptados por classe (Ações, FIIs, BDRs, ETFs, Tesouro), histórico de cotações e proventos.
+- **Simuladores Financeiros (#359):** Calculadora de aportes periódicos e simulador comparativo de Renda Fixa com dedução tributária automática conforme a taxonomia canônica (`/carteira/ferramentas/*`).
+- **Catálogo e Cotações Internacionais (`366ae927`):** Suporte nativo a Stocks e ETFs globais no bootstrap de dados e séries históricas.
+- **Tabela Oficial de Proventos (`dea616ee`):** Detalhamento de proventos com tipo de provento, data-com, data de pagamento e valor unitário líquido.
+- **Taxonomia Canônica de Renda Fixa (#355):** Normalização fiscal automática derivada do tipo de produto, títulos com emissores integrados e liquidez diária.
 
-### Rebaseline pós-promoção
+### Mapeamento de Oportunidades de Melhoria
 
-- PR #425 sincronizou `main` para `stable-15jun`. Desde então, `stable-15jun`
-  avançou e está 7 commits à frente, 0 atrás de `main`; o checkout está no SHA
-  `b37661921e3a8455f45c8b676b28955d6ad3d0ea` e coincide com `origin/stable-15jun`.
-- O inventário GitHub de 16/10/2026 encontrou 23 Issues abertas e nenhuma PR
-  aberta. O quadro por prioridade está em `docs/ISSUE_GOVERNANCE.md`.
-- #408: a sanitização dos logs está em `stable-15jun` pela PR #413 e
-  as regressões chegaram pela #419; a CI da #419 passou. A Issue segue aberta
-  até uma análise CodeQL posterior à correção confirmar os findings.
-- #83: download, reautenticação de restore, auditoria, status persistido de
-  operações e retenção já têm implementação no código estável. Falta comprovar
-  o ciclo integrado de backup e restore isolado antes de tratar a interface
-  como disaster recovery certificado.
-
-- #363 fechado apos recuperacao dos gates tecnicos locais.
-- #354 permanece fechada.
-- #352 foi validada manualmente e fechada: `Tipo de ativo` virou caixa seletora
-  no modal de lancamento, e a transacao foi adicionada com sucesso.
-- #158, #269 e #227 estão fechadas; a PR #362 foi mergeada em `main`;
-- OCI/#284 saiu do caminho crítico atual e permanece backlog futuro de
-  infraestrutura/cloud;
-- a #384 foi concluída com evento `PROMOTE` append-only, validação DB-first e
-  persistência comprovada após restart; qualquer nova identidade de runtime
-  exige novo ciclo de certificação;
-- #370 avancou a fronteira de eventos corporativos materiais: a varredura de
-  22/09/2026 registrou zero eventos materiais em `UNRECONCILED`; AMOB3 esta
-  formalizada como `MATCHED`/`CONFLICT`, e KLBN11 permanece em `CONFLICT`
-  revisavel ate haver evidencia documental de liquidacao fracionaria para
-  eventual `MATCHED`.
-- a Epic #344 foi concluída: #345–#350 estão fechadas e os blocos de Doctor,
-  Agent Skills, Certification Proof, runtime determinístico, Access Context e
-  Reliable Async foram promovidos para `main`;
-- #384 possui persistência append-only, leitura DB-first, relatório, contrato,
-  executor transacional e CLI guardada; a promoção operacional real foi
-  executada para o dataset/SHA registrados e `/ready` consome essa autoridade.
-
-`GO_ASSISTED` continua descrevendo apenas testes acompanhados. A autorização
-para dados reais depende exclusivamente do evento persistido da #384 e da
-correspondência exata da identidade; a CLI assistida não altera `/ready`.
-
-### Runtime local observado — 16/10/2026
-
-- backend, PostgreSQL e Redis estão saudáveis; `/health` retornou `ok`;
-- `/ready` retornou `503` com `runtime_identity_error` e
-  `ready_for_real_data=false`;
-- o container declara `APP_BRANCH=stable-15jun` e `ENVIRONMENT=testing`, mas sua
-  `APP_COMMIT_SHA` diverge do HEAD e `REAL_DATASET_REFERENCE` está vazia;
-- o working tree contém alterações locais de código e documentação, além de
-  artefatos candidatos não rastreados; a revisão inicial identificou trabalho
-  ainda não consolidado de eventos corporativos;
-- a consulta read-only atual de `user_test_readiness` não concluiu nem produziu
-  relatório antes do timeout; não há readiness assistida atual confirmada.
-  Consulte `docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
-
-O status do checkout e do runtime, com o mapa de desenvolvimento, está em
-`docs/DEVELOPMENT_BASELINE_2026-10-16.md`. A certificação de 06/10 é histórica;
-o runtime atual não está certificado para dados reais.
-
-### Candidato implantado — 17/10/2026
-
-O candidato local foi implantado em `production`, com Alembic em
-`20261016_corp_ev_effective_date`. A identidade exata de cada build fica no
-proof gerado para o runtime corrente em `artifacts/certification-proof/`.
-Backend, frontend,
-PostgreSQL e Redis estão ativos; readiness assistida retornou `GO_ASSISTED`,
-sem blockers/warnings e sem escritas. O `/ready` permanece 503 porque o evento
-persistido anterior certifica outra identidade. Backup v3 pós-migration, restore
-isolado e dry-run #384 passaram sem promover. Qualquer novo SHA exige backup,
-restore e dry-run próprios; os relatórios e o mapa estão em `artifacts/` e
-`docs/DEVELOPMENT_BASELINE_2026-10-16.md`.
-
-A cadeia histórica de promoção foi concluída. O próximo ciclo vigente está em
-`ROADMAP.md` e `docs/DEVELOPMENT_BASELINE_2026-10-16.md`:
-
-```text
-consolidar o candidato local e as migrations
-        -> gates de código, Doctor e CodeQL #408
-        -> backup v3 e restore isolado #83
-        -> atualizar e validar imagem / readiness assistida
-        -> dry-run e certificação guardada #384
-        -> GOV-07/#293 e uma entrega de produto
-
-#384 foi concluída para a identidade registrada; promoções futuras continuam vinculadas à identidade exata.
-#284 permanece backlog futuro e não bloqueia desenvolvimento local.
-```
+O diagnóstico técnico aprofundado do sistema encontra-se catalogado no relatório oficial [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md). O documento mapeia 19 oportunidades técnicas estruturadas por prioridade (P1 a P3), cobrindo integridade contábil, ampliação do `PortfolioAccessContext`, governança de branches e otimizações de performance.
 
 ## Agent Skills versionadas
 
@@ -195,42 +106,32 @@ Princípios obrigatórios:
 
 ## Estado funcional resumido
 
-| Domínio | Estado em 11/10/2026 |
+| Domínio | Estado em 29/10/2026 |
 |---|---|
-| Autenticação/Core | funcional em validação assistida |
+| Autenticação/Core | funcional com Google OAuth 2.0 e MFA TOTP (#97) |
 | Carteiras/Transações | canônico e certificado sinteticamente |
 | CSV | certificado |
 | Patrimônio/Resumo | reconciliado em carteira assistida |
-| Snapshots | rebuild/replay certificados |
+| Snapshots | rebuild/replay certificados com writer único canônico |
 | Rentabilidade | TWR dedicado de Tesouro e Renda Fixa disponível; lacunas permanecem explícitas |
 | Tesouro | valuation DB-first, snapshots dedicados e eventos monetários consumidos uma vez |
-| Renda Fixa | lifecycle transaction-derived, valuation e TWR dedicados |
-| Proventos | `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda; prova portfolio-scoped idempotente |
+| Renda Fixa | lifecycle transaction-derived, taxonomia canônica unificada (#355) e TWR dedicado |
+| Proventos | tabela oficial com tipo, data com/pag e valor unitário (`dea616ee`); `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda |
 | Eventos corporativos | sem `UNRECONCILED` material; KLBN11 em `CONFLICT` revisável |
 | IRPF | funcional para classes suportadas |
 | Metas | superfície básica funcional; desenho definitivo permanece #246 |
-| Detalhe de ativo | parcialmente implementado (#58/#351) |
-| Analysis Engine | planejado (#360) |
-| IA | planejada após #360/#246 (#361) |
+| Detalhe de ativo | implementado via `AssetDetailDrawer.tsx` (#58 / #351) |
+| Analysis Engine | implementado (#360) |
+| IA | implementada com síntese executiva em linguagem natural (`AnalisePage.tsx`) (#361) |
+| Calculadoras & Simulação | implementadas em `/carteira/ferramentas/*` (#359) |
+| Ativos Internacionais | catálogo e séries históricas integrados (`366ae927`) |
 
-## Pendências financeiras pós-GO
+## Status do Backlog e Evolução
 
-- #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
-- #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
-- #370 permanece fail-closed para KLBN11 até evidência documental suficiente;
-- #384 foi concluída e mantém a liberação para dados reais explícita,
-  persistente e separada da promoção para `main`.
-
-#149 permanece aberta para evidência de posição de custódia por carteira na
-manhã do pagamento e base tributável/IRRF por lote. A regra oficial de
-elegibilidade está documentada; certificação de runtime é gate separado de
-promoção para dados reais, não requisito de desenvolvimento. Os contratos de
-TWR dedicado já estão cobertos por oracles; lacunas de PU, benchmark ou
-calendário continuam fail-closed e não são apresentadas como retorno oficial.
-
-## Evolução pós-GO
-
-#351, #90, #58, #355–#361 e #97 permanecem backlog de evolução conforme classificação nas Issues.
+- **Entregas pós-GO consolidadas:** #58, #351, #355, #359, #360, #361 e #97 estão implementadas no branch `stable-15jun`.
+- **Issues fechadas:** #352 (seletor de tipo de ativo), #354 (alinhamento de senha), #363, #364, #365.
+- **Oportunidades Técnicas Priorizadas:** O planejamento das próximas rodadas de evolução técnica está formalizado no relatório oficial [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) (19 oportunidades mapeadas).
+- **Pendências específicas:** #149 permanece aberta para evidência de posição de custódia por carteira na manhã do pagamento e base tributável/IRRF por lote do Tesouro Direto. #284 preserva o trabalho de infraestrutura em nuvem (OCI) como backlog futuro.
 
 ## Comandos básicos
 
@@ -239,54 +140,49 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Backend:
+### Backend (Ambiente Local / `.venv`)
 
-```bash
+```powershell
 cd backend
-python -m ruff check app tests
-python -m compileall -q app tests
-pytest -q
+# Linting canônico (Flake8 com parâmetros oficiais de CI)
+..\.venv\Scripts\python.exe -m flake8 app --max-line-length=120 --extend-ignore=E501,E221 --per-file-ignores="app/models/*.py:F821,F401" --jobs=1
+# Verificação estrita de tipagem (Mypy)
+..\.venv\Scripts\python.exe -m mypy app
+# Validador de invariantes arquiteturais (Architecture Doctor)
+..\.venv\Scripts\python.exe -m app.doctor --all-static --format json
+# Validação de compilação
+..\.venv\Scripts\python.exe -m compileall -q app tests
+# Suíte de testes automatizados
+..\.venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-Frontend:
+> **Nota sobre o Ruff:** O Ruff está instalado no ambiente e configurado como target opcional no `Makefile`, porém não possui `ruff.toml` dedicado no backend. O linter canônico do projeto é o **Flake8** com as diretivas acima.
 
-```bash
+### Frontend (Ambiente Local / Node.js 22+)
+
+```powershell
 cd frontend
 npm run typecheck
 npm run lint
-npm test -- --run
+npm test -- run
 npm run build
 ```
 
-Gate assistido:
+### Gate assistido
 
-```bash
+```powershell
 docker compose run --rm backend python -m app.cli.user_test_readiness
 ```
 
 ## Documentação canônica
 
-- `ROADMAP.md`;
-- `CHANGELOG.md`;
-- `docs/DEVELOPMENT_CONTINUITY.md`;
-- `docs/architecture.md`;
-- `docs/USER_TEST_READINESS_GATE.md`;
-- `docs/USER_VALIDATION_RUNBOOK.md`;
-- `docs/BOOTSTRAP_DATA_FLOW.md`;
-- `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`;
-- `docs/deployment/oci-execution-index.md` (referência futura OCI);
-- Issues #408, #83, #293, #149, #370 e #284 (estados atuais e backlog).
-
-## Status atual — 17/10/2026
-
-O runtime consultado nesta data esta no SHA `5c4ad390`, saudavel e com `/ready=200` para a identidade certificada registrada. A Issue #83 foi concluida no GitHub apos ensaio administrativo integrado em dois bancos descartaveis; procedimento em `docs/ADMIN_BACKUP_RESTORE_REHEARSAL.md`. #408 continua aguardando confirmacao CodeQL posterior as correcoes e GOV-07/#293 segue como proximo bloco de governanca. Este status atualiza fotografias anteriores deste README, preservadas como historico.
-
-### Atualizacao de governanca — 17/10/2026
-
-O inventario GitHub ao vivo encontrou 22 Issues abertas e nenhuma PR aberta.
-GOV-07 foi correlacionada no snapshot local sem encontrar Issue claramente
-duplicada ou sem destino. #353 ja tem scroll restoration global e testes
-unitarios; faltam validacoes desktop/mobile, sem bloquear a jornada critica.
-#293 segue aberta ate reconciliar/publicar a documentacao porque a ponta remota
-`stable-15jun` nao foi obtida (consulta Git indisponivel). #408 segue aberta ate
-reconciliar a evidencia CodeQL divergente. Ver `docs/ISSUE_GOVERNANCE.md`.
+- [`docs/DOCUMENTACAO_DO_SISTEMA.md`](docs/DOCUMENTACAO_DO_SISTEMA.md) — Manual unificado do sistema;
+- [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) — Diagnóstico detalhado de melhorias e oportunidades;
+- [`backend/README.md`](backend/README.md) — Guia técnico e arquitetural do backend FastAPI;
+- [`frontend/README.md`](frontend/README.md) — Guia técnico e arquitetural do frontend React 19;
+- [`docs/architecture.md`](docs/architecture.md) — Arquitetura de domínios e contratos financeiros;
+- [`ROADMAP.md`](ROADMAP.md) — Planejamento de entregas e reconciliação de marcos;
+- [`CHANGELOG.md`](CHANGELOG.md) — Histórico de mudanças;
+- [`docs/BOOTSTRAP_DATA_FLOW.md`](docs/BOOTSTRAP_DATA_FLOW.md) — Fluxo de inicialização e dados;
+- [`docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`](docs/REAL_DATA_CERTIFICATION_RUNBOOK.md) — Certificação para dados reais;
+- [`docs/DEVELOPMENT_BASELINE_2026-10-16.md`](docs/DEVELOPMENT_BASELINE_2026-10-16.md) — Registro histórico da baseline anterior.

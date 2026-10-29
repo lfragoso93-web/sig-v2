@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import (
+    PortfolioAccessContext,
+    PortfolioAccessDenied,
+)
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.models.dividend_enums import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.user import User
@@ -23,16 +27,21 @@ from app.services.proventos_service import (
 router = APIRouter(prefix="/portfolios/{portfolio_id}/proventos", tags=["proventos"])
 
 
+READ_PORTFOLIO_PROVENTOS = "read:portfolio_proventos"
+
+
 async def _assert_owner(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id, Portfolio.user_id == user.id
-        )
+    access = PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_PROVENTOS}),
     )
-    portfolio = result.scalar_one_or_none()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return portfolio
+    try:
+        return await get_accessible_portfolio(
+            db, access, required_permission=READ_PORTFOLIO_PROVENTOS
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.") from exc
 
 
 def _parse_status(status: str | None) -> DividendStatus | None:

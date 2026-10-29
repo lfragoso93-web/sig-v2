@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from decimal import Decimal
 
 from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
@@ -20,6 +24,14 @@ from app.services.fixed_income_contract_service import (
     WRITE_FIXED_INCOME_CONTRACTS,
     create_fixed_income_contract,
     require_fixed_income_contract,
+)
+from app.services.corporate_action_position_reader import (
+    load_global_corporate_actions_by_ticker,
+)
+from app.services.position_timeline_projection import (
+    PositionMovement,
+    PositionMovementKind,
+    project_position_timeline,
 )
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
@@ -69,21 +81,72 @@ async def _current_quantity(
     portfolio_id: int,
     ticker: str,
     asset_type: str,
+    as_of_date: date | None = None,
+    exclude_tx_id: int | None = None,
 ) -> float:
-    result = await db.execute(
-        select(Transaction.operation, Transaction.quantity).where(
-            Transaction.portfolio_id == portfolio_id,
-            func.lower(Transaction.ticker) == ticker.lower(),
-            Transaction.asset_type == asset_type,
-        )
+    stmt = select(
+        Transaction.operation,
+        Transaction.quantity,
+        Transaction.date,
+    ).where(
+        Transaction.portfolio_id == portfolio_id,
+        func.lower(Transaction.ticker) == ticker.lower(),
+        Transaction.asset_type == asset_type,
     )
+    if exclude_tx_id is not None:
+        stmt = stmt.where(Transaction.id != exclude_tx_id)
+    if as_of_date is not None:
+        stmt = stmt.where(Transaction.date <= as_of_date)
+    stmt = stmt.order_by(Transaction.date.asc(), Transaction.id.asc())
+
+    result = await db.execute(stmt)
+    rows = result.all()
+    if not rows:
+        return 0.0
+
+    actions = ()
+    if asset_type in {"ACAO", "FII", "BDR", "ETF"}:
+        try:
+            actions_by_ticker = await load_global_corporate_actions_by_ticker(
+                db,
+                [ticker.strip().upper()],
+            )
+            actions = actions_by_ticker.get(ticker.strip().upper(), ())
+        except Exception:
+            actions = ()
+
+    if actions:
+        movements: list[PositionMovement] = []
+        for row in rows:
+            op_raw = row[0]
+            op_val = op_raw.value if isinstance(op_raw, OperationType) else str(op_raw).lower()
+            qty = Decimal(str(row[1]))
+            tx_date = row[2] if len(row) > 2 and isinstance(row[2], date) else (as_of_date or date.min)
+            kind = PositionMovementKind.BUY if op_val == OperationType.buy.value else PositionMovementKind.SELL
+            movements.append(
+                PositionMovement(
+                    movement_date=tx_date,
+                    kind=kind,
+                    quantity=qty,
+                    unit_price=Decimal('0'),
+                )
+            )
+        timeline = project_position_timeline(
+            movements=movements,
+            actions=actions,
+            through_date=as_of_date,
+        )
+        return max(float(timeline.quantity), 0.0)
+
     quantity = 0.0
-    for operation, value in result.all():
-        op = operation.value if isinstance(operation, OperationType) else str(operation)
+    for row in rows:
+        op_raw = row[0]
+        op = op_raw.value if isinstance(op_raw, OperationType) else str(op_raw)
+        val = float(row[1])
         if op == OperationType.buy.value:
-            quantity += float(value)
+            quantity += val
         elif op == OperationType.sell.value:
-            quantity -= float(value)
+            quantity -= val
     return max(quantity, 0.0)
 
 
@@ -205,7 +268,13 @@ async def add_transaction_record(
                 await db.flush()
 
     if operation == OperationType.sell:
-        current_qty = await _current_quantity(db, portfolio_id, ticker, asset_type)
+        current_qty = await _current_quantity(
+            db,
+            portfolio_id,
+            ticker,
+            asset_type,
+            as_of_date=payload.date,
+        )
         if payload.quantity > current_qty:
             raise TransactionWriteError(
                 f"Quantidade insuficiente para venda de {ticker}. "
