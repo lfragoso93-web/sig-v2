@@ -37,6 +37,9 @@ Adicionalmente, o modal de detalhes do ETF exibia a mensagem contraditória *"Po
    - Utilização de `normalize_asset_type` na leitura SQL, no agrupamento de movimentações em memória e nos filtros da API pública de proventos.
 3. **Correção Visual no Drawer de Ativos (`AssetDetailDrawer.tsx`):**
    - Se `dividendHistory.length > 0`, a política é exibida como `"Distribuição Periódica de Proventos"`, descrevendo adequadamente o repasse periódico aos cotistas.
+4. **Conversão Cambial DB-First (`USD` -> `BRL`) para Proventos Internacionais (`canonical_dividend_entitlement_reader.py`, `dividend_service.py`, `asset_enrichment_service.py`):**
+   - Eventos de ativos internacionais (`currency = 'USD'`, como `IVV`, `TFLO`, `INTR`, `NVDA`) passam a ser convertidos em Reais (`BRL`) no momento da leitura canônica utilizando a última taxa `USD-BRL` persistida em `fx_rates` na data de pagamento (`payment_date`) ou na Data Ex (`ex_date`).
+   - A consulta de câmbio é realizada em lote único (`load_usd_brl_rates`) apenas quando há eventos em `USD`, preservando zero queries extras para carteiras 100% em `BRL` e comportamento *fail-closed* caso não haja cobertura cambial anterior à data de referência.
 
 ---
 

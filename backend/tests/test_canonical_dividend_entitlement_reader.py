@@ -145,3 +145,83 @@ async def test_rejects_asset_without_explicit_currency():
 
     with pytest.raises(ValueError, match="has no currency"):
         await load_portfolio_dividend_entitlements(db, 3)
+
+@pytest.mark.asyncio
+async def test_converts_usd_dividend_to_brl_using_persisted_fx_rate_in_single_batch():
+    fx_rows = [
+        (date(2026, 1, 15), Decimal("5.50")),
+        (date(2026, 1, 20), Decimal("5.80")),
+    ]
+    db = Session(
+        [
+            (
+                event(
+                    id=10,
+                    record_date=date(2026, 1, 9),
+                    ex_date=date(2026, 1, 12),
+                    payment_date=date(2026, 1, 20),
+                    value_per_unit=Decimal("1.50"),
+                    gross_value_per_unit=Decimal("1.50"),
+                ),
+                asset(ticker="IVV", asset_type="ETF_INTERNACIONAL", currency="USD"),
+            ),
+            (
+                event(
+                    id=11,
+                    record_date=date(2026, 1, 9),
+                    ex_date=date(2026, 1, 16),
+                    payment_date=None,
+                    value_per_unit=Decimal("0.20"),
+                    gross_value_per_unit=Decimal("0.20"),
+                ),
+                asset(ticker="TFLO", asset_type="ETF_INTERNACIONAL", currency="USD"),
+            ),
+        ],
+        [
+            transaction(ticker="IVV", asset_type="ETF_INTERNACIONAL", quantity=10),
+            transaction(ticker="TFLO", asset_type="ETF_INT", quantity=5),
+        ],
+        fx_rows,
+    )
+
+    results = await load_portfolio_dividend_entitlements(db, 3)
+
+    assert db.calls == 3
+    assert len(results) == 2
+    assert results[0].ticker == "IVV"
+    assert results[0].event.currency == "BRL"
+    assert results[0].event.value_per_unit == Decimal("8.70000000")
+    assert results[0].gross_value_per_unit == Decimal("8.70000000")
+    assert results[0].entitlement.currency == "BRL"
+    assert results[0].entitlement.net_amount == Decimal("87.00")
+
+    assert results[1].ticker == "TFLO"
+    assert results[1].event.currency == "BRL"
+    assert results[1].event.value_per_unit == Decimal("1.10000000")
+    assert results[1].entitlement.net_amount == Decimal("5.50")
+
+
+@pytest.mark.asyncio
+async def test_keeps_usd_currency_fail_closed_when_no_fx_rate_exists():
+    db = Session(
+        [
+            (
+                event(
+                    record_date=date(2026, 1, 9),
+                    ex_date=date(2026, 1, 12),
+                    payment_date=date(2026, 1, 20),
+                    value_per_unit=Decimal("1.50"),
+                ),
+                asset(ticker="IVV", asset_type="ETF_INTERNACIONAL", currency="USD"),
+            )
+        ],
+        [transaction(ticker="IVV", asset_type="ETF_INTERNACIONAL", quantity=10)],
+        [],
+    )
+
+    results = await load_portfolio_dividend_entitlements(db, 3)
+
+    assert db.calls == 3
+    assert results[0].event.currency == "USD"
+    assert results[0].entitlement.currency == "USD"
+    assert results[0].event.value_per_unit == Decimal("1.50")

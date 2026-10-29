@@ -152,7 +152,7 @@ O adaptador read-only `canonical_dividend_entitlement_reader.py` já conecta
 `asset_dividends` e `assets` ao histórico completo de `transactions`, usando
 o par `(ticker, asset_type)` enquanto as transações não possuem `asset_id`.
 Ele não consulta `dividends`, não grava projeções e não altera endpoints. A
-moeda vem explicitamente do ativo; cadastro sem moeda é rejeitado.
+moeda vem explicitamente do ativo; cadastro sem moeda é rejeitado. Para ativos internacionais (USD), o leitor converte alue_per_unit e gross_value_per_unit para BRL via consulta em lote único na tabela x_rates (USD-BRL) na data de pagamento (payment_date) ou Data Ex (ex_date), mantendo comportamento fail-closed caso não haja cotação persistida.
 
 
 ### Bloco 4 — migração de consumidores

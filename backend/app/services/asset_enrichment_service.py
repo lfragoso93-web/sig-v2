@@ -18,6 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
+from app.services.canonical_dividend_entitlement_reader import (
+    load_usd_brl_rates,
+    lookup_fx_rate_on_or_before,
+)
 
 from app.core.cache import get_redis
 from app.core.log_safety import sanitize_log_value
@@ -816,7 +820,7 @@ class AssetEnrichmentService:
         if not clean_ticker:
             return [], None
 
-        cache_key = f"dividend_history:{clean_ticker}"
+        cache_key = f"dividend_history:v2:{clean_ticker}"
         if not force_refresh:
             cached = await self._get_cached(cache_key)
             if cached is not None and isinstance(cached, dict):
@@ -828,7 +832,7 @@ class AssetEnrichmentService:
         if db is not None:
             try:
                 stmt = (
-                    select(AssetDividend)
+                    select(AssetDividend, Asset.currency)
                     .join(Asset, Asset.id == AssetDividend.asset_id)
                     .where(
                         or_(
@@ -845,8 +849,25 @@ class AssetEnrichmentService:
                     .limit(60)
                 )
                 res = await db.execute(stmt)
-                db_dividends = res.scalars().all()
-                for div in db_dividends:
+                raw_rows = res.all() if hasattr(res, "all") else res.scalars().all()
+                unpacked_divs: list[tuple[Any, str]] = []
+                for row in raw_rows:
+                    if isinstance(row, tuple) or (hasattr(row, "__len__") and len(row) >= 2):
+                        unpacked_divs.append((row[0], str(row[1] or "BRL").strip().upper()))
+                    else:
+                        unpacked_divs.append((row, str(getattr(row, "currency", "BRL") or "BRL").strip().upper()))
+
+                usd_dates = [
+                    div.payment_date or div.ex_date
+                    for div, curr in unpacked_divs
+                    if curr == "USD" and (div.payment_date or div.ex_date) is not None
+                ]
+                fx_dates = []
+                fx_rates = []
+                if usd_dates:
+                    fx_dates, fx_rates = await load_usd_brl_rates(db, max(usd_dates))
+
+                for div, curr in unpacked_divs:
                     raw_type = (div.dividend_type.value if hasattr(div.dividend_type, "value") else str(div.dividend_type)).upper()
                     if "JCP" in raw_type or "JUROS" in raw_type:
                         norm_type = "JCP"
@@ -857,14 +878,22 @@ class AssetEnrichmentService:
                     else:
                         norm_type = "DIVIDENDO"
 
+                    fx_mult = 1.0
+                    if curr == "USD":
+                        ref_dt = div.payment_date or div.ex_date
+                        if ref_dt is not None:
+                            resolved = lookup_fx_rate_on_or_before(fx_dates, fx_rates, ref_dt)
+                            if resolved is not None:
+                                fx_mult = float(resolved)
+
                     rec_date = div.record_date or div.ex_date
                     history.append({
                         "payment_date": div.payment_date.isoformat() if div.payment_date else None,
                         "record_date": rec_date.isoformat() if rec_date else None,
                         "ex_date": div.ex_date.isoformat() if div.ex_date else None,
                         "type": norm_type,
-                        "value": float(div.value_per_unit),
-                        "gross_value": float(div.gross_value_per_unit) if div.gross_value_per_unit is not None else None,
+                        "value": round(float(div.value_per_unit) * fx_mult, 6),
+                        "gross_value": round(float(div.gross_value_per_unit) * fx_mult, 6) if div.gross_value_per_unit is not None else None,
                     })
             except Exception as exc:
                 logger.debug("Falha ao consultar AssetDividend no DB para %s: %s", sanitize_log_value(clean_ticker), sanitize_log_value(exc))
