@@ -127,9 +127,7 @@ async def load_portfolio_dividend_entitlements(
             movements = movements_by_asset.get(
                 (norm_ticker, str(asset.asset_type).strip().upper()), ()
             )
-        ent_date = effective_entitlement_date(
-            asset_dividend.record_date, asset_dividend.ex_date
-        )
+        ent_date = effective_entitlement_date(asset_dividend)
         if movements and ent_date is not None and ent_date >= movements[0].transaction_date:
             usd_ref_dates.append(asset_dividend.payment_date or asset_dividend.ex_date)
 
