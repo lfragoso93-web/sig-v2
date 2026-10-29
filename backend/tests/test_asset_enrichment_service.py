@@ -19,6 +19,7 @@ def mock_v2_client():
     client.fetch_fii_indicators = AsyncMock()
     client.fetch_company_fundamentals = AsyncMock()
     client.fetch_macro_series = AsyncMock()
+    client.fetch_dividends_and_events = AsyncMock(return_value=([], []))
     return client
 
 
@@ -206,3 +207,50 @@ async def test_get_asset_enrichment_international(enrichment_service) -> None:
         assert enrichment["international_profile"] is not None
         assert enrichment["international_profile"]["country"] == "US"
         assert enrichment["international_profile"]["consensus"] == "STRONG_BUY"
+
+
+@pytest.mark.asyncio
+async def test_get_asset_enrichment_etf(enrichment_service) -> None:
+    # BOVA11 deve ser enriquecido como ETF, sem fundamentos corporativos de ações (sem P/L ou P/VP de empresa)
+    enrichment = await enrichment_service.get_asset_enrichment("BOVA11", asset_type="ETF_NACIONAL")
+    assert enrichment["ticker"] == "BOVA11"
+    assert enrichment["asset_class"] == "ETF"
+    assert enrichment["stock_fundamentals"] is None
+    assert enrichment["etf_indicators"] is not None
+    assert enrichment["etf_indicators"]["benchmark"] == "Índice Bovespa (IBOV)"
+    assert enrichment["etf_indicators"]["expense_ratio"] == 0.10
+    assert "BlackRock" in enrichment["etf_indicators"]["manager"]
+    assert enrichment["etf_indicators"]["dividend_policy"] == "Reinvestimento Automático de Proventos"
+
+
+@pytest.mark.asyncio
+async def test_get_asset_enrichment_bdr(enrichment_service) -> None:
+    enrichment = await enrichment_service.get_asset_enrichment("AAPL34", asset_type="BDR")
+    assert enrichment["ticker"] == "AAPL34"
+    assert enrichment["asset_class"] == "BDR"
+    assert enrichment["bdr_indicators"] is not None
+    assert enrichment["bdr_indicators"]["underlying_ticker"] == "AAPL"
+    assert enrichment["bdr_indicators"]["underlying_company"] == "Apple Inc."
+    assert "B3" in enrichment["bdr_indicators"]["depositary_bank"]
+
+
+@pytest.mark.asyncio
+async def test_get_dividend_history_with_provider_fallback(enrichment_service, mock_v2_client) -> None:
+    from app.integrations.brapi_v2_client import DividendEventDTO
+    div_dto = DividendEventDTO(
+        symbol="PETR4",
+        label="DIVIDENDO",
+        rate=1.25,
+        last_date_prior=date(2026, 4, 15),
+        payment_date=date(2026, 5, 20),
+    )
+    mock_v2_client.fetch_dividends_and_events.return_value = ([div_dto], [])
+
+    history, metrics = await enrichment_service.get_dividend_history("PETR4")
+    assert len(history) == 1
+    assert history[0]["type"] == "DIVIDENDO"
+    assert history[0]["value"] == 1.25
+    assert history[0]["payment_date"] == "2026-05-20"
+    assert metrics is not None
+    assert metrics["total_paid_12m"] == 1.25
+    assert metrics["payments_count_12m"] == 1

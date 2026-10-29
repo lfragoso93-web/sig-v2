@@ -57,7 +57,7 @@ class AssetPortfolioInsightService:
         # 4. Enriquecimento de mercado (Issue #130)
         asset_type = target_pos.get("asset_type") if target_pos else None
         enrichment = await asset_enrichment_service.get_asset_enrichment(
-            clean_ticker, asset_type=asset_type
+            clean_ticker, asset_type=asset_type, db=db
         )
 
         # 5. Construir dados de posição na carteira

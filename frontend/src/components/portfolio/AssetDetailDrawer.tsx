@@ -132,6 +132,10 @@ export default function AssetDetailDrawer({
   const crypto = enrichment?.crypto_indicators
   const treasury = enrichment?.treasury_indicators
   const intlProfile = enrichment?.international_profile
+  const etf = enrichment?.etf_indicators
+  const bdr = enrichment?.bdr_indicators
+  const dividendHistory = enrichment?.dividend_history ?? []
+  const dividendMetrics = enrichment?.dividend_metrics
 
   if (!activeTicker) return null
 
@@ -958,7 +962,7 @@ export default function AssetDetailDrawer({
             </div>
           )}
 
-          {/* TAB 3: FUNDAMENTOS & IMÓVEIS */}
+          {/* TAB 3: FUNDAMENTOS ADAPTADOS POR CLASSE DE ATIVO */}
           {activeTab === 'fundamentals' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {fii ? (
@@ -1071,6 +1075,125 @@ export default function AssetDetailDrawer({
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+                </>
+              ) : etf ? (
+                <>
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Características do Fundo de Índice (ETF)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Índice / Benchmark</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                          {etf.benchmark ?? 'Índice de Mercado'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Taxa de Adm. (a.a.)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {etf.expense_ratio != null ? `${formatNumber(etf.expense_ratio)}% a.a.` : '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Gestora</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {etf.manager ?? '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>DY (12M)</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: (etf.dividend_yield ?? 0) > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                          {etf.dividend_yield != null ? `${formatNumber(etf.dividend_yield)}%` : 'Reinvestido'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Classe / Categoria</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {etf.category ?? 'Fundo de Índice'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Patrimônio Líquido</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {etf.net_assets != null ? formatBRL(etf.net_assets) : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 4 }}>
+                      <Layers size={16} style={{ color: 'var(--color-primary)' }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                        Política de Proventos: {etf.dividend_policy ?? 'Reinvestimento Automático de Proventos'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                      {etf.dividend_policy?.includes('Distribuição')
+                        ? 'Este ETF distribui proventos periodicamente aos cotistas de acordo com os dividendos recebidos dos ativos da carteira teórica.'
+                        : 'Este ETF não distribui proventos em conta: todos os dividendos e juros sobre capital próprio pagos pelas empresas subjacentes são automaticamente reinvestidos na compra de novas ações do índice, valorizando o patrimônio e a cota do fundo sem incidência imediata de IR sobre proventos.'}
+                    </p>
+                    {etf.description && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                        {etf.description}
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : bdr ? (
+                <>
+                  <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1rem 0' }}>
+                      Características do Certificado de Depósito (BDR)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Ticker de Origem</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                          {bdr.underlying_ticker ?? '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Empresa Subjacente</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {bdr.underlying_company ?? '-'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Paridade / Ratio</span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {bdr.ratio ?? '1:1'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Mercado de Origem</span>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {bdr.origin_market ?? 'EUA'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>Banco Depositário</span>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                          {bdr.depositary_bank ?? 'Banco B3'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'var(--color-surface)', borderRadius: 6 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>P/L da Empresa</span>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+                          {bdr.pe != null ? formatNumber(bdr.pe) : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {bdr.description && (
+                    <div style={{ background: 'var(--color-surface-offset)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                        {bdr.description} Os proventos recebidos no exterior são repassados ao detentor do BDR em Reais (BRL) após dedução de impostos de retenção na fonte do país de origem e taxa do depositário.
+                      </p>
                     </div>
                   )}
                 </>
@@ -1466,6 +1589,103 @@ export default function AssetDetailDrawer({
                     Os indicadores para {activeTicker} serão atualizados automaticamente através do nosso serviço de
                     cobertura integrada de mercado.
                   </p>
+                </div>
+              )}
+
+              {/* SEÇÃO COMPARTILHADA: HISTÓRICO OFICIAL DE PROVENTOS DECLARADOS */}
+              {dividendHistory.length > 0 && (
+                <div style={{ background: 'var(--color-surface-offset)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                        Histórico de Proventos Declarados
+                      </h3>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                        Últimas distribuições de dividendos, JCP ou rendimentos por cota
+                      </span>
+                    </div>
+                    {dividendMetrics && (
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ padding: '0.25rem 0.6rem', background: 'var(--color-surface)', borderRadius: 6, fontSize: '0.75rem' }}>
+                          <span style={{ color: 'var(--color-text-muted)' }}>Total 12M: </span>
+                          <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>
+                            {formatBRL(dividendMetrics.total_paid_12m)}
+                          </span>
+                        </div>
+                        <div style={{ padding: '0.25rem 0.6rem', background: 'var(--color-surface)', borderRadius: 6, fontSize: '0.75rem' }}>
+                          <span style={{ color: 'var(--color-text-muted)' }}>Frequência: </span>
+                          <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+                            {dividendMetrics.frequency}
+                          </span>
+                        </div>
+                        <div style={{ padding: '0.25rem 0.6rem', background: 'var(--color-surface)', borderRadius: 6, fontSize: '0.75rem' }}>
+                          <span style={{ color: 'var(--color-text-muted)' }}>Pagamentos: </span>
+                          <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>
+                            {dividendMetrics.payments_count_12m} proventos
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ overflowX: 'auto', maxHeight: '280px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Tipo</th>
+                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Data Com</th>
+                          <th style={{ padding: '0.5rem', fontWeight: 600 }}>Pagamento</th>
+                          <th style={{ padding: '0.5rem', fontWeight: 600, textAlign: 'right' }}>Valor por Cota</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dividendHistory.slice(0, 15).map((divItem, idx) => (
+                          <tr
+                            key={`${divItem.payment_date || divItem.record_date || idx}-${idx}`}
+                            style={{ borderBottom: '1px solid var(--color-border-subtle, rgba(255,255,255,0.05))' }}
+                          >
+                            <td style={{ padding: '0.5rem' }}>
+                              <span
+                                style={{
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: 4,
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  background:
+                                    divItem.type === 'JCP'
+                                      ? 'rgba(234, 179, 8, 0.15)'
+                                      : divItem.type === 'RENDIMENTO'
+                                      ? 'rgba(59, 130, 246, 0.15)'
+                                      : 'rgba(34, 197, 94, 0.15)',
+                                  color:
+                                    divItem.type === 'JCP'
+                                      ? 'var(--color-warning, #eab308)'
+                                      : divItem.type === 'RENDIMENTO'
+                                      ? 'var(--color-primary, #3b82f6)'
+                                      : 'var(--color-success, #22c55e)',
+                                }}
+                              >
+                                {divItem.type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.5rem', color: 'var(--color-text-muted)' }}>
+                              {divItem.record_date
+                                ? new Date(divItem.record_date + 'T00:00:00').toLocaleDateString('pt-BR')
+                                : '-'}
+                            </td>
+                            <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                              {divItem.payment_date
+                                ? new Date(divItem.payment_date + 'T00:00:00').toLocaleDateString('pt-BR')
+                                : '-'}
+                            </td>
+                            <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: 'var(--color-success)' }}>
+                              {formatBRL(divItem.value)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

@@ -16,12 +16,13 @@ const mocks = vi.hoisted(() => ({
     payment_date: string
     date: string
   }>,
+  enrichment: undefined as any,
 }))
 
 vi.mock('@/hooks/useAssetDetail', () => ({
   useAssetDetail: () => ({ data: undefined, isLoading: false }),
   useAssetCorporateLifecycle: () => ({ data: mocks.corporateLifecycle }),
-  useAssetEnrichment: () => ({ data: undefined, isLoading: false }),
+  useAssetEnrichment: () => ({ data: mocks.enrichment, isLoading: false }),
   useAssetPortfolioInsights: () => ({ data: undefined, isLoading: false }),
 }))
 
@@ -81,6 +82,7 @@ describe('AssetDetailDrawer corporate lifecycle', () => {
   beforeEach(() => {
     mocks.corporateLifecycle = []
     mocks.dividends = []
+    mocks.enrichment = undefined
   })
 
   it('mostra a verdade econômica da venda da fração', () => {
@@ -143,4 +145,88 @@ describe('AssetDetailDrawer corporate lifecycle', () => {
     expect(screen.queryByText(/Eventos corporativos/)).toBeNull()
     expect(screen.queryByText(/Fração vendida/)).toBeNull()
   })
+
+  it('renderiza fundamentos específicos para ETF sem métricas irrelevantes de ações', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    mocks.enrichment = {
+      ticker: 'BOVA11',
+      asset_class: 'ETF',
+      coverage_status: 'FULL',
+      fii_indicators: null,
+      stock_fundamentals: null,
+      etf_indicators: {
+        symbol: 'BOVA11',
+        benchmark: 'Índice Bovespa (IBOV)',
+        expense_ratio: 0.1,
+        manager: 'BlackRock (iShares)',
+        dividend_policy: 'Reinvestimento Automático de Proventos',
+        dividend_yield: null,
+        net_assets: 12000000000,
+        category: 'Renda Variável Brasil',
+      },
+      dividend_history: [],
+    }
+
+    render(<AssetDetailDrawer asset={{ ...asset, ticker: 'BOVA11', asset_type: 'ETF_NACIONAL' }} portfolioId={15} onClose={vi.fn()} />)
+
+    // Clica na aba Fundamentos
+    fireEvent.click(screen.getByText('Fundamentos & Imóveis'))
+
+    expect(screen.getByText('Características do Fundo de Índice (ETF)')).toBeTruthy()
+    expect(screen.getByText('Índice Bovespa (IBOV)')).toBeTruthy()
+    expect(screen.getByText('BlackRock (iShares)')).toBeTruthy()
+    expect(screen.getByText('0,10% a.a.')).toBeTruthy()
+    // Garante que métricas corporativas de ações não são exibidas
+    expect(screen.queryByText('P/L (Preço / Lucro)')).toBeNull()
+    expect(screen.queryByText('Margem Líquida')).toBeNull()
+    expect(screen.queryByText('Dívida Líquida')).toBeNull()
+  })
+
+  it('renderiza histórico de proventos declarados na aba de fundamentos', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    mocks.enrichment = {
+      ticker: 'PETR4',
+      asset_class: 'ACAO',
+      coverage_status: 'FULL',
+      fii_indicators: null,
+      stock_fundamentals: {
+        pe: 4.5,
+        pb: 1.1,
+        dividend_yield: 12.5,
+        eps: 8.2,
+        market_cap: 500000000000,
+        net_revenue: 400000000000,
+        net_income: 100000000000,
+        ebitda: 150000000000,
+        net_margin: 25.0,
+        roe: 28.0,
+        net_debt: 200000000000,
+      },
+      dividend_history: [
+        {
+          payment_date: '2026-05-20',
+          record_date: '2026-04-15',
+          ex_date: '2026-04-16',
+          type: 'DIVIDENDO',
+          value: 1.35,
+        },
+      ],
+      dividend_metrics: {
+        total_paid_12m: 1.35,
+        payments_count_12m: 1,
+        last_payment_date: '2026-05-20',
+        frequency: 'Eventual',
+      },
+    }
+
+    render(<AssetDetailDrawer asset={{ ...asset, ticker: 'PETR4', asset_type: 'ACAO' }} portfolioId={15} onClose={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('Fundamentos & Imóveis'))
+
+    expect(screen.getByText('Histórico de Proventos Declarados')).toBeTruthy()
+    expect(screen.getByText('Últimas distribuições de dividendos, JCP ou rendimentos por cota')).toBeTruthy()
+    expect(screen.getByText('1 proventos')).toBeTruthy()
+    expect(screen.getByText('Eventual')).toBeTruthy()
+  })
+
 })

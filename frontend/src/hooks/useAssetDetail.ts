@@ -163,15 +163,64 @@ export interface InternationalProfile {
   strong_sell: number | null
 }
 
+export interface DividendHistoryItem {
+  payment_date: string | null
+  record_date: string | null
+  ex_date: string | null
+  type: string
+  value: number
+  gross_value?: number | null
+}
+
+export interface DividendMetrics {
+  total_paid_12m: number
+  payments_count_12m: number
+  last_payment_date: string | null
+  frequency: string
+  dy_12m?: number | null
+}
+
+export interface ETFIndicators {
+  symbol: string
+  benchmark: string | null
+  expense_ratio: number | null
+  manager: string | null
+  administrator?: string | null
+  dividend_policy: string | null
+  dividend_yield: number | null
+  net_assets: number | null
+  category: string | null
+  description?: string | null
+}
+
+export interface BDRIndicators {
+  symbol: string
+  underlying_ticker: string | null
+  underlying_company: string | null
+  origin_market: string | null
+  origin_currency: string | null
+  depositary_bank: string | null
+  ratio: string | null
+  dividend_yield: number | null
+  pe?: number | null
+  market_cap_usd?: number | null
+  description?: string | null
+}
+
 export interface AssetEnrichment {
   ticker: string
+  asset_class?: string
   coverage_status: string
   capabilities?: Record<string, boolean>
   fii_indicators: FIIIndicators | null
   stock_fundamentals: StockFundamentals | null
+  etf_indicators?: ETFIndicators | null
+  bdr_indicators?: BDRIndicators | null
   crypto_indicators?: CryptoIndicators | null
   treasury_indicators?: TreasuryIndicators | null
   international_profile?: InternationalProfile | null
+  dividend_history?: DividendHistoryItem[]
+  dividend_metrics?: DividendMetrics | null
 }
 
 export interface AssetPortfolioPositionInsight {

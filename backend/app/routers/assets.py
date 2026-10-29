@@ -496,6 +496,7 @@ async def get_macro_series(
 async def get_asset_enrichment(
     ticker: str,
     asset_type: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Retorna dados fundamentalistas/operacionais enriquecidos e status de cobertura (Issue #130)."""
@@ -503,7 +504,7 @@ async def get_asset_enrichment(
     if not _SAFE_TICKER_RE.fullmatch(clean_ticker):
         raise HTTPException(status_code=400, detail="Ticker invalido")
     from app.services.asset_enrichment_service import asset_enrichment_service
-    return await asset_enrichment_service.get_asset_enrichment(clean_ticker, asset_type=asset_type)
+    return await asset_enrichment_service.get_asset_enrichment(clean_ticker, asset_type=asset_type, db=db)
 
 
 @router.get("/csv-template", tags=["csv-import"])
