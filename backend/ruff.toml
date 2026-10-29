@@ -1,0 +1,25 @@
+# Configuração do Linter Ruff espelhando as diretrizes canônicas de .flake8
+line-length = 120
+target-version = "py312"
+exclude = [
+    ".git",
+    "alembic/versions",
+    ".venv",
+    "venv",
+    "__pycache__",
+]
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line too long (controlado pelo formatter)
+    "E221",  # multiple spaces before operator
+    "E241",  # multiple spaces after comma
+    "E402",  # module level import not at top of file
+    "E741",  # ambiguous variable name
+]
+
+[lint.per-file-ignores]
+"app/models/*.py" = ["F821", "F401"]
+"app/models/base.py" = ["F401"]
+"tests/**" = ["F401", "F841", "W291", "W292", "W293", "E302", "E303", "E261", "E231"]

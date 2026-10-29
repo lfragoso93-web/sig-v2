@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import SYSTEM_CLOCK, Clock
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction
 from app.services.canonical_dividend_aggregation_service import (
@@ -57,6 +58,7 @@ async def backfill_canonical_snapshots_with_returns(
     *,
     end_date: date | None = None,
     commit: bool = True,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> int:
     """Reconstrói snapshots canônicos até ``end_date`` usando apenas dados persistidos.
 
@@ -77,7 +79,7 @@ async def backfill_canonical_snapshots_with_returns(
         await load_portfolio_dividend_entitlements(db, portfolio_id)
     )
 
-    upper_bound = end_date or date.today()
+    upper_bound = end_date or clock.today()
     start = transactions[0].date
 
     previous_value = _ZERO

@@ -155,7 +155,11 @@ cd backend
 ..\.venv\Scripts\python.exe -m flake8 app --max-line-length=120 --extend-ignore=E501,E221 --per-file-ignores="app/models/*.py:F821,F401" --jobs=1
 ```
 
-> **Nota sobre o Ruff:** O Ruff está instalado no ambiente e referenciado no `Makefile`, porém não possui arquivo de configuração dedicado (`ruff.toml` / `pyproject.toml`) no backend. O linter canônico do pipeline de integração contínua é o **Flake8** com as diretrizes acima.
+> **Nota sobre o Ruff:** O arquivo de configuração canônico `backend/ruff.toml` está ativo e espelha integralmente a política do `.flake8`. Para linting ultrarrápido em desenvolvimento local ou no pre-commit, execute:
+> ```powershell
+> cd backend
+> ..\.venv\Scripts\python.exe -m ruff check app tests
+> ```
 
 ### 7.4 Compilação de Bytecode
 
