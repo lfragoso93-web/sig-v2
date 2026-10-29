@@ -81,6 +81,7 @@ jobs:
 
             echo "==> Rebuildando imagens e atualizando backend e frontend..."
             COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
+            docker ps -a --format '{{.Names}}' | grep -E '_sig-v2-(backend|frontend)-1$' | xargs -r docker rm -f
             docker compose ${COMPOSE_FILES} up -d --build backend frontend
 
             echo "==> Aguardando estabilização dos serviços..."
