@@ -31,7 +31,6 @@ def test_codeql_portfolio_fallback_logs_sanitize_context_and_reason() -> None:
     assert source.count("sanitize_log_value(exc)") >= 2
 
 
-
 def test_codeql_fixed_income_fallback_logs_sanitize_external_values() -> None:
     source = (
         BACKEND_ROOT / "app/services/fixed_income_valuation_service.py"
@@ -161,3 +160,21 @@ def test_codeql_brapi_logs_sanitize_external_values() -> None:
     assert "from app.core.log_safety import sanitize_log_value" in source
     assert "sanitize_log_value(ticker)" in source
     assert "sanitize_log_value(e)" in source
+
+
+def test_codeql_brapi_v2_fii_treasury_crypto_logs_sanitize_external_values() -> None:
+    v2_source = (
+        BACKEND_ROOT / "app/integrations/brapi_v2_client.py"
+    ).read_text(encoding="utf-8")
+    assert v2_source.count("sanitize_log_value(symbol)") >= 2
+
+    treasury_source = (
+        BACKEND_ROOT / "app/integrations/brapi_treasury.py"
+    ).read_text(encoding="utf-8")
+    assert "from app.core.log_safety import sanitize_log_value" in treasury_source
+    assert "sanitize_log_value(invalid[:10])" in treasury_source
+
+    crypto_source = (
+        BACKEND_ROOT / "app/integrations/brapi_crypto_catalog.py"
+    ).read_text(encoding="utf-8")
+    assert crypto_source.count("sanitize_log_value(clean_coin)") >= 2

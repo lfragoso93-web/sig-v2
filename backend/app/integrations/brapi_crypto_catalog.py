@@ -60,7 +60,7 @@ async def fetch_crypto_catalog_all(limit: int = 500) -> list[dict]:
                 resp.raise_for_status()
                 raw_data = resp.json()
         except Exception as exc:
-            logger.error("[market_data] /v2/crypto/available page=%d: %s", page, exc)
+            logger.error("[market_data] /v2/crypto/available page=%d: %s", page, sanitize_log_value(exc))
             break
 
         raw_count = 0
@@ -177,7 +177,7 @@ async def fetch_crypto_quote_and_metrics(coin: str) -> Optional[dict[str, Any]]:
                     market_cap_rank = raw_rank
                 break
     except Exception as exc:
-        logger.debug("[crypto] CoinGecko rank ranking indisponível para %s: %s", clean_coin, exc)
+        logger.debug("[crypto] CoinGecko rank ranking indisponível para %s: %s", sanitize_log_value(clean_coin), sanitize_log_value(exc))
 
     return {
         "coin": clean_coin,

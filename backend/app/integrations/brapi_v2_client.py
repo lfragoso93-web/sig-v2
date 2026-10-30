@@ -569,7 +569,7 @@ class BrapiV2Client:
             if isinstance(fiis_list, list) and fiis_list and isinstance(fiis_list[0], dict):
                 fii_entry = fiis_list[0]
         except (BrapiV2Error, Exception) as exc:
-            logger.debug("Endpoint /v2/fii/indicators indisponivel para %s: %s", symbol, exc)
+            logger.debug("Endpoint /v2/fii/indicators indisponivel para %s: %s", sanitize_log_value(symbol), sanitize_log_value(exc))
 
         # Se encontrou no endpoint v2 de FIIs, tenta tambem /v2/fii/properties para vacancia e imoveis
         if fii_entry is not None:
@@ -585,7 +585,7 @@ class BrapiV2Client:
                 if isinstance(props_fiis, list) and props_fiis and isinstance(props_fiis[0], dict):
                     fii_props_entry = props_fiis[0]
             except Exception as exc:
-                logger.debug("Endpoint /v2/fii/properties indisponivel para %s: %s", symbol, exc)
+                logger.debug("Endpoint /v2/fii/properties indisponivel para %s: %s", sanitize_log_value(symbol), sanitize_log_value(exc))
 
             props_summary = fii_props_entry.get("summary", {}) if isinstance(fii_props_entry, dict) else {}
 

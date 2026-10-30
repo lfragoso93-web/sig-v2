@@ -27,6 +27,7 @@ from typing import Any, Iterable, Optional
 import httpx
 
 from app.core.config import settings
+from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -415,7 +416,7 @@ async def _fetch_tesouro_transparente_list(client: httpx.AsyncClient) -> list[di
         resp.raise_for_status()
         urls = _resource_candidates(resp.json())
     except Exception as exc:
-        logger.info("[treasury] Tesouro Transparente indisponível para catálogo: %s", exc)
+        logger.info("[treasury] Tesouro Transparente indisponível para catálogo: %s", sanitize_log_value(exc))
         return []
 
     for url in urls[:3]:
@@ -427,7 +428,7 @@ async def _fetch_tesouro_transparente_list(client: httpx.AsyncClient) -> list[di
                 logger.info("[treasury] Tesouro Transparente retornou %d títulos", len(items))
                 return items
         except Exception as exc:
-            logger.info("[treasury] falha ao ler recurso Tesouro Transparente %s: %s", url, exc)
+            logger.info("[treasury] falha ao ler recurso Tesouro Transparente %s: %s", sanitize_log_value(url), sanitize_log_value(exc))
     return []
 
 
@@ -461,7 +462,7 @@ async def fetch_treasury_list(
         try:
             brapi_items = await _fetch_brapi_treasury_list(client, indexer=indexer, coupon_type=coupon_type)
         except Exception as exc:
-            logger.warning("[treasury] BRAPI list falhou: %s", exc)
+            logger.warning("[treasury] BRAPI list falhou: %s", sanitize_log_value(exc))
 
         if not indexer and not coupon_type:
             transparente_items = await _fetch_tesouro_transparente_list(client)
@@ -521,7 +522,7 @@ async def fetch_treasury_indicators(symbols: Iterable[str]) -> dict[str, dict]:
                 logger.info(
                     "[treasury] indicators em lote falhou para %d símbolos; tentando individualmente: %s",
                     len(chunk),
-                    exc,
+                    sanitize_log_value(exc),
                 )
                 for symbol in chunk:
                     try:
@@ -541,7 +542,7 @@ async def fetch_treasury_indicators(symbols: Iterable[str]) -> dict[str, dict]:
                     result[returned_symbol] = item
 
     if invalid:
-        logger.info("[treasury] %d symbols sem indicators na BRAPI: %s", len(invalid), invalid[:10])
+        logger.info("[treasury] %d symbols sem indicators na BRAPI: %s", len(invalid), sanitize_log_value(invalid[:10]))
     return result
 
 
@@ -583,7 +584,7 @@ async def fetch_treasury_history(
                 response.raise_for_status()
                 items = _items_from_payload(response.json())
             except Exception as exc:
-                logger.info("[treasury] history em lote falhou para %d símbolos; tentando individualmente: %s", len(chunk), exc)
+                logger.info("[treasury] history em lote falhou para %d símbolos; tentando individualmente: %s", len(chunk), sanitize_log_value(exc))
                 items = []
                 for symbol in chunk:
                     try:
