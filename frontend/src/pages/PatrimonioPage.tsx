@@ -834,13 +834,6 @@ export default function PatrimonioPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Patrimônio</h1>
-          <p className="page-subtitle">Valuation intradiário, consolidação por classe, metas e posições</p>
-        </div>
-      </div>
-
       {/* Bloco 1: KPIs de Resumo Patrimonial */}
       <div className="kpi-grid">
         {loadingSummary ? (

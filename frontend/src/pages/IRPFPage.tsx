@@ -683,14 +683,8 @@ export default function IRPFPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">IRPF</h1>
-          <p className="page-subtitle">Relatório fiscal consolidado de investimentos para declaração anual</p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Caixa de seleção de Ano-base moderna */}
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        {/* Caixa de seleção de Ano-base moderna */}
           <div
             className="inline-flex items-center rounded-lg px-2.5 gap-2"
             style={{
@@ -765,7 +759,6 @@ export default function IRPFPage() {
             <Download size={13} />
             {downloadingCSV ? 'Gerando...' : 'Exportar CSV'}
           </button>
-        </div>
       </div>
 
       {/* KPIs Fiscais Anuais */}

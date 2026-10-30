@@ -116,7 +116,6 @@ describe('MetasPage', () => {
     mockSelectedPortfolioId = 10
     renderComponent()
 
-    expect(screen.getByText('Metas')).toBeDefined()
     expect(screen.getByText('Nova meta')).toBeDefined()
     expect(screen.getByText('Metas ativas')).toBeDefined()
 

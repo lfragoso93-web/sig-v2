@@ -8,7 +8,6 @@ import {
   useDeleteTransaction,
   type Transaction,
 } from '@/hooks/useTransactions'
-import { usePortfolios } from '@/hooks/usePortfolios'
 import { formatBRL, fmtMoney, formatDate, assetBadgeClass } from '@/utils/format'
 import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
 import AssetDetailDrawer from '@/components/portfolio/AssetDetailDrawer'
@@ -299,7 +298,6 @@ function ClassSection({
 
 export default function Transacoes() {
   const { selectedPortfolioId, openTransactionModal } = useAppStore()
-  const { data: portfolios = [] } = usePortfolios()
   const [searchParams] = useSearchParams()
 
   const [search, setSearch]     = useState(() => searchParams.get('ticker') ?? '')
@@ -367,20 +365,8 @@ export default function Transacoes() {
     )
   }
 
-  const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
-
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Transações</h1>
-          <p className="page-subtitle">
-            {portfolioName} · {totalRecords} registro{totalRecords !== 1 ? 's' : ''}
-            {search && <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)' }}>Filtrado: {search.toUpperCase()}</span>}
-          </p>
-        </div>
-      </div>
-
       <div className="card p-4">
         <div className="flex items-center gap-2 mb-3"><BarChart2 size={16} className="text-brand-400" /><span className="section-card-title">Consolidação de aportes</span></div>
         <div className="h-56"><TransactionsBarChart transactions={globalTransactions} /></div>

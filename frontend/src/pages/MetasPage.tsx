@@ -726,11 +726,7 @@ export default function MetasPage() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Metas</h1>
-          <p className="page-subtitle">Acompanhe objetivos de patrimônio, renda, rentabilidade e alocação por classe.</p>
-        </div>
+      <div className="flex items-center justify-end">
         <button type="button" onClick={openCreate} className="btn btn-primary">
           <Plus size={16} />
           Nova meta

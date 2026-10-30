@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react'
-import { Calculator, CircleHelp, TrendingUp } from 'lucide-react'
+import { CircleHelp, TrendingUp } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -93,19 +93,6 @@ export default function IncomeCalculatorPage() {
 
   return (
     <div className="page-container">
-      <header className="page-header">
-        <div>
-          <h1 className="page-title">Calculadora de rendimentos</h1>
-          <p className="page-subtitle">
-            Simule aportes e crescimento composto com as premissas que você informar.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
-          <Calculator size={15} aria-hidden="true" />
-          Simulação independente da carteira
-        </div>
-      </header>
-
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]" aria-label="Premissas e projeção">
         <div className="card flex flex-col gap-5 p-4 sm:p-5">
           <div>

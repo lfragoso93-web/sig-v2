@@ -877,19 +877,6 @@ export default function AnalisePage() {
 
   return (
     <div className="page-container flex flex-col gap-6">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title flex items-center gap-2">
-            <PieChart size={24} style={{ color: 'var(--color-primary)' }} />
-            Análise de Carteira & IA
-          </h1>
-          <p className="page-subtitle">
-            {analysis.portfolio_name} · Diagnóstico determinístico por classe, síntese explicativa e rebalanceamento
-          </p>
-        </div>
-      </div>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard

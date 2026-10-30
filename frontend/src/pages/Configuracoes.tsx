@@ -642,13 +642,6 @@ export default function Configuracoes() {
 
   return (
     <div className="page-container settings-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Configurações</h1>
-          <p className="page-subtitle">Gerencie seu perfil, segurança, carteiras e parâmetros do sistema</p>
-        </div>
-      </div>
-
       <Tabs active={activeTab} onChange={handleTabChange} />
 
       <div className="settings-content">

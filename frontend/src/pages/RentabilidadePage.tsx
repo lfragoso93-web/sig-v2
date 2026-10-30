@@ -294,19 +294,6 @@ export default function RentabilidadePage() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Rentabilidade</h1>
-          <p className="page-subtitle">TWR fechado, resultados financeiros e benchmarks</p>
-        </div>
-        {performanceReference && (
-          <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
-            Performance até {performanceReference}
-            {kpis?.return_is_estimated ? ' · estimada' : ''}
-          </span>
-        )}
-      </div>
-
       {loadingKpis ? (
         <div className="kpi-grid">
           {[...Array(4)].map((_, i) => (

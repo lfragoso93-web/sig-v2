@@ -265,9 +265,7 @@ describe('AnalisePage determinismo e inteligência artificial (Issues #360 e #36
     currentSimulationData = null
     renderWithProviders()
 
-    expect(screen.getByText(/Análise de Carteira/i)).toBeDefined()
     expect(screen.getByText('85/100')).toBeDefined()
-    expect(screen.getByText(/Diagnóstico determinístico por classe/i)).toBeDefined()
     expect(screen.getByText('Síntese Executiva & Postura Estratégica')).toBeDefined()
     expect(screen.getByText('Equilibrada com foco em proventos')).toBeDefined()
     expect(screen.getByText('Pontos Fortes Observados')).toBeDefined()

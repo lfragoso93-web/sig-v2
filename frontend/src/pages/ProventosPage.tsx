@@ -111,13 +111,6 @@ export default function ProventosPage() {
 
   return (
     <div className="page-container proventos-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Proventos</h1>
-          <p className="page-subtitle">Eventos recebidos e a receber, com Data Com, Data Ex e pagamento.</p>
-        </div>
-      </div>
-
       <div className="kpi-grid proventos-kpi-grid">
         {loadingSummary && [...Array(4)].map((_, i) => (
           <div key={i} data-testid="proventos-kpi-loading" className="card h-24 skeleton rounded" />
