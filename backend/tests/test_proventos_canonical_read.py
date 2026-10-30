@@ -134,10 +134,12 @@ async def test_list_preserves_public_shape_without_legacy_dividend_rows(
 ):
     result = await list_items(object(), 1)
 
-    assert result["total"] == 3
-    assert {item["id"] for item in result["items"]} == {1, 2, 3}
+    # Only eligible cash events are listed: non-cash (3) and ambiguous (4)
+    # entitlements are excluded from the public list.
+    assert result["total"] == 2
+    assert {item["id"] for item in result["items"]} == {1, 2}
     assert all("quantity" in item for item in result["items"])
-    assert all(item["id"] != 4 for item in result["items"])
+    assert all(item["is_cash"] for item in result["items"])
 
 
 @pytest.mark.asyncio
