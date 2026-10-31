@@ -38,12 +38,12 @@ Get-Content -Raw "caminho\para\chave.key" | gh secret set OCI_SSH_KEY
 
 ## 3. Como o Deploy Automático Funciona
 
-1. Quando há um merge/push na `main` (e o workflow `SIG v2 CI/CD` conclui com sucesso), ou quando acionado manualmente via `workflow_dispatch`:
-2. O job `Rebuild and Deploy on OCI via SSH` conecta na VM em `/opt/sig-v2` (ou `/opt/sgi-v2`).
-3. Executa `git fetch` e `git pull --ff-only` da branch alvo.
-4. Atualiza `APP_COMMIT_SHA` no arquivo `.env` com o hash exato do commit.
-5. Executa `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build`.
-6. Executa `sh scripts/oci_smoke_test.sh`, verificando:
+1. Todo push em `main` inicia `SIG v2 CI/CD`, inclusive commits apenas de documentação.
+2. Quando essa execução termina com sucesso e foi iniciada por `push` em `main`, `Deploy to OCI Production` conecta à VM via SSH. Execuções manuais do CI não iniciam deploy.
+3. O deploy fixa a branch `main`, atualiza o checkout e exige que o HEAD corresponda ao SHA exato aprovado pela execução de CI. Alterações rastreadas locais interrompem o deploy; artefatos não versionados ficam preservados.
+4. Compose usa o projeto `sig-v2` explicitamente, mesmo quando o diretório de entrada é um symlink, e atualiza `APP_COMMIT_SHA` no `.env`.
+5. As imagens backend e frontend são construídas em sequência. Containers antigos não são removidos antes do rebuild; `up -d --no-deps` recria apenas os serviços da aplicação.
+6. O deploy valida a saúde dos serviços e executa `sh scripts/oci_smoke_test.sh`, verificando:
    - `/health` respondendo HTTP 200;
    - PostgreSQL e Redis saudáveis (`pg_isready` e `PONG`);
    - Cloudflare Tunnel ativo e sem vazamento de credenciais;
@@ -51,9 +51,7 @@ Get-Content -Raw "caminho\para\chave.key" | gh secret set OCI_SSH_KEY
 
 ---
 
-## 4. Disparo Manual pelo GitHub
+## 4. Execuções manuais
 
-Para disparar o deploy de qualquer branch (`stable-15jun` ou `main`) manualmente pela interface web:
-1. No GitHub, acesse a aba **Actions**.
-2. Selecione **Deploy to OCI Production** no menu lateral esquerdo.
-3. Clique em **Run workflow**, informe a branch desejada e confirme em **Run workflow**.
+A execução manual de `SIG v2 CI/CD` roda validações, mas não dispara deploy. Produção atualiza somente após um push em `main` cujo workflow de CI conclua com sucesso.
+

@@ -7,16 +7,12 @@ name: SIG v2 CI/CD
 #
 # Nota: desativado em commits intermediários de branches/PRs (ex.: stable-15jun)
 # para evitar consumo desnecessário de minutos do GitHub Actions no plano gratuito.
-# paths-ignore: commits que alteram apenas docs/markdown não consomem minutos.
+# A CI roda em todo push para main para que qualquer merge passe pelo mesmo gate
+# antes de o workflow de deploy ser acionado.
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
     branches: ["main"]
-    paths-ignore:
-      - "**.md"
-      - ".github/dependabot.yml"
-      - ".github/dependency-review-config.yml"
-      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -344,3 +340,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-frontend.sarif
+
