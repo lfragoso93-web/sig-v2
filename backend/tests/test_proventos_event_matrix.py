@@ -74,9 +74,8 @@ async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
     assert summary["eventos_nao_cash"] == 2
     assert history == []
     assert distribution == []
-    assert items["total"] == 2
-    assert {item["dividend_type"] for item in items["items"]} == {
-        DividendType.BONIFICACAO,
-        DividendType.SUBSCRICAO,
-    }
-    assert all(item["is_cash"] is False for item in items["items"])
+    # Non-cash events stay visible in the summary count, but the public list
+    # contains only eligible cash events.
+    assert items["total"] == 0
+    assert items["items"] == []
+

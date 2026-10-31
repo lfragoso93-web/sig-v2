@@ -2,9 +2,7 @@ name: Deploy to OCI Production
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
-# • workflow_run (SIG v2 CI/CD na branch main) → executa somente se o CI for aprovado
-# • push na stable-15jun ou main               → opcional via dispatch manual
-# • workflow_dispatch                          → disparo manual via interface do GitHub
+# • workflow_run (push em main) → executa somente para o SHA aprovado pelo CI
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   workflow_run:
@@ -12,38 +10,39 @@ on:
     branches: ["main"]
     types:
       - completed
-  workflow_dispatch:
-    inputs:
-      target_branch:
-        description: "Branch para deploy no OCI"
-        required: true
-        default: "stable-15jun"
-
 concurrency:
   group: deploy-oci-production
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     name: Rebuild and Deploy on OCI via SSH
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' }}
     steps:
       - name: Deploy and Rebuild SGI v2 Stack via SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'main' }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         with:
           host: ${{ secrets.OCI_HOST }}
           username: ${{ secrets.OCI_USER }}
           key: ${{ secrets.OCI_SSH_KEY }}
           port: ${{ secrets.OCI_SSH_PORT || 22 }}
-          envs: TARGET_BRANCH
+          envs: TARGET_SHA
           command_timeout: 25m
           script_stop: true
           script: |
             set -eu
+
+            TARGET_BRANCH="main"
 
             if [ -d "/opt/sig-v2" ]; then
               DEPLOY_DIR="/opt/sig-v2"
@@ -60,7 +59,21 @@ jobs:
             echo " Branch alvo: ${TARGET_BRANCH}"
             echo "=========================================================="
 
-            cd "${DEPLOY_DIR}"
+            # Resolve /opt/sgi-v2 symlinks before invoking Compose so its
+            # project identity matches the already-running production stack.
+            cd -P "${DEPLOY_DIR}"
+
+            compose() {
+              docker compose -p sig-v2 \
+                -f docker-compose.yml \
+                -f docker-compose.prod.yml \
+                -f docker-compose.oci.yml "$@"
+            }
+
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "[deploy-oci] ERRO: tracked local changes prevent deployment." >&2
+              exit 1
+            fi
 
             echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
             git fetch origin "${TARGET_BRANCH}"
@@ -68,6 +81,10 @@ jobs:
             git pull --ff-only origin "${TARGET_BRANCH}"
 
             APP_COMMIT_SHA="$(git rev-parse HEAD)"
+            if [ "${APP_COMMIT_SHA}" != "${TARGET_SHA}" ]; then
+              echo "[deploy-oci] ERRO: main HEAD does not match the CI-approved SHA." >&2
+              exit 1
+            fi
             echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
 
             if [ -f .env ]; then
@@ -80,31 +97,31 @@ jobs:
             fi
 
             echo "==> Rebuildando imagens sequencialmente (otimizado para 1 OCPU)..."
-            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
-            docker ps -a --format '{{.Names}}' | grep -E '_sig-v2-(backend|frontend)-1$' | xargs -r docker rm -f
-            docker compose ${COMPOSE_FILES} build backend
-            docker compose ${COMPOSE_FILES} build frontend
+            compose build backend
+            compose build frontend
 
             echo "==> Atualizando containers backend e frontend..."
-            docker compose ${COMPOSE_FILES} up -d --no-deps backend
-            docker compose ${COMPOSE_FILES} up -d --no-deps frontend
+            compose up -d --no-deps backend
+            compose up -d --no-deps frontend
 
             echo "==> Aguardando estabilização do backend..."
             for i in $(seq 1 15); do
-              if docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+              if compose exec -T backend curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
                 break
               fi
               sleep 2
             done
 
             echo "==> Validando saúde dos serviços..."
-            docker compose ${COMPOSE_FILES} ps
-            docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health
+            compose ps
+            compose exec -T backend curl -fsS http://localhost:8000/health
             echo ""
-            docker compose ${COMPOSE_FILES} exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
-            docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping | grep -q PONG
+            compose exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
+            compose exec -T redis redis-cli ping | grep -q PONG
+            sh scripts/oci_smoke_test.sh
 
             echo "=========================================================="
             echo " Deploy e rebuild concluídos com sucesso no OCI!"
             echo " Runtime SHA: ${APP_COMMIT_SHA}"
             echo "=========================================================="
+
