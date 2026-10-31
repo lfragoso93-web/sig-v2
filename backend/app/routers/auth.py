@@ -1,6 +1,6 @@
 """Rotas de autenticacao, seguranca, OAuth e MFA do SGI v2."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -86,21 +86,26 @@ async def register(
 async def request_password_reset(
     request: Request,
     data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Inicia recuperacao de senha apenas para usuarios existentes e envia link por e-mail."""
+    """Responde de forma uniforme e envia o link em background quando elegivel."""
     ip_address, user_agent = _extract_request_metadata(request)
-    await auth_service.forgot_password(
+    reset_token = await auth_service.forgot_password(
         db,
         data.email,
         ip_address=ip_address,
         user_agent=user_agent,
     )
     await db.commit()
+    if reset_token:
+        background_tasks.add_task(
+            auth_service.send_password_reset_email_safely,
+            data.email,
+            reset_token,
+        )
     return ForgotPasswordResponse(
-        message=(
-            "Instrucoes de recuperacao foram enviadas para o seu e-mail."
-        ),
+        message="Se houver uma conta ativa para este e-mail, enviaremos instrucoes de recuperacao.",
         reset_token=None,
     )
 

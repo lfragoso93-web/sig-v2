@@ -258,17 +258,15 @@ class TestAuthMfaAndOAuthFlows:
         assert "UserPassword" in resource_types
 
     @pytest.mark.asyncio
-    async def test_forgot_password_rejects_nonexistent_user_without_sending_email(
+    async def test_forgot_password_returns_same_outcome_for_nonexistent_user(
         self, db: AsyncSession
     ):
         with patch(
             "app.services.auth_service.send_password_reset_email",
             new_callable=AsyncMock,
         ) as mock_send:
-            with pytest.raises(HTTPException) as exc_info:
-                await auth_service.forgot_password(
-                    db, "nao_existe_jamais@sgi.com"
-                )
-            assert exc_info.value.status_code == 404
-            assert "Nenhuma conta ativa" in exc_info.value.detail
+            result = await auth_service.forgot_password(
+                db, "nao_existe_jamais@sgi.com"
+            )
+            assert result is None
             mock_send.assert_not_awaited()

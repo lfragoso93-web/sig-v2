@@ -396,8 +396,8 @@ async def forgot_password(
     *,
     ip_address: str | None = None,
     user_agent: str | None = None,
-) -> str:
-    """Valida existencia do usuario, gera token de uso unico e dispara e-mail via Brevo."""
+) -> str | None:
+    """Gera token de uso unico; retorna None sem revelar contas inexistentes."""
     email_clean = email.strip().lower()
     user = await get_user_by_email(db, email_clean)
     if not user or not user.is_active:
@@ -406,10 +406,7 @@ async def forgot_password(
             sanitize_log_value(email_clean),
             sanitize_log_value(ip_address or "unknown"),
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Nenhuma conta ativa encontrada com este e-mail.",
-        )
+        return None
 
     reset_token = create_access_token(
         subject=str(user.id),
@@ -436,15 +433,18 @@ async def forgot_password(
             sanitize_log_value(exc),
         )
 
+    return reset_token
+
+
+async def send_password_reset_email_safely(email: str, reset_token: str) -> None:
+    """Deliver reset email outside the request while keeping failures sanitized."""
     try:
-        await send_password_reset_email(user.email, reset_token)
+        await send_password_reset_email(email, reset_token)
     except Exception as exc:
         logger.error(
-            "Erro ao enviar email de reset para usuario id=%s: %s",
-            user.id,
+            "Erro ao enviar email de reset: %s",
             sanitize_log_value(exc),
         )
-    return reset_token
 
 
 async def reset_password(
