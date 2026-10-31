@@ -2,15 +2,13 @@ name: SIG v2 CI/CD
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
-# • push main        → quality + security + build + publish + scans (após merge)
-# • workflow_dispatch→ execução manual sob demanda
-#
-# Nota: desativado em commits intermediários de branches/PRs (ex.: stable-15jun)
-# para evitar consumo desnecessário de minutos do GitHub Actions no plano gratuito.
-# A CI roda em todo push para main para que qualquer merge passe pelo mesmo gate
-# antes de o workflow de deploy ser acionado.
+# • pull_request main → quality + security + build antes do merge
+# • push main         → quality + security + build após o merge; deploy aguarda sucesso
+# • workflow_dispatch → execução manual de validação, sem deploy automático
 # ─────────────────────────────────────────────────────────────────────────────
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main"]
   workflow_dispatch:
@@ -183,7 +181,7 @@ jobs:
     name: Dependency audit – Python (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
 
@@ -205,7 +203,7 @@ jobs:
     name: Dependency audit – Node.js (npm audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
 
