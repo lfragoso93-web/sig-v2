@@ -54,4 +54,3 @@ Get-Content -Raw "caminho\para\chave.key" | gh secret set OCI_SSH_KEY
 ## 4. Execuções manuais
 
 A execução manual de `SIG v2 CI/CD` roda validações, mas não dispara deploy. Produção atualiza somente após um push em `main` cujo workflow de CI conclua com sucesso.
-
