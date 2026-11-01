@@ -119,8 +119,8 @@ def start_scheduler() -> None:
         )
 
         async with distributed_job_lock(
-            job_name="update_crypto_quotes_offhours",
-            period="hourly",
+            job_name="update_quotes_intraday",
+            period="intraday",
             ttl_seconds=7200,
         ) as acquired:
             if not acquired:

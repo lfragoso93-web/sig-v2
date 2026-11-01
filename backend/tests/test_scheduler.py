@@ -200,8 +200,8 @@ async def test_crypto_offhours_quotes_skip_work_when_distributed_lock_is_refused
     @asynccontextmanager
     async def refused_lock(**kwargs):
         assert kwargs == {
-            "job_name": "update_crypto_quotes_offhours",
-            "period": "hourly",
+            "job_name": "update_quotes_intraday",
+            "period": "intraday",
             "ttl_seconds": 7200,
         }
         yield False
