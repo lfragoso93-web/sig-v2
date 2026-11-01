@@ -242,3 +242,18 @@ def test_backup_branch_guard_explicitly_allows_main_and_dev_branch() -> None:
         'if [ "${PREDEPLOY_BRANCH}" != "main" ] && '
         '[ "${PREDEPLOY_BRANCH}" != "stable-15jun" ]; then'
     ) in source
+
+
+def test_backend_health_wait_is_embedded_as_one_ssh_safe_python_command() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    payloads = re.findall(
+        r"base64\\.b64decode\\('([A-Za-z0-9+/=]+)'\\)", source
+    )
+    decoded = [base64.b64decode(payload).decode("ascii") for payload in payloads]
+    health_wait = next(payload for payload in decoded if "urlopen(" in payload)
+
+    compile(health_wait, "<oci-health-wait>", "exec")
+    assert "range(15)" in health_wait
+    assert "time.sleep(2)" in health_wait
+    assert "for i in $(seq 1 15)" not in source
+    assert not any("<<" in line for line in source.splitlines())
