@@ -89,7 +89,7 @@ jobs:
             # point at PostgreSQL data, certification artifacts, or app files.
             DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
             PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
-            compose exec -T --user 0 backend python - /app/artifacts <<'PY'
+            compose exec -T --user 0 backend python -c '
             import os
             import sys
             from pathlib import Path
@@ -117,7 +117,7 @@ jobs:
             os.chown(root, 1000, 1000)
             if os.name == "posix":
                 root.chmod(0o700)
-            PY
+            ' /app/artifacts
             PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
             if [ "${PREDEPLOY_ROOT_REAL}" != "${PREDEPLOY_ROOT_EXPECTED}" ]; then
               echo "[deploy-oci] ERRO: diretório dedicado de backup resolve para fora do caminho esperado." >&2
@@ -146,7 +146,7 @@ jobs:
 
             # Rotate only after the new dump passes the canonical artifact
             # validator. The backend user removes only direct child run-* dirs.
-            compose exec -T backend python - "${PREDEPLOY_RUN_ID}" <<'PY'
+            compose exec -T backend python -c '
             from pathlib import Path
             import shutil
             import sys
@@ -163,7 +163,7 @@ jobs:
                     if resolved_candidate.parent != resolved_root:
                         raise SystemExit("refusing to remove backup outside dedicated root")
                     shutil.rmtree(candidate)
-            PY
+            ' "\${PREDEPLOY_RUN_ID}"
 
             echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
             git fetch origin "${TARGET_BRANCH}"
