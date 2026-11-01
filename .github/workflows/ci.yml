@@ -60,7 +60,8 @@ jobs:
 
           lines = Path(".github/workflows/deploy-oci.yml").read_text(encoding="utf-8").splitlines()
           start = next(i for i, line in enumerate(lines) if line.strip() == "script: |")
-          indent = len(lines[start + 1]) - len(lines[start + 1].lstrip())
+          first_content = next(line for line in lines[start + 1:] if line.strip())
+          indent = len(first_content) - len(first_content.lstrip())
           script = []
           for line in lines[start + 1:]:
               if not line.strip():
