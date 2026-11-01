@@ -85,39 +85,13 @@ jobs:
             fi
 
             # Keep automated pre-deploy dumps in a dedicated host directory.
+            # Python helpers below stay on one physical command line because
+            # the pinned SSH action appends status guards after command lines.
             # Resolve and compare the path before any cleanup so it cannot
             # point at PostgreSQL data, certification artifacts, or app files.
             DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
             PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
-            compose exec -T --user 0 backend python - /app/artifacts <<'PY'
-            import os
-            import sys
-            from pathlib import Path
-
-            parent = Path(sys.argv[1])
-            if (
-                not parent.is_absolute()
-                or parent.is_symlink()
-                or not parent.is_dir()
-                or parent.resolve(strict=True) != parent
-            ):
-                raise SystemExit("artifact mount is not the expected directory")
-
-            root = parent / "oci-predeploy-backups"
-            if root.is_symlink() or (root.exists() and not root.is_dir()):
-                raise SystemExit("pre-deploy backup path is not a regular directory")
-            root.mkdir(
-                mode=0o700 if os.name == "posix" else 0o777,
-                exist_ok=True,
-            )
-            if root.is_symlink() or root.resolve(strict=True) != root:
-                raise SystemExit(
-                    "pre-deploy backup path resolves outside its dedicated root"
-                )
-            os.chown(root, 1000, 1000)
-            if os.name == "posix":
-                root.chmod(0o700)
-            PY
+            compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zLHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKcGFyZW50PVBhdGgoc3lzLmFyZ3ZbMV0pCmlmIG5vdCBwYXJlbnQuaXNfYWJzb2x1dGUoKSBvciBwYXJlbnQuaXNfc3ltbGluaygpIG9yIG5vdCBwYXJlbnQuaXNfZGlyKCkgb3IgcGFyZW50LnJlc29sdmUoc3RyaWN0PVRydWUpIT1wYXJlbnQ6IHJhaXNlIFN5c3RlbUV4aXQoImFydGlmYWN0IG1vdW50IGlzIG5vdCB0aGUgZXhwZWN0ZWQgZGlyZWN0b3J5IikKcm9vdD1wYXJlbnQvIm9jaS1wcmVkZXBsb3ktYmFja3VwcyIKaWYgcm9vdC5pc19zeW1saW5rKCkgb3IgKHJvb3QuZXhpc3RzKCkgYW5kIG5vdCByb290LmlzX2RpcigpKTogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCnJvb3QubWtkaXIobW9kZT0wbzcwMCBpZiBvcy5uYW1lPT0icG9zaXgiIGVsc2UgMG83NzcsZXhpc3Rfb2s9VHJ1ZSkKaWYgcm9vdC5pc19zeW1saW5rKCkgb3Igcm9vdC5yZXNvbHZlKHN0cmljdD1UcnVlKSE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcm9vdCIpCm9zLmNob3duKHJvb3QsMTAwMCwxMDAwKQppZiBvcy5uYW1lPT0icG9zaXgiOiByb290LmNobW9kKDBvNzAwKQ=='))" /app/artifacts
             PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
             if [ "${PREDEPLOY_ROOT_REAL}" != "${PREDEPLOY_ROOT_EXPECTED}" ]; then
               echo "[deploy-oci] ERRO: diretório dedicado de backup resolve para fora do caminho esperado." >&2
@@ -146,24 +120,7 @@ jobs:
 
             # Rotate only after the new dump passes the canonical artifact
             # validator. The backend user removes only direct child run-* dirs.
-            compose exec -T backend python - "${PREDEPLOY_RUN_ID}" <<'PY'
-            from pathlib import Path
-            import shutil
-            import sys
-
-            root = Path("/app/artifacts/oci-predeploy-backups")
-            keep = sys.argv[1]
-            resolved_root = root.resolve(strict=True)
-            if resolved_root != root:
-                raise SystemExit("pre-deploy backup root resolves outside its dedicated path")
-            for candidate in root.iterdir():
-                if (candidate.name.startswith("run-") and candidate.name != keep
-                        and not candidate.is_symlink() and candidate.is_dir()):
-                    resolved_candidate = candidate.resolve(strict=True)
-                    if resolved_candidate.parent != resolved_root:
-                        raise SystemExit("refusing to remove backup outside dedicated root")
-                    shutil.rmtree(candidate)
-            PY
+            compose exec -T backend python -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBzaHV0aWwsc3lzCnJvb3Q9UGF0aCgiL2FwcC9hcnRpZmFjdHMvb2NpLXByZWRlcGxveS1iYWNrdXBzIikKa2VlcD1zeXMuYXJndlsxXQpyZXNvbHZlZF9yb290PXJvb3QucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKaWYgcmVzb2x2ZWRfcm9vdCE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcm9vdCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcGF0aCIpCmZvciBjYW5kaWRhdGUgaW4gcm9vdC5pdGVyZGlyKCk6CiBpZiBjYW5kaWRhdGUubmFtZS5zdGFydHN3aXRoKCJydW4tIikgYW5kIGNhbmRpZGF0ZS5uYW1lIT1rZWVwIGFuZCBub3QgY2FuZGlkYXRlLmlzX3N5bWxpbmsoKSBhbmQgY2FuZGlkYXRlLmlzX2RpcigpOgogIHJlc29sdmVkX2NhbmRpZGF0ZT1jYW5kaWRhdGUucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKICBpZiByZXNvbHZlZF9jYW5kaWRhdGUucGFyZW50IT1yZXNvbHZlZF9yb290OiByYWlzZSBTeXN0ZW1FeGl0KCJyZWZ1c2luZyB0byByZW1vdmUgYmFja3VwIG91dHNpZGUgZGVkaWNhdGVkIHJvb3QiKQogIHNodXRpbC5ybXRyZWUoY2FuZGlkYXRlKQ=='))" "${PREDEPLOY_RUN_ID}"
 
             echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
             git fetch origin "${TARGET_BRANCH}"
