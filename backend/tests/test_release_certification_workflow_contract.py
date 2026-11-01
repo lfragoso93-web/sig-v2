@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-oci.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_production_release_certification_is_after_ci_and_smoke_gates() -> None:
@@ -145,9 +146,11 @@ def test_ambiguous_commit_is_not_reported_as_zero_writes(
     assert payload["plan_event_key"] == "release-event-uncertain"
 
 
-def test_backup_branch_case_arm_contains_a_valid_noop_command() -> None:
+
+def test_backup_branch_guard_explicitly_allows_main_and_dev_branch() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
 
     assert (
-        "main|stable-15jun)\n                :\n                ;;" in source
-    )
+        'if [ "${PREDEPLOY_BRANCH}" != "main" ] && '
+        '[ "${PREDEPLOY_BRANCH}" != "stable-15jun" ]; then'
+    ) in source
