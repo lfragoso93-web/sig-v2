@@ -296,6 +296,7 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     assert "umask 077" in smoke
     assert 'trap \'rm -f -- "${CLOUDFLARED_LOG}" "${CLOUDFLARED_SANITIZED_LOG}"\' EXIT' in smoke
 
+
 def test_env_identity_persistence_uses_one_ssh_safe_python_command(tmp_path, monkeypatch) -> None:
     import sys
 
