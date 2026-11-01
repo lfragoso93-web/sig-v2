@@ -94,17 +94,13 @@ jobs:
               else:
                   break
 
-          # appleboy/ssh-action appends a shell status guard after every
-          # submitted script line; verify those guards cannot enter Python stdin.
-          assert not re.search(r"python\s+-\s", "\n".join(script))
-          assert "<<'PY'" not in "\n".join(script)
-          deployed = "\n".join(
-              f"{line}\nDRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
-              "if [ $DRONE_SSH_PREV_COMMAND_EXIT_CODE -ne 0 ]; then "
-              "exit $DRONE_SSH_PREV_COMMAND_EXIT_CODE; fi;"
-              for line in script
-          )
-          subprocess.run(["bash", "-n"], input=deployed, text=True, check=True)
+          # Heredoc bodies can consume the action's injected status guard as input.
+          # Keep remote Python payloads encoded on one shell command line.
+          script_text = "\\n".join(script)
+          assert not re.search(r"<<\\s*['\\"]", script_text)
+          assert not re.search(r"python\\s+-\\s", script_text)
+          assert not any("python -c '" in line for line in script)
+          subprocess.run(["bash", "-n"], input=script_text, text=True, check=True)
           PY
 
       - name: Install dependencies
