@@ -22,6 +22,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    user: "${CLOUDFLARED_UID:-1000}"
     environment:
       TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
     secrets:
