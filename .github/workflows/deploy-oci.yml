@@ -146,24 +146,7 @@ jobs:
 
             # Rotate only after the new dump passes the canonical artifact
             # validator. The backend user removes only direct child run-* dirs.
-            compose exec -T backend python -c '
-            from pathlib import Path
-            import shutil
-            import sys
-
-            root = Path("/app/artifacts/oci-predeploy-backups")
-            keep = sys.argv[1]
-            resolved_root = root.resolve(strict=True)
-            if resolved_root != root:
-                raise SystemExit("pre-deploy backup root resolves outside its dedicated path")
-            for candidate in root.iterdir():
-                if (candidate.name.startswith("run-") and candidate.name != keep
-                        and not candidate.is_symlink() and candidate.is_dir()):
-                    resolved_candidate = candidate.resolve(strict=True)
-                    if resolved_candidate.parent != resolved_root:
-                        raise SystemExit("refusing to remove backup outside dedicated root")
-                    shutil.rmtree(candidate)
-            ' "\${PREDEPLOY_RUN_ID}"
+            compose exec -T backend python -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBzaHV0aWwsc3lzCnJvb3Q9UGF0aCgiL2FwcC9hcnRpZmFjdHMvb2NpLXByZWRlcGxveS1iYWNrdXBzIikKa2VlcD1zeXMuYXJndlsxXQpyZXNvbHZlZF9yb290PXJvb3QucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKaWYgcmVzb2x2ZWRfcm9vdCE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcm9vdCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcGF0aCIpCmZvciBjYW5kaWRhdGUgaW4gcm9vdC5pdGVyZGlyKCk6CiBpZiBjYW5kaWRhdGUubmFtZS5zdGFydHN3aXRoKCJydW4tIikgYW5kIGNhbmRpZGF0ZS5uYW1lIT1rZWVwIGFuZCBub3QgY2FuZGlkYXRlLmlzX3N5bWxpbmsoKSBhbmQgY2FuZGlkYXRlLmlzX2RpcigpOgogIHJlc29sdmVkX2NhbmRpZGF0ZT1jYW5kaWRhdGUucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKICBpZiByZXNvbHZlZF9jYW5kaWRhdGUucGFyZW50IT1yZXNvbHZlZF9yb290OiByYWlzZSBTeXN0ZW1FeGl0KCJyZWZ1c2luZyB0byByZW1vdmUgYmFja3VwIG91dHNpZGUgZGVkaWNhdGVkIHJvb3QiKQogIHNodXRpbC5ybXRyZWUoY2FuZGlkYXRlKQ=='))" "${PREDEPLOY_RUN_ID}"
 
             echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
             git fetch origin "${TARGET_BRANCH}"
