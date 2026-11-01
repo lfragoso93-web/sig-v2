@@ -96,9 +96,9 @@ jobs:
 
           # Heredoc bodies can consume the action's injected status guard as input.
           # Keep remote Python payloads encoded on one shell command line.
-          script_text = "\\n".join(script)
-          assert not re.search(r"<<\\s*['\\"]", script_text)
-          assert not re.search(r"python\\s+-\\s", script_text)
+          script_text = "\n".join(script)
+          assert "<<" not in script_text
+          assert not re.search(r"python\s+-\s", script_text)
           assert not any("python -c '" in line for line in script)
           subprocess.run(["bash", "-n"], input=script_text, text=True, check=True)
           PY
