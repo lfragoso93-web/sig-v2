@@ -59,3 +59,44 @@ def test_deploy_gate_invokes_release_cli_with_workflow_identity() -> None:
     ):
         assert source.count(option) >= 2
     assert "curl -fsS http://localhost:8000/ready" in source
+
+
+def test_smoke_test_uses_the_same_explicit_compose_project_as_deploy() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "COMPOSE_PROJECT_NAME=sig-v2 sh scripts/oci_smoke_test.sh" in source
+
+
+def test_post_commit_failures_report_persisted_certification_state(
+    monkeypatch, capsys
+) -> None:
+    import json
+
+    import pytest
+
+    from app.cli import real_data_release_certification as cli
+
+    error = cli.RealDataReleasePostCommitError(
+        "report write failed after commit",
+        database_writes_executed=1,
+        event_key="release-event-123",
+    )
+    monkeypatch.setattr(cli.asyncio, "run", lambda _coro: (_ for _ in ()).throw(error))
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(
+            [
+                "--expected-sha", "a" * 40,
+                "--workflow-run-id", "12345",
+                "--workflow-run-conclusion", "success",
+                "--workflow-run-event", "push",
+                "--workflow-run-branch", "main",
+                "--report-file", "/tmp/release-report.json",
+            ]
+        )
+
+    assert raised.value.code == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["database_writes_executed"] == 1
+    assert payload["transaction_committed"] is True
+    assert payload["plan_event_key"] == "release-event-123"
