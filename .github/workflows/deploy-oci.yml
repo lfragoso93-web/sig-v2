@@ -84,12 +84,34 @@ jobs:
               exit 1
             fi
 
+            # Pass the Tunnel credential through a mode-restricted file secret.
+            # cloudflared logs its TUNNEL_TOKEN environment setting on startup.
+            if [ ! -f .env ]; then
+              echo "[deploy-oci] ERRO: .env de produção não encontrado." >&2
+              exit 1
+            fi
+            DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
+            CLOUDFLARED_TOKEN_DIR="${DEPLOY_DIR_REAL}/.cloudflared"
+            CLOUDFLARED_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"
+            if [ -L "${CLOUDFLARED_TOKEN_DIR}" ] || [ -L "${CLOUDFLARED_TOKEN_FILE}" ]; then
+              echo "[deploy-oci] ERRO: caminho inseguro para o arquivo de token Cloudflare." >&2
+              exit 1
+            fi
+            mkdir -p -- "${CLOUDFLARED_TOKEN_DIR}"
+            chmod 700 "${CLOUDFLARED_TOKEN_DIR}"
+            CLOUDFLARED_TOKEN_TMP="$(mktemp "${CLOUDFLARED_TOKEN_DIR}/tunnel-token.XXXXXX")"
+            trap 'rm -f -- "${CLOUDFLARED_TOKEN_TMP}"' EXIT
+            awk -F= 'BEGIN { count = 0 } /^CLOUDFLARE_TUNNEL_TOKEN=/ { count++; token = substr($0, index($0, "=") + 1) } END { if (count != 1 || length(token) < 100) exit 1; print token }' .env > "${CLOUDFLARED_TOKEN_TMP}"
+            chmod 600 "${CLOUDFLARED_TOKEN_TMP}"
+            mv -f -- "${CLOUDFLARED_TOKEN_TMP}" "${CLOUDFLARED_TOKEN_FILE}"
+            trap - EXIT
+            export CLOUDFLARE_TUNNEL_TOKEN_FILE="${CLOUDFLARED_TOKEN_FILE}"
+
             # Keep automated pre-deploy dumps in a dedicated host directory.
             # Python helpers below stay on one physical command line because
             # the pinned SSH action appends status guards after command lines.
             # Resolve and compare the path before any cleanup so it cannot
             # point at PostgreSQL data, certification artifacts, or app files.
-            DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
             PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
             compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zLHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKcGFyZW50PVBhdGgoc3lzLmFyZ3ZbMV0pCmlmIG5vdCBwYXJlbnQuaXNfYWJzb2x1dGUoKSBvciBwYXJlbnQuaXNfc3ltbGluaygpIG9yIG5vdCBwYXJlbnQuaXNfZGlyKCkgb3IgcGFyZW50LnJlc29sdmUoc3RyaWN0PVRydWUpIT1wYXJlbnQ6IHJhaXNlIFN5c3RlbUV4aXQoImFydGlmYWN0IG1vdW50IGlzIG5vdCB0aGUgZXhwZWN0ZWQgZGlyZWN0b3J5IikKcm9vdD1wYXJlbnQvIm9jaS1wcmVkZXBsb3ktYmFja3VwcyIKaWYgcm9vdC5pc19zeW1saW5rKCkgb3IgKHJvb3QuZXhpc3RzKCkgYW5kIG5vdCByb290LmlzX2RpcigpKTogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCnJvb3QubWtkaXIobW9kZT0wbzcwMCBpZiBvcy5uYW1lPT0icG9zaXgiIGVsc2UgMG83NzcsZXhpc3Rfb2s9VHJ1ZSkKaWYgcm9vdC5pc19zeW1saW5rKCkgb3Igcm9vdC5yZXNvbHZlKHN0cmljdD1UcnVlKSE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcm9vdCIpCm9zLmNob3duKHJvb3QsMTAwMCwxMDAwKQppZiBvcy5uYW1lPT0icG9zaXgiOiByb290LmNobW9kKDBvNzAwKQ=='))" /app/artifacts
             PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
@@ -149,6 +171,7 @@ jobs:
             echo "==> Atualizando containers backend e frontend..."
             compose up -d --no-deps backend
             compose up -d --no-deps frontend
+            compose up -d --no-deps cloudflared
 
             echo "==> Aguardando estabilização do backend..."
             compose exec -T backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IHRpbWUKZnJvbSB1cmxsaWIucmVxdWVzdCBpbXBvcnQgdXJsb3Blbgpmb3IgYXR0ZW1wdCBpbiByYW5nZSgxNSk6CiAgICB0cnk6CiAgICAgICAgd2l0aCB1cmxvcGVuKCJodHRwOi8vMTI3LjAuMC4xOjgwMDAvaGVhbHRoIiwgdGltZW91dD0yKSBhcyByZXNwb25zZToKICAgICAgICAgICAgaWYgcmVzcG9uc2Uuc3RhdHVzID09IDIwMDoKICAgICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigiYmFja2VuZCBoZWFsdGggZW5kcG9pbnQgcmV0dXJuZWQgYSBub24tMjAwIHJlc3BvbnNlIikKICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgaWYgYXR0ZW1wdCA9PSAxNDoKICAgICAgICAgICAgcmFpc2UKICAgICAgICB0aW1lLnNsZWVwKDIpCmVsc2U6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJiYWNrZW5kIGRpZCBub3QgYmVjb21lIGhlYWx0aHkiKQ=='))"
