@@ -37,8 +37,27 @@ docker compose $COMPOSE_FILES logs --tail=120 cloudflared >/tmp/sgi-cloudflared.
 sed -E 's/(token[=:])[[:space:]]*\*+/\1<masked>/Ig; s/(CLOUDFLARE_TUNNEL_TOKEN=)\*+/\1<masked>/g; s/INF \+[A-Za-z0-9_-]{80,}\+/INF +<precheck-border>+/g' \
   /tmp/sgi-cloudflared.log >/tmp/sgi-cloudflared.sanitized.log
 
-if grep -E "CLOUDFLARE_TUNNEL_TOKEN=[^[:space:]]+|[A-Za-z0-9_-]{80,}" /tmp/sgi-cloudflared.sanitized.log >/dev/null; then
-  fail "cloudflared logs may contain token-like content"
+TOKEN_PATTERN="CLOUDFLARE_TUNNEL_TOKEN=[^[:space:]]+|[A-Za-z0-9_-]{80,}"
+if grep -E "$TOKEN_PATTERN" /tmp/sgi-cloudflared.sanitized.log >/dev/null; then
+  # Report only metadata for manual diagnosis; never print a candidate value.
+  grep -nEo "$TOKEN_PATTERN" /tmp/sgi-cloudflared.sanitized.log | awk -F: '
+    {
+      line_number = $1
+      candidate = $0
+      sub(/^[^:]*:/, "", candidate)
+      count = split(candidate, characters, "")
+      for (i = 1; i <= count; i++) {
+        if (!(characters[i] in seen)) {
+          seen[characters[i]] = 1
+          unique_count++
+        }
+      }
+      printf "[oci-smoke-test] token-like candidate line=%s length=%d unique_chars=%d plus=%d hyphen=%d spaces=%d eyJ_prefix=%d\\n", line_number, length(candidate), unique_count, index(candidate, "+") > 0, index(candidate, "-") > 0, candidate ~ /[[:space:]]/, candidate ~ /^eyJ/
+      delete seen
+      unique_count = 0
+    }
+  ' >&2
+  fail "cloudflared logs may contain token-like content (candidate values suppressed)"
 fi
 ok "cloudflared logs captured without obvious token pattern"
 
