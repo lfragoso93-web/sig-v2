@@ -70,7 +70,7 @@ def test_embedded_backup_initializer_executes_and_chowns_only_dedicated_root(
         script_lines.append(line[12:] if line.startswith("            ") else "")
     else:
         pytest.fail("backup initializer heredoc terminator missing")
-    script = compile("\\n".join(script_lines), "oci-backup-initializer", "exec")
+    script = compile("\n".join(script_lines), "oci-backup-initializer", "exec")
 
     parent = tmp_path / "artifacts"
     parent.mkdir()
@@ -103,6 +103,21 @@ def test_embedded_backup_initializer_executes_and_chowns_only_dedicated_root(
     with pytest.raises(SystemExit, match="artifact mount"):
         exec(script, {"__name__": "__main__"})
     assert not (outside / "oci-predeploy-backups").exists()
+
+    second_parent = tmp_path / "artifacts2"
+    second_parent.mkdir()
+    outside_root = tmp_path / "outside-root"
+    outside_root.mkdir()
+    (outside_root / "keep.txt").write_text("preserve", encoding="utf-8")
+    backup_link = second_parent / "oci-predeploy-backups"
+    try:
+        backup_link.symlink_to(outside_root, target_is_directory=True)
+    except OSError:
+        return
+    monkeypatch.setattr(sys, "argv", ["initializer", str(second_parent)])
+    with pytest.raises(SystemExit, match="regular directory"):
+        exec(script, {"__name__": "__main__"})
+    assert (outside_root / "keep.txt").read_text(encoding="utf-8") == "preserve"
 
 
 def test_deploy_gate_invokes_release_cli_with_workflow_identity() -> None:
