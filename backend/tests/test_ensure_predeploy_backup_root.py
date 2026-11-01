@@ -19,7 +19,7 @@ def test_initializer_assigns_only_the_dedicated_root_to_app_user(
         ownership_changes.append((Path(path), uid, gid))
 
     monkeypatch.setattr(
-        "app.cli.ensure_predeploy_backup_root.os.chown", record_chown
+        "app.cli.ensure_predeploy_backup_root.os.chown", record_chown, raising=False
     )
 
     root = ensure_predeploy_backup_root(parent)
@@ -45,6 +45,7 @@ def test_initializer_rejects_symlink_artifact_mount_without_creating_backup_path
     monkeypatch.setattr(
         "app.cli.ensure_predeploy_backup_root.os.chown",
         lambda *_args: pytest.fail("must not change ownership through a symlink"),
+        raising=False,
     )
 
     with pytest.raises(RuntimeError, match="artifact mount"):
@@ -70,6 +71,7 @@ def test_initializer_rejects_symlink_backup_root_without_chowning_target(
     monkeypatch.setattr(
         "app.cli.ensure_predeploy_backup_root.os.chown",
         lambda *_args: pytest.fail("must not change ownership through a symlink"),
+        raising=False,
     )
 
     with pytest.raises(RuntimeError, match="regular directory"):
