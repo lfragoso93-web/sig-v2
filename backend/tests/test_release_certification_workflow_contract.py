@@ -287,6 +287,7 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     smoke_run = deploy.index("sh scripts/oci_smoke_test.sh")
     assert token_file_ready < first_compose_exec
     assert tunnel_restart < smoke_run
+    assert "compose up -d --no-deps --force-recreate cloudflared" in deploy
     assert "chmod 700" in deploy
     assert 'chmod 400 "${CLOUDFLARED_TOKEN_TMP}"' in deploy
     assert 'export CLOUDFLARED_UID="$(id -u)"' in deploy
