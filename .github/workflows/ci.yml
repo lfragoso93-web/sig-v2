@@ -113,7 +113,7 @@ jobs:
 
           rotation_index = next(i for i, source in enumerate(decoded) if "root.iterdir()" in source)
           rotation_line = next(line for line in script if "base64.b64decode" in line and "PREDEPLOY_RUN_ID" in line)
-          assert '"
+          assert rotation_line.endswith('" "${PREDEPLOY_RUN_ID}"')
           rotation = decoded[rotation_index]
           with tempfile.TemporaryDirectory() as directory:
               root = Path(directory) / "oci-predeploy-backups"
