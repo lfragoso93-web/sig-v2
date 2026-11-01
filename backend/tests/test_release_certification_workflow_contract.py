@@ -38,11 +38,86 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     assert backup < checkout < build
     assert backup < validate_backup < rotate < checkout
     assert "oci-predeploy-backups" in source
+    assert "compose exec -T --user 0 backend python - /app/artifacts <<'PY'" in source
+    assert "chown -R" not in source
     assert 'candidate.name.startswith("run-")' in source
     assert "resolved_candidate.parent != resolved_root" in source
     assert "postgres_data" not in source
     assert "volume prune" not in source
     assert "compose down -v" not in source
+
+
+def test_embedded_backup_initializer_executes_and_chowns_only_dedicated_root(
+    tmp_path, monkeypatch
+) -> None:
+    import os
+    import sys
+
+    import pytest
+
+    source = WORKFLOW.read_text(encoding="utf-8")
+    lines = source.splitlines()
+    start = next(
+        i
+        for i, line in enumerate(lines)
+        if line.strip()
+        == "compose exec -T --user 0 backend python - /app/artifacts <<'PY'"
+    )
+    script_lines = []
+    for line in lines[start + 1 :]:
+        if line == "            PY":
+            break
+        script_lines.append(line[12:] if line.startswith("            ") else "")
+    else:
+        pytest.fail("backup initializer heredoc terminator missing")
+    script = compile("\n".join(script_lines), "oci-backup-initializer", "exec")
+
+    parent = tmp_path / "artifacts"
+    parent.mkdir()
+    ownership_changes = []
+
+    def record_chown(path, uid, gid):
+        ownership_changes.append((Path(path), uid, gid))
+
+    from pathlib import Path
+
+    monkeypatch.setattr(os, "chown", record_chown, raising=False)
+    monkeypatch.setattr(sys, "argv", ["initializer", str(parent)])
+    exec(script, {"__name__": "__main__"})
+
+    root = parent / "oci-predeploy-backups"
+    assert root.is_dir()
+    assert ownership_changes == [(root, 1000, 1000)]
+    if os.name == "posix":
+        assert root.stat().st_mode & 0o777 == 0o700
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link_parent = tmp_path / "artifacts-link"
+    try:
+        link_parent.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        return
+
+    monkeypatch.setattr(sys, "argv", ["initializer", str(link_parent)])
+    with pytest.raises(SystemExit, match="artifact mount"):
+        exec(script, {"__name__": "__main__"})
+    assert not (outside / "oci-predeploy-backups").exists()
+
+    second_parent = tmp_path / "artifacts2"
+    second_parent.mkdir()
+    outside_root = tmp_path / "outside-root"
+    outside_root.mkdir()
+    (outside_root / "keep.txt").write_text("preserve", encoding="utf-8")
+    backup_link = second_parent / "oci-predeploy-backups"
+    try:
+        backup_link.symlink_to(outside_root, target_is_directory=True)
+    except OSError:
+        return
+    monkeypatch.setattr(sys, "argv", ["initializer", str(second_parent)])
+    with pytest.raises(SystemExit, match="regular directory"):
+        exec(script, {"__name__": "__main__"})
+    assert (outside_root / "keep.txt").read_text(encoding="utf-8") == "preserve"
 
 
 def test_deploy_gate_invokes_release_cli_with_workflow_identity() -> None:
