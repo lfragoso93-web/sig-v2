@@ -101,6 +101,37 @@ jobs:
           assert not re.search(r"python\s+-\s", script_text)
           assert not any("python -c '" in line for line in script)
           subprocess.run(["bash", "-n"], input=script_text, text=True, check=True)
+          import base64
+          import sys
+          import tempfile
+
+          payloads = re.findall(r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", script_text)
+          assert len(payloads) == 2
+          decoded = [base64.b64decode(payload).decode("ascii") for payload in payloads]
+          for source in decoded:
+              compile(source, "<oci-deploy-python>", "exec")
+
+          rotation_index = next(i for i, source in enumerate(decoded) if "root.iterdir()" in source)
+          rotation_line = next(line for line in script if "base64.b64decode" in line and "PREDEPLOY_RUN_ID" in line)
+          assert '"\${PREDEPLOY_RUN_ID}"' in rotation_line
+          rotation = decoded[rotation_index]
+          with tempfile.TemporaryDirectory() as directory:
+              root = Path(directory) / "oci-predeploy-backups"
+              root.mkdir()
+              (root / "run-old").mkdir()
+              (root / "run-current").mkdir()
+              outside = Path(directory) / "outside"
+              outside.mkdir()
+              (root / "run-linked").symlink_to(outside, target_is_directory=True)
+              rotation = rotation.replace(
+                  '"/app/artifacts/oci-predeploy-backups"', repr(str(root))
+              )
+              sys.argv = ["-c", "run-current"]
+              exec(compile(rotation, "<oci-backup-rotation>", "exec"), {})
+              assert not (root / "run-old").exists()
+              assert (root / "run-current").is_dir()
+              assert (root / "run-linked").is_symlink()
+              assert outside.is_dir()
           PY
 
       - name: Install dependencies
