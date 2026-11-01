@@ -280,7 +280,7 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     assert "env_file:" not in compose
     assert "TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN" not in compose
 
-    token_file_ready = deploy.index('CLOUDFLARE_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"')
+    token_file_ready = deploy.index('CLOUDFLARED_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"')
     first_compose_exec = deploy.index("compose exec -T --user 0 backend python -c")
     tunnel_restart = deploy.index("compose up -d --no-deps cloudflared")
     smoke_run = deploy.index("sh scripts/oci_smoke_test.sh")
