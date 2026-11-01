@@ -52,7 +52,7 @@ if grep -E "$TOKEN_PATTERN" /tmp/sgi-cloudflared.sanitized.log >/dev/null; then
           unique_count++
         }
       }
-      printf "[oci-smoke-test] token-like candidate line=%s length=%d unique_chars=%d plus=%d hyphen=%d spaces=%d eyJ_prefix=%d\\n", line_number, length(candidate), unique_count, index(candidate, "+") > 0, index(candidate, "-") > 0, candidate ~ /[[:space:]]/, candidate ~ /^eyJ/
+      printf "[oci-smoke-test] token-like candidate line=%s length=%d unique_chars=%d plus=%d hyphen=%d spaces=%d eyJ_prefix=%d%c", line_number, length(candidate), unique_count, index(candidate, "+") > 0, index(candidate, "-") > 0, candidate ~ /[[:space:]]/, candidate ~ /^eyJ/, 10
       delete seen
       unique_count = 0
     }
