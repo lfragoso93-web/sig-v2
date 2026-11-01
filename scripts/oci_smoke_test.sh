@@ -45,16 +45,13 @@ if grep -E "$TOKEN_PATTERN" /tmp/sgi-cloudflared.sanitized.log >/dev/null; then
       line_number = $1
       candidate = $0
       sub(/^[^:]*:/, "", candidate)
-      count = split(candidate, characters, "")
-      for (i = 1; i <= count; i++) {
-        if (!(characters[i] in seen)) {
-          seen[characters[i]] = 1
-          unique_count++
-        }
-      }
-      printf "[oci-smoke-test] token-like candidate line=%s length=%d unique_chars=%d plus=%d hyphen=%d spaces=%d eyJ_prefix=%d%c", line_number, length(candidate), unique_count, index(candidate, "+") > 0, index(candidate, "-") > 0, candidate ~ /[[:space:]]/, candidate ~ /^eyJ/, 10
-      delete seen
-      unique_count = 0
+      classes = (candidate ~ /[a-z]/ ? "l" : "-")
+      classes = classes (candidate ~ /[A-Z]/ ? "u" : "-")
+      classes = classes (candidate ~ /[0-9]/ ? "d" : "-")
+      classes = classes (index(candidate, "-") > 0 ? "h" : "-")
+      classes = classes (index(candidate, "_") > 0 ? "u" : "-")
+      classes = classes (index(candidate, "+") > 0 ? "p" : "-")
+      printf "[oci-smoke-test] token-like candidate line=%s length=%d classes=%s eyJ_prefix=%d%c", line_number, length(candidate), classes, candidate ~ /^eyJ/, 10
     }
   ' >&2
   fail "cloudflared logs may contain token-like content (candidate values suppressed)"
