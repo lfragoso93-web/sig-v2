@@ -79,12 +79,186 @@ jobs:
               exit 1
             fi
 
+            if ! printf '%s' "${CI_WORKFLOW_RUN_ID}" | grep -Eq '^[1-9][0-9]*
+
+            # Keep automated pre-deploy dumps in a dedicated host directory.
+            # Resolve and compare the path before any cleanup so it cannot
+            # point at PostgreSQL data, certification artifacts, or app files.
+            DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
+            PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
+            compose exec -T backend python -c \
+              "from pathlib import Path; Path('/app/artifacts/oci-predeploy-backups').mkdir(parents=True, exist_ok=True)"
+            PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
+            if [ "${PREDEPLOY_ROOT_REAL}" != "${PREDEPLOY_ROOT_EXPECTED}" ]; then
+              echo "[deploy-oci] ERRO: diretório dedicado de backup resolve para fora do caminho esperado." >&2
+              exit 1
+            fi
+
+            echo "==> Criando e validando backup da base em execução antes do checkout..."
+            PREDEPLOY_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
+            PREDEPLOY_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
+            if [ "${PREDEPLOY_BRANCH}" != "main" ] && [ "${PREDEPLOY_BRANCH}" != "stable-15jun" ]; then
+              echo "[deploy-oci] ERRO: branch do runtime atual não permitida para backup." >&2
+              exit 1
+            fi
+            if ! printf '%s' "${PREDEPLOY_SHA}" | grep -Eq '^[0-9a-fA-F]{40}$'; then
+              echo "[deploy-oci] ERRO: SHA do runtime atual inválido; backup/deploy abortados." >&2
+              exit 1
+            fi
+            PREDEPLOY_RUN_ID="run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+            compose exec -T backend python -m app.cli.pre_prod_backup \
+              --artifact-root /app/artifacts/oci-predeploy-backups \
+              --run-id "${PREDEPLOY_RUN_ID}" \
+              --branch "${PREDEPLOY_BRANCH}" \
+              --commit-sha "${PREDEPLOY_SHA}" > /dev/null
+            compose exec -T backend python -m app.cli.real_data_dataset_identity \
+              --artifact-directory "/app/artifacts/oci-predeploy-backups/${PREDEPLOY_RUN_ID}" > /dev/null
+
+            # Rotate only after the new dump passes the canonical artifact
+            # validator. The backend user removes only direct child run-* dirs.
+            compose exec -T backend python - "${PREDEPLOY_RUN_ID}" <<'PY'
+            from pathlib import Path
+            import shutil
+            import sys
+
+            root = Path("/app/artifacts/oci-predeploy-backups")
+            keep = sys.argv[1]
+            resolved_root = root.resolve(strict=True)
+            if resolved_root != root:
+                raise SystemExit("pre-deploy backup root resolves outside its dedicated path")
+            for candidate in root.iterdir():
+                if (candidate.name.startswith("run-") and candidate.name != keep
+                        and not candidate.is_symlink() and candidate.is_dir()):
+                    resolved_candidate = candidate.resolve(strict=True)
+                    if resolved_candidate.parent != resolved_root:
+                        raise SystemExit("refusing to remove backup outside dedicated root")
+                    shutil.rmtree(candidate)
+            PY
+
+            echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
+            git fetch origin "${TARGET_BRANCH}"
+            git checkout "${TARGET_BRANCH}"
+            git pull --ff-only origin "${TARGET_BRANCH}"
+
+            APP_COMMIT_SHA="$(git rev-parse HEAD)"
+            if [ "${APP_COMMIT_SHA}" != "${TARGET_SHA}" ]; then
+              echo "[deploy-oci] ERRO: main HEAD does not match the CI-approved SHA." >&2
+              exit 1
+            fi
+            echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
+
+            if [ ! -f .env ]; then
+              echo "[deploy-oci] ERRO: .env de produção não encontrado." >&2
+              exit 1
+            fi
+
+            export APP_BRANCH="main"
+            export APP_COMMIT_SHA
+
+            echo "==> Rebuildando imagens sequencialmente (otimizado para 1 OCPU)..."
+            compose build backend
+            compose build frontend
+
+            echo "==> Atualizando containers backend e frontend..."
+            compose up -d --no-deps backend
+            compose up -d --no-deps frontend
+
+            echo "==> Aguardando estabilização do backend..."
+            for i in $(seq 1 15); do
+              if compose exec -T backend curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+
+            echo "==> Validando saúde dos serviços..."
+            compose ps
+            compose exec -T backend curl -fsS http://localhost:8000/health
+            echo ""
+            compose exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
+            compose exec -T redis redis-cli ping | grep -q PONG
+            COMPOSE_PROJECT_NAME=sig-v2 sh scripts/oci_smoke_test.sh
+
+            RUNTIME_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
+            RUNTIME_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
+            if [ "${RUNTIME_BRANCH}" != "main" ] || [ "${RUNTIME_SHA}" != "${TARGET_SHA}" ]; then
+              echo "[deploy-oci] ERRO: identidade do container difere do SHA aprovado pelo CI." >&2
+              exit 1
+            fi
+
             case "${CI_WORKFLOW_RUN_ID}" in
               ''|*[!0-9]*)
-                echo "[deploy-oci] ERRO: CI workflow run ID is missing or invalid." >&2
+                echo "[deploy-oci] ERRO: workflow run de CI ausente ou invÃ¡lido." >&2
                 exit 1
                 ;;
             esac
+
+            echo "==> Persistindo a identidade implantada em .env..."
+            ENV_TMP="$(mktemp .env.deploy.XXXXXX)"
+            trap 'rm -f "${ENV_TMP}"' EXIT
+            chmod --reference=.env "${ENV_TMP}"
+            awk -v branch="${APP_BRANCH}" -v sha="${APP_COMMIT_SHA}" '
+              /^APP_BRANCH=/ { if (++branch_count > 1) exit 2; print "APP_BRANCH=" branch; next }
+              /^APP_COMMIT_SHA=/ { if (++sha_count > 1) exit 2; print "APP_COMMIT_SHA=" sha; next }
+              { print }
+              END {
+                if (branch_count == 0) print "APP_BRANCH=" branch
+                if (sha_count == 0) print "APP_COMMIT_SHA=" sha
+              }
+            ' .env > "${ENV_TMP}" || {
+              echo "[deploy-oci] ERRO: entradas de identidade duplicadas em .env." >&2
+              exit 1
+            }
+            mv "${ENV_TMP}" .env
+            trap - EXIT
+
+            echo "==> Certificando automaticamente o SHA aprovado pelo CI..."
+            CERT_REPORT="/app/artifacts/real-data-certification/releases/${TARGET_SHA}.json"
+            CERT_DRY_RUN="/tmp/real-data-release-${TARGET_SHA}.dry-run.json"
+            compose exec -T backend python -m app.cli.real_data_release_certification \
+              --expected-sha "${TARGET_SHA}" \
+              --workflow-run-id "${CI_WORKFLOW_RUN_ID}" \
+              --workflow-run-conclusion "${CI_WORKFLOW_CONCLUSION}" \
+              --workflow-run-event "${CI_WORKFLOW_EVENT}" \
+              --workflow-run-branch "${CI_WORKFLOW_BRANCH}" \
+              --smoke-test-passed \
+              --report-file "${CERT_DRY_RUN}" > /dev/null
+            CERT_MODE="$(compose exec -T backend python -c \
+              "import json; print(json.load(open('${CERT_DRY_RUN}', encoding='utf-8'))['mode'])")"
+            if [ "${CERT_MODE}" = "dry-run" ]; then
+              CERT_CONFIRMATION="$(compose exec -T backend python -c \
+                "import json; print(json.load(open('${CERT_DRY_RUN}', encoding='utf-8'))['plan']['confirmation'])")"
+              if [ -z "${CERT_CONFIRMATION}" ]; then
+                echo "[deploy-oci] ERRO: dry-run nÃ£o emitiu confirmaÃ§Ã£o de certificaÃ§Ã£o." >&2
+                exit 1
+              fi
+              compose exec -T backend python -m app.cli.real_data_release_certification \
+                --expected-sha "${TARGET_SHA}" \
+                --workflow-run-id "${CI_WORKFLOW_RUN_ID}" \
+                --workflow-run-conclusion "${CI_WORKFLOW_CONCLUSION}" \
+                --workflow-run-event "${CI_WORKFLOW_EVENT}" \
+                --workflow-run-branch "${CI_WORKFLOW_BRANCH}" \
+                --smoke-test-passed \
+                --report-file "${CERT_REPORT}" \
+                --execute \
+                --confirmation "${CERT_CONFIRMATION}" > /dev/null
+            elif [ "${CERT_MODE}" != "already-certified" ]; then
+              echo "[deploy-oci] ERRO: modo de certificaÃ§Ã£o inesperado." >&2
+              exit 1
+            fi
+
+            echo "==> Validando prontidÃ£o certificada para o SHA implantado..."
+            compose exec -T backend curl -fsS http://localhost:8000/ready
+            echo ""
+
+            echo "=========================================================="
+            echo " Deploy e rebuild concluídos com sucesso no OCI!"
+            echo " Runtime SHA: ${APP_COMMIT_SHA}"
+            echo "=========================================================="
+; then
+              echo "[deploy-oci] ERRO: CI workflow run ID is missing or invalid." >&2
+              exit 1
+            fi
 
             # Keep automated pre-deploy dumps in a dedicated host directory.
             # Resolve and compare the path before any cleanup so it cannot
