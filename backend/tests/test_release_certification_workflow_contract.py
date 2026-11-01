@@ -143,3 +143,11 @@ def test_ambiguous_commit_is_not_reported_as_zero_writes(
     assert payload["database_writes_executed"] is None
     assert payload["transaction_committed"] is None
     assert payload["plan_event_key"] == "release-event-uncertain"
+
+
+def test_backup_branch_case_arm_contains_a_valid_noop_command() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+
+    assert (
+        "main|stable-15jun)\n                :\n                ;;" in source
+    )

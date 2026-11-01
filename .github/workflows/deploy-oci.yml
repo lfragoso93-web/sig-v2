@@ -103,7 +103,9 @@ jobs:
             PREDEPLOY_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
             PREDEPLOY_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
             case "${PREDEPLOY_BRANCH}" in
-              main|stable-15jun) ;;
+              main|stable-15jun)
+                :
+                ;;
               *)
                 echo "[deploy-oci] ERRO: branch do runtime atual não permitida para backup." >&2
                 exit 1
