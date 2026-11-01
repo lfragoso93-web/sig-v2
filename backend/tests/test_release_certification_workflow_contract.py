@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-oci.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_production_release_certification_is_after_ci_and_smoke_gates() -> None:
@@ -151,3 +152,10 @@ def test_backup_branch_case_arm_contains_a_valid_noop_command() -> None:
     assert (
         "main|stable-15jun)\n                :\n                ;;" in source
     )
+
+
+def test_deploy_script_is_syntax_checked_in_ci() -> None:
+    source = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "Validate OCI deployment script syntax" in source
+    assert 'subprocess.run(["bash", "-n"]' in source
