@@ -237,7 +237,16 @@ async def _main(arguments: argparse.Namespace) -> int:
                 event_key=payload["plan_event_key"],
             ) from exc
         raise
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    try:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    except Exception as exc:
+        if payload.get("transaction_committed"):
+            raise RealDataReleasePostCommitError(
+                "certification event committed, but success output could not be written",
+                database_writes_executed=payload["database_writes_executed"],
+                event_key=payload["plan_event_key"],
+            ) from exc
+        raise
     return 0
 
 
