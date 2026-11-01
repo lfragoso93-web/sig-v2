@@ -64,7 +64,7 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     assert "python - /app/artifacts <<'PY'" not in source
     assert "chown -R" not in source
     assert 'candidate.name.startswith("run-")' in rotation
-    assert "resolved_candidate.parent != resolved_root" in rotation
+    assert "resolved_candidate.parent!=resolved_root" in rotation
     assert ' "${PREDEPLOY_RUN_ID}"' in source
     assert "postgres_data" not in source
     assert "volume prune" not in source
