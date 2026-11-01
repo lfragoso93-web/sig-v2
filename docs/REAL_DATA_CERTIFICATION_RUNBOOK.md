@@ -2,7 +2,7 @@
 
 Issue: #384
 
-Branch obrigatória: `stable-15jun`
+Branch de produção obrigatória: `main`
 
 Última atualização do procedimento: 06/10/2026
 
@@ -22,6 +22,8 @@ se transfere ao runtime atual. A fotografia completa está em
 
 ## Estado e objetivo
 
+A final main SHA does not exist before merge. PR CI validates candidate code; it cannot create runtime certification for a future merge commit. The merge precondition is that this post-deploy release gate is present and passing in CI. After merge, deploy certifies the exact pushed main SHA before reporting success.
+
 Este runbook governa promoção e revogação auditáveis do estado de prontidão
 para dados reais. Ele não executa bootstrap, seed, import, rebuild, migration,
 reconciliação financeira nem escrita no ledger.
@@ -39,8 +41,9 @@ Em 06/10/2026, a promoção autorizada foi persistida para a identidade exata do
 runtime no SHA `3ab054f61e34f440dddf93c170259958243d58af`; o `/ready` retornou
 `200` com `ready_for_real_data=true`, inclusive após restart. A suíte opt-in em
 PostgreSQL 16 efêmero também comprovou concorrência, stale-plan e restart sem
-tocar o banco canônico. Qualquer novo SHA ou dataset exige outro ciclo completo
-de evidência, dry-run, autorização e validação.
+tocar o banco canônico. A cada release de codigo, a automacao cria uma promocao para o SHA exato somente depois de CI aprovado, deploy, smoke test de producao, checks PostgreSQL/Redis, inventario read-only sem bloqueios e uma revisao Alembic unica. O CLI de release gera um dry-run, executa apenas a confirmacao exata desse plano, acrescenta um evento e valida o leitor DB-first antes do workflow terminar com sucesso. O evento anterior e usado somente para ancorar a mesma referencia de dataset; ele nunca certifica o novo SHA.
+
+Se nao houver promocao anterior valida, se o historico estiver revogado/invalido, ou se a referencia do dataset mudar, a automacao para sem escrever. Esses casos exigem o ciclo completo de backup, restore isolado, evidencias e certificacao manual protegida.
 
 Para resolver a identidade, o runtime exige `ENVIRONMENT`, `APP_BRANCH`,
 `APP_COMMIT_SHA` completo e `REAL_DATASET_REFERENCE`; a revision Alembic é lida
@@ -60,7 +63,7 @@ contagens do inventário ou um backup histórico de outro estado do banco.
 - `GO_ASSISTED` não é aceito como `GO`;
 - a identidade inclui ambiente, branch, SHA completo, dataset, revision Alembic,
   gate #227 e PR #362;
-- toda falha deve terminar com `database_writes_executed=0`;
+- coleta de evidencias e dry-run nao escrevem no banco; execucao aprovada acrescenta exatamente um evento de certificacao;
 - o chamador controla o commit; o executor apenas faz `flush`;
 - nunca apagar eventos para desfazer uma decisão.
 
@@ -93,13 +96,13 @@ formal do dataset candidato.
 
 ## Preflight obrigatório
 
-1. confirmar branch `stable-15jun`, SHA local/remoto e working tree limpa;
+1. confirmar branch `main`, SHA de produção aprovado pelo CI e working tree limpa;
 2. registrar ambiente, referência imutável do dataset e revision Alembic;
 3. comprovar que a evidência se refere ao mesmo dataset e ao estado fechado;
 4. confirmar `blockers=[]`, `warnings=[]` e zero escritas na coleta;
 5. garantir que não há writer concorrente não autorizado;
 6. preservar backup/restore e volumes existentes;
-7. anexar o dry-run à #384 antes de solicitar execução real.
+7. No fluxo manual completo, anexar o dry-run a #384 antes de solicitar execucao real. Releases de codigo seguem a automacao post-deploy descrita acima.
 
 OCI/#284 não faz parte do caminho atual.
 
@@ -144,7 +147,7 @@ $Evidence = "/app/artifacts/real-data-certification/evidence.json"
 docker compose exec backend python -m app.cli.real_data_certification `
     --action promote `
     --environment local `
-    --branch stable-15jun `
+    --branch main `
     --commit-sha $CommitSha `
     --dataset-reference $DatasetReference `
     --alembic-revision "ALEMBIC-REVISION" `

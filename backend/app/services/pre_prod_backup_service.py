@@ -83,6 +83,9 @@ def create_run_directory(root: Path, run_id: str | None = None) -> Path:
         directory.mkdir(parents=True, exist_ok=False)
     except FileExistsError as exc:
         raise BackupError(f"diretório de execução já existe: {directory}") from exc
+    # Production backups contain the full financial dataset. Keep each run
+    # private even when the container or host has a permissive default umask.
+    directory.chmod(0o700)
     return directory
 
 

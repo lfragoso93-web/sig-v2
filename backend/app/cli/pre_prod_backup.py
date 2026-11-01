@@ -1,7 +1,7 @@
 """Cria backup auditável da base antes do rebuild pré-produção.
 
 Uso dentro do container backend:
-    python -m app.cli.pre_prod_backup --branch stable-15jun --commit-sha <sha>
+    python -m app.cli.pre_prod_backup --branch <runtime-branch> --commit-sha <sha>
 """
 from __future__ import annotations
 
@@ -65,9 +65,23 @@ def _validate_runtime_commit_sha(expected_sha: str) -> None:
         )
 
 
+def _validate_runtime_branch(expected_branch: str) -> None:
+    runtime_branch = settings.APP_BRANCH.strip()
+    environment = settings.ENVIRONMENT.strip().lower()
+    allowed_branch = "main" if environment == "production" else "stable-15jun"
+    if expected_branch != allowed_branch:
+        raise BackupError(
+            f"backup {environment} deve executar na branch {allowed_branch}"
+        )
+    if runtime_branch != expected_branch:
+        raise BackupError(
+            "APP_BRANCH do runtime diverge da branch informada: "
+            f"runtime={runtime_branch}, esperado={expected_branch}"
+        )
+
+
 async def _main(arguments: argparse.Namespace) -> int:
-    if arguments.branch != "stable-15jun":
-        raise BackupError("backup pré-produção deve executar na branch stable-15jun")
+    _validate_runtime_branch(arguments.branch)
     if not arguments.commit_sha:
         raise BackupError("informe --commit-sha ou PRE_PROD_COMMIT_SHA")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", arguments.commit_sha):
@@ -113,6 +127,9 @@ async def _main(arguments: argparse.Namespace) -> int:
 
 def main() -> None:
     _configure_output()
+    # pg_dump, inventory, and manifests all contain sensitive production data.
+    # The dedicated CLI process can safely tighten its umask for every artifact.
+    os.umask(0o077)
     try:
         exit_code = asyncio.run(_main(_arguments()))
     except KeyboardInterrupt:

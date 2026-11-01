@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import stat
 import subprocess
 
 import pytest
@@ -63,6 +65,8 @@ def test_backup_creates_exclusive_auditable_artifacts(tmp_path: Path) -> None:
     assert len(report.sha256) == 64
     assert report.safety["source_database_writes_executed"] == 0
     assert "secret" not in " ".join(item.command for item in report.commands)
+    if os.name == "posix":
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
 
     with pytest.raises(BackupError, match="já existe"):
         create_postgres_backup(
