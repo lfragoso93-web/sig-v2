@@ -67,3 +67,6 @@ Thumbs.db
 /backend/.test-tmp/
 /backend/pytest-cache-files-*/
 /backend/review-temp/
+
+# OCI-only Cloudflare tunnel credential
+/.cloudflared/
