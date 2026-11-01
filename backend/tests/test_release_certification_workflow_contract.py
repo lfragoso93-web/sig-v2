@@ -38,9 +38,10 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     assert backup < checkout < build
     assert backup < validate_backup < rotate < checkout
     assert "oci-predeploy-backups" in source
-    assert "compose exec -T --user 0 backend python - <<'PY'" in source
-    assert "root.chown(1000, 1000)" in source
-    assert "root.chmod(root.stat().st_mode | 0o700)" in source
+    assert (
+        "compose exec -T --user 0 backend "
+        "python -m app.cli.ensure_predeploy_backup_root"
+    ) in source
     assert "chown -R" not in source
     assert 'candidate.name.startswith("run-")' in source
     assert "resolved_candidate.parent != resolved_root" in source
