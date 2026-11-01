@@ -2,9 +2,7 @@ name: Deploy to OCI Production
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
-# • workflow_run (SIG v2 CI/CD na branch main) → executa somente se o CI for aprovado
-# • push na stable-15jun ou main               → opcional via dispatch manual
-# • workflow_dispatch                          → disparo manual via interface do GitHub
+# • workflow_run (push em main) → executa somente para o SHA aprovado pelo CI
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   workflow_run:
@@ -12,38 +10,43 @@ on:
     branches: ["main"]
     types:
       - completed
-  workflow_dispatch:
-    inputs:
-      target_branch:
-        description: "Branch para deploy no OCI"
-        required: true
-        default: "stable-15jun"
-
 concurrency:
   group: deploy-oci-production
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     name: Rebuild and Deploy on OCI via SSH
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' }}
     steps:
       - name: Deploy and Rebuild SGI v2 Stack via SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.target_branch || 'main' }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          CI_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+          CI_WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          CI_WORKFLOW_EVENT: ${{ github.event.workflow_run.event || '' }}
+          CI_WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch || '' }}
         with:
           host: ${{ secrets.OCI_HOST }}
           username: ${{ secrets.OCI_USER }}
           key: ${{ secrets.OCI_SSH_KEY }}
           port: ${{ secrets.OCI_SSH_PORT || 22 }}
-          envs: TARGET_BRANCH
+          envs: TARGET_SHA,CI_WORKFLOW_RUN_ID,CI_WORKFLOW_CONCLUSION,CI_WORKFLOW_EVENT,CI_WORKFLOW_BRANCH
           command_timeout: 25m
           script_stop: true
           script: |
             set -eu
+
+            TARGET_BRANCH="main"
 
             if [ -d "/opt/sig-v2" ]; then
               DEPLOY_DIR="/opt/sig-v2"
@@ -60,7 +63,87 @@ jobs:
             echo " Branch alvo: ${TARGET_BRANCH}"
             echo "=========================================================="
 
-            cd "${DEPLOY_DIR}"
+            # Resolve /opt/sgi-v2 symlinks before invoking Compose so its
+            # project identity matches the already-running production stack.
+            cd -P "${DEPLOY_DIR}"
+
+            compose() {
+              docker compose -p sig-v2 \
+                -f docker-compose.yml \
+                -f docker-compose.prod.yml \
+                -f docker-compose.oci.yml "$@"
+            }
+
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "[deploy-oci] ERRO: tracked local changes prevent deployment." >&2
+              exit 1
+            fi
+
+            if ! printf '%s' "${CI_WORKFLOW_RUN_ID}" | grep -Eq '^[1-9][0-9]*$'; then
+              echo "[deploy-oci] ERRO: CI workflow run ID is missing or invalid." >&2
+              exit 1
+            fi
+
+            # Pass the Tunnel credential through a mode-restricted file secret.
+            # cloudflared logs its TUNNEL_TOKEN environment setting on startup.
+            if [ ! -f .env ]; then
+              echo "[deploy-oci] ERRO: .env de produção não encontrado." >&2
+              exit 1
+            fi
+            DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
+            export CLOUDFLARED_UID="$(id -u)"
+            CLOUDFLARED_TOKEN_DIR="${DEPLOY_DIR_REAL}/.cloudflared"
+            CLOUDFLARED_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"
+            if [ -L "${CLOUDFLARED_TOKEN_DIR}" ] || [ -L "${CLOUDFLARED_TOKEN_FILE}" ]; then
+              echo "[deploy-oci] ERRO: caminho inseguro para o arquivo de token Cloudflare." >&2
+              exit 1
+            fi
+            mkdir -p -- "${CLOUDFLARED_TOKEN_DIR}"
+            chmod 700 "${CLOUDFLARED_TOKEN_DIR}"
+            CLOUDFLARED_TOKEN_TMP="$(mktemp "${CLOUDFLARED_TOKEN_DIR}/tunnel-token.XXXXXX")"
+            trap 'rm -f -- "${CLOUDFLARED_TOKEN_TMP}"' EXIT
+            env -u CLOUDFLARE_TUNNEL_TOKEN docker compose --env-file .env -f docker-compose.yml config --environment | awk -F= 'BEGIN { count = 0 } $1 == "CLOUDFLARE_TUNNEL_TOKEN" { count++; token = substr($0, index($0, "=") + 1) } END { if (count != 1 || length(token) < 100) exit 1; print token }' > "${CLOUDFLARED_TOKEN_TMP}"
+            chmod 400 "${CLOUDFLARED_TOKEN_TMP}"
+            mv -f -- "${CLOUDFLARED_TOKEN_TMP}" "${CLOUDFLARED_TOKEN_FILE}"
+            trap - EXIT
+            export CLOUDFLARE_TUNNEL_TOKEN_FILE="${CLOUDFLARED_TOKEN_FILE}"
+
+            # Keep automated pre-deploy dumps in a dedicated host directory.
+            # Python helpers below stay on one physical command line because
+            # the pinned SSH action appends status guards after command lines.
+            # Resolve and compare the path before any cleanup so it cannot
+            # point at PostgreSQL data, certification artifacts, or app files.
+            PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
+            compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zLHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKcGFyZW50PVBhdGgoc3lzLmFyZ3ZbMV0pCmlmIG5vdCBwYXJlbnQuaXNfYWJzb2x1dGUoKSBvciBwYXJlbnQuaXNfc3ltbGluaygpIG9yIG5vdCBwYXJlbnQuaXNfZGlyKCkgb3IgcGFyZW50LnJlc29sdmUoc3RyaWN0PVRydWUpIT1wYXJlbnQ6IHJhaXNlIFN5c3RlbUV4aXQoImFydGlmYWN0IG1vdW50IGlzIG5vdCB0aGUgZXhwZWN0ZWQgZGlyZWN0b3J5IikKcm9vdD1wYXJlbnQvIm9jaS1wcmVkZXBsb3ktYmFja3VwcyIKaWYgcm9vdC5pc19zeW1saW5rKCkgb3IgKHJvb3QuZXhpc3RzKCkgYW5kIG5vdCByb290LmlzX2RpcigpKTogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCnJvb3QubWtkaXIobW9kZT0wbzcwMCBpZiBvcy5uYW1lPT0icG9zaXgiIGVsc2UgMG83NzcsZXhpc3Rfb2s9VHJ1ZSkKaWYgcm9vdC5pc19zeW1saW5rKCkgb3Igcm9vdC5yZXNvbHZlKHN0cmljdD1UcnVlKSE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcm9vdCIpCm9zLmNob3duKHJvb3QsMTAwMCwxMDAwKQppZiBvcy5uYW1lPT0icG9zaXgiOiByb290LmNobW9kKDBvNzAwKQ=='))" /app/artifacts
+            PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
+            if [ "${PREDEPLOY_ROOT_REAL}" != "${PREDEPLOY_ROOT_EXPECTED}" ]; then
+              echo "[deploy-oci] ERRO: diretório dedicado de backup resolve para fora do caminho esperado." >&2
+              exit 1
+            fi
+
+            echo "==> Criando e validando backup da base em execução antes do checkout..."
+            PREDEPLOY_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
+            PREDEPLOY_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
+            if [ "${PREDEPLOY_BRANCH}" != "main" ] && [ "${PREDEPLOY_BRANCH}" != "stable-15jun" ]; then
+              echo "[deploy-oci] ERRO: branch do runtime atual não permitida para backup." >&2
+              exit 1
+            fi
+            if ! printf '%s' "${PREDEPLOY_SHA}" | grep -Eq '^[0-9a-fA-F]{40}$'; then
+              echo "[deploy-oci] ERRO: SHA do runtime atual inválido; backup/deploy abortados." >&2
+              exit 1
+            fi
+            PREDEPLOY_RUN_ID="run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+            compose exec -T backend python -m app.cli.pre_prod_backup \
+              --artifact-root /app/artifacts/oci-predeploy-backups \
+              --run-id "${PREDEPLOY_RUN_ID}" \
+              --branch "${PREDEPLOY_BRANCH}" \
+              --commit-sha "${PREDEPLOY_SHA}" > /dev/null
+            compose exec -T backend python -m app.cli.real_data_dataset_identity \
+              --artifact-directory "/app/artifacts/oci-predeploy-backups/${PREDEPLOY_RUN_ID}" > /dev/null
+
+            # Rotate only after the new dump passes the canonical artifact
+            # validator. The backend user removes only direct child run-* dirs.
+            compose exec -T backend python -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBzaHV0aWwsc3lzCnJvb3Q9UGF0aCgiL2FwcC9hcnRpZmFjdHMvb2NpLXByZWRlcGxveS1iYWNrdXBzIikKa2VlcD1zeXMuYXJndlsxXQpyZXNvbHZlZF9yb290PXJvb3QucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKaWYgcmVzb2x2ZWRfcm9vdCE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcm9vdCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcGF0aCIpCmZvciBjYW5kaWRhdGUgaW4gcm9vdC5pdGVyZGlyKCk6CiBpZiBjYW5kaWRhdGUubmFtZS5zdGFydHN3aXRoKCJydW4tIikgYW5kIGNhbmRpZGF0ZS5uYW1lIT1rZWVwIGFuZCBub3QgY2FuZGlkYXRlLmlzX3N5bWxpbmsoKSBhbmQgY2FuZGlkYXRlLmlzX2RpcigpOgogIHJlc29sdmVkX2NhbmRpZGF0ZT1jYW5kaWRhdGUucmVzb2x2ZShzdHJpY3Q9VHJ1ZSkKICBpZiByZXNvbHZlZF9jYW5kaWRhdGUucGFyZW50IT1yZXNvbHZlZF9yb290OiByYWlzZSBTeXN0ZW1FeGl0KCJyZWZ1c2luZyB0byByZW1vdmUgYmFja3VwIG91dHNpZGUgZGVkaWNhdGVkIHJvb3QiKQogIHNodXRpbC5ybXRyZWUoY2FuZGlkYXRlKQ=='))" "${PREDEPLOY_RUN_ID}"
 
             echo "==> Atualizando repositório a partir de origin/${TARGET_BRANCH}..."
             git fetch origin "${TARGET_BRANCH}"
@@ -68,41 +151,98 @@ jobs:
             git pull --ff-only origin "${TARGET_BRANCH}"
 
             APP_COMMIT_SHA="$(git rev-parse HEAD)"
+            if [ "${APP_COMMIT_SHA}" != "${TARGET_SHA}" ]; then
+              echo "[deploy-oci] ERRO: main HEAD does not match the CI-approved SHA." >&2
+              exit 1
+            fi
             echo "==> Commit SHA ativo: ${APP_COMMIT_SHA}"
 
-            if [ -f .env ]; then
-              echo "==> Atualizando APP_COMMIT_SHA no arquivo .env..."
-              if grep -q "^APP_COMMIT_SHA=" .env; then
-                sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
-              else
-                echo "APP_COMMIT_SHA=${APP_COMMIT_SHA}" >> .env
-              fi
+            if [ ! -f .env ]; then
+              echo "[deploy-oci] ERRO: .env de produção não encontrado." >&2
+              exit 1
             fi
 
+            export APP_BRANCH="main"
+            export APP_COMMIT_SHA
+
             echo "==> Rebuildando imagens sequencialmente (otimizado para 1 OCPU)..."
-            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml"
-            docker ps -a --format '{{.Names}}' | grep -E '_sig-v2-(backend|frontend)-1$' | xargs -r docker rm -f
-            docker compose ${COMPOSE_FILES} build backend
-            docker compose ${COMPOSE_FILES} build frontend
+            compose build backend
+            compose build frontend
 
             echo "==> Atualizando containers backend e frontend..."
-            docker compose ${COMPOSE_FILES} up -d --no-deps backend
-            docker compose ${COMPOSE_FILES} up -d --no-deps frontend
+            compose up -d --no-deps backend
+            compose up -d --no-deps frontend
+            compose up -d --no-deps --force-recreate cloudflared
 
             echo "==> Aguardando estabilização do backend..."
-            for i in $(seq 1 15); do
-              if docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
-                break
-              fi
-              sleep 2
-            done
-
+            compose exec -T backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IHRpbWUKZnJvbSB1cmxsaWIucmVxdWVzdCBpbXBvcnQgdXJsb3Blbgpmb3IgYXR0ZW1wdCBpbiByYW5nZSgxNSk6CiAgICB0cnk6CiAgICAgICAgd2l0aCB1cmxvcGVuKCJodHRwOi8vMTI3LjAuMC4xOjgwMDAvaGVhbHRoIiwgdGltZW91dD0yKSBhcyByZXNwb25zZToKICAgICAgICAgICAgaWYgcmVzcG9uc2Uuc3RhdHVzID09IDIwMDoKICAgICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigiYmFja2VuZCBoZWFsdGggZW5kcG9pbnQgcmV0dXJuZWQgYSBub24tMjAwIHJlc3BvbnNlIikKICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgaWYgYXR0ZW1wdCA9PSAxNDoKICAgICAgICAgICAgcmFpc2UKICAgICAgICB0aW1lLnNsZWVwKDIpCmVsc2U6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJiYWNrZW5kIGRpZCBub3QgYmVjb21lIGhlYWx0aHkiKQ=='))"
             echo "==> Validando saúde dos serviços..."
-            docker compose ${COMPOSE_FILES} ps
-            docker compose ${COMPOSE_FILES} exec -T backend curl -fsS http://localhost:8000/health
+            compose ps
+            compose exec -T backend curl -fsS http://localhost:8000/health
             echo ""
-            docker compose ${COMPOSE_FILES} exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
-            docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping | grep -q PONG
+            compose exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
+            compose exec -T redis redis-cli ping | grep -q PONG
+            COMPOSE_PROJECT_NAME=sig-v2 sh scripts/oci_smoke_test.sh
+
+            RUNTIME_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
+            RUNTIME_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
+            if [ "${RUNTIME_BRANCH}" != "main" ] || [ "${RUNTIME_SHA}" != "${TARGET_SHA}" ]; then
+              echo "[deploy-oci] ERRO: identidade do container difere do SHA aprovado pelo CI." >&2
+              exit 1
+            fi
+
+            echo "==> Persistindo a identidade implantada em .env..."
+            ENV_TMP="$(mktemp .env.deploy.XXXXXX)"
+            trap 'rm -f "${ENV_TMP}"' EXIT
+            chmod --reference=.env "${ENV_TMP}"
+            python3 -c "import base64;exec(base64.b64decode('aW1wb3J0IHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKc291cmNlX3BhdGgsIGRlc3RpbmF0aW9uX3BhdGgsIGJyYW5jaCwgc2hhID0gc3lzLmFyZ3ZbMTpdCnZhbHVlcyA9IHsiQVBQX0JSQU5DSCI6IGJyYW5jaCwgIkFQUF9DT01NSVRfU0hBIjogc2hhfQpsaW5lcyA9IFBhdGgoc291cmNlX3BhdGgpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKS5zcGxpdGxpbmVzKCkKc2VlbiA9IHNldCgpCnVwZGF0ZWQgPSBbXQpmb3IgbGluZSBpbiBsaW5lczoKICAgIGtleSwgc2VwYXJhdG9yLCBfID0gbGluZS5wYXJ0aXRpb24oIj0iKQogICAgaWYgc2VwYXJhdG9yIGFuZCBrZXkgaW4gdmFsdWVzOgogICAgICAgIGlmIGtleSBpbiBzZWVuOgogICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCJkdXBsaWNhdGUgcnVudGltZSBpZGVudGl0eSBrZXkgaW4gLmVudiIpCiAgICAgICAgc2Vlbi5hZGQoa2V5KQogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGYie2tleX09e3ZhbHVlc1trZXldfSIpCiAgICBlbHNlOgogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGxpbmUpCmZvciBrZXksIHZhbHVlIGluIHZhbHVlcy5pdGVtcygpOgogICAgaWYga2V5IG5vdCBpbiBzZWVuOgogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGYie2tleX09e3ZhbHVlfSIpClBhdGgoZGVzdGluYXRpb25fcGF0aCkud3JpdGVfdGV4dCgiXG4iLmpvaW4odXBkYXRlZCkgKyAiXG4iLCBlbmNvZGluZz0idXRmLTgiKQ=='))" .env "${ENV_TMP}" "${APP_BRANCH}" "${APP_COMMIT_SHA}" || {
+              echo "[deploy-oci] ERRO: falha ao atualizar identidade em .env." >&2
+              exit 1
+            }
+            mv "${ENV_TMP}" .env
+            trap - EXIT
+
+            echo "==> Preparando diretório privado do relatório de certificação..."
+            compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aApyb290ID0gUGF0aCgiL2FwcC9hcnRpZmFjdHMiKQppZiByb290LmlzX3N5bWxpbmsoKSBvciBub3Qgcm9vdC5pc19kaXIoKSBvciByb290LnJlc29sdmUoc3RyaWN0PVRydWUpICE9IHJvb3Q6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJhcnRpZmFjdCByb290IGlzIG5vdCB0aGUgZXhwZWN0ZWQgbW91bnRlZCBkaXJlY3RvcnkiKQpjZXJ0aWZpY2F0aW9uID0gcm9vdCAvICJyZWFsLWRhdGEtY2VydGlmaWNhdGlvbiIKcmVsZWFzZXMgPSBjZXJ0aWZpY2F0aW9uIC8gInJlbGVhc2VzIgpmb3IgZGlyZWN0b3J5IGluIChjZXJ0aWZpY2F0aW9uLCByZWxlYXNlcyk6CiAgICBpZiBkaXJlY3RvcnkuaXNfc3ltbGluaygpIG9yIChkaXJlY3RvcnkuZXhpc3RzKCkgYW5kIG5vdCBkaXJlY3RvcnkuaXNfZGlyKCkpOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoInJlbGVhc2UgcmVwb3J0IGRpcmVjdG9yeSBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCiAgICBkaXJlY3RvcnkubWtkaXIobW9kZT0wbzcwMCwgZXhpc3Rfb2s9VHJ1ZSkKICAgIGlmIGRpcmVjdG9yeS5yZXNvbHZlKHN0cmljdD1UcnVlKSAhPSBkaXJlY3Rvcnk6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgicmVsZWFzZSByZXBvcnQgZGlyZWN0b3J5IHJlc29sdmVzIG91dHNpZGUgZXhwZWN0ZWQgcGF0aCIpCiAgICBvcy5jaG93bihkaXJlY3RvcnksIDEwMDAsIDEwMDApCiAgICBvcy5jaG1vZChkaXJlY3RvcnksIDBvNzAwKQ=='))"
+
+            echo "==> Certificando automaticamente o SHA aprovado pelo CI..."
+            CERT_REPORT="/app/artifacts/real-data-certification/releases/${TARGET_SHA}.json"
+            CERT_DRY_RUN="/tmp/real-data-release-${TARGET_SHA}.dry-run.json"
+            compose exec -T backend python -m app.cli.real_data_release_certification \
+              --expected-sha "${TARGET_SHA}" \
+              --workflow-run-id "${CI_WORKFLOW_RUN_ID}" \
+              --workflow-run-conclusion "${CI_WORKFLOW_CONCLUSION}" \
+              --workflow-run-event "${CI_WORKFLOW_EVENT}" \
+              --workflow-run-branch "${CI_WORKFLOW_BRANCH}" \
+              --smoke-test-passed \
+              --report-file "${CERT_DRY_RUN}" > /dev/null
+            CERT_MODE="$(compose exec -T backend python -c \
+              "import json; print(json.load(open('${CERT_DRY_RUN}', encoding='utf-8'))['mode'])")"
+            if [ "${CERT_MODE}" = "dry-run" ]; then
+              CERT_CONFIRMATION="$(compose exec -T backend python -c \
+                "import json; print(json.load(open('${CERT_DRY_RUN}', encoding='utf-8'))['plan']['confirmation'])")"
+              if [ -z "${CERT_CONFIRMATION}" ]; then
+                echo "[deploy-oci] ERRO: dry-run nÃ£o emitiu confirmaÃ§Ã£o de certificaÃ§Ã£o." >&2
+                exit 1
+              fi
+              compose exec -T backend python -m app.cli.real_data_release_certification \
+                --expected-sha "${TARGET_SHA}" \
+                --workflow-run-id "${CI_WORKFLOW_RUN_ID}" \
+                --workflow-run-conclusion "${CI_WORKFLOW_CONCLUSION}" \
+                --workflow-run-event "${CI_WORKFLOW_EVENT}" \
+                --workflow-run-branch "${CI_WORKFLOW_BRANCH}" \
+                --smoke-test-passed \
+                --report-file "${CERT_REPORT}" \
+                --execute \
+                --confirmation "${CERT_CONFIRMATION}" > /dev/null
+            elif [ "${CERT_MODE}" != "already-certified" ]; then
+              echo "[deploy-oci] ERRO: modo de certificaÃ§Ã£o inesperado." >&2
+              exit 1
+            fi
+
+            echo "==> Validando prontidÃ£o certificada para o SHA implantado..."
+            compose exec -T backend curl -fsS http://localhost:8000/ready
+            echo ""
 
             echo "=========================================================="
             echo " Deploy e rebuild concluídos com sucesso no OCI!"

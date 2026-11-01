@@ -32,7 +32,7 @@ FROZEN_NOW = datetime(2026, 10, 6, 12, tzinfo=timezone.utc)
 def _production_settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
         "ENVIRONMENT": "production",
-        "APP_BRANCH": "stable-15jun",
+        "APP_BRANCH": "main",
         "APP_COMMIT_SHA": "a" * 40,
         "REAL_DATASET_REFERENCE": "pre-prod-backup.v3:sha256:" + "b" * 64,
         "SECRET_KEY": "s" * 32,
@@ -108,7 +108,7 @@ async def test_proventos_status_is_deterministic_across_payment_boundary(
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"APP_BRANCH": "main"}, "APP_BRANCH"),
+        ({"APP_BRANCH": "stable-15jun"}, "APP_BRANCH"),
         ({"APP_COMMIT_SHA": "short"}, "APP_COMMIT_SHA"),
         ({"REAL_DATASET_REFERENCE": "free-form"}, "REAL_DATASET_REFERENCE"),
         ({"REDIS_PORT": 0}, "REDIS_PORT"),

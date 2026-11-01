@@ -2,21 +2,15 @@ name: SIG v2 CI/CD
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DISPAROS
-# • push main        → quality + security + build + publish + scans (após merge)
-# • workflow_dispatch→ execução manual sob demanda
-#
-# Nota: desativado em commits intermediários de branches/PRs (ex.: stable-15jun)
-# para evitar consumo desnecessário de minutos do GitHub Actions no plano gratuito.
-# paths-ignore: commits que alteram apenas docs/markdown não consomem minutos.
+# • pull_request main → quality + security + build antes do merge
+# • push main         → quality + security + build após o merge; deploy aguarda sucesso
+# • workflow_dispatch → execução manual de validação, sem deploy automático
 # ─────────────────────────────────────────────────────────────────────────────
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main"]
-    paths-ignore:
-      - "**.md"
-      - ".github/dependabot.yml"
-      - ".github/dependency-review-config.yml"
-      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -57,6 +51,104 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+
+      - name: Validate OCI deployment script syntax
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          lines = Path(".github/workflows/deploy-oci.yml").read_text(encoding="utf-8").splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "script: |")
+          first_content = next(line for line in lines[start + 1:] if line.strip())
+          indent = len(first_content) - len(first_content.lstrip())
+          script = []
+          for line in lines[start + 1:]:
+              if not line.strip():
+                  script.append("")
+              elif len(line) - len(line.lstrip()) >= indent:
+                  script.append(line[indent:])
+              else:
+                  break
+          subprocess.run(["bash", "-n"], input="\n".join(script), text=True, check=True)
+          subprocess.run(["sh", "-n", "scripts/oci_smoke_test.sh"], check=True)
+          PY
+
+      - name: Validate OCI SSH action command stream
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/deploy-oci.yml").read_text(encoding="utf-8")
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "script: |")
+          first_content = next(line for line in lines[start + 1:] if line.strip())
+          indent = len(first_content) - len(first_content.lstrip())
+          script = []
+          for line in lines[start + 1:]:
+              if not line.strip():
+                  script.append("")
+              elif len(line) - len(line.lstrip()) >= indent:
+                  script.append(line[indent:])
+              else:
+                  break
+
+          # Heredoc bodies can consume the action's injected status guard as input.
+          # Keep remote Python payloads encoded on one shell command line.
+          script_text = "\n".join(script)
+          assert "<<" not in script_text
+          assert not re.search(r"python\s+-\s", script_text)
+          assert not any("python -c '" in line for line in script)
+          guard = (
+              "DRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
+              "if [ $DRONE_SSH_PREV_COMMAND_EXIT_CODE -ne 0 ]; then "
+              "exit $DRONE_SSH_PREV_COMMAND_EXIT_CODE; fi;"
+          )
+          action_commands = []
+          for line in script:
+              command = line.strip()
+              if not command:
+                  continue
+              action_commands.append(command)
+              if not command.endswith("\\"):
+                  action_commands.append(guard)
+          deployed_script = "\n".join(action_commands)
+          subprocess.run(["bash", "-n"], input=deployed_script, text=True, check=True)
+          import base64
+          import sys
+          import tempfile
+
+          payloads = re.findall(r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", script_text)
+          assert len(payloads) >= 3
+          decoded = [base64.b64decode(payload).decode("ascii") for payload in payloads]
+          for source in decoded:
+              compile(source, "<oci-deploy-python>", "exec")
+          assert any("urlopen(" in source and "range(15)" in source for source in decoded)
+
+          rotation_index = next(i for i, source in enumerate(decoded) if "root.iterdir()" in source)
+          rotation_line = next(line for line in script if "base64.b64decode" in line and "PREDEPLOY_RUN_ID" in line)
+          assert rotation_line.endswith('" "${PREDEPLOY_RUN_ID}"')
+          rotation = decoded[rotation_index]
+          with tempfile.TemporaryDirectory() as directory:
+              root = Path(directory) / "oci-predeploy-backups"
+              root.mkdir()
+              (root / "run-old").mkdir()
+              (root / "run-current").mkdir()
+              outside = Path(directory) / "outside"
+              outside.mkdir()
+              (root / "run-linked").symlink_to(outside, target_is_directory=True)
+              rotation = rotation.replace(
+                  '"/app/artifacts/oci-predeploy-backups"', repr(str(root))
+              )
+              sys.argv = ["-c", "run-current"]
+              exec(compile(rotation, "<oci-backup-rotation>", "exec"), {})
+              assert not (root / "run-old").exists()
+              assert (root / "run-current").is_dir()
+              assert (root / "run-linked").is_symlink()
+              assert outside.is_dir()
+          PY
 
       - name: Install dependencies
         working-directory: backend
@@ -187,7 +279,7 @@ jobs:
     name: Dependency audit – Python (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
 
@@ -209,7 +301,7 @@ jobs:
     name: Dependency audit – Node.js (npm audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v7
 

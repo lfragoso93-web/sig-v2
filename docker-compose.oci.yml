@@ -22,11 +22,11 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: true
+    user: "${CLOUDFLARED_UID:-1000}"
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in the VM .env}
+      TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
     command:
       - tunnel
       - --no-autoupdate
@@ -36,3 +36,7 @@ services:
         condition: service_started
     networks:
       - sig-net
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ${CLOUDFLARE_TUNNEL_TOKEN_FILE:-.cloudflared/tunnel-token}

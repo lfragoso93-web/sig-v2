@@ -1,8 +1,28 @@
 # SGI v2 OCI Backup And Restore Runbook
 
-Status: prepared before the VM exists.
+Status: operational guidance for OCI and local pre-production backup flows.
 
 Goal: move data to the OCI VM with an auditable PostgreSQL backup, checksum verification, empty-target restore preflight, and explicit rollback points.
+
+## Automatic OCI Pre-deploy Backup
+
+The production deploy workflow creates a consistent backup from the currently
+running backend before it checks out the incoming `main` commit or rebuilds any
+application image. The artifact is stored on the OCI host at
+`artifacts/oci-predeploy-backups/<run-id>/` and validated with
+`app.cli.real_data_dataset_identity` before the deployment continues.
+
+After a new backup passes that validation, the workflow removes only older
+direct child directories named `run-*` inside
+`artifacts/oci-predeploy-backups/`. If backup generation or validation fails,
+the workflow stops and preserves the previous backup. The cleanup never targets
+the PostgreSQL named volume, other artifact directories, or application files.
+The backup CLI applies restrictive file permissions to the sensitive dump and
+its manifest.
+
+This directory contains only the latest successful automatic pre-deploy backup
+after rotation. It is not an off-host disaster-recovery copy; keep the existing
+separate backup/restore procedure for recovery requirements.
 
 ## 1. Backup Source Preconditions
 

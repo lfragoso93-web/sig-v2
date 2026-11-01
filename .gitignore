@@ -54,6 +54,7 @@ Thumbs.db
 
 # OCI operational artifacts
 /artifacts/oci-source-package/
+/artifacts/oci-predeploy-backups/
 
 # Codex local operational scratch and retained dry-run artifacts
 /.tmp-codex/
@@ -66,3 +67,6 @@ Thumbs.db
 /backend/.test-tmp/
 /backend/pytest-cache-files-*/
 /backend/review-temp/
+
+# OCI-only Cloudflare tunnel credential
+/.cloudflared/

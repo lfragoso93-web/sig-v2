@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 def _settings(**overrides: str) -> Settings:
     values = {
         "ENVIRONMENT": "local-canonical",
-        "APP_BRANCH": "stable-15jun",
+        "APP_BRANCH": "main",
         "APP_COMMIT_SHA": "a" * 40,
         "REAL_DATASET_REFERENCE": "dataset:2026-10-06",
     }
@@ -41,7 +41,7 @@ async def test_runtime_identity_combines_config_and_live_schema(
     )
 
     assert identity.environment == "local-canonical"
-    assert identity.branch == "stable-15jun"
+    assert identity.branch == "main"
     assert identity.commit_sha == "a" * 40
     assert identity.dataset_reference == "dataset:2026-10-06"
     assert identity.alembic_revision == "revision_head"
