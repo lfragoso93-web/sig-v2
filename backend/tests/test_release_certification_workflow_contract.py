@@ -266,4 +266,5 @@ def test_oci_smoke_cloudflared_diagnostics_suppress_candidate_values() -> None:
     assert "candidate line=%s length=%d unique_chars=%d" in smoke
     assert "candidate values suppressed" in smoke
     assert 'fail "cloudflared logs may contain token-like content' in smoke
-    assert "printf" not in smoke[smoke.index("TOKEN_PATTERN="):smoke.index("ok \"cloudflared logs")]
+
+    assert 'printf "[oci-smoke-test] token-like candidate' in smoke
