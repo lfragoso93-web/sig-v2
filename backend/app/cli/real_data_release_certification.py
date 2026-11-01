@@ -35,6 +35,22 @@ from app.services.real_data_runtime_identity import (
 REPORT_SCHEMA_VERSION = "real-data-release-certification.v1"
 
 
+class RealDataReleasePostCommitError(RealDataReleaseCertificationError):
+    """A release event committed but post-commit verification/reporting failed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        database_writes_executed: int,
+        event_key: str,
+    ) -> None:
+        super().__init__(message)
+        self.database_writes_executed = database_writes_executed
+        self.transaction_committed = True
+        self.plan_event_key = event_key
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -138,19 +154,26 @@ async def _main(arguments: argparse.Namespace) -> int:
                     confirmation=arguments.confirmation,
                 )
                 await session.commit()
-                committed = mark_certification_result_committed(result)
-                async with AsyncSessionLocal() as verify_session:
-                    current_identity = await resolve_real_data_runtime_identity(
-                        verify_session
-                    )
-                    state = await read_real_data_certification(
-                        verify_session,
-                        current_identity,
-                    )
-                if not state.ready_for_real_data:
-                    raise RealDataReleaseCertificationError(
-                        "persisted release event did not certify the running identity"
-                    )
+                try:
+                    committed = mark_certification_result_committed(result)
+                    async with AsyncSessionLocal() as verify_session:
+                        current_identity = await resolve_real_data_runtime_identity(
+                            verify_session
+                        )
+                        state = await read_real_data_certification(
+                            verify_session,
+                            current_identity,
+                        )
+                    if not state.ready_for_real_data:
+                        raise RealDataReleaseCertificationError(
+                            "persisted release event did not certify the running identity"
+                        )
+                except Exception as exc:
+                    raise RealDataReleasePostCommitError(
+                        "certification event committed, but post-commit verification failed",
+                        database_writes_executed=result.database_writes_executed,
+                        event_key=plan.event_key,
+                    ) from exc
                 payload = {
                     "schema_version": REPORT_SCHEMA_VERSION,
                     "mode": "execute",
@@ -162,11 +185,22 @@ async def _main(arguments: argparse.Namespace) -> int:
                     "result": committed.to_dict(),
                     "ready_for_real_data": state.ready_for_real_data,
                 }
+        except RealDataReleasePostCommitError:
+            raise
         except Exception:
             await session.rollback()
             raise
 
-    _write_report(arguments.report_file, payload)
+    try:
+        _write_report(arguments.report_file, payload)
+    except Exception as exc:
+        if payload.get("transaction_committed"):
+            raise RealDataReleasePostCommitError(
+                "certification event committed, but release report could not be written",
+                database_writes_executed=payload["database_writes_executed"],
+                event_key=payload["plan_event_key"],
+            ) from exc
+        raise
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
@@ -186,8 +220,13 @@ def main(argv: Sequence[str] | None = None) -> None:
                 {
                     "schema_version": REPORT_SCHEMA_VERSION,
                     "ok": False,
-                    "database_writes_executed": 0,
-                    "transaction_committed": False,
+                    "database_writes_executed": getattr(
+                        exc, "database_writes_executed", 0
+                    ),
+                    "transaction_committed": getattr(
+                        exc, "transaction_committed", False
+                    ),
+                    "plan_event_key": getattr(exc, "plan_event_key", None),
                     "error_type": type(exc).__name__,
                     "error": str(exc),
                 },
