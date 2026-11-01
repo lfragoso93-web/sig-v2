@@ -283,7 +283,7 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
 
     token_file_ready = deploy.index('CLOUDFLARED_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"')
     first_compose_exec = deploy.index("compose exec -T --user 0 backend python -c")
-    tunnel_restart = deploy.index("compose up -d --no-deps cloudflared")
+    tunnel_restart = deploy.index("compose up -d --no-deps --force-recreate cloudflared")
     smoke_run = deploy.index("sh scripts/oci_smoke_test.sh")
     assert token_file_ready < first_compose_exec
     assert tunnel_restart < smoke_run
