@@ -14,9 +14,8 @@ def _embedded_python(source: str, command_fragment: str) -> str:
         for line in source.splitlines()
         if command_fragment in line and "base64.b64decode" in line
     )
-    match = re.search(r"base64\\.b64decode\\('([A-Za-z0-9+/=]+)'\\)", line)
-    assert match is not None
-    return base64.b64decode(match.group(1)).decode("ascii")
+    encoded = line.split("base64.b64decode('", 1)[1].split("')", 1)[0]
+    return base64.b64decode(encoded).decode("ascii")
 def test_production_release_certification_is_after_ci_and_smoke_gates() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
 
@@ -338,7 +337,6 @@ def test_release_report_directory_is_prepared_before_certification() -> None:
     command_line = source.splitlines()[source.splitlines().index(payload_line) + 1]
     encoded = command_line.split("base64.b64decode('", 1)[1].split("')", 1)[0]
     payload = base64.b64decode(encoded).decode("ascii")
-    payload = base64.b64decode(match.group(1)).decode("ascii")
     compile(payload, "<oci-release-report-directory>", "exec")
     assert "root / \"real-data-certification\"" in payload
     assert "os.chown(directory, 1000, 1000)" in payload
