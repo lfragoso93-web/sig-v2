@@ -71,6 +71,7 @@ jobs:
               else:
                   break
           subprocess.run(["bash", "-n"], input="\n".join(script), text=True, check=True)
+          subprocess.run(["sh", "-n", "scripts/oci_smoke_test.sh"], check=True)
           PY
 
       - name: Validate OCI SSH action command stream
