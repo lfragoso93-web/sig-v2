@@ -275,6 +275,7 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     smoke = (ROOT / "scripts" / "oci_smoke_test.sh").read_text(encoding="utf-8")
 
     assert "TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token" in compose
+    assert 'user: "${CLOUDFLARED_UID:-1000}"' in compose
     assert "cloudflare_tunnel_token:" in compose
     assert "file: ${CLOUDFLARE_TUNNEL_TOKEN_FILE:-.cloudflared/tunnel-token}" in compose
     assert "env_file:" not in compose
@@ -287,7 +288,10 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     assert token_file_ready < first_compose_exec
     assert tunnel_restart < smoke_run
     assert "chmod 700" in deploy
-    assert 'chmod 600 "${CLOUDFLARED_TOKEN_TMP}"' in deploy
+    assert 'chmod 400 "${CLOUDFLARED_TOKEN_TMP}"' in deploy
+    assert 'export CLOUDFLARED_UID="$(id -u)"' in deploy
+    assert "config --environment | awk" in deploy
+    assert "CLOUDFLARE_TUNNEL_TOKEN=/" not in deploy
 
     assert "umask 077" in smoke
     assert 'trap \'rm -f -- "${CLOUDFLARED_LOG}" "${CLOUDFLARED_SANITIZED_LOG}"\' EXIT' in smoke
