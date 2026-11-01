@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     LOGIN_RATE_LIMIT: str = "10/minute"
     REGISTER_RATE_LIMIT: str = "5/minute"
-    FORGOT_PASSWORD_RATE_LIMIT: str = "20/hour"
+    FORGOT_PASSWORD_RATE_LIMIT: str = "3/15minute"
     RESET_PASSWORD_RATE_LIMIT: str = "5/minute"
 
     REDIS_URL: Optional[str] = "redis://redis:6379/0"

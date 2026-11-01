@@ -71,7 +71,6 @@ services:
       APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
       APP_BRANCH: ${APP_BRANCH:-unknown}
       REAL_DATASET_REFERENCE: ${REAL_DATASET_REFERENCE:-}
-      FORGOT_PASSWORD_RATE_LIMIT: ${FORGOT_PASSWORD_RATE_LIMIT:-20/hour}
     volumes:
       - ./artifacts:/app/artifacts
     depends_on:
