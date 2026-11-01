@@ -91,6 +91,7 @@ jobs:
               exit 1
             fi
             DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
+            export CLOUDFLARED_UID="$(id -u)"
             CLOUDFLARED_TOKEN_DIR="${DEPLOY_DIR_REAL}/.cloudflared"
             CLOUDFLARED_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"
             if [ -L "${CLOUDFLARED_TOKEN_DIR}" ] || [ -L "${CLOUDFLARED_TOKEN_FILE}" ]; then
@@ -101,8 +102,8 @@ jobs:
             chmod 700 "${CLOUDFLARED_TOKEN_DIR}"
             CLOUDFLARED_TOKEN_TMP="$(mktemp "${CLOUDFLARED_TOKEN_DIR}/tunnel-token.XXXXXX")"
             trap 'rm -f -- "${CLOUDFLARED_TOKEN_TMP}"' EXIT
-            awk -F= 'BEGIN { count = 0 } /^CLOUDFLARE_TUNNEL_TOKEN=/ { count++; token = substr($0, index($0, "=") + 1) } END { if (count != 1 || length(token) < 100) exit 1; print token }' .env > "${CLOUDFLARED_TOKEN_TMP}"
-            chmod 600 "${CLOUDFLARED_TOKEN_TMP}"
+            env -u CLOUDFLARE_TUNNEL_TOKEN docker compose --env-file .env -f docker-compose.yml config --environment | awk -F= 'BEGIN { count = 0 } $1 == "CLOUDFLARE_TUNNEL_TOKEN" { count++; token = substr($0, index($0, "=") + 1) } END { if (count != 1 || length(token) < 100) exit 1; print token }' > "${CLOUDFLARED_TOKEN_TMP}"
+            chmod 400 "${CLOUDFLARED_TOKEN_TMP}"
             mv -f -- "${CLOUDFLARED_TOKEN_TMP}" "${CLOUDFLARED_TOKEN_FILE}"
             trap - EXIT
             export CLOUDFLARE_TUNNEL_TOKEN_FILE="${CLOUDFLARED_TOKEN_FILE}"
