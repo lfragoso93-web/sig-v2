@@ -16,6 +16,8 @@ def _embedded_python(source: str, command_fragment: str) -> str:
     )
     encoded = line.split("base64.b64decode('", 1)[1].split("')", 1)[0]
     return base64.b64decode(encoded).decode("ascii")
+
+
 def test_production_release_certification_is_after_ci_and_smoke_gates() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
 
