@@ -68,7 +68,7 @@ def test_initializer_rejects_symlink_backup_root_without_chowning_target(
         pytest.skip(f"symlinks unavailable: {exc}")
 
     monkeypatch.setattr(
-        "app.cli.ensure_preprod_backup_root.os.chown",
+        "app.cli.ensure_predeploy_backup_root.os.chown",
         lambda *_args: pytest.fail("must not change ownership through a symlink"),
     )
 
