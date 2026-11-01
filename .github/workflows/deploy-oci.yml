@@ -85,6 +85,8 @@ jobs:
             fi
 
             # Keep automated pre-deploy dumps in a dedicated host directory.
+            # Python helpers below stay on one physical command line because
+            # the pinned SSH action appends status guards after command lines.
             # Resolve and compare the path before any cleanup so it cannot
             # point at PostgreSQL data, certification artifacts, or app files.
             DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
