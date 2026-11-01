@@ -100,7 +100,21 @@ jobs:
           assert "<<" not in script_text
           assert not re.search(r"python\s+-\s", script_text)
           assert not any("python -c '" in line for line in script)
-          subprocess.run(["bash", "-n"], input=script_text, text=True, check=True)
+          guard = (
+              "DRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
+              "if [ $DRONE_SSH_PREV_COMMAND_EXIT_CODE -ne 0 ]; then "
+              "exit $DRONE_SSH_PREV_COMMAND_EXIT_CODE; fi;"
+          )
+          action_commands = []
+          for line in script:
+              command = line.strip()
+              if not command:
+                  continue
+              action_commands.append(command)
+              if not command.endswith("\\"):
+                  action_commands.append(guard)
+          deployed_script = "\n".join(action_commands)
+          subprocess.run(["bash", "-n"], input=deployed_script, text=True, check=True)
           import base64
           import sys
           import tempfile
