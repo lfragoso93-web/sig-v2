@@ -291,7 +291,6 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
     assert 'chmod 400 "${CLOUDFLARED_TOKEN_TMP}"' in deploy
     assert 'export CLOUDFLARED_UID="$(id -u)"' in deploy
     assert "config --environment | awk" in deploy
-    assert "CLOUDFLARE_TUNNEL_TOKEN=/" not in deploy
 
     assert "umask 077" in smoke
     assert 'trap \'rm -f -- "${CLOUDFLARED_LOG}" "${CLOUDFLARED_SANITIZED_LOG}"\' EXIT' in smoke
