@@ -247,7 +247,7 @@ def test_backup_branch_guard_explicitly_allows_main_and_dev_branch() -> None:
 def test_backend_health_wait_is_embedded_as_one_ssh_safe_python_command() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
     payloads = re.findall(
-        r"base64\\.b64decode\\('([A-Za-z0-9+/=]+)'\\)", source
+        r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", source
     )
     decoded = [base64.b64decode(payload).decode("ascii") for payload in payloads]
     health_wait = next(payload for payload in decoded if "urlopen(" in payload)
