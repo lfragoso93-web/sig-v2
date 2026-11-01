@@ -81,7 +81,11 @@ def test_post_commit_failures_report_persisted_certification_state(
         database_writes_executed=1,
         event_key="release-event-123",
     )
-    monkeypatch.setattr(cli.asyncio, "run", lambda _coro: (_ for _ in ()).throw(error))
+    def fail_run(coro):
+        coro.close()
+        raise error
+
+    monkeypatch.setattr(cli.asyncio, "run", fail_run)
 
     with pytest.raises(SystemExit) as raised:
         cli.main(
