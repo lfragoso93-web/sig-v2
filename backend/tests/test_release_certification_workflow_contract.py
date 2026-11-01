@@ -14,8 +14,8 @@ def _embedded_python(source: str, command_fragment: str) -> str:
         for line in source.splitlines()
         if command_fragment in line and "base64.b64decode" in line
     )
-    match = re.search(r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", line)
-    assert match is not None
+    encoded = command_line.split("base64.b64decode('", 1)[1].split("')", 1)[0]
+    payload = base64.b64decode(encoded).decode("ascii")
     return base64.b64decode(match.group(1)).decode("ascii")
 
 
@@ -324,6 +324,7 @@ def test_env_identity_persistence_uses_one_ssh_safe_python_command(tmp_path, mon
     )
     with pytest.raises(SystemExit, match="duplicate runtime identity"):
         exec(compile(script, "<oci-env-identity>", "exec"), {"__name__": "__main__"})
+
 
 def test_release_report_directory_is_prepared_before_certification() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
