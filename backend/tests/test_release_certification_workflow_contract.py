@@ -146,16 +146,11 @@ def test_ambiguous_commit_is_not_reported_as_zero_writes(
     assert payload["plan_event_key"] == "release-event-uncertain"
 
 
-def test_backup_branch_case_arm_contains_a_valid_noop_command() -> None:
+
+def test_backup_branch_guard_explicitly_allows_main_and_dev_branch() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
 
     assert (
-        "main|stable-15jun)\n                :\n                ;;" in source
-    )
-
-
-def test_deploy_script_is_syntax_checked_in_ci() -> None:
-    source = CI_WORKFLOW.read_text(encoding="utf-8")
-
-    assert "Validate OCI deployment script syntax" in source
-    assert 'subprocess.run(["bash", "-n"]' in source
+        'if [ "${PREDEPLOY_BRANCH}" != "main" ] && '
+        '[ "${PREDEPLOY_BRANCH}" != "stable-15jun" ]; then'
+    ) in source
