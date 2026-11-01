@@ -17,22 +17,18 @@ O deploy contínuo roda nos servidores do GitHub (`ubuntu-latest`) e conecta-se 
 
 ---
 
-## 2. Segredos Configurados no GitHub Actions
+## 2. GitHub Actions Secrets
 
-Os seguintes segredos estão configurados em **Settings $\rightarrow$ Secrets and variables $\rightarrow$ Actions**:
+Os valores de conexao da OCI ficam somente em GitHub Repository Secrets. Este runbook nao registra host, usuario, porta efetiva ou chave privada.
 
-| Secret | Descrição |
+| Secret | Purpose |
 |---|---|
-| `OCI_HOST` | IP público da instância OCI (`168.75.106.202`) |
-| `OCI_USER` | Usuário do sistema operacional (`ubuntu`) |
-| `OCI_SSH_PORT` | Porta SSH (`22`) |
-| `OCI_SSH_KEY` | Chave privada SSH autorizada na instância |
+| OCI_HOST | Production host stored as a secret |
+| OCI_USER | Deploy user stored as a secret |
+| OCI_SSH_PORT | SSH port stored as a secret |
+| OCI_SSH_KEY | Private deploy key stored as a secret |
 
-Caso o IP ou a chave mudem no futuro, basta atualizar via GitHub CLI:
-```powershell
-gh secret set OCI_HOST --body "<NOVO_IP>"
-Get-Content -Raw "caminho\para\chave.key" | gh secret set OCI_SSH_KEY
-```
+Atualize os valores diretamente nas configuracoes de secrets do repositorio. Nunca copie uma chave privada para o repositorio, workflow, ticket ou log.
 
 ---
 
@@ -48,6 +44,9 @@ Get-Content -Raw "caminho\para\chave.key" | gh secret set OCI_SSH_KEY
    - PostgreSQL e Redis saudáveis (`pg_isready` e `PONG`);
    - Cloudflare Tunnel ativo e sem vazamento de credenciais;
    - Nenhuma porta interna exposta indevidamente no host.
+
+7. Depois dos smoke tests, o job coleta evidencia read-only no backend, prepara um dry-run e executa a confirmacao exata emitida pelo plano. A promocao vincula o workflow de CI aprovado, o SHA do push em main, uma revisao Alembic unica e a referencia do dataset da ultima certificacao valida. Ao final, /ready deve retornar HTTP 200 para esse runtime exato.
+8. Historico de certificacao invalido ou revogado, referencia de dataset diferente, inventario com bloqueios, dependencia indisponivel ou falha no smoke interrompem o job sem inserir promocao.
 
 ---
 

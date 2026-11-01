@@ -4,7 +4,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -18,6 +17,7 @@ from app.services.proventos_service import (
     get_summary,
     list_items,
 )
+
 
 @pytest.mark.asyncio
 async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
@@ -78,4 +78,3 @@ async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
     # contains only eligible cash events.
     assert items["total"] == 0
     assert items["items"] == []
-

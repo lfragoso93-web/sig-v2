@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     LOGIN_RATE_LIMIT: str = "10/minute"
     REGISTER_RATE_LIMIT: str = "5/minute"
-    FORGOT_PASSWORD_RATE_LIMIT: str = "3/15minute"
+    FORGOT_PASSWORD_RATE_LIMIT: str = "20/hour"
     RESET_PASSWORD_RATE_LIMIT: str = "5/minute"
 
     REDIS_URL: Optional[str] = "redis://redis:6379/0"
@@ -139,8 +139,8 @@ class Settings(BaseSettings):
                 )
 
         if self.ENVIRONMENT.strip().lower() == "production":
-            if self.APP_BRANCH != "stable-15jun":
-                raise ValueError("APP_BRANCH de producao deve ser stable-15jun")
+            if self.APP_BRANCH != "main":
+                raise ValueError("APP_BRANCH de producao deve ser main")
             if not re.fullmatch(r"[0-9a-f]{40}", self.APP_COMMIT_SHA):
                 raise ValueError("APP_COMMIT_SHA de producao deve ser SHA completo")
             if not self.REAL_DATASET_REFERENCE.startswith(

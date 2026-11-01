@@ -9,7 +9,7 @@ Read `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md` and `docs/operations.md`. Query
 the live runtime and `real_data_certification_events`; do not infer current
 certification from README text, process memory, or an old artifact.
 
-Certification identity is exact: environment, `stable-15jun`, full runtime SHA,
+Production certification identity is exact: environment, `main`, full runtime SHA,
 canonical dataset reference, single Alembic revision, gate #227 and PR #362.
 The dataset reference must come from a validated consistent
 `pre-prod-backup.v3` artifact via `app.cli.real_data_dataset_identity`.
