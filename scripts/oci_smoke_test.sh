@@ -34,7 +34,7 @@ docker compose $COMPOSE_FILES exec -T redis redis-cli ping | grep -q PONG \
   || fail "redis ping failed"
 ok "redis pong"
 
-docker compose $COMPOSE_FILES logs --tail=120 cloudflared >/tmp/sgi-cloudflared.log 2>&1 \
+docker compose $COMPOSE_FILES logs --tail=120 cloudflared >"${CLOUDFLARED_LOG}" 2>&1 \\
   || fail "cloudflared logs unavailable"
 
 # cloudflared can emit masked fields such as token:***** and long precheck borders.
