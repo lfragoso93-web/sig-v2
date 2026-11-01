@@ -268,3 +268,26 @@ def test_oci_smoke_cloudflared_diagnostics_suppress_candidate_values() -> None:
     assert 'fail "cloudflared logs may contain token-like content' in smoke
 
     assert 'printf "[oci-smoke-test] token-like candidate' in smoke
+
+def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() -> None:
+    compose = (ROOT / "docker-compose.oci.yml").read_text(encoding="utf-8")
+    deploy = WORKFLOW.read_text(encoding="utf-8")
+    smoke = (ROOT / "scripts" / "oci_smoke_test.sh").read_text(encoding="utf-8")
+
+    assert "TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token" in compose
+    assert "cloudflare_tunnel_token:" in compose
+    assert "file: ${CLOUDFLARE_TUNNEL_TOKEN_FILE:-.cloudflared/tunnel-token}" in compose
+    assert "env_file:" not in compose
+    assert "TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN" not in compose
+
+    token_file_ready = deploy.index('CLOUDFLARE_TOKEN_FILE="${CLOUDFLARED_TOKEN_DIR}/tunnel-token"')
+    first_compose_exec = deploy.index("compose exec -T --user 0 backend python -c")
+    tunnel_restart = deploy.index("compose up -d --no-deps cloudflared")
+    smoke_run = deploy.index("sh scripts/oci_smoke_test.sh")
+    assert token_file_ready < first_compose_exec
+    assert tunnel_restart < smoke_run
+    assert "chmod 700" in deploy
+    assert 'chmod 600 "${CLOUDFLARED_TOKEN_TMP}"' in deploy
+
+    assert "umask 077" in smoke
+    assert 'trap \'rm -f -- "${CLOUDFLARED_LOG}" "${CLOUDFLARED_SANITIZED_LOG}"\' EXIT' in smoke
