@@ -35,7 +35,24 @@ from app.services.real_data_runtime_identity import (
 REPORT_SCHEMA_VERSION = "real-data-release-certification.v1"
 
 
-class RealDataReleasePostCommitError(RealDataReleaseCertificationError):
+class RealDataReleaseStateError(RealDataReleaseCertificationError):
+    """A release failed after its persistence outcome became relevant."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        database_writes_executed: int | None,
+        transaction_committed: bool | None,
+        event_key: str,
+    ) -> None:
+        super().__init__(message)
+        self.database_writes_executed = database_writes_executed
+        self.transaction_committed = transaction_committed
+        self.plan_event_key = event_key
+
+
+class RealDataReleasePostCommitError(RealDataReleaseStateError):
     """A release event committed but post-commit verification/reporting failed."""
 
     def __init__(
@@ -45,10 +62,24 @@ class RealDataReleasePostCommitError(RealDataReleaseCertificationError):
         database_writes_executed: int,
         event_key: str,
     ) -> None:
-        super().__init__(message)
-        self.database_writes_executed = database_writes_executed
-        self.transaction_committed = True
-        self.plan_event_key = event_key
+        super().__init__(
+            message,
+            database_writes_executed=database_writes_executed,
+            transaction_committed=True,
+            event_key=event_key,
+        )
+
+
+class RealDataReleaseCommitOutcomeUnknownError(RealDataReleaseStateError):
+    """The database did not confirm whether the release commit persisted."""
+
+    def __init__(self, *, event_key: str) -> None:
+        super().__init__(
+            "database commit outcome is unknown; inspect the event chain before retrying",
+            database_writes_executed=None,
+            transaction_committed=None,
+            event_key=event_key,
+        )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -153,7 +184,12 @@ async def _main(arguments: argparse.Namespace) -> int:
                     plan=plan,
                     confirmation=arguments.confirmation,
                 )
-                await session.commit()
+                try:
+                    await session.commit()
+                except Exception as exc:
+                    raise RealDataReleaseCommitOutcomeUnknownError(
+                        event_key=plan.event_key
+                    ) from exc
                 try:
                     committed = mark_certification_result_committed(result)
                     async with AsyncSessionLocal() as verify_session:
@@ -185,7 +221,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                     "result": committed.to_dict(),
                     "ready_for_real_data": state.ready_for_real_data,
                 }
-        except RealDataReleasePostCommitError:
+        except RealDataReleaseStateError:
             raise
         except Exception:
             await session.rollback()
