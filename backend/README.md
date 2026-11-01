@@ -100,13 +100,14 @@ Configurado em `backend/app/core/scheduler.py` via APScheduler no fuso horário 
 
 | Horário (BRT) | ID do Job | Finalidade | Bloqueio / Lock |
 | :--- | :--- | :--- | :--- |
-| **09h–18h (a cada 90m)** | `update_quotes_intraday_*` | Atualiza cotações correntes dos ativos em negociação | Redis lock (TTL 7200s) |
+| **09h–18h, hora cheia em dias úteis** | `update_quotes_intraday_full_hour` | Atualiza cotações correntes dos ativos de mercado, incluindo cripto | Redis lock (TTL 7200s, liberado ao concluir) |
+| **Fora do pregão e fins de semana, hora cheia** | `update_crypto_quotes_*` | Atualiza apenas cotações de cripto, que negociam continuamente | Redis lock (TTL 7200s, liberado ao concluir) |
 | **08:30 (dias úteis)** | `notify_daily_dividend_payments` | Dispara resumo matinal por e-mail dos proventos pagos no dia | Redis lock (TTL 3600s) |
 | **20:40 (dias úteis)** | `sync_benchmark_rates_daily` | Sincroniza CDI, Selic, IPCA e IGPM via BCB SGS com anti-WAF | Redis lock (TTL 3600s) |
 | **20:42 (dias úteis)** | `sync_ibov_benchmark_daily` | Sincroniza fechamento e calcula retorno diário do Ibovespa | Redis lock (TTL 3600s) |
 | **20:45 (dias úteis)** | `persist_daily_close_prices` | Grava fechamento oficial diário de todos os ativos sob custódia | Redis lock (TTL 7200s) |
 | **20:50 (dias úteis)** | `persist_treasury_daily_close` | Sincroniza fechamento diário de preços e taxas do Tesouro Direto | Redis lock (TTL 7200s) |
-| **21:00 (dias úteis)** | `portfolio_snapshot_auto_maintenance` | Consolidação patrimonial diária e cálculo de rentabilidade TWR | Redis lock (TTL 7200s) |
+| **21:00 (dias úteis)** | `portfolio_snapshot_auto_maintenance` | Reconstrói o snapshot oficial diário e o TWR após os fechamentos de preços | Redis lock (TTL 7200s) |
 | **21:30 (dias úteis)** | `refresh_asset_fundamentals_daily` | Atualiza indicadores fundamentalistas e consenso de mercado | Redis lock (TTL 7200s) |
 | **Dia 01 às 08:15** | `audit_b3_market_calendar_monthly` | Auditoria read-only da fonte oficial do calendário da B3 | Redis lock (TTL 300s) |
 

@@ -18,11 +18,16 @@ def _cron_trigger(**kwargs) -> CronTrigger:
     return CronTrigger(timezone=SCHEDULER_TIMEZONE, **kwargs)
 
 
-def _intraday_quote_triggers() -> tuple[CronTrigger, CronTrigger]:
-    """Retorna a cadência de 90 minutos entre 09:00 e 18:00 em dias úteis."""
+def _intraday_quote_triggers() -> tuple[CronTrigger]:
+    """Atualiza ativos de pregão de hora em hora, das 09:00 às 18:00."""
+    return (_cron_trigger(day_of_week="mon-fri", hour="9-18", minute=0),)
+
+
+def _crypto_offhours_quote_triggers() -> tuple[CronTrigger, CronTrigger]:
+    """Mantém cripto horária fora do pregão e durante fins de semana."""
     return (
-        _cron_trigger(day_of_week="mon-fri", hour="9,12,15,18", minute=0),
-        _cron_trigger(day_of_week="mon-fri", hour="10,13,16", minute=30),
+        _cron_trigger(day_of_week="mon-fri", hour="0-8,19-23", minute=0),
+        _cron_trigger(day_of_week="sat-sun", hour="0-23", minute=0),
     )
 
 
@@ -39,19 +44,12 @@ def start_scheduler() -> None:
     - snapshots/TWR são manutenção local e não consultam providers.
     """
 
-    intraday_full_hour, intraday_half_hour = _intraday_quote_triggers()
+    (intraday_full_hour,) = _intraday_quote_triggers()
 
     @scheduler.scheduled_job(
         intraday_full_hour,
         id="update_quotes_intraday_full_hour",
         name="Atualizar cotações intradiárias — lote completo (hora cheia)",
-        max_instances=1,
-        coalesce=True,
-    )
-    @scheduler.scheduled_job(
-        intraday_half_hour,
-        id="update_quotes_intraday_half_hour",
-        name="Atualizar cotações intradiárias — lote completo (meia hora)",
         max_instances=1,
         coalesce=True,
     )
@@ -92,6 +90,56 @@ def start_scheduler() -> None:
                 except Exception as exc:
                     logger.error(
                         "[scheduler] Erro ao atualizar cotações intradiárias: %s",
+                        exc,
+                    )
+
+    crypto_offhours_weekdays, crypto_offhours_weekends = (
+        _crypto_offhours_quote_triggers()
+    )
+
+    @scheduler.scheduled_job(
+        crypto_offhours_weekdays,
+        id="update_crypto_quotes_offhours_weekdays",
+        name="Atualizar cotações de cripto fora do pregão (dias úteis)",
+        max_instances=1,
+        coalesce=True,
+    )
+    @scheduler.scheduled_job(
+        crypto_offhours_weekends,
+        id="update_crypto_quotes_weekends",
+        name="Atualizar cotações de cripto aos fins de semana",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def update_crypto_quotes_offhours():
+        from app.core.database import AsyncSessionLocal
+        from app.models.asset import AssetType
+        from app.services.quote_cache_invalidation_service import (
+            refresh_quotes_and_invalidate,
+        )
+
+        async with distributed_job_lock(
+            job_name="update_quotes_intraday",
+            period="intraday",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                try:
+                    updated, invalidated = await refresh_quotes_and_invalidate(
+                        db, [AssetType.CRIPTO]
+                    )
+                    logger.info(
+                        "[scheduler] Cripto fora do pregão: %s preços, "
+                        "%s carteiras invalidadas",
+                        updated,
+                        invalidated,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[scheduler] Erro ao atualizar cotações de cripto "
+                        "fora do pregão: %s",
                         exc,
                     )
 
@@ -390,5 +438,5 @@ def start_scheduler() -> None:
 
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — preços intraday + fechamentos diários + snapshots locais"
+        "Scheduler iniciado — cotações horárias + fechamentos diários + snapshots locais"
     )
