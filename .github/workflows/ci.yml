@@ -52,6 +52,26 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
+      - name: Validate OCI deployment script syntax
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          lines = Path(".github/workflows/deploy-oci.yml").read_text(encoding="utf-8").splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "script: |")
+          indent = len(lines[start + 1]) - len(lines[start + 1].lstrip())
+          script = []
+          for line in lines[start + 1:]:
+              if not line.strip():
+                  script.append("")
+              elif len(line) - len(line.lstrip()) >= indent:
+                  script.append(line[indent:])
+              else:
+                  break
+          subprocess.run(["bash", "-n"], input="\\n".join(script), text=True, check=True)
+          PY
+
       - name: Install dependencies
         working-directory: backend
         run: |
