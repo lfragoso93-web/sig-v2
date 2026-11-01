@@ -307,7 +307,7 @@ def test_env_identity_persistence_uses_one_ssh_safe_python_command(tmp_path, mon
 
     env_file = tmp_path / ".env"
     output_file = tmp_path / ".env.tmp"
-    env_file.write_text("KEEP=value\\nAPP_BRANCH=stable-15jun\\n", encoding="utf-8")
+    env_file.write_text("KEEP=value\nAPP_BRANCH=stable-15jun\n", encoding="utf-8")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -315,11 +315,11 @@ def test_env_identity_persistence_uses_one_ssh_safe_python_command(tmp_path, mon
     )
     exec(compile(script, "<oci-env-identity>", "exec"), {"__name__": "__main__"})
     assert output_file.read_text(encoding="utf-8") == (
-        "KEEP=value\\nAPP_BRANCH=main\\nAPP_COMMIT_SHA=" + "a" * 40 + "\\n"
+        "KEEP=value\nAPP_BRANCH=main\nAPP_COMMIT_SHA=" + "a" * 40 + "\n"
     )
 
     env_file.write_text(
-        "APP_BRANCH=main\\nAPP_BRANCH=stable-15jun\\n", encoding="utf-8"
+        "APP_BRANCH=main\nAPP_BRANCH=stable-15jun\n", encoding="utf-8"
     )
     with pytest.raises(SystemExit, match="duplicate runtime identity"):
         exec(compile(script, "<oci-env-identity>", "exec"), {"__name__": "__main__"})
