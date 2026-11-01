@@ -89,35 +89,7 @@ jobs:
             # point at PostgreSQL data, certification artifacts, or app files.
             DEPLOY_DIR_REAL="$(realpath -e -- "${DEPLOY_DIR}")"
             PREDEPLOY_ROOT_EXPECTED="${DEPLOY_DIR_REAL}/artifacts/oci-predeploy-backups"
-            compose exec -T --user 0 backend python -c '
-            import os
-            import sys
-            from pathlib import Path
-
-            parent = Path(sys.argv[1])
-            if (
-                not parent.is_absolute()
-                or parent.is_symlink()
-                or not parent.is_dir()
-                or parent.resolve(strict=True) != parent
-            ):
-                raise SystemExit("artifact mount is not the expected directory")
-
-            root = parent / "oci-predeploy-backups"
-            if root.is_symlink() or (root.exists() and not root.is_dir()):
-                raise SystemExit("pre-deploy backup path is not a regular directory")
-            root.mkdir(
-                mode=0o700 if os.name == "posix" else 0o777,
-                exist_ok=True,
-            )
-            if root.is_symlink() or root.resolve(strict=True) != root:
-                raise SystemExit(
-                    "pre-deploy backup path resolves outside its dedicated root"
-                )
-            os.chown(root, 1000, 1000)
-            if os.name == "posix":
-                root.chmod(0o700)
-            ' /app/artifacts
+            compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zLHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKcGFyZW50PVBhdGgoc3lzLmFyZ3ZbMV0pCmlmIG5vdCBwYXJlbnQuaXNfYWJzb2x1dGUoKSBvciBwYXJlbnQuaXNfc3ltbGluaygpIG9yIG5vdCBwYXJlbnQuaXNfZGlyKCkgb3IgcGFyZW50LnJlc29sdmUoc3RyaWN0PVRydWUpIT1wYXJlbnQ6IHJhaXNlIFN5c3RlbUV4aXQoImFydGlmYWN0IG1vdW50IGlzIG5vdCB0aGUgZXhwZWN0ZWQgZGlyZWN0b3J5IikKcm9vdD1wYXJlbnQvIm9jaS1wcmVkZXBsb3ktYmFja3VwcyIKaWYgcm9vdC5pc19zeW1saW5rKCkgb3IgKHJvb3QuZXhpc3RzKCkgYW5kIG5vdCByb290LmlzX2RpcigpKTogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCnJvb3QubWtkaXIobW9kZT0wbzcwMCBpZiBvcy5uYW1lPT0icG9zaXgiIGVsc2UgMG83NzcsZXhpc3Rfb2s9VHJ1ZSkKaWYgcm9vdC5pc19zeW1saW5rKCkgb3Igcm9vdC5yZXNvbHZlKHN0cmljdD1UcnVlKSE9cm9vdDogcmFpc2UgU3lzdGVtRXhpdCgicHJlLWRlcGxveSBiYWNrdXAgcGF0aCByZXNvbHZlcyBvdXRzaWRlIGl0cyBkZWRpY2F0ZWQgcm9vdCIpCm9zLmNob3duKHJvb3QsMTAwMCwxMDAwKQppZiBvcy5uYW1lPT0icG9zaXgiOiByb290LmNobW9kKDBvNzAwKQ=='))" /app/artifacts
             PREDEPLOY_ROOT_REAL="$(realpath -e -- "${PREDEPLOY_ROOT_EXPECTED}")"
             if [ "${PREDEPLOY_ROOT_REAL}" != "${PREDEPLOY_ROOT_EXPECTED}" ]; then
               echo "[deploy-oci] ERRO: diretório dedicado de backup resolve para fora do caminho esperado." >&2
