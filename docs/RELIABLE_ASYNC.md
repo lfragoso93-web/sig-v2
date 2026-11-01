@@ -13,7 +13,7 @@ necessária uma dependência de mensageria adicional.
 
 | Job/efeito | Estado | Risco concorrente | Decisão |
 | --- | --- | --- | --- |
-| cotações intraday, dois triggers | ativo | alto: provider, preços e cache globais | lock Redis compartilhado pelos triggers |
+| cotações gerais 09:00–18:00 e cripto fora desse intervalo | ativo | alto: provider, preços e cache globais | leases Redis por lote, TTL 7200s, liberação ao concluir |
 | fechamento diário global de preços | ativo | alto: backfill e writes globais | lock Redis implementado |
 | fechamento diário do Tesouro | ativo | alto: import e latest prices compartilhados | lock Redis implementado |
 | manutenção de snapshots/TWR | ativo | médio: rebuild derivado e idempotente | lock Redis global implementado |
@@ -33,11 +33,14 @@ O job `portfolio_snapshot_auto_maintenance` usa a mesma semântica, com a key
 `sgi:job:portfolio_snapshot_auto_maintenance:daily`, antes de abrir a sessão
 que reconstrói snapshots derivados.
 
-Os dois triggers intraday compartilham a lease
-`sgi:job:update_quotes_intraday:intraday`, evitando chamadas concorrentes entre
-réplicas e entre os horários cheios/meia hora. O fechamento do Tesouro usa
+O lote geral atualiza cotações às horas cheias entre 09:00 e 18:00 em dias
+úteis, incluindo cripto. Fora desse intervalo, um lote separado atualiza apenas
+cripto de hora em hora, inclusive nos fins de semana. Cada lote usa uma lease
+Redis com TTL de 7200 segundos, liberada ao concluir. Assim, uma execução
+anterior ainda ativa impede sobreposição entre réplicas; quando termina, a
+próxima janela horária pode iniciar. O fechamento do Tesouro usa
 `sgi:job:persist_treasury_daily_close:daily` antes de abrir a sessão de banco.
-Ambos usam TTL de duas horas.
+O fechamento do Tesouro e os fechamentos diários continuam com TTL de duas horas.
 
 - aquisição é fail-closed: Redis indisponível ou lock ocupado pula a execução;
 - TTL de duas horas limita o bloqueio após crash/restart;
