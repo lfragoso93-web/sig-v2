@@ -195,16 +195,8 @@ jobs:
             ENV_TMP="$(mktemp .env.deploy.XXXXXX)"
             trap 'rm -f "${ENV_TMP}"' EXIT
             chmod --reference=.env "${ENV_TMP}"
-            awk -v branch="${APP_BRANCH}" -v sha="${APP_COMMIT_SHA}" '
-              /^APP_BRANCH=/ { if (++branch_count > 1) exit 2; print "APP_BRANCH=" branch; next }
-              /^APP_COMMIT_SHA=/ { if (++sha_count > 1) exit 2; print "APP_COMMIT_SHA=" sha; next }
-              { print }
-              END {
-                if (branch_count == 0) print "APP_BRANCH=" branch
-                if (sha_count == 0) print "APP_COMMIT_SHA=" sha
-              }
-            ' .env > "${ENV_TMP}" || {
-              echo "[deploy-oci] ERRO: entradas de identidade duplicadas em .env." >&2
+            python3 -c "import base64;exec(base64.b64decode('aW1wb3J0IHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKc291cmNlX3BhdGgsIGRlc3RpbmF0aW9uX3BhdGgsIGJyYW5jaCwgc2hhID0gc3lzLmFyZ3ZbMTpdCnZhbHVlcyA9IHsiQVBQX0JSQU5DSCI6IGJyYW5jaCwgIkFQUF9DT01NSVRfU0hBIjogc2hhfQpsaW5lcyA9IFBhdGgoc291cmNlX3BhdGgpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKS5zcGxpdGxpbmVzKCkKc2VlbiA9IHNldCgpCnVwZGF0ZWQgPSBbXQpmb3IgbGluZSBpbiBsaW5lczoKICAgIGtleSwgc2VwYXJhdG9yLCBfID0gbGluZS5wYXJ0aXRpb24oIj0iKQogICAgaWYgc2VwYXJhdG9yIGFuZCBrZXkgaW4gdmFsdWVzOgogICAgICAgIGlmIGtleSBpbiBzZWVuOgogICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCJkdXBsaWNhdGUgcnVudGltZSBpZGVudGl0eSBrZXkgaW4gLmVudiIpCiAgICAgICAgc2Vlbi5hZGQoa2V5KQogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGYie2tleX09e3ZhbHVlc1trZXldfSIpCiAgICBlbHNlOgogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGxpbmUpCmZvciBrZXksIHZhbHVlIGluIHZhbHVlcy5pdGVtcygpOgogICAgaWYga2V5IG5vdCBpbiBzZWVuOgogICAgICAgIHVwZGF0ZWQuYXBwZW5kKGYie2tleX09e3ZhbHVlfSIpClBhdGgoZGVzdGluYXRpb25fcGF0aCkud3JpdGVfdGV4dCgiXG4iLmpvaW4odXBkYXRlZCkgKyAiXG4iLCBlbmNvZGluZz0idXRmLTgiKQ=='))" .env "${ENV_TMP}" "${APP_BRANCH}" "${APP_COMMIT_SHA}" || {
+              echo "[deploy-oci] ERRO: falha ao atualizar identidade em .env." >&2
               exit 1
             }
             mv "${ENV_TMP}" .env

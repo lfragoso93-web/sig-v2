@@ -295,3 +295,32 @@ def test_cloudflared_token_is_mounted_as_a_secret_file_and_not_an_env_value() ->
 
     assert "umask 077" in smoke
     assert 'trap \'rm -f -- "${CLOUDFLARED_LOG}" "${CLOUDFLARED_SANITIZED_LOG}"\' EXIT' in smoke
+
+
+def test_env_identity_persistence_uses_one_ssh_safe_python_command(tmp_path, monkeypatch) -> None:
+    import sys
+
+    import pytest
+
+    source = WORKFLOW.read_text(encoding="utf-8")
+    script = _embedded_python(source, "python3 -c")
+    compile(script, "<oci-env-identity>", "exec")
+
+    env_file = tmp_path / ".env"
+    output_file = tmp_path / ".env.tmp"
+    env_file.write_text("KEEP=value\nAPP_BRANCH=stable-15jun\n", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["persist-env", str(env_file), str(output_file), "main", "a" * 40],
+    )
+    exec(compile(script, "<oci-env-identity>", "exec"), {"__name__": "__main__"})
+    assert output_file.read_text(encoding="utf-8") == (
+        "KEEP=value\nAPP_BRANCH=main\nAPP_COMMIT_SHA=" + "a" * 40 + "\n"
+    )
+
+    env_file.write_text(
+        "APP_BRANCH=main\nAPP_BRANCH=stable-15jun\n", encoding="utf-8"
+    )
+    with pytest.raises(SystemExit, match="duplicate runtime identity"):
+        exec(compile(script, "<oci-env-identity>", "exec"), {"__name__": "__main__"})

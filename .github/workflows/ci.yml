@@ -121,7 +121,7 @@ jobs:
           import tempfile
 
           payloads = re.findall(r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", script_text)
-          assert len(payloads) == 3
+          assert len(payloads) >= 3
           decoded = [base64.b64decode(payload).decode("ascii") for payload in payloads]
           for source in decoded:
               compile(source, "<oci-deploy-python>", "exec")
