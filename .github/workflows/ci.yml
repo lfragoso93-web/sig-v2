@@ -96,10 +96,10 @@ jobs:
 
           # appleboy/ssh-action appends a shell status guard after every
           # submitted script line; verify those guards cannot enter Python stdin.
-          assert not re.search(r"python\\s+-\\s", "\\n".join(script))
-          assert "<<'PY'" not in "\\n".join(script)
+          assert not re.search(r"python\s+-\s", "\n".join(script))
+          assert "<<'PY'" not in "\n".join(script)
           deployed = "\\n".join(
-              f"{line}\\nDRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
+              f"{line}\nDRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
               "if [ $DRONE_SSH_PREV_COMMAND_EXIT_CODE -ne 0 ]; then "
               "exit $DRONE_SSH_PREV_COMMAND_EXIT_CODE; fi;"
               for line in script
