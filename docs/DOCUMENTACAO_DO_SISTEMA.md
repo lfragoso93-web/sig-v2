@@ -1,55 +1,54 @@
-# Documenta��o do Sistema � SGI
+# Documentação do Sistema — SGI
 
-> **Atualiza��o:** 1� de novembro de 2026
-> **Produ��o:** OCI, publicada a partir da branch `main` ap�s merge de PR e deploy automatizado por GitHub Actions.
+> **Atualização:** 1º de novembro de 2026
+> **Produção:** OCI, publicada a partir da branch `main` após merge de PR e deploy automatizado por GitHub Actions.
 > **Desenvolvimento:** ambiente Windows local, branch `stable-15jun`.
 
-## 1. Vis�o geral
+## 1. Visão geral
 
-O SGI (Sistema de Gest�o de Investimentos) ajuda a registrar e acompanhar carteiras de investimentos, posi��es, pre�os, proventos, rentabilidade e informa��es para apoio � apura��o de imposto de renda. � uma ferramenta gerencial e informativa; n�o presta consultoria nem recomenda��o de investimentos.
+O SGI (Sistema de Gestão de Investimentos) ajuda a registrar e acompanhar carteiras de investimentos, posições, preços, proventos, rentabilidade e informações para apoio à apuração de imposto de renda. É uma ferramenta gerencial e informativa; não presta consultoria nem recomendação de investimentos.
 
-O sistema atende ativos brasileiros e internacionais, renda fixa privada, t�tulos p�blicos e criptoativos. Os recursos dispon�veis incluem cadastro e movimenta��o de ativos, acompanhamento de posi��es, hist�rico patrimonial, proventos, eventos corporativos, indicadores e relat�rios.
+O sistema atende ativos brasileiros e internacionais, renda fixa privada, títulos públicos e criptoativos. Os recursos disponíveis incluem cadastro e movimentação de ativos, acompanhamento de posições, histórico patrimonial, proventos, eventos corporativos, indicadores e relatórios.
 
 ## 2. Integridade dos dados financeiros
 
-- As transa��es persistidas formam o registro can�nico das movimenta��es da carteira. Posi��es e custos s�o derivados delas, considerando a sequ�ncia cronol�gica dos eventos.
-- Leituras financeiras usam dados j� persistidos. A atualiza��o de dados externos � realizada por rotinas pr�prias, separadas da leitura das telas.
-- O sistema n�o deve inventar pre�os, taxas ou valores ausentes. Lacunas s�o apresentadas como pend�ncias at� que exista informa��o confi�vel.
-- Snapshots patrimoniais e rentabilidade TWR s�o mantidos pelo fluxo can�nico de consolida��o. O snapshot oficial continua di�rio; n�o s�o criados snapshots oficiais intradi�rios.
-- Acesso a informa��es de carteira depende da autentica��o e da autoriza��o do propriet�rio.
+- As transações persistidas formam o registro canônico das movimentações da carteira. Posições e custos são derivados delas, considerando a sequência cronológica dos eventos.
+- Leituras financeiras usam dados já persistidos. A atualização de dados externos é realizada por rotinas próprias, separadas da leitura das telas.
+- O sistema não deve inventar preços, taxas ou valores ausentes. Lacunas são apresentadas como pendências até que exista informação confiável.
+- Snapshots patrimoniais e rentabilidade TWR são mantidos pelo fluxo canônico de consolidação. O snapshot oficial continua diário; não são criados snapshots oficiais intradiários.
+- Acesso a informações de carteira depende da autenticação e da autorização do proprietário.
 
-## 3. Atualiza��o de cota��es e snapshots
+## 3. Atualização de cotações e snapshots
 
-Os hor�rios abaixo usam o fuso de Bras�lia. A disponibilidade e o hor�rio efetivo de cada cota��o dependem do calend�rio de negocia��o e dos provedores de dados.
+Os horários abaixo usam o fuso de Brasília. A disponibilidade e o horário efetivo de cada cotação dependem do calendário de negociação e dos provedores de dados.
 
-| Rotina | Frequ�ncia | Escopo |
+| Rotina | Frequência | Escopo |
 | --- | --- | --- |
-| Cota��es de mercado | De hora em hora, em dias �teis, das 09h �s 18h | Ativos de mercado acompanhados, incluindo criptoativos |
-| Cota��es de cripto fora do preg�o | De hora em hora, fora da janela acima e aos fins de semana | Criptoativos, que negociam continuamente |
-| Snapshot patrimonial oficial e manuten��o TWR | Uma vez ao dia, �s 21h em dias �teis | Consolida��o di�ria das carteiras ap�s as rotinas de fechamento |
+| Cotações de mercado | De hora em hora, em dias úteis, das 09h às 18h | Ativos de mercado acompanhados, incluindo criptoativos |
+| Cotações de cripto fora do pregão | De hora em hora, fora da janela acima e aos fins de semana | Criptoativos, que negociam continuamente |
+| Snapshot patrimonial oficial e manutenção TWR | Uma vez ao dia, às 21h em dias úteis | Consolidação diária das carteiras após as rotinas de fechamento |
 
-As atualiza��es de pre�os podem invalidar dados derivados para que sejam recalculados com as cota��es dispon�veis. A rotina de snapshot di�rio n�o substitui as transa��es e n�o cria movimenta��es financeiras.
+As atualizações de preços podem invalidar dados derivados para que sejam recalculados com as cotações disponíveis. A rotina de snapshot diário não substitui as transações e não cria movimentações financeiras.
 
 ## 4. Fontes de dados
 
-O SGI integra provedores de mercado e fontes p�blicas para cota��es, s�ries econ�micas, proventos e informa��es de t�tulos p�blicos. A cobertura varia por classe de ativo e per�odo. Dados sem cobertura suficiente permanecem identificados como indispon�veis ou pendentes, em vez de serem completados por estimativas n�o verificadas.
+O SGI integra provedores de mercado e fontes públicas para cotações, séries econômicas, proventos e informações de títulos públicos. A cobertura varia por classe de ativo e período. Dados sem cobertura suficiente permanecem identificados como indisponíveis ou pendentes, em vez de serem completados por estimativas não verificadas.
 
-## 5. Seguran�a e acesso
+## 5. Segurança e acesso
 
-O sistema requer autentica��o para recursos protegidos e verifica a autoriza��o para acesso �s carteiras. Os recursos de autentica��o incluem tokens de sess�o e suporte a segundo fator. Segredos e credenciais de ambiente s�o configurados fora da documenta��o e n�o devem ser inclu�dos em arquivos versionados.
+O sistema requer autenticação para recursos protegidos e verifica a autorização para acesso às carteiras. Os recursos de autenticação incluem tokens de sessão e suporte a segundo fator. Segredos e credenciais de ambiente são configurados fora da documentação e não devem ser incluídos em arquivos versionados.
 
-## 6. Desenvolvimento e publica��o
+## 6. Desenvolvimento e publicação
 
-- O ambiente Windows local � usado para desenvolvimento na branch `stable-15jun`.
-- A produ��o executa a vers�o integrada em `main`.
-- Altera��es s�o validadas antes da publica��o, submetidas por Pull Request e integradas ap�s as verifica��es automatizadas exigidas pelo reposit�rio.
-- O merge para `main` aciona o fluxo de CI/CD respons�vel pelo deploy em produ��o. A prontid�o do sistema depende tamb�m da valida��o de identidade e certifica��o correspondentes � vers�o implantada.
-- Altera��es de banco de dados s�o versionadas por migra��es do Alembic e aplicadas pelo processo de publica��o da aplica��o.
+- O ambiente Windows local é usado para desenvolvimento na branch `stable-15jun`.
+- A produção executa a versão integrada em `main`.
+- Alterações são validadas antes da publicação, submetidas por Pull Request e integradas após as verificações automatizadas exigidas pelo repositório.
+- O merge para `main` aciona o fluxo de CI/CD responsável pelo deploy em produção. A prontidão do sistema depende também da validação de identidade e certificação correspondentes à versão implantada.
+- Alterações de banco de dados são versionadas por migrações do Alembic e aplicadas pelo processo de publicação da aplicação.
 
 ## 7. Guias relacionados
 
 - [Guia do backend](../backend/README.md)
 - [Guia do frontend](../frontend/README.md)
-- [Execu��o ass�ncrona confi�vel](RELIABLE_ASYNC.md)
-- [Runbook de certifica��o de dados reais](REAL_DATA_CERTIFICATION_RUNBOOK.md)
-
+- [Execução assíncrona confiável](RELIABLE_ASYNC.md)
+- [Runbook de certificação de dados reais](REAL_DATA_CERTIFICATION_RUNBOOK.md)
