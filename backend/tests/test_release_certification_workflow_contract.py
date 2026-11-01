@@ -43,8 +43,8 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     source = WORKFLOW.read_text(encoding="utf-8")
 
     backup = source.index("Criando e validando backup da base")
-    checkout = source.index('git checkout "${TARGET_BRANCH}"')
-    build = source.index("compose build backend")
+    checkout = source.index('git checkout "${TARGET_BRANCH}"', backup)
+    build = source.index("compose build backend", checkout)
     validate_backup = source.index("app.cli.real_data_dataset_identity")
     initializer = _embedded_python(
         source, "compose exec -T --user 0 backend python -c"
