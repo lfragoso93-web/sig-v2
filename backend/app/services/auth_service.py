@@ -301,24 +301,32 @@ async def handle_google_callback(
             detail="Perfil do Google incompleto. E-mail nao fornecido.",
         )
 
-    # Busca por sub do Google ou por email
-    stmt = select(User).where(
-        (User.google_sub == google_sub) | (User.email == email)
-    )
-    result = await db.execute(stmt)
+    # A identidade Google persistente e o sub. Nao vincule automaticamente
+    # uma conta local apenas porque o endereco informado coincide: isso pode
+    # permitir takeover quando o Google nao e autoridade sobre esse endereco.
+    result = await db.execute(select(User).where(User.google_sub == google_sub))
     user = result.scalar_one_or_none()
 
-    if user:
-        if not user.google_sub:
-            user.google_sub = google_sub
-            if user.auth_provider == "local":
-                user.auth_provider = "google"
-        picture = user_info.get("picture")
-        if picture and not user.avatar_url:
-            user.avatar_url = picture
-        await db.flush()
-    else:
-        # Cria novo usuario vinculado ao Google
+    if not user:
+        email_verified = user_info.get("email_verified") is True
+        if not email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O Google precisa confirmar o endereco de e-mail.",
+            )
+
+        result = await db.execute(select(User).where(User.email == email))
+        existing_user = result.scalar_one_or_none()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Este e-mail ja possui uma conta. Entre pelo metodo atual "
+                    "antes de vincular uma identidade Google."
+                ),
+            )
+
+        # Cria nova conta somente apos confirmar o e-mail pelo Google.
         name = user_info.get("name") or email.split("@")[0]
         picture = user_info.get("picture")
         random_pwd = hash_password(secrets.token_urlsafe(32))
@@ -339,6 +347,12 @@ async def handle_google_callback(
             await send_welcome_email(user.email, user.name)
         except Exception as exc:
             logger.warning("Falha ao enviar email boas-vindas Google: %s", exc)
+
+    if user:
+        picture = user_info.get("picture")
+        if picture and not user.avatar_url:
+            user.avatar_url = picture
+        await db.flush()
 
     if not user.is_active:
         raise HTTPException(

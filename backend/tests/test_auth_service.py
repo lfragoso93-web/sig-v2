@@ -84,6 +84,75 @@ class TestCreateAccessToken:
 class TestAuthMfaAndOAuthFlows:
 
     @pytest.mark.asyncio
+    async def test_google_login_does_not_link_existing_local_account_by_email(
+        self, db: AsyncSession
+    ):
+        user = User(
+            name="Conta Local",
+            email="local_google@sgi.com",
+            hashed_password=hash_password("SenhaForte@123"),
+            is_active=True,
+            auth_provider="local",
+        )
+        db.add(user)
+        await db.flush()
+
+        google_profile = {
+            "sub": "google-sub-local-link-attempt",
+            "email": user.email,
+            "email_verified": True,
+        }
+        with (
+            patch(
+                "app.services.auth_service.verify_and_consume_oauth_state",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.services.auth_service.exchange_code_for_user_info",
+                new_callable=AsyncMock,
+                return_value=google_profile,
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_service.handle_google_callback(db, "google-code", "state")
+
+        assert exc_info.value.status_code == 409
+        await db.refresh(user)
+        assert user.google_sub is None
+        assert user.auth_provider == "local"
+
+    @pytest.mark.asyncio
+    async def test_google_login_rejects_unverified_email_for_new_account(
+        self, db: AsyncSession
+    ):
+        google_profile = {
+            "sub": "google-sub-unverified",
+            "email": "unverified_google@sgi.com",
+            "email_verified": False,
+        }
+        with (
+            patch(
+                "app.services.auth_service.verify_and_consume_oauth_state",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.services.auth_service.exchange_code_for_user_info",
+                new_callable=AsyncMock,
+                return_value=google_profile,
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_service.handle_google_callback(db, "google-code", "state")
+
+        assert exc_info.value.status_code == 400
+        result = await db.execute(
+            select(User).where(User.email == "unverified_google@sgi.com")
+        )
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.asyncio
     async def test_login_success_without_mfa(self, db: AsyncSession):
         user = User(
             name="Usuario Sem MFA",
