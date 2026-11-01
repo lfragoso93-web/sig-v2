@@ -1,3 +1,5 @@
+> **Historical snapshot from 2026-10-29.** This diagnosis records observations and opportunities from that date. Branches, backlog, and operational status may have changed; confirm against code, Issues, and current runbooks before acting. OCI is now production on `main`; local Windows development uses `stable-15jun`.
+
 # Relatório Técnico de Diagnóstico e Mapeamento de Oportunidades de Melhoria — SGI v2
 
 **Documento:** `docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`  

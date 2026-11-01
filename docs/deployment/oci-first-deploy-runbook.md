@@ -1,3 +1,5 @@
+> **HISTORICAL PROVISIONING / HOMOLOGATION SNAPSHOT:** This document is not the current OCI production release procedure. Production runs `main` and deploys automatically after successful CI; see `oci-execution-index.md`. Do not use these manual branch/checkout steps for a production release.
+
 # SGI v2 OCI First Deploy / Homologation Runbook
 
 Status: OCI e alvo de homologacao de SHA previamente certificado localmente.

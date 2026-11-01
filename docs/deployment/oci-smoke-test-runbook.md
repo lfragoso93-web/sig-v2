@@ -1,3 +1,5 @@
+> **HISTORICAL E2 MICRO LAB SMOKE SNAPSHOT:** This document is not the current OCI production release procedure. Production runs `main` and deploys automatically after successful CI; see `oci-execution-index.md`. Do not use these manual branch/checkout steps for a production release.
+
 # SGI v2 OCI Smoke Test Runbook
 
 Status: validated on the OCI E2 Micro lab on 2026-08-25.

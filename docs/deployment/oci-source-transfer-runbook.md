@@ -1,3 +1,5 @@
+> **LEGACY SOURCE TRANSFER PROCEDURE:** This document is not the current OCI production release procedure. Production runs `main` and deploys automatically after successful CI; see `oci-execution-index.md`. Do not use these manual branch/checkout steps for a production release.
+
 # SGI v2 OCI Source Transfer Runbook
 
 Status: prepared before the VM exists.

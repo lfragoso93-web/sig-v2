@@ -8,9 +8,11 @@ Plataforma corporativa e determinística para acompanhamento, consolidação pat
 - **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261022_auth_oauth_mfa`), PostgreSQL 16, Redis 7 e APScheduler.
 - **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`), Vite 8 (`^8.3.4`), Tailwind CSS v4 (`^4.3.3`), TanStack Query v5, Zustand e Vitest.
 
-## Ambiente de validação com usuários
+## Ambientes de desenvolvimento e producao
 
-O runtime único de desenvolvimento, testes e validação com usuários é o projeto Compose existente `docker-compose.yml` (`sig-v2`), publicado localmente ou via Cloudflare Tunnel. Toda alteração de produto validada com usuários deve ser incorporada às imagens backend/frontend dessa stack. Não iniciar `sgi-usertest`; o procedimento atual está em [`docs/USER_VALIDATION_RUNBOOK.md`](docs/USER_VALIDATION_RUNBOOK.md).
+Windows com Docker e o ambiente local de desenvolvimento e validacao na branch `stable-15jun`. OCI e producao na branch `main`.
+
+Alteracoes chegam a `main` por Pull Request. Apos o merge e CI aprovado, GitHub Actions executa deploy automatico no SHA exato, salva backup pre-deploy e valida servicos, smoke, certificacao e `/ready`. Nao atualize a producao manualmente por SSH ou Compose. Consulte `docs/USER_VALIDATION_RUNBOOK.md` para validacao local e `docs/deployment/oci-execution-index.md` para o release.
 
 ## Simulações e Calculadoras
 
@@ -18,17 +20,19 @@ A calculadora de aportes está em `/carteira/ferramentas/rendimentos`; o simulad
 
 No cadastro de Renda Fixa, o nome do título inclui o emissor, o tipo do produto define o tratamento fiscal e a carência é omitida sob liquidez diária. A taxonomia e as regras estão descritas em [`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
 
-## Branch e governança
+## Branches e releases
 
-- desenvolvimento obrigatório em `stable-15jun`;
-- `main` recebe apenas macroblocos certificados via Pull Request;
-- cada implementação é dividida em commits pequenos e rastreáveis;
-- antes de alterar funcionalidade, revisar a Issue relacionada, contratos canônicos e impacto arquitetural;
-- README, ROADMAP, CHANGELOG, Issues e runbooks devem refletir o estado real do projeto.
+- Windows/local: desenvolvimento e validacao em `stable-15jun`.
+- OCI/producao: branch `main`.
+- Alteracoes chegam a `main` por Pull Request; push direto e proibido.
+- Apos merge e CI aprovado para o push em `main`, GitHub Actions executa deploy automatico no SHA exato, cria backup pre-deploy e valida saude, smoke, certificacao e `/ready`.
+- `/ready` deve corresponder ao SHA, dataset e revisao Alembic ativos; `/health` isolado nao comprova certificacao.
 
-## Status do Projeto e Entregas Recentes — 29/10/2026
+Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
-O SGI v2 opera sobre o branch obrigatório `stable-15jun`, com o banco de dados governado pelo Alembic na cabeça **`20261022_auth_oauth_mfa`** (67 revisões lineares encadeadas) e runtime unificado local no Docker Compose (`sig-v2`).
+## Funcionalidades e baseline observado em 01/11/2026
+
+O codigo sincronizado entre `stable-15jun` e `main` esta no baseline `ab19b94397b1a9e5196a2e981d1bd1f302c76d4b`; OCI executa `main`, com o banco de dados governado pelo Alembic na cabeça **`20261022_auth_oauth_mfa`** (67 revisões lineares encadeadas) e runtime de producao em OCI. O SHA e a migration citados sao a fotografia observada em 01/11/2026 e devem ser confirmados nos releases posteriores.
 
 ### Funcionalidades Implementadas e Ativas
 
@@ -42,7 +46,7 @@ O SGI v2 opera sobre o branch obrigatório `stable-15jun`, com o banco de dados 
 
 ### Mapeamento de Oportunidades de Melhoria
 
-O diagnóstico técnico aprofundado do sistema encontra-se catalogado no relatório oficial [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md). O documento mapeia 19 oportunidades técnicas estruturadas por prioridade (P1 a P3), cobrindo integridade contábil, ampliação do `PortfolioAccessContext`, governança de branches e otimizações de performance.
+O diagnostico de 29/10/2026 e uma fotografia historica, nao um inventario confirmado do backlog atual. Consulte o relatorio [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md). O documento mapeia 19 oportunidades técnicas estruturadas por prioridade (P1 a P3), cobrindo integridade contábil, ampliação do `PortfolioAccessContext`, governança de branches e otimizações de performance.
 
 ## Agent Skills versionadas
 
@@ -57,19 +61,12 @@ atualizadas no mesmo bloco que alterar um contrato correspondente:
 As skills orientam a leitura dos contratos vivos; não substituem Issues,
 runbooks, testes ou autorização explícita para operações destrutivas/escritas.
 
-## Ambiente de desenvolvimento e OCI
+## Ambientes
 
-### Local
+- Desenvolvimento: Windows, PowerShell e Docker, na branch `stable-15jun`.
+- Producao: OCI, branch `main`, atualizacao automatica pelo GitHub Actions apos CI aprovado.
 
-Windows + PowerShell + Docker é o ambiente oficial de desenvolvimento, correção, migrations de teste, suítes pesadas, certificação financeira e geração do SHA candidato.
-
-### OCI
-
-OCI não faz parte do caminho atual de desenvolvimento, testes ou homologação.
-#284 preserva o trabalho de infraestrutura/cloud como backlog futuro.
-
-Quando esse backlog for retomado, não desenvolver nem manter hotfix permanente
-na VM.
+Deploy normal nao e feito manualmente por SSH. A identidade produtiva e a certificacao sao verificadas para o SHA exato do release; consulte o indice operacional OCI.
 
 ## Arquitetura financeira canônica
 
@@ -106,7 +103,7 @@ Princípios obrigatórios:
 
 ## Estado funcional resumido
 
-| Domínio | Estado em 29/10/2026 |
+| Domínio | Estado em 01/11/2026 |
 |---|---|
 | Autenticação/Core | funcional com Google OAuth 2.0 e MFA TOTP (#97) |
 | Carteiras/Transações | canônico e certificado sinteticamente |
@@ -126,12 +123,12 @@ Princípios obrigatórios:
 | Calculadoras & Simulação | implementadas em `/carteira/ferramentas/*` (#359) |
 | Ativos Internacionais | catálogo e séries históricas integrados (`366ae927`) |
 
-## Status do Backlog e Evolução
+## Registro historico de backlog
 
-- **Entregas pós-GO consolidadas:** #58, #351, #355, #359, #360, #361 e #97 estão implementadas no branch `stable-15jun`.
+- **Entregas pós-GO consolidadas:** #58, #351, #355, #359, #360, #361 e #97 estão implementadas na baseline sincronizada `stable-15jun` / `main`.
 - **Issues fechadas:** #352 (seletor de tipo de ativo), #354 (alinhamento de senha), #363, #364, #365.
-- **Oportunidades Técnicas Priorizadas:** O planejamento das próximas rodadas de evolução técnica está formalizado no relatório oficial [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) (19 oportunidades mapeadas).
-- **Pendências específicas:** #149 permanece aberta para evidência de posição de custódia por carteira na manhã do pagamento e base tributável/IRRF por lote do Tesouro Direto. #284 preserva o trabalho de infraestrutura em nuvem (OCI) como backlog futuro.
+- **Oportunidades Técnicas Priorizadas:** O planejamento registrado em 29/10/2026 e uma fotografia historica, nao uma lista confirmada de Issues abertas [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) (19 oportunidades mapeadas).
+- **Pendências específicas:** #149 permanece aberta para evidência de posição de custódia por carteira na manhã do pagamento e base tributável/IRRF por lote do Tesouro Direto. #284 registra o historico da implantacao OCI; OCI atualmente e producao.
 
 ## Comandos básicos
 

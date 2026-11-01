@@ -2,7 +2,9 @@
 
 Todas as mudanças relevantes do projeto são documentadas aqui. O histórico detalhado anterior permanece preservado no Git e nos changelogs datados em `docs/changelog/`.
 
-## [Unreleased] - branch `stable-15jun`
+## Consolidated release history - current production branch `main` (baseline checked 2026-11-01)
+
+Entries dated before this heading describe prior releases and point-in-time observations; check current code and runbooks before treating them as current runtime state.
 
 ### 27/10/2026 - Correcoes de integridade, simulador de metas, tesouro, provedores internacionais e seguranca
 

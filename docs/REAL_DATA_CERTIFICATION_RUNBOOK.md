@@ -4,9 +4,11 @@ Issue: #384
 
 Branch de produção obrigatória: `main`
 
-Última atualização do procedimento: 06/10/2026
+Última atualização do procedimento: 01/11/2026
 
-## Observação operacional mais recente — 16/10/2026
+OCI e producao na branch `main`; Windows local usa `stable-15jun`. Releases de codigo sao certificados automaticamente apos CI, deploy e smoke, no SHA exato do push em `main`.
+
+## Registro historico do ambiente local — 16/10/2026
 
 O runtime local foi consultado em modo read-only. Backend, PostgreSQL e Redis
 estavam saudáveis; `/health=200`. `/ready=503` retornou
@@ -104,7 +106,7 @@ formal do dataset candidato.
 6. preservar backup/restore e volumes existentes;
 7. No fluxo manual completo, anexar o dry-run a #384 antes de solicitar execucao real. Releases de codigo seguem a automacao post-deploy descrita acima.
 
-OCI/#284 não faz parte do caminho atual.
+OCI e o ambiente produtivo atual. O deploy normal ocorre automaticamente apos merge e CI aprovado em `main`; #284 e os documentos de provisionamento registram a historia de implantacao, nao o fluxo vigente.
 
 ## Identidade canônica do dataset
 

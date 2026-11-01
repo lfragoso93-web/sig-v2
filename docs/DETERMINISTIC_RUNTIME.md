@@ -14,7 +14,7 @@ A primeira vertical migrada é Proventos, incluindo o limite entre `A_RECEBER` e
 ## Configuração
 
 `Settings` rejeita cedo URLs, portas e limites inválidos. Em `production`, são
-obrigatórios `APP_BRANCH=stable-15jun`, `APP_COMMIT_SHA` hexadecimal completo e
+obrigatórios `APP_BRANCH=main`, `APP_COMMIT_SHA` hexadecimal completo e
 `REAL_DATASET_REFERENCE` canônica. Mensagens de validação citam apenas o nome do
 campo ou a regra, nunca o valor recebido.
 
