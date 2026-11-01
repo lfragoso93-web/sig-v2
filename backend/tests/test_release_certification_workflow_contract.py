@@ -257,3 +257,13 @@ def test_backend_health_wait_is_embedded_as_one_ssh_safe_python_command() -> Non
     assert "time.sleep(2)" in health_wait
     assert "for i in $(seq 1 15)" not in source
     assert not any("<<" in line for line in source.splitlines())
+
+
+def test_oci_smoke_cloudflared_diagnostics_suppress_candidate_values() -> None:
+    smoke = (ROOT / "scripts" / "oci_smoke_test.sh").read_text(encoding="utf-8")
+
+    assert 'grep -nEo "$TOKEN_PATTERN"' in smoke
+    assert "candidate line=%s length=%d unique_chars=%d" in smoke
+    assert "candidate values suppressed" in smoke
+    assert 'fail "cloudflared logs may contain token-like content' in smoke
+    assert "printf" not in smoke[smoke.index("TOKEN_PATTERN="):smoke.index("ok \"cloudflared logs")]
