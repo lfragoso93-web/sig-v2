@@ -202,6 +202,9 @@ jobs:
             mv "${ENV_TMP}" .env
             trap - EXIT
 
+            echo "==> Preparando diretório privado do relatório de certificação..."
+            compose exec -T --user 0 backend python -c "import base64;exec(base64.b64decode('aW1wb3J0IG9zCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aApyb290ID0gUGF0aCgiL2FwcC9hcnRpZmFjdHMiKQppZiByb290LmlzX3N5bWxpbmsoKSBvciBub3Qgcm9vdC5pc19kaXIoKSBvciByb290LnJlc29sdmUoc3RyaWN0PVRydWUpICE9IHJvb3Q6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJhcnRpZmFjdCByb290IGlzIG5vdCB0aGUgZXhwZWN0ZWQgbW91bnRlZCBkaXJlY3RvcnkiKQpjZXJ0aWZpY2F0aW9uID0gcm9vdCAvICJyZWFsLWRhdGEtY2VydGlmaWNhdGlvbiIKcmVsZWFzZXMgPSBjZXJ0aWZpY2F0aW9uIC8gInJlbGVhc2VzIgpmb3IgZGlyZWN0b3J5IGluIChjZXJ0aWZpY2F0aW9uLCByZWxlYXNlcyk6CiAgICBpZiBkaXJlY3RvcnkuaXNfc3ltbGluaygpIG9yIChkaXJlY3RvcnkuZXhpc3RzKCkgYW5kIG5vdCBkaXJlY3RvcnkuaXNfZGlyKCkpOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoInJlbGVhc2UgcmVwb3J0IGRpcmVjdG9yeSBpcyBub3QgYSByZWd1bGFyIGRpcmVjdG9yeSIpCiAgICBkaXJlY3RvcnkubWtkaXIobW9kZT0wbzcwMCwgZXhpc3Rfb2s9VHJ1ZSkKICAgIGlmIGRpcmVjdG9yeS5yZXNvbHZlKHN0cmljdD1UcnVlKSAhPSBkaXJlY3Rvcnk6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgicmVsZWFzZSByZXBvcnQgZGlyZWN0b3J5IHJlc29sdmVzIG91dHNpZGUgZXhwZWN0ZWQgcGF0aCIpCiAgICBvcy5jaG93bihkaXJlY3RvcnksIDEwMDAsIDEwMDApCiAgICBvcy5jaG1vZChkaXJlY3RvcnksIDBvNzAwKQ=='))"
+
             echo "==> Certificando automaticamente o SHA aprovado pelo CI..."
             CERT_REPORT="/app/artifacts/real-data-certification/releases/${TARGET_SHA}.json"
             CERT_DRY_RUN="/tmp/real-data-release-${TARGET_SHA}.dry-run.json"
