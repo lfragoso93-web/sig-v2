@@ -81,6 +81,7 @@ def test_post_commit_failures_report_persisted_certification_state(
         database_writes_executed=1,
         event_key="release-event-123",
     )
+
     def fail_run(coro):
         coro.close()
         raise error
@@ -104,3 +105,41 @@ def test_post_commit_failures_report_persisted_certification_state(
     assert payload["database_writes_executed"] == 1
     assert payload["transaction_committed"] is True
     assert payload["plan_event_key"] == "release-event-123"
+
+
+def test_ambiguous_commit_is_not_reported_as_zero_writes(
+    monkeypatch, capsys
+) -> None:
+    import json
+
+    import pytest
+
+    from app.cli import real_data_release_certification as cli
+
+    error = cli.RealDataReleaseCommitOutcomeUnknownError(
+        event_key="release-event-uncertain"
+    )
+
+    def fail_run(coro):
+        coro.close()
+        raise error
+
+    monkeypatch.setattr(cli.asyncio, "run", fail_run)
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(
+            [
+                "--expected-sha", "a" * 40,
+                "--workflow-run-id", "12345",
+                "--workflow-run-conclusion", "success",
+                "--workflow-run-event", "push",
+                "--workflow-run-branch", "main",
+                "--report-file", "/tmp/release-report.json",
+            ]
+        )
+
+    assert raised.value.code == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["database_writes_executed"] is None
+    assert payload["transaction_committed"] is None
+    assert payload["plan_event_key"] == "release-event-uncertain"
