@@ -185,7 +185,7 @@ jobs:
             echo ""
             compose exec -T db pg_isready -U "${POSTGRES_USER:-sgi}"
             compose exec -T redis redis-cli ping | grep -q PONG
-            sh scripts/oci_smoke_test.sh
+            COMPOSE_PROJECT_NAME=sig-v2 sh scripts/oci_smoke_test.sh
 
             RUNTIME_BRANCH="$(compose exec -T backend printenv APP_BRANCH | tr -d '\r')"
             RUNTIME_SHA="$(compose exec -T backend printenv APP_COMMIT_SHA | tr -d '\r')"
