@@ -1,9 +1,22 @@
+import base64
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-oci.yml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def _embedded_python(source: str, command_fragment: str) -> str:
+    line = next(
+        line
+        for line in source.splitlines()
+        if command_fragment in line and "base64.b64decode" in line
+    )
+    match = re.search(r"base64\.b64decode\('([A-Za-z0-9+/=]+)'\)", line)
+    assert match is not None
+    return base64.b64decode(match.group(1)).decode("ascii")
 
 
 def test_production_release_certification_is_after_ci_and_smoke_gates() -> None:
@@ -33,15 +46,23 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     checkout = source.index('git checkout "${TARGET_BRANCH}"')
     build = source.index("compose build backend")
     validate_backup = source.index("app.cli.real_data_dataset_identity")
-    rotate = source.index("shutil.rmtree(candidate)")
+    initializer = _embedded_python(
+        source, "compose exec -T --user 0 backend python -c"
+    )
+    rotation = _embedded_python(
+        source, "compose exec -T backend python -c"
+    )
+    rotate = rotation.index("shutil.rmtree(candidate)")
 
     assert backup < checkout < build
     assert backup < validate_backup < rotate < checkout
     assert "oci-predeploy-backups" in source
-    assert "compose exec -T --user 0 backend python - /app/artifacts <<'PY'" in source
+    assert "compose exec -T --user 0 backend python -c" in source
+    assert "python - /app/artifacts <<'PY'" not in source
     assert "chown -R" not in source
-    assert 'candidate.name.startswith("run-")' in source
-    assert "resolved_candidate.parent != resolved_root" in source
+    assert 'candidate.name.startswith("run-")' in rotation
+    assert "resolved_candidate.parent != resolved_root" in rotation
+    assert ' "${PREDEPLOY_RUN_ID}"' in source
     assert "postgres_data" not in source
     assert "volume prune" not in source
     assert "compose down -v" not in source
@@ -56,21 +77,10 @@ def test_embedded_backup_initializer_executes_and_chowns_only_dedicated_root(
     import pytest
 
     source = WORKFLOW.read_text(encoding="utf-8")
-    lines = source.splitlines()
-    start = next(
-        i
-        for i, line in enumerate(lines)
-        if line.strip()
-        == "compose exec -T --user 0 backend python - /app/artifacts <<'PY'"
+    initializer = _embedded_python(
+        source, "compose exec -T --user 0 backend python -c"
     )
-    script_lines = []
-    for line in lines[start + 1 :]:
-        if line == "            PY":
-            break
-        script_lines.append(line[12:] if line.startswith("            ") else "")
-    else:
-        pytest.fail("backup initializer heredoc terminator missing")
-    script = compile("\n".join(script_lines), "oci-backup-initializer", "exec")
+    script = compile(initializer, "oci-backup-initializer", "exec")
 
     parent = tmp_path / "artifacts"
     parent.mkdir()
