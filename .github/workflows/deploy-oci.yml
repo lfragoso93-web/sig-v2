@@ -189,13 +189,6 @@ jobs:
               exit 1
             fi
 
-            case "${CI_WORKFLOW_RUN_ID}" in
-              ''|*[!0-9]*)
-                echo "[deploy-oci] ERRO: workflow run de CI ausente ou invÃ¡lido." >&2
-                exit 1
-                ;;
-            esac
-
             echo "==> Persistindo a identidade implantada em .env..."
             ENV_TMP="$(mktemp .env.deploy.XXXXXX)"
             trap 'rm -f "${ENV_TMP}"' EXIT
