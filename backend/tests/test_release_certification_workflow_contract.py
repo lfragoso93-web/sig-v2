@@ -52,10 +52,13 @@ def test_deploy_validates_predeploy_backup_before_checkout_and_rotates_only_back
     rotation = _embedded_python(
         source, "compose exec -T backend python -c"
     )
-    rotate = rotation.index("shutil.rmtree(candidate)")
+    rotation_command = source.index(
+        "compose exec -T backend python -c", validate_backup
+    )
 
     assert backup < checkout < build
-    assert backup < validate_backup < rotate < checkout
+    assert backup < validate_backup < rotation_command < checkout
+    assert "shutil.rmtree(candidate)" in rotation
     assert "oci-predeploy-backups" in source
     assert "compose exec -T --user 0 backend python -c" in source
     assert "python - /app/artifacts <<'PY'" not in source
