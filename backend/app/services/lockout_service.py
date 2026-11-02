@@ -8,6 +8,7 @@ import logging
 import time
 from fastapi import HTTPException, status
 from app.core.cache import get_redis
+from app.core.config import settings
 from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,36 @@ async def clear_lockout(email: str) -> None:
             )
         except Exception as exc:
             logger.warning("Falha ao limpar lockout no Redis: %s", exc)
+
+    _memory_failed_attempts.pop(email_clean, None)
+    _memory_lockouts.pop(email_clean, None)
+
+
+async def admin_unlock_lockout(email: str) -> None:
+    """Clear login lockout and fail visibly if production Redis is unavailable."""
+    email_clean = email.strip().lower()
+    redis_client = await get_redis()
+    if redis_client:
+        try:
+            await redis_client.delete(
+                _failed_key(email_clean), _lockout_key(email_clean)
+            )
+        except Exception as exc:
+            logger.warning(
+                "Falha ao desbloquear login via Redis: %s",
+                sanitize_log_value(exc),
+            )
+            if settings.ENVIRONMENT.strip().lower() == "production":
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Não foi possível desbloquear o usuário agora.",
+                ) from exc
+    else:
+        if settings.ENVIRONMENT.strip().lower() == "production":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Não foi possível desbloquear o usuário agora.",
+            )
 
     _memory_failed_attempts.pop(email_clean, None)
     _memory_lockouts.pop(email_clean, None)

@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database, Server, Zap, Mail, Send, AlertTriangle, CheckCircle2,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, Unlock, BookOpen, Database, Server, Zap, Mail, Send, AlertTriangle, CheckCircle2,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
@@ -259,6 +259,22 @@ function UsersSection() {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
+  const unlockUser = useMutation({
+    mutationFn: (id: number) => api.post(`/admin/users/${id}/unlock`),
+    onSuccess: (_res, id) => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      setUserFeedback({ userId: id, msg: 'Bloqueios de login e recuperação removidos.', isError: false })
+    },
+    onError: (e: any, id) => {
+      const detail = e?.response?.data?.detail
+      setUserFeedback({
+        userId: id,
+        msg: typeof detail === 'string' ? detail : 'Erro ao desbloquear usuário.',
+        isError: true,
+      })
+    },
+  })
+
   const updateUser = useMutation({
     mutationFn: ({ id, name, email, role }: { id: number; name: string; email: string; role: string }) =>
       api.put(`/admin/users/${id}`, { name, email, role }),
@@ -479,6 +495,19 @@ function UsersSection() {
                     style={{ color: resettingId === u.id ? 'var(--color-primary)' : 'var(--color-text-muted)' }}
                   >
                     <KeyRound size={13} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!confirm(`Remover bloqueios de login e recuperação de "${u.name || u.email}"?`)) return
+                      unlockUser.mutate(u.id)
+                    }}
+                    title="Desbloquear usuário"
+                    aria-label={`Desbloquear ${u.name || u.email}`}
+                    disabled={unlockUser.isPending}
+                    className="settings-icon-button disabled:opacity-50"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
+                    <Unlock size={13} />
                   </button>
                   <button
                     onClick={() => {

@@ -54,6 +54,9 @@ from app.services.lockout_service import (
     clear_lockout,
     register_failed_attempt,
 )
+from app.services.password_reset_throttle_service import (
+    register_password_reset_request,
+)
 from app.services.totp_service import (
     generate_backup_codes,
     generate_qr_code_data_uri,
@@ -424,6 +427,8 @@ async def forgot_password(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Nenhuma conta ativa encontrada com este e-mail.",
         )
+
+    await register_password_reset_request(email_clean)
 
     reset_token = create_access_token(
         subject=str(user.id),

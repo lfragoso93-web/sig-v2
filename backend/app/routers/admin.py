@@ -39,6 +39,8 @@ from app.services.user_service import (
     create_user, list_users, get_user_by_id,
     admin_update_user, delete_user, count_users, count_active_superadmins
 )
+from app.services.lockout_service import admin_unlock_lockout
+from app.services.password_reset_throttle_service import clear_password_reset_lockout
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 from app.services import backup_service
 from app.schemas.audit_log import (
@@ -214,6 +216,35 @@ async def admin_toggle_user_active(
     except Exception as exc:
         logger.warning("Falha ao enviar e-mail de status da conta: %s", exc)
     return user
+
+
+@router.post("/users/{user_id}/unlock", response_model=MessageResponse)
+async def admin_unlock_user(
+    user_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Limpa bloqueios de login e de solicitacao de recuperacao de senha."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    await admin_unlock_lockout(user.email)
+    await clear_password_reset_lockout(user.email)
+    await AuditLogService.log_action(
+        db=db,
+        user_id=current_user.id,
+        action="UPDATE",
+        resource_type="UserAuthenticationLockout",
+        resource_id=user.id,
+        new_values={"event": "unlocked_by_superadmin"},
+        ip_address=request.client.host if request.client else None,
+        user_agent=sanitize_log_value(request.headers.get("user-agent", "")) or None,
+        status="SUCCESS",
+    )
+    await db.commit()
+    return MessageResponse(message="Bloqueios do usuário removidos com sucesso.")
 
 
 @router.post("/users/{user_id}/reset-password", response_model=MessageResponse)

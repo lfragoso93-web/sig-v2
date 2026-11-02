@@ -38,6 +38,8 @@ O SGI integra provedores de mercado e fontes públicas para cotações, séries 
 
 O sistema requer autenticação para recursos protegidos e verifica a autorização para acesso às carteiras. Os recursos de autenticação incluem tokens de sessão e suporte a segundo fator. Segredos e credenciais de ambiente são configurados fora da documentação e não devem ser incluídos em arquivos versionados.
 
+Solicitações de recuperação de senha são limitadas por conta: duas solicitações em uma janela de dois minutos; uma terceira solicitação bloqueia novos envios por 60 minutos. O limite usa Redis em produção e falha de forma fechada se Redis não estiver disponível. Fora de produção, há fallback em memória para desenvolvimento e testes. Um SuperAdmin pode remover os bloqueios de login e de recuperação pela ação **Desbloquear usuário** no painel administrativo; a operação fica registrada na auditoria.
+
 ## 6. Desenvolvimento e publicação
 
 - O ambiente Windows local é usado para desenvolvimento na branch `stable-15jun`.
