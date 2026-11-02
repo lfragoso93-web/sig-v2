@@ -1,9 +1,9 @@
-> **Current release contract (2026-11-01):** Local Windows development uses `stable-15jun`; OCI production runs `main`. Merged PRs deploy automatically after successful CI and the production workflow certifies the exact release identity. The roadmap and diagnosis snapshots below are dated historical planning/evidence, not a verified current open-issue inventory. Confirm current priorities in GitHub Issues and current release documentation before acting.
+> **Current release contract (2026-11-02):** Local Windows development uses `stable-15jun`; OCI production runs `main`. Merged PRs deploy automatically after successful CI and the production workflow certifies the exact release identity. The roadmap and diagnosis snapshots below are dated historical planning/evidence, not a verified current open-issue inventory. Confirm current priorities in GitHub Issues and current release documentation before acting.
 
 # Roadmap - SGI v2
 
 > **Última Atualização:** 29/10/2026.
-> **Relatório Oficial de Oportunidades de Melhoria (Backlog Técnico Vigente):** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+> **Roadmap vivo:** [`docs/ROADMAP.md`](docs/ROADMAP.md). O diagnóstico de 29/10 é histórico, não backlog técnico vigente.
 > **Alembic Head Vigente:** `20261022_auth_oauth_mfa` (67 revisões lineares encadeadas).
 > **Branch Mandatória:** `stable-15jun`.
 

@@ -235,6 +235,7 @@ async def test_crypto_offhours_quotes_skip_work_when_distributed_lock_is_refused
             "job_name": "update_quotes_intraday",
             "period": "intraday",
             "ttl_seconds": 7200,
+            "status_job_name": "update_crypto_quotes",
         }
         yield False
 

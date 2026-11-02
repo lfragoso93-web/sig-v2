@@ -1,7 +1,7 @@
 # SGI — Sistema de Gestão de Investimentos
 
 > **Documentação Completa da Aplicação:** Consulte o manual técnico unificado em [`docs/DOCUMENTACAO_DO_SISTEMA.md`](docs/DOCUMENTACAO_DO_SISTEMA.md).
-> **Relatório Oficial de Oportunidades de Melhoria:** [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+> **Roadmap vivo:** [`docs/ROADMAP.md`](docs/ROADMAP.md). O diagnóstico de outubro é um registro histórico, não a lista atual de pendências.
 > **Guias Técnicos Dedicados:** Backend em [`backend/README.md`](backend/README.md) | Frontend em [`frontend/README.md`](frontend/README.md).
 
 Plataforma corporativa e determinística para acompanhamento, consolidação patrimonial, rentabilidade ponderada pelo tempo (TWR), Proventos, apuração fiscal de IRPF e simulação financeira de carteiras multiclasse.
@@ -30,9 +30,9 @@ No cadastro de Renda Fixa, o nome do título inclui o emissor, o tipo do produto
 
 Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
-## Funcionalidades e baseline observado em 01/11/2026
+## Funcionalidades e baseline de produção
 
-O codigo sincronizado entre `stable-15jun` e `main` esta no baseline `ab19b94397b1a9e5196a2e981d1bd1f302c76d4b`; OCI executa `main`, com o banco de dados governado pelo Alembic na cabeça **`20261022_auth_oauth_mfa`** (67 revisões lineares encadeadas) e runtime de producao em OCI. O SHA e a migration citados sao a fotografia observada em 01/11/2026 e devem ser confirmados nos releases posteriores.
+O último deploy confirmado nesta revisão é a PR #500 no SHA `18bac9ba49ff660b4d08818fac8e7a39680380c8`. A branch local `stable-15jun` é a base de desenvolvimento e pode estar alguns commits atrás de `main`; este repositório não presume que os ponteiros das duas branches sejam idênticos. A migration `20261022_auth_oauth_mfa` e os detalhes funcionais abaixo são fotografias documentais e devem ser confirmados nos releases posteriores. Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o estado atual.
 
 ### Funcionalidades Implementadas e Ativas
 
@@ -174,7 +174,8 @@ docker compose run --rm backend python -m app.cli.user_test_readiness
 ## Documentação canônica
 
 - [`docs/DOCUMENTACAO_DO_SISTEMA.md`](docs/DOCUMENTACAO_DO_SISTEMA.md) — Manual unificado do sistema;
-- [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) — Diagnóstico detalhado de melhorias e oportunidades;
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — Próximas atividades confirmadas e decisões vigentes;
+- [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) — Diagnóstico histórico de 29/10/2026;
 - [`backend/README.md`](backend/README.md) — Guia técnico e arquitetural do backend FastAPI;
 - [`frontend/README.md`](frontend/README.md) — Guia técnico e arquitetural do frontend React 19;
 - [`docs/architecture.md`](docs/architecture.md) — Arquitetura de domínios e contratos financeiros;

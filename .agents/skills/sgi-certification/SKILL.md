@@ -45,5 +45,8 @@ dataset identity.
 Code or deployment changes that alter the runtime SHA require a new certified
 identity cycle. Keep the existing runtime fail-closed when candidate evidence
 is incomplete. Preserve database volumes and backups; never use `down -v` or
-volume pruning. OCI/#284 is outside the local certification path unless the
-user explicitly resumes it.
+volume pruning. Local candidate validation runs on Windows in `stable-15jun`;
+production runs on OCI in `main` and releases only through GitHub Actions. When
+the user authorizes a release, follow the production workflow and verify the
+exact deployed SHA and `/ready`; do not operate the host manually for a normal
+release.

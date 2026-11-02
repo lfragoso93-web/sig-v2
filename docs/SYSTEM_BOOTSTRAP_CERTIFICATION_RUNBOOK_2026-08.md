@@ -1,5 +1,7 @@
 # Runbook de certificação operacional do system-bootstrap.v4
 
+> Runbook historico de agosto/2026: as notas de ambiente e backlog abaixo nao sao o fluxo de release atual. Windows/`stable-15jun` e desenvolvimento; OCI/`main` e producao, implantada pelo GitHub Actions. Consulte `docs/ROADMAP.md` e `docs/deployment/oci-execution-index.md`.
+
 Issues: #227, #248, #250  
 Branch obrigatória: `stable-15jun`
 

@@ -17,7 +17,7 @@ necessária uma dependência de mensageria adicional.
 | fechamento diário global de preços | ativo | alto: backfill e writes globais | lock Redis implementado |
 | fechamento diário do Tesouro | ativo | alto: import e latest prices compartilhados | lock Redis implementado |
 | manutenção de snapshots/TWR | ativo | médio: rebuild derivado e idempotente | lock Redis global implementado |
-| rate history BCB | módulo registrável, fora do scheduler canônico | alto se ativado | exigir lock antes de ativar |
+| `rate_history` BCB | ingestão canônica pelo `benchmark_rate_service`; módulo legado não registrado removido | protegido pelo lock do job de benchmarks | não criar segundo coletor |
 | startup bootstrap | assíncrono, não recorrente | mitigado por reserva e locks DB por estágio | manter contrato atual |
 | backfills após transação/CSV | BackgroundTasks locais | médio, derivados reconstruíveis | sem outbox neste momento |
 
@@ -39,6 +39,33 @@ Proventos e eventos reutilizam os estágios canônicos, com persistência
 idempotente e sem alterar transações ou projeções de carteira. A consulta Yahoo
 de proventos fica restrita à janela recorrente, sem baixar o histórico desde
 1970 a cada execução.
+
+## Estado e alerta operacional dos jobs
+
+Cada execução que adquire a lease Redis registra `running`, `succeeded` ou
+`failed`, início, fim, duração e tipo da exceção em uma hash Redis com retenção
+de 90 dias. O payload da exceção não é persistido. Depois do registro, uma
+exceção sanitizada com o tipo original é relançada ao APScheduler, sem a
+mensagem original, para não parecer sucesso silencioso nem expor detalhes de
+provedores no traceback do scheduler.
+
+As gravações de status usam Lua para confirmar atomicamente que a execução
+ainda possui a lease; os estados finais também conferem o token da execução na
+hash. Um job antigo cujo TTL expirou não pode sobrescrever o estado de uma
+execução que readquiriu a lease. Os lotes de cripto mantêm uma identidade de
+status própria no painel, embora compartilhem a lease de cotações intradiárias.
+
+O SuperAdmin consulta a próxima execução e o último resultado em
+**Administração > Tarefas agendadas** (`GET /api/v1/admin/scheduler/status`).
+O painel mostra um alerta visual para falha e indisponibilidade do Redis. Esse
+alerta aparece enquanto o painel está aberto; não há envio de e-mail ou
+notificação externa para falhas de jobs. A indisponibilidade do Redis continua
+fail-closed para as tarefas com lease e deixa o histórico temporariamente
+indisponível.
+
+O job mensal de auditoria da fonte B3 segue desativado por padrão. Ele só deve
+ser habilitado com URL e ano oficiais vigentes; sua auditoria é read-only e
+não promove fatos para `market_calendar_days`.
 
 ## Lock distribuído adotado
 

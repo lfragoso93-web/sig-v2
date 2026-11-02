@@ -1,3 +1,5 @@
+> **Registro histórico, não operacional:** fotografia de 20/10/2026. Inventários de Issues/PRs, papéis de branches, status de deploy e ações propostas abaixo não foram atualizados como backlog vivo. Para o contrato atual, consulte [`docs/ROADMAP.md`](../ROADMAP.md), o `README.md` e os runbooks de release.
+
 # SGI v2 — Governed Development Roadmap 2026
 
 > **Data de Emissão**: 20 de Outubro de 2026  
