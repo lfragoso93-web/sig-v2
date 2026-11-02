@@ -151,6 +151,64 @@ async def test_days_back_preserves_same_twr_chain_as_full_rebuild(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_canonical_twr_persists_weekend_closes(monkeypatch):
+    transaction = SimpleNamespace(
+        ticker="BTC",
+        asset_type="CRIPTO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=10,
+        fees=0,
+        date=date(2026, 9, 4),
+        fx_rate=None,
+        notes=None,
+    )
+
+    class HistoricalResult:
+        def scalars(self):
+            return SimpleNamespace(all=lambda: [transaction])
+
+    persisted = []
+
+    async def valuation(_db, _portfolio_id, snapshot_date, **_kwargs):
+        market_value = {
+            date(2026, 9, 4): Decimal("10"),
+            date(2026, 9, 5): Decimal("11"),
+            date(2026, 9, 6): Decimal("12"),
+        }[snapshot_date]
+        return {"market_value": market_value}
+
+    async def capture_upsert(_db, _portfolio_id, snapshot_date, _values):
+        persisted.append(snapshot_date)
+
+    monkeypatch.setattr(service, "calculate_canonical_portfolio_totals", valuation)
+    monkeypatch.setattr(
+        service,
+        "load_portfolio_dividend_entitlements",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        service,
+        "has_partial_prices_silent",
+        AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", capture_upsert)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=HistoricalResult())
+    db.commit = AsyncMock()
+
+    count = await service.backfill_canonical_snapshots_with_returns(
+        db,
+        portfolio_id=13,
+        end_date=date(2026, 9, 6),
+    )
+
+    assert count == 3
+    assert persisted == [date(2026, 9, 4), date(2026, 9, 5), date(2026, 9, 6)]
+
+
+@pytest.mark.asyncio
 async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
     persisted_values = []
 

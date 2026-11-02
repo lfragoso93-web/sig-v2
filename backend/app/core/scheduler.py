@@ -397,7 +397,7 @@ def start_scheduler() -> None:
                 raise
 
     @scheduler.scheduled_job(
-        _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
+        _cron_trigger(hour=21, minute=0),
         id="portfolio_snapshot_auto_maintenance",
         name="Manutenção automática de snapshots patrimoniais e TWR",
         max_instances=1,
