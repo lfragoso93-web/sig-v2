@@ -82,7 +82,7 @@ async def register(
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-@limiter.limit(settings.FORGOT_PASSWORD_RATE_LIMIT)
+@limiter.limit("20/hour")
 async def request_password_reset(
     request: Request,
     data: ForgotPasswordRequest,
