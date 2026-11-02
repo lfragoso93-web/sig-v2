@@ -121,6 +121,7 @@ def start_scheduler() -> None:
             job_name="update_quotes_intraday",
             period="intraday",
             ttl_seconds=7200,
+            status_job_name="update_crypto_quotes",
         ) as acquired:
             if not acquired:
                 return

@@ -23,6 +23,20 @@ if redis.call('get', KEYS[1]) == ARGV[1] then
 end
 return 0
 """
+_RECORD_STATUS_IF_OWNER = """
+if redis.call('get', KEYS[1]) ~= ARGV[1] then
+    return 0
+end
+if ARGV[2] == 'terminal'
+    and redis.call('hget', KEYS[2], 'run_token') ~= ARGV[1] then
+    return 0
+end
+for i = 3, #ARGV - 1, 2 do
+    redis.call('hset', KEYS[2], ARGV[i], ARGV[i + 1])
+end
+redis.call('expire', KEYS[2], tonumber(ARGV[#ARGV]))
+return 1
+"""
 _JOB_STATUS_RETENTION_SECONDS = 90 * 24 * 60 * 60
 
 
@@ -40,16 +54,41 @@ def scheduler_job_status_key(job_name: str) -> str:
     return f"sgi:job:status:{job_name}"
 
 
-async def _record_job_status(client, key: str, values: dict[str, str]) -> None:
-    """Persist best-effort operational status without changing job outcome."""
+async def _record_job_status(
+    client,
+    lock_key: str,
+    status_key: str,
+    owner_token: str,
+    values: dict[str, str],
+    *,
+    terminal: bool,
+) -> bool:
+    """Persist status only while this execution still owns the current lease."""
     try:
-        await client.hset(key, mapping=values)
-        await client.expire(key, _JOB_STATUS_RETENTION_SECONDS)
+        arguments = [owner_token, "terminal" if terminal else "start"]
+        for name, value in values.items():
+            arguments.extend((name, value))
+        arguments.append(str(_JOB_STATUS_RETENTION_SECONDS))
+        recorded = bool(
+            await client.eval(
+                _RECORD_STATUS_IF_OWNER,
+                2,
+                lock_key,
+                status_key,
+                *arguments,
+            )
+        )
+        if not recorded:
+            logger.warning(
+                "scheduler_status_write_ignored reason=lease_owner_changed"
+            )
+        return recorded
     except Exception as exc:
         logger.warning(
             "scheduler_status_write_failed error_type=%s",
             type(exc).__name__,
         )
+        return False
 
 
 async def read_scheduler_job_statuses(
@@ -92,6 +131,7 @@ async def distributed_job_lock(
     period: str,
     ttl_seconds: int,
     attempt: int = 1,
+    status_job_name: str | None = None,
 ) -> AsyncIterator[bool]:
     """Acquire a fail-closed Redis lease and release only the owned token."""
     if ttl_seconds <= 0:
@@ -100,6 +140,8 @@ async def distributed_job_lock(
         raise ValueError("attempt must be positive")
 
     key = scheduler_lock_key(job_name, period)
+    status_name = status_job_name or job_name
+    status_key = scheduler_job_status_key(status_name)
     owner_token = uuid4().hex
     client = await get_redis()
     if client is None:
@@ -151,14 +193,16 @@ async def distributed_job_lock(
         attempt,
         attempt > 1,
     )
-    status_key = scheduler_job_status_key(job_name)
     started_at = datetime.now(timezone.utc).isoformat()
     started_clock = time.monotonic()
     await _record_job_status(
         client,
+        key,
         status_key,
+        owner_token,
         {
-            "job_name": job_name,
+            "job_name": status_name,
+            "run_token": owner_token,
             "status": "running",
             "last_started_at": started_at,
             "last_finished_at": "",
@@ -166,6 +210,7 @@ async def distributed_job_lock(
             "last_error_type": "",
             "lease_ttl_seconds": str(ttl_seconds),
         },
+        terminal=False,
     )
     try:
         yield True
@@ -173,13 +218,16 @@ async def distributed_job_lock(
         error_type = getattr(exc, "original_error_type", type(exc).__name__)
         await _record_job_status(
             client,
+            key,
             status_key,
+            owner_token,
             {
                 "status": "failed",
                 "last_finished_at": datetime.now(timezone.utc).isoformat(),
                 "duration_ms": str(round((time.monotonic() - started_clock) * 1000)),
                 "last_error_type": error_type,
             },
+            terminal=True,
         )
         logger.error(
             "scheduler_job_failed job=%s error_type=%s",
@@ -190,13 +238,16 @@ async def distributed_job_lock(
     else:
         await _record_job_status(
             client,
+            key,
             status_key,
+            owner_token,
             {
                 "status": "succeeded",
                 "last_finished_at": datetime.now(timezone.utc).isoformat(),
                 "duration_ms": str(round((time.monotonic() - started_clock) * 1000)),
                 "last_error_type": "",
             },
+            terminal=True,
         )
         logger.info("scheduler_job_succeeded job=%s", job_name)
     finally:

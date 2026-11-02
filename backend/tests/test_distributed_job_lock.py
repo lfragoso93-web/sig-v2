@@ -41,9 +41,28 @@ class _FakeRedis:
         self.values[key] = (value, self.now + ex)
         return True
 
-    async def eval(self, script: str, key_count: int, key: str, token: str):
+    async def eval(self, script: str, key_count: int, *args):
+        if "redis.call('hget', KEYS[2]" in script:
+            assert key_count == 2
+            lock_key, status_key, token, phase, *fields = args
+            self._expire(lock_key)
+            current = self.values.get(lock_key)
+            if current is None or current[0] != token:
+                return 0
+            status = self.hashes.get(status_key, {})
+            if phase == "terminal" and status.get("run_token") != token:
+                return 0
+            retention_seconds = int(fields.pop())
+            assert retention_seconds > 0
+            self.hashes.setdefault(status_key, {}).update(
+                dict(zip(fields[::2], fields[1::2]))
+            )
+            self.ttls[status_key] = retention_seconds
+            return 1
+
         assert "redis.call('get'" in script
         assert key_count == 1
+        key, token = args
         self._expire(key)
         current = self.values.get(key)
         if current is None or current[0] != token:
@@ -147,6 +166,79 @@ async def test_expired_crashed_owner_does_not_create_permanent_deadlock(
     assert redis.values == replacement
     await recovered.__aexit__(None, None, None)
     assert redis.values == {}
+
+
+@pytest.mark.asyncio
+async def test_expired_owner_cannot_overwrite_replacement_run_status(
+    monkeypatch,
+) -> None:
+    redis = _FakeRedis()
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+    old_run = distributed_job_lock(
+        job_name="persist_daily_close_prices",
+        period="daily",
+        ttl_seconds=60,
+    )
+    assert await old_run.__aenter__() is True
+    redis.advance(61)
+
+    current_run = distributed_job_lock(
+        job_name="persist_daily_close_prices",
+        period="daily",
+        ttl_seconds=60,
+        attempt=2,
+    )
+    assert await current_run.__aenter__() is True
+    status_key = lock_module.scheduler_job_status_key(
+        "persist_daily_close_prices"
+    )
+    current_token = redis.hashes[status_key]["run_token"]
+
+    await old_run.__aexit__(None, None, None)
+
+    status = redis.hashes[status_key]
+    assert status["status"] == "running"
+    assert status["run_token"] == current_token
+
+    await current_run.__aexit__(None, None, None)
+    assert redis.hashes[status_key]["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_expired_failed_owner_cannot_overwrite_newer_success(
+    monkeypatch,
+) -> None:
+    redis = _FakeRedis()
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+    old_run = distributed_job_lock(
+        job_name="sync_asset_dividends",
+        period="morning",
+        ttl_seconds=60,
+    )
+    assert await old_run.__aenter__() is True
+    redis.advance(61)
+
+    current_run = distributed_job_lock(
+        job_name="sync_asset_dividends",
+        period="morning",
+        ttl_seconds=60,
+        attempt=2,
+    )
+    assert await current_run.__aenter__() is True
+    status_key = lock_module.scheduler_job_status_key("sync_asset_dividends")
+    await current_run.__aexit__(None, None, None)
+    assert redis.hashes[status_key]["status"] == "succeeded"
+
+    with pytest.raises(ScheduledJobFailed, match="RuntimeError"):
+        await old_run.__aexit__(
+            RuntimeError,
+            RuntimeError("stale failure"),
+            None,
+        )
+
+    status = redis.hashes[status_key]
+    assert status["status"] == "succeeded"
+    assert status["last_error_type"] == ""
 
 
 @pytest.mark.asyncio

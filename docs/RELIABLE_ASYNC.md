@@ -49,6 +49,12 @@ exceção sanitizada com o tipo original é relançada ao APScheduler, sem a
 mensagem original, para não parecer sucesso silencioso nem expor detalhes de
 provedores no traceback do scheduler.
 
+As gravações de status usam Lua para confirmar atomicamente que a execução
+ainda possui a lease; os estados finais também conferem o token da execução na
+hash. Um job antigo cujo TTL expirou não pode sobrescrever o estado de uma
+execução que readquiriu a lease. Os lotes de cripto mantêm uma identidade de
+status própria no painel, embora compartilhem a lease de cotações intradiárias.
+
 O SuperAdmin consulta a próxima execução e o último resultado em
 **Administração > Tarefas agendadas** (`GET /api/v1/admin/scheduler/status`).
 O painel mostra um alerta visual para falha e indisponibilidade do Redis. Esse
