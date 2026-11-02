@@ -1,5 +1,6 @@
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -32,13 +33,10 @@ def _crypto_offhours_quote_triggers() -> tuple[CronTrigger, CronTrigger]:
 
 
 def start_scheduler() -> None:
-    """Registra somente preços recorrentes e manutenções locais.
+    """Registra sincronizações recorrentes e manutenções locais.
 
     Regra arquitetural:
-    - catálogo, metadados, Proventos, eventos, benchmarks e demais dados externos
-      pertencem ao bootstrap completo executado antes da liberação do ambiente;
-    - após o bootstrap, providers externos recorrentes são permitidos somente
-      para preço intraday e fechamento diário;
+    - sincronizações externas recorrentes usam serviços canônicos e leases;
     - preenchimento pontual de lacuna histórica pertence ao resolvedor dedicado
       de preço por data, nunca a jobs amplos de domínio;
     - snapshots/TWR são manutenção local e não consultam providers.
@@ -195,7 +193,7 @@ def start_scheduler() -> None:
     if settings.ENABLE_DAILY_BENCHMARK_SYNC:
 
         @scheduler.scheduled_job(
-            _cron_trigger(day_of_week="mon-fri", hour=20, minute=40),
+            _cron_trigger(day_of_week="mon-fri", hour="8,20", minute=40),
             id="sync_benchmark_rates_daily",
             name="Sincronizar índices macroeconômicos (CDI, SELIC, IPCA, IGPM)",
             max_instances=1,
@@ -224,7 +222,7 @@ def start_scheduler() -> None:
                         logger.error("[scheduler] Erro ao sincronizar índices macroeconômicos: %s", exc)
 
         @scheduler.scheduled_job(
-            _cron_trigger(day_of_week="mon-fri", hour=20, minute=42),
+            _cron_trigger(day_of_week="mon-fri", hour="8,20", minute=42),
             id="sync_ibov_benchmark_daily",
             name="Sincronizar fechamento diário do IBOV (Ibovespa)",
             max_instances=1,
@@ -313,6 +311,80 @@ def start_scheduler() -> None:
                         "[scheduler] Erro ao enviar notificações de proventos: %s",
                         exc,
                     )
+
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-sat", hour=8, minute=0),
+        id="sync_asset_dividends_morning",
+        name="Sincronizar proventos globais pela manhã",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_asset_dividends_morning():
+        from app.services.system_bootstrap_dividends_stage import (
+            run_system_bootstrap_dividends_stage,
+        )
+        from app.services.system_bootstrap_execution_context import (
+            build_system_bootstrap_execution_context,
+        )
+
+        async with distributed_job_lock(
+            job_name="sync_asset_dividends",
+            period="morning",
+            ttl_seconds=21600,
+        ) as acquired:
+            if not acquired:
+                return
+            try:
+                today = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).date()
+                context = build_system_bootstrap_execution_context()
+                result = await run_system_bootstrap_dividends_stage(
+                    context,
+                    start_date=today - timedelta(days=90),
+                    end_date=today + timedelta(days=365),
+                    authorized=True,
+                    allow_production_branch=True,
+                )
+                logger.info("[scheduler] Sincronização de proventos: %s", result)
+            except Exception as exc:
+                logger.error("[scheduler] Erro na sincronização de proventos: %s", exc)
+
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=22, minute=0),
+        id="sync_corporate_events_daily",
+        name="Sincronizar eventos corporativos globais ao fim do dia",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_corporate_events_daily():
+        from app.services.system_bootstrap_corporate_events_stage import (
+            run_system_bootstrap_corporate_events_stage,
+        )
+        from app.services.system_bootstrap_execution_context import (
+            build_system_bootstrap_execution_context,
+        )
+
+        async with distributed_job_lock(
+            job_name="sync_corporate_events",
+            period="daily",
+            ttl_seconds=21600,
+        ) as acquired:
+            if not acquired:
+                return
+            try:
+                context = build_system_bootstrap_execution_context()
+                result = await run_system_bootstrap_corporate_events_stage(
+                    context,
+                    authorized=True,
+                )
+                logger.info(
+                    "[scheduler] Sincronização de eventos corporativos: %s",
+                    result,
+                )
+            except Exception as exc:
+                logger.error(
+                    "[scheduler] Erro na sincronização de eventos corporativos: %s",
+                    exc,
+                )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),

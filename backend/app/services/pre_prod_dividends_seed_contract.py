@@ -30,13 +30,20 @@ def validate_dividends_seed_identity(
     run_id: str,
     branch: str,
     commit_sha: str,
+    allow_production_branch: bool = False,
 ) -> None:
     """Valida a identidade antes de qualquer acesso operacional."""
 
     if not _RUN_ID_PATTERN.fullmatch(run_id):
         raise DividendsSeedContractError("run_id deve seguir o formato YYYYMMDD-HHMMSS")
-    if branch != DIVIDENDS_SEED_BRANCH:
-        raise DividendsSeedContractError(f"branch deve ser {DIVIDENDS_SEED_BRANCH!r}")
+    allowed_branches = {DIVIDENDS_SEED_BRANCH}
+    if allow_production_branch:
+        allowed_branches.add("main")
+    if branch not in allowed_branches:
+        raise DividendsSeedContractError(
+            "branch deve ser 'stable-15jun'"
+            + (" ou 'main' para sincronizacao recorrente" if allow_production_branch else "")
+        )
     if not _COMMIT_SHA_PATTERN.fullmatch(commit_sha):
         raise DividendsSeedContractError(
             "commit_sha deve conter 40 caracteres hexadecimais minúsculos"
