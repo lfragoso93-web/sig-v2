@@ -61,8 +61,14 @@ def _mark_symbol_unavailable(symbol: str) -> None:
     _unavailable_symbols[symbol] = time.monotonic() + _UNAVAILABLE_TTL_SECONDS
 
 
-async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, float]]:
-    """Busca dividendos desde 1970 via Yahoo Finance."""
+async def _fetch_full_history(
+    ticker: str,
+    asset_type: str,
+    *,
+    start_date: date = date(1970, 1, 1),
+    end_date: date | None = None,
+) -> list[tuple[date, float]]:
+    """Busca dividendos no intervalo solicitado via Yahoo Finance."""
     symbol = _yf_symbol(ticker, asset_type)
     if _is_symbol_unavailable(symbol):
         logger.debug(
@@ -82,8 +88,8 @@ async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 history = yf.Ticker(symbol).history(
-                    start="1970-01-01",
-                    end=(date.today() + timedelta(days=1)).isoformat(),
+                    start=start_date.isoformat(),
+                    end=((end_date or date.today()) + timedelta(days=1)).isoformat(),
                     actions=True,
                     auto_adjust=False,
                     raise_errors=False,
@@ -142,6 +148,9 @@ async def seed_full_dividend_history(
     db: AsyncSession,
     ticker: str,
     asset_type: str,
+    *,
+    start_date: date = date(1970, 1, 1),
+    end_date: date | None = None,
 ) -> int:
     """Persiste o histórico global retroativo e complementar de proventos."""
     ticker = ticker.upper().strip()
@@ -170,7 +179,12 @@ async def seed_full_dividend_history(
         if rec_d is not None:
             existing_dates.add(rec_d)
 
-    history = await _fetch_full_history(ticker, asset_type)
+    history = await _fetch_full_history(
+        ticker,
+        asset_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
     if not history:
         return 0
 
@@ -178,6 +192,8 @@ async def seed_full_dividend_history(
     inserted = 0
 
     for event_date, amount in history:
+        if end_date is not None and event_date > end_date:
+            continue
         if _has_nearby_existing_date(event_date, existing_dates):
             continue
 

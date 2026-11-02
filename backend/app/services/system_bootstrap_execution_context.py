@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 BOOTSTRAP_BRANCH = "stable-15jun"
+BOOTSTRAP_BRANCHES = {BOOTSTRAP_BRANCH, "main"}
 BOOTSTRAP_COMMIT_SHA_ENV = "SGI_BOOTSTRAP_COMMIT_SHA"
 DEFAULT_BOOTSTRAP_COMMIT_SHA = "0" * 40
 
@@ -24,9 +25,9 @@ class SystemBootstrapExecutionContext:
     commit_sha: str
 
     def __post_init__(self) -> None:
-        if self.branch != BOOTSTRAP_BRANCH:
+        if self.branch not in BOOTSTRAP_BRANCHES:
             raise SystemBootstrapContextError(
-                f"branch deve ser {BOOTSTRAP_BRANCH!r}"
+                "branch deve ser 'stable-15jun' (desenvolvimento) ou 'main' (producao)"
             )
         if not _COMMIT_SHA_PATTERN.fullmatch(self.commit_sha):
             raise SystemBootstrapContextError(
@@ -61,6 +62,6 @@ def build_system_bootstrap_execution_context(
 
     return SystemBootstrapExecutionContext(
         run_id=current.strftime("%Y%m%d-%H%M%S"),
-        branch=BOOTSTRAP_BRANCH,
+        branch=os.getenv("APP_BRANCH", BOOTSTRAP_BRANCH).strip(),
         commit_sha=resolved_sha,
     )

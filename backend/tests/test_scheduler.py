@@ -27,6 +27,8 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
             "update_crypto_quotes_offhours_weekdays",
             "update_crypto_quotes_weekends",
             "refresh_asset_fundamentals_daily",
+            "sync_asset_dividends_morning",
+            "sync_corporate_events_daily",
         }
         if scheduler_module.settings.ENABLE_DAILY_BENCHMARK_SYNC:
             expected.add("sync_benchmark_rates_daily")
@@ -46,6 +48,36 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
         assert next_run.weekday() == 0
         assert next_run.hour == 9
         assert next_run.minute == 0
+
+        dividends = scheduler.get_job("sync_asset_dividends_morning")
+        assert dividends is not None
+        saturday_morning = datetime(2026, 7, 10, 8, 1, tzinfo=scheduler.timezone)
+        next_dividend_run = dividends.trigger.get_next_fire_time(
+            None, saturday_morning
+        )
+        assert next_dividend_run.weekday() == 5
+        assert (next_dividend_run.hour, next_dividend_run.minute) == (8, 0)
+
+        corporate_events = scheduler.get_job("sync_corporate_events_daily")
+        assert corporate_events is not None
+        next_event_run = corporate_events.trigger.get_next_fire_time(
+            None,
+            datetime(2026, 7, 10, 22, 1, tzinfo=scheduler.timezone),
+        )
+        assert next_event_run.weekday() == 0
+        assert (next_event_run.hour, next_event_run.minute) == (22, 0)
+
+        if scheduler_module.settings.ENABLE_DAILY_BENCHMARK_SYNC:
+            benchmarks = scheduler.get_job("sync_benchmark_rates_daily")
+            assert benchmarks is not None
+            next_benchmark_run = benchmarks.trigger.get_next_fire_time(
+                None,
+                datetime(2026, 7, 10, 7, 0, tzinfo=scheduler.timezone),
+            )
+            assert (next_benchmark_run.hour, next_benchmark_run.minute) == (
+                8,
+                40,
+            )
     finally:
         scheduler.shutdown(wait=False)
 

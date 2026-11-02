@@ -188,7 +188,13 @@ async def _run_production_dividends_sync(
                     logger.debug("[dividends_bootstrap] B3 skip %s: %s", ticker, exc)
 
         try:
-            yf_inserted = await seed_full_dividend_history(db, ticker, asset_type)
+            yf_inserted = await seed_full_dividend_history(
+                db,
+                ticker,
+                asset_type,
+                start_date=start_date,
+                end_date=end_date,
+            )
             total_created += yf_inserted
         except Exception as exc:
             await db.rollback()
@@ -219,7 +225,9 @@ async def run_system_bootstrap_dividends_stage(
     context: SystemBootstrapExecutionContext,
     *,
     end_date: date | None = None,
+    start_date: date = DIVIDENDS_HISTORY_START_DATE,
     authorized: bool | None = None,
+    allow_production_branch: bool = False,
     seed_runner: SeedRunner = run_pre_prod_dividends_seed,
 ) -> str:
     """Reconstrói o catálogo global de Proventos sob o gate operacional #226."""
@@ -233,10 +241,15 @@ async def run_system_bootstrap_dividends_stage(
             f"configure {DIVIDENDS_BOOTSTRAP_AUTH_ENV}=true somente na janela autorizada"
         )
 
+    if context.branch == "main" and not allow_production_branch:
+        raise SystemBootstrapDividendsGateError(
+            "execucao recorrente em main exige allow_production_branch explicito"
+        )
     validate_dividends_seed_identity(
         run_id=context.run_id,
         branch=context.branch,
         commit_sha=context.commit_sha,
+        allow_production_branch=allow_production_branch,
     )
     target_end = end_date or datetime.now(UTC).date()
 
@@ -248,7 +261,7 @@ async def run_system_bootstrap_dividends_stage(
             return await _run_production_dividends_sync(
                 db=db,
                 client=client,
-                start_date=DIVIDENDS_HISTORY_START_DATE,
+                start_date=start_date,
                 end_date=target_end,
             )
 
@@ -256,7 +269,7 @@ async def run_system_bootstrap_dividends_stage(
             run_id=context.run_id,
             branch=context.branch,
             commit_sha=context.commit_sha,
-            start_date=DIVIDENDS_HISTORY_START_DATE,
+            start_date=start_date,
             end_date=target_end,
             db=db,
             providers=(
