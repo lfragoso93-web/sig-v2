@@ -25,7 +25,7 @@ As transações históricas permanecem imutáveis. Quando aplicável, o sistema 
 
 ## Rebuild de snapshots
 
-Após uma importação bem-sucedida, o sistema identifica a primeira transação da carteira, remove os snapshots afetados, reconstrói todos os dias úteis até hoje e invalida novamente os caches financeiros.
+Após uma importação bem-sucedida, o sistema identifica a primeira transação da carteira, remove os snapshots afetados, reconstrói todos os dias corridos até hoje e invalida novamente os caches financeiros.
 
 O rebuild roda em segundo plano para não bloquear a resposta da importação.
 

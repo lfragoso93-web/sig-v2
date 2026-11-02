@@ -91,106 +91,103 @@ async def backfill_canonical_snapshots_with_returns(
     treasury_ticker_cache: dict[str, str] = {}
 
     while cursor <= upper_bound:
-        if cursor.weekday() < 5:
-            try:
-                totals = await calculate_canonical_portfolio_totals(
-                    db,
-                    portfolio_id,
-                    cursor,
-                    transactions=transactions,
-                    treasury_symbol_cache=treasury_symbol_cache,
-                    treasury_ticker_cache=treasury_ticker_cache,
-                )
-            except IncompleteBenchmarkCoverageError as exc:
-                logger.warning(
-                    "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
-                    portfolio_id,
-                    cursor,
-                    exc,
-                )
-                break
-            except RuntimeError as exc:
-                if not _is_persisted_price_gap(exc):
-                    raise
-                logger.warning(
-                    "[snapshot_twr_canonical] portfolio=%s skip=%s reason=%s",
-                    portfolio_id,
-                    cursor,
-                    exc,
-                )
-                cursor += timedelta(days=1)
-                continue
-            _, net_external_flow = calculate_transaction_components(
-                transactions,
-                cursor,
-            )
-            corporate_action_cash_flow_total = decimal_value(
-                totals.get("corporate_action_cash_flow_total", _ZERO)
-            )
-            corporate_action_cash_flow_day = (
-                corporate_action_cash_flow_total
-                - previous_corporate_action_cash_flow_total
-            )
-            if corporate_action_cash_flow_day < _ZERO:
-                raise RuntimeError(
-                    "fluxo acumulado de evento corporativo regrediu: "
-                    f"portfolio={portfolio_id} date={cursor} "
-                    f"previous={previous_corporate_action_cash_flow_total} "
-                    f"current={corporate_action_cash_flow_total}"
-                )
-
-            dividends_day = dividends_day_map.get(cursor, _ZERO)
-            dividends_accumulated = accumulated_dividends_at(
-                dividends_accumulated_map,
-                cursor,
-            )
-            current_value = decimal_value(totals["market_value"])
-            daily_return = calculate_daily_twr_pct(
-                previous_value,
-                current_value,
-                net_external_flow=net_external_flow,
-                dividends_day=(
-                    dividends_day + corporate_action_cash_flow_day
-                ),
-            )
-            accumulated_return = append_compounded_return_pct(
-                accumulated_return,
-                daily_return,
-            )
-
-            has_partial_prices = await has_partial_prices_silent(
+        try:
+            totals = await calculate_canonical_portfolio_totals(
                 db,
-                transactions,
+                portfolio_id,
                 cursor,
+                transactions=transactions,
+                treasury_symbol_cache=treasury_symbol_cache,
+                treasury_ticker_cache=treasury_ticker_cache,
             )
-            treasury_unresolved = decimal_value(
-                totals.get("treasury_unresolved", 0)
-            ) > _ZERO
-            has_partial_prices = has_partial_prices or treasury_unresolved
-            snapshot_fields = {
-                key: value
-                for key, value in totals.items()
-                if key in _SNAPSHOT_COLUMNS
-                and not key.startswith(_DIAGNOSTIC_PREFIXES)
-            }
-            values = {
-                **snapshot_fields,
-                "net_external_flow": net_external_flow,
-                "dividends_day": dividends_day,
-                "dividends_accumulated": dividends_accumulated,
-                "daily_return_pct": daily_return,
-                "accumulated_return_pct": accumulated_return,
-                "has_partial_prices": has_partial_prices,
-                "return_is_estimated": has_partial_prices,
-            }
-            await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
-            previous_value = current_value
-            previous_corporate_action_cash_flow_total = (
-                corporate_action_cash_flow_total
+        except IncompleteBenchmarkCoverageError as exc:
+            logger.warning(
+                "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
+                portfolio_id,
+                cursor,
+                exc,
             )
-            count += 1
-            if commit and count % 30 == 0:
-                await db.commit()
+            break
+        except RuntimeError as exc:
+            if not _is_persisted_price_gap(exc):
+                raise
+            logger.warning(
+                "[snapshot_twr_canonical] portfolio=%s skip=%s reason=%s",
+                portfolio_id,
+                cursor,
+                exc,
+            )
+            cursor += timedelta(days=1)
+            continue
+        _, net_external_flow = calculate_transaction_components(
+            transactions,
+            cursor,
+        )
+        corporate_action_cash_flow_total = decimal_value(
+            totals.get("corporate_action_cash_flow_total", _ZERO)
+        )
+        corporate_action_cash_flow_day = (
+            corporate_action_cash_flow_total
+            - previous_corporate_action_cash_flow_total
+        )
+        if corporate_action_cash_flow_day < _ZERO:
+            raise RuntimeError(
+                "fluxo acumulado de evento corporativo regrediu: "
+                f"portfolio={portfolio_id} date={cursor} "
+                f"previous={previous_corporate_action_cash_flow_total} "
+                f"current={corporate_action_cash_flow_total}"
+            )
+
+        dividends_day = dividends_day_map.get(cursor, _ZERO)
+        dividends_accumulated = accumulated_dividends_at(
+            dividends_accumulated_map,
+            cursor,
+        )
+        current_value = decimal_value(totals["market_value"])
+        daily_return = calculate_daily_twr_pct(
+            previous_value,
+            current_value,
+            net_external_flow=net_external_flow,
+            dividends_day=(dividends_day + corporate_action_cash_flow_day),
+        )
+        accumulated_return = append_compounded_return_pct(
+            accumulated_return,
+            daily_return,
+        )
+
+        has_partial_prices = await has_partial_prices_silent(
+            db,
+            transactions,
+            cursor,
+        )
+        treasury_unresolved = decimal_value(
+            totals.get("treasury_unresolved", 0)
+        ) > _ZERO
+        has_partial_prices = has_partial_prices or treasury_unresolved
+        snapshot_fields = {
+            key: value
+            for key, value in totals.items()
+            if key in _SNAPSHOT_COLUMNS
+            and not key.startswith(_DIAGNOSTIC_PREFIXES)
+        }
+        values = {
+            **snapshot_fields,
+            "net_external_flow": net_external_flow,
+            "dividends_day": dividends_day,
+            "dividends_accumulated": dividends_accumulated,
+            "daily_return_pct": daily_return,
+            "accumulated_return_pct": accumulated_return,
+            "has_partial_prices": has_partial_prices,
+            "return_is_estimated": has_partial_prices,
+        }
+        await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
+        previous_value = current_value
+        previous_corporate_action_cash_flow_total = (
+            corporate_action_cash_flow_total
+        )
+        count += 1
+        if commit and count % 30 == 0:
+            await db.commit()
         cursor += timedelta(days=1)
 
     if commit:

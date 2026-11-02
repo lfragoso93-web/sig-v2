@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -40,6 +40,14 @@ def _decimal(value: object) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value or 0))
+
+
+def _latest_weekday_close_date(today: date | None = None) -> date:
+    """Class snapshots follow market weekdays; avoid rebuilding them on weekends."""
+    target = today or date.today()
+    while target.weekday() >= 5:
+        target -= timedelta(days=1)
+    return target
 
 
 def _latest_snapshot_has_legacy_zero_twr(
@@ -153,9 +161,10 @@ async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int
         .group_by(PortfolioClassSnapshot.asset_type)
     )
     latest_by_type = {row.asset_type: row[1] for row in snapshot_result.all()}
+    latest_expected_close = _latest_weekday_close_date()
     if any(
         latest_by_type.get(asset_type) is None
-        or latest_by_type[asset_type] < date.today()
+        or latest_by_type[asset_type] < latest_expected_close
         for asset_type in transaction_types
     ):
         return True

@@ -26,7 +26,7 @@ Os horários abaixo usam o fuso de Brasília. A disponibilidade e o horário efe
 | --- | --- | --- |
 | Cotações de mercado | De hora em hora, em dias úteis, das 09h às 18h | Ativos de mercado acompanhados, incluindo criptoativos |
 | Cotações de cripto fora do pregão | De hora em hora, fora da janela acima e aos fins de semana | Criptoativos, que negociam continuamente |
-| Snapshot patrimonial oficial e manutenção TWR | Uma vez ao dia, às 21h em dias úteis | Consolidação diária das carteiras após as rotinas de fechamento |
+| Snapshot patrimonial oficial e manutenção TWR | Diariamente, às 21h, inclusive sábados, domingos e feriados | Consolidação com cotações persistidas na data; ativos sem negociação usam o último dado disponível |
 
 As atualizações de preços podem invalidar dados derivados para que sejam recalculados com as cotações disponíveis. A rotina de snapshot diário não substitui as transações e não cria movimentações financeiras.
 

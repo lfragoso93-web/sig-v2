@@ -38,6 +38,15 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
         expected.add("notify_daily_dividend_payments")
         assert job_ids == expected
 
+        snapshots = scheduler.get_job("portfolio_snapshot_auto_maintenance")
+        assert snapshots is not None
+        saturday_after_close = datetime(2026, 7, 11, 21, 1, tzinfo=scheduler.timezone)
+        next_snapshot_run = snapshots.trigger.get_next_fire_time(
+            None, saturday_after_close
+        )
+        assert next_snapshot_run.weekday() == 6
+        assert (next_snapshot_run.hour, next_snapshot_run.minute) == (21, 0)
+
         intraday = scheduler.get_job("update_quotes_intraday_full_hour")
         assert intraday is not None
         assert isinstance(intraday.trigger, CronTrigger)
