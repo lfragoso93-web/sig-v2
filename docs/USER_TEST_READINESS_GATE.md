@@ -1,6 +1,8 @@
+> **Current status 2026-11-01:** This file preserves dated assisted-readiness evidence. Observations from 2026-10-16 and earlier are historical. Local development/testing is Windows on `stable-15jun`; OCI is production on `main`, with automatic post-CI deployment and certification per SHA/dataset/schema. `GO_ASSISTED` does not certify production or replace `/ready`. Current validation procedure: `docs/USER_VALIDATION_RUNBOOK.md`; release: `docs/deployment/oci-execution-index.md`.
+
 # Gate de readiness para testes assistidos
 
-## Runtime de validacao vigente — 18/10/2026
+## Evidencia historica de runtime assistido ? 18/10/2026
 
 Os usuarios testam a imagem publicada na stack existente `sig-v2` pelo
 Cloudflare Tunnel. Nao iniciar nem manter `sgi-usertest` como ambiente paralelo.
@@ -14,7 +16,7 @@ reutilizar um evento de certificacao de outra identidade.
 
 Atualizado em 16/10/2026.
 
-## Rebaseline do checkout e runtime — 16/10/2026
+## Registro historico de checkout e runtime ? 16/10/2026
 
 O evento de promoção histórico pertence à identidade runtime
 `3ab054f61e34f440dddf93c170259958243d58af`; não é evidência para o checkout ou
@@ -81,12 +83,11 @@ Contagens observadas: users=6, portfolios=5, transactions=332, assets=3684, asse
 
 A validacao assistida ja produziu evidencia reutilizavel de CSV/rebuild, mercado, Tesouro, Renda Fixa, IRPF, Proventos portfolio-scoped idempotentes e eventos corporativos portfolio-scoped.
 
-## Fronteira local x OCI
+## Fronteira local x OCI ? registro historico substituido
 
-- **Local:** desenvolvimento, correcoes e certificacao pesada do SHA candidato.
-- **OCI:** backlog futuro de infraestrutura/cloud (#284), fora do caminho atual.
-
-Nao executar desenvolvimento, testes ou homologacao OCI na fase atual.
+- Desenvolvimento local: Windows na branch `stable-15jun`.
+- Producao: OCI na branch `main`, com deploy automatico apos CI aprovado.
+- O paragrafo legado desta secao descrevia o fluxo anterior e foi substituido pelo contrato atual no topo deste documento.
 
 Durante a fase assistida anterior à promoção da #384, esta combinação era
 válida e permanece como evidência histórica:
@@ -131,7 +132,7 @@ automaticamente `ready_for_real_data`.
 
 1. preservar as evidencias historicas de #303, #226, #216, #158, #269 e #227;
 2. executar desenvolvimento e gates no ambiente local canonico;
-3. manter OCI/#284 como backlog futuro;
+3. usar OCI/main como producao e o workflow automatico apos CI aprovado;
 4. tratar eventual liberacao de dados reais exclusivamente pela #384.
 
 Runbook: `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.

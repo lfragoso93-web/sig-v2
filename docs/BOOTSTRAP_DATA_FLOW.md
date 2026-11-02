@@ -1,3 +1,5 @@
+> **Historical runtime notes:** Environment observations and OCI backlog statements below are dated snapshots. Current system flow runs in OCI production on `main`; local development uses Windows and `stable-15jun`. Release details: `deployment/oci-execution-index.md`.
+
 # Fluxo canônico de bootstrap e carga de dados — SGI v2
 
 > Documento arquitetural canônico para reconstrução inicial, sincronização incremental e rebuild de dados globais. Qualquer seed, backfill, rebuild ou Central de Bootstrap deve respeitar este fluxo.
@@ -40,7 +42,7 @@ Este documento distingue cinco operações que não são equivalentes:
 - `GO_ASSISTED` permite validação controlada e não equivale a `ready_for_real_data=true`;
 - `ready_for_real_data=true` somente pode ser avaliado pelo contrato próprio da
   #384, após evidência `GO` referenciar os gates concluídos #227 e PR #362;
-- OCI/#284 permanece backlog futuro e não integra esse caminho local.
+- Este fluxo local nao representa producao; releases para OCI seguem o fluxo automatico de `main`.
 
 ## Ambientes
 

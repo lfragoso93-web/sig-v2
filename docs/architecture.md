@@ -1,3 +1,5 @@
+> **Operational note:** This document includes dated runtime and backlog snapshots. Those sections describe the state at their stated dates. Current release contract: Windows local development on `stable-15jun`; OCI production on `main`, deployed automatically after successful CI. See `deployment/oci-execution-index.md` and `REAL_DATA_CERTIFICATION_RUNBOOK.md`.
+
 # Arquitetura — SGI v2
 
 > **Última Atualização:** 29/10/2026.
@@ -271,7 +273,7 @@ Ambiente oficial de desenvolvimento, correção, migrations de teste, suítes pe
 
 ### OCI
 
-Backlog futuro sob #284; não integra o caminho atual de desenvolvimento ou a
+- #284: historical OCI infrastructure item; OCI currently runs production on `main`.
 ativação da #384. Quando retomado, deve homologar o SHA exato já certificado,
 sem hotfix permanente na VM e sem remoção de volumes persistentes.
 
@@ -291,7 +293,7 @@ sem hotfix permanente na VM e sem remoção de volumes persistentes.
    escopo residual da #83;
 3. concluir GOV-07 da #293 e alinhar Issues/documentação com o código atual;
 4. depois, selecionar uma única entrega de produto pós-GO;
-5. manter OCI/#284 como backlog futuro até retomada explícita.
+5. As etapas subsequentes desse snapshot foram substituidas pelo fluxo atual de releases OCI em `main`.
 
 As Issues #365 e #364 foram fechadas em 08/10/2026; não fazem mais parte da
 sequência corrente. A higiene de dependências priorizada também foi integrada.
@@ -311,7 +313,7 @@ Com as entregas consolidadas no branch `stable-15jun`:
 - **Backlog Técnico Vigente (Oportunidades Mapeadas):**
   - O backlog arquitetural, de integridade contábil e resiliência está formalizado em [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) (19 oportunidades catalogadas, OP-01 a OP-19).
   - #149 — Posição elegível por carteira e tributação por lote de cupons/amortizações.
-  - #284 — Homologação da infraestrutura em nuvem OCI (preservada como backlog futuro).
+- #284: historical OCI infrastructure item; OCI currently runs production on `main`.
 
 
 ## Lancamentos de cripto e historico de mercado

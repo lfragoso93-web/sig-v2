@@ -1,145 +1,31 @@
-# SGI v2 OCI Operations Runbook
+# Operação de produção OCI
 
-Status: updated from the running OCI E2 Micro lab on 2026-08-25.
+Estado vigente em 01/11/2026. Este runbook cobre observação e resposta a incidentes da produção. Releases normais são executados pelo GitHub Actions após CI aprovado para `main`; consulte [`oci-self-hosted-runner-runbook.md`](oci-self-hosted-runner-runbook.md). Não publique valores de secrets, tokens, dados pessoais ou conteúdo bruto de logs.
 
-Goal: define routine operations for the single-VM OCI deployment without introducing paid services or public app ingress.
+## Verificação de um release
 
-## 1. Daily Status
+Use a execução de `Deploy to OCI Production` vinculada ao CI que concluiu com sucesso para o push em `main`. Confirme no resumo/logs protegidos do workflow:
 
-Run from `/opt/sgi-v2`:
+- branch de destino `main` e SHA alvo igual ao SHA do CI;
+- backup pré-deploy concluído;
+- checkout/`APP_COMMIT_SHA` igual ao SHA alvo;
+- serviços, banco, Redis e smoke verificados;
+- certificação de release persistida e `/ready` aprovado para a identidade atual.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml ps
-docker system df
-# UFW is intentionally not managed in this lab block. Do not change it here.
-df -h /
-free -h
-```
+`/health` verifica disponibilidade básica. Para dados reais, `/ready` é o gate autoritativo e deve permanecer fail-closed diante de divergência. CI isolado ou `/health=200` não comprovam release certificado.
 
-Expected:
+## Incidente ou deploy malsucedido
 
-- App containers are running or healthy.
-- Disk usage leaves room for logs, images, and backups.
-- No backend/frontend host ports are published; app traffic enters through Cloudflare Tunnel.
-- Memory pressure is acceptable for the current E2 Micro lab limits.
+1. Interrompa novos deploys enquanto avalia a execução falha.
+2. Preserve os volumes e o backup pré-deploy. Não execute `docker compose down -v`, remoção/pruning de volumes, recriação do banco ou limpeza de artefatos como tentativa de recuperação.
+3. Consulte logs e checks da execução, removendo segredos e dados pessoais antes de compartilhar qualquer trecho.
+4. Para correção de código, reproduza localmente em `stable-15jun`, valide, abra PR para `main` e use o deploy automático.
+5. Uma reversão de release deve passar por alteração revisada em `main` e pelo mesmo fluxo de CI/CD. Restauração de banco é uma ação separada, exige análise do backup e procedimento de recuperação aprovado; não a combine automaticamente com rollback de código.
+6. Após a recuperação, confirme SHA, migration head, `/health` e `/ready`. Uma nova identidade requer nova certificação; nunca force readiness nem reutilize evento de outro SHA/dataset/schema.
 
-## 2. Logs
+## Limites
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml logs --tail=200 backend
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml logs --tail=200 frontend
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml logs --tail=200 cloudflared
-```
-
-Do not paste logs externally until checking they contain no tokens, passwords, API keys, or personal data.
-
-## 3. Controlled Restart
-
-Restart app services without touching data volumes:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml restart backend frontend cloudflared
-sh scripts/oci_smoke_test.sh
-```
-
-Restart database/cache only if needed:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml restart db redis
-```
-
-## 4. Update Deployment
-
-Before update:
-
-```bash
-git status --short
-git fetch origin stable-15jun
-git log --oneline HEAD..origin/stable-15jun
-```
-
-Apply update:
-
-```bash
-git pull --ff-only origin stable-15jun
-APP_COMMIT_SHA="$(git rev-parse HEAD)"
-sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
-sh scripts/oci_env_preflight.sh .env
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build
-sh scripts/oci_smoke_test.sh
-```
-
-NO-GO:
-
-- local uncommitted changes on the VM.
-- `.env` missing or failing preflight.
-- update requires opening OCI ingress.
-
-## 5. Rollback Code
-
-Rollback code without deleting volumes:
-
-```bash
-git log --oneline -5
-git checkout <previous-good-sha>
-APP_COMMIT_SHA="$(git rev-parse HEAD)"
-sed -i "s/^APP_COMMIT_SHA=.*/APP_COMMIT_SHA=${APP_COMMIT_SHA}/" .env
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build
-sh scripts/oci_smoke_test.sh
-```
-
-Return to branch tracking after incident:
-
-```bash
-git checkout stable-15jun
-git pull --ff-only origin stable-15jun
-```
-
-## 6. Cleanup
-
-Safe cleanup:
-
-```bash
-docker image prune
-docker builder prune
-```
-
-Do not run:
-
-```bash
-docker volume prune
-docker compose down -v
-```
-
-unless backups are verified and data deletion is explicitly approved.
-
-## 7. Reboot Recovery Check
-
-After any VM reboot:
-
-```bash
-cd /opt/sgi-v2
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml ps
-sh scripts/oci_smoke_test.sh
-curl -I https://sgi.lfconsultoria.dpdns.org
-```
-
-Expected:
-
-- PostgreSQL, Redis and backend report healthy.
-- Frontend and Cloudflared are up.
-- Smoke test passes.
-- Public hostname responds through Cloudflare.
-
-Do not open OCI app ingress to recover from tunnel or DNS issues. Fix Cloudflare/Docker routing instead.
-
-## 8. Cost And Security Recheck
-
-Weekly:
-
-- OCI Cost Analysis has no unexpected charges.
-- No NAT Gateway exists.
-- No Load Balancer exists.
-- No reserved public IP exists.
-- NSG/lab security rules do not expose application ports.
-- Cloudflare Tunnel remains healthy and routes `sgi.lfconsultoria.dpdns.org` to `http://frontend:80`.
+- Não fazer deploy por SSH, `git pull`, alteração manual do `.env` ou `docker compose up` em rotina normal.
+- Não abrir portas ou alterar firewall para contornar falha de aplicação/tunnel.
+- Não executar seeds, imports, rebuilds financeiros ou operações de dados como parte de um restart.
+- Use [`oci-backup-restore-runbook.md`](oci-backup-restore-runbook.md) para distinguir backup automático de restauração controlada e [`../REAL_DATA_CERTIFICATION_RUNBOOK.md`](../REAL_DATA_CERTIFICATION_RUNBOOK.md) para gates de dados reais.

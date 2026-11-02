@@ -1,172 +1,22 @@
-# SGI v2 OCI Execution Index
+# Índice operacional de produção OCI
 
-Status: backlog futuro de homologacao de SHA certificado localmente (#284).
+Estado vigente em 01/11/2026. OCI é o ambiente produtivo do SGI v2 e acompanha a branch `main`. Windows com Docker é o ambiente local de desenvolvimento, na branch `stable-15jun`.
 
-Atualizado em 06/10/2026.
+## Release normal
 
-> Este índice permanece como referência de retomada. OCI não integra o caminho
-> atual de desenvolvimento nem a ativação da #384.
+1. Desenvolver e validar localmente em `stable-15jun`.
+2. Abrir PR para `main`; o CI valida o candidato e as proteções da branch controlam o merge.
+3. Após merge/push em `main` e CI concluído com sucesso, `.github/workflows/deploy-oci.yml` inicia o deploy automático para OCI no SHA exato aprovado.
+4. O workflow salva backup pré-deploy, atualiza o checkout e `APP_COMMIT_SHA`, reconstrói a aplicação e executa health, dependências, smoke e certificação automática da identidade do release.
+5. O deploy só termina com sucesso quando `/ready` confirma a certificação persistida para o ambiente, branch, SHA, dataset e revisão Alembic atuais.
 
-> Rebaseline local de 16/10/2026: a observação atual é `/health=200` e
-> `/ready=503` por identidade divergente/incompleta; `GO_ASSISTED` ainda não foi
-> determinado para a imagem ativa. As afirmações de readiness da seção seguinte
-> registram o estado certificado em 06/10/2026, não o runtime atual. Consulte
-> `docs/DEVELOPMENT_BASELINE_2026-10-16.md` antes de homologar uma imagem.
+Não atualize a produção manualmente por SSH, `git pull`, Compose ou edição do `.env` para releases normais. Não faça push direto em `main`. Uma falha de deploy/certificação exige diagnóstico e correção pelo fluxo de PR; se a âncora do dataset estiver inválida ou tiver mudado, siga o ciclo manual de certificação descrito em [`../REAL_DATA_CERTIFICATION_RUNBOOK.md`](../REAL_DATA_CERTIFICATION_RUNBOOK.md).
 
-## Fronteira operacional obrigatoria
+## Referências vigentes
 
-OCI nao e o ambiente de desenvolvimento nem o local primario de certificacao pesada do SGI v2.
+- [`oci-self-hosted-runner-runbook.md`](oci-self-hosted-runner-runbook.md) — gatilhos, gates e comportamento da automação.
+- [`oci-operations-runbook.md`](oci-operations-runbook.md) — observação e resposta operacional segura.
+- [`../REAL_DATA_CERTIFICATION_RUNBOOK.md`](../REAL_DATA_CERTIFICATION_RUNBOOK.md) — identidade, `/ready` e exceções que exigem certificação completa.
+- [`oci-backup-restore-runbook.md`](oci-backup-restore-runbook.md) — política de backup automático e restauração controlada.
 
-Fluxo vigente:
-
-1. desenvolver e corrigir localmente em `stable-15jun`;
-2. executar certificacao pesada localmente com Docker/PowerShell;
-3. fechar blockers P0/P1 e congelar um SHA candidato;
-4. enviar exatamente esse SHA para OCI;
-5. usar OCI para homologacao de deploy, migrations, persistencia, restart, recursos, rede, tunnel e smoke;
-6. se OCI revelar falha de codigo/contrato, reproduzir e corrigir localmente, gerar novo SHA e homologar novamente;
-7. nunca editar codigo na VM OCI como forma de correcao permanente.
-
-`GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. Os gates
-#158, #269 e #227 foram concluídos; a decisão persistente da #384 foi executada
-em 06/10/2026 para uma identidade runtime específica. A observação de 16/10
-retornou `/ready=503`; consulte o runbook de certificação antes de inferir a
-readiness atual. OCI/#284 não foi pré-requisito dessa decisão e permanece
-backlog futuro.
-
-## Phase 0. Freeze Candidate SHA
-
-Antes de qualquer deploy OCI:
-
-- confirmar branch `stable-15jun`;
-- confirmar working tree local limpa;
-- confirmar HEAD local = `origin/stable-15jun`;
-- registrar SHA candidato;
-- executar gates locais aplicaveis ao estagio;
-- confirmar que nenhuma dependencia/toolchain nao relacionada foi misturada ao candidato.
-
-Enquanto #303 ainda estiver em rodada assistida com P0/P1 em aberto, o SHA e apenas candidato, nao SHA de promocao.
-
-## Phase 1. Prepare OCI Target
-
-Use:
-
-- `docs/deployment/oci-capacity-fallbacks.md`
-- `docs/deployment/oci-micro-lab-runbook.md`
-- `docs/deployment/oci-stack-retry-runbook.md`
-- `docs/deployment/oci-cost-guardrails.md`
-- `docs/deployment/oci.md`
-
-A1 continua sendo o alvo preferencial quando houver capacidade. E2 Micro e laboratorio/homologacao limitada e nao e equivalente de performance.
-
-Rejeitar recursos pagos nao autorizados.
-
-## Phase 2. Validate VM Baseline
-
-Use:
-
-- `docs/deployment/oci-cloud-init.yaml`
-- `docs/deployment/oci-vm-handoff-template.md`
-- `docs/deployment/oci-first-deploy-runbook.md`
-- `scripts/oci_vm_baseline_check.sh`
-
-Validar cloud-init, Docker, firewall, volumes e `/opt/sgi-v2`.
-
-## Phase 3. Deploy Exact Certified Source
-
-Preferir Git e fazer checkout do SHA explicitamente registrado. Nao usar simplesmente o HEAD mais recente da branch se ele diferir do candidato certificado.
-
-Exemplo conceitual:
-
-```bash
-cd /opt/sgi-v2
-git fetch origin
-git switch stable-15jun
-git reset --hard <CERTIFIED_SHA>
-git rev-parse HEAD
-```
-
-O SHA retornado deve ser identico ao SHA certificado localmente e ao `APP_COMMIT_SHA` do ambiente.
-
-Nao desenvolver nem corrigir codigo na VM.
-
-## Phase 4. Configure Environment
-
-Use `.env.oci.example` e `scripts/oci_env_preflight.sh`.
-
-- segredos somente na VM;
-- `APP_COMMIT_SHA` deve corresponder ao checkout real;
-- `ready_for_real_data` nao deve ser promovido manualmente;
-- flags de bootstrap/seed devem respeitar o estagio autorizado.
-
-## Phase 5. Data Policy
-
-Enquanto o projeto estiver somente `GO_ASSISTED`:
-
-- usar banco/dados de homologacao controlados;
-- nao restaurar base real ampla;
-- nao executar seed global real apenas para testar deploy;
-- nao executar contracao destrutiva sem gate especifico.
-
-Restore/importacao real exigem autorização formal e não são liberados pela
-certificação de infraestrutura OCI nem pela #384.
-
-## Phase 6. Start App
-
-Use `docs/deployment/oci-first-deploy-runbook.md`.
-
-Renderizar Compose, confirmar ausencia de host ports indevidos, executar migrations aprovadas e iniciar o stack.
-
-## Phase 7. Publish Through Tunnel
-
-Usar Cloudflare Tunnel para `http://frontend:80` e manter ingress OCI de aplicacao fechado.
-
-Nunca expor `5432`, `6379` ou `8000` publicamente.
-
-## Phase 8. Homologation Smoke
-
-Validar:
-
-- `/health` operacional;
-- Postgres e Redis;
-- tunnel/hostname;
-- migrations no estado esperado;
-- restart do stack/VM;
-- persistencia dos volumes;
-- CPU, RAM e disco;
-- ausencia de portas publicas indevidas.
-
-### Semantica de `/ready`
-
-`/ready=503` e **esperado** enquanto `ready_for_real_data=false`. Isso nao invalida `GO_ASSISTED` nem um smoke de infraestrutura.
-
-Para homologacao assistida, a combinacao esperada e:
-
-```text
-/health = 200
-/ready = 503
-user-test-readiness.v1 = GO_ASSISTED
-ready_for_real_data = false
-```
-
-Nao alterar readiness manualmente para fazer o smoke passar.
-
-## Phase 9. Promotion Homologation (historical reference)
-
-Os gates históricos #303, #226, #216, #158 e #227 já foram concluídos. Quando
-OCI for retomada:
-
-- homologar exatamente esse SHA na OCI;
-- executar os smokes e gates de resiliencia/seguranca aplicaveis;
-- registrar a evidência de infraestrutura sem promover readiness manualmente;
-- manter a decisão de dados reais sob o contrato e runbook da #384.
-
-## Phase 10. Operate And Recover
-
-Use:
-
-- `docs/deployment/oci-operations-runbook.md`
-- `docs/deployment/oci-self-hosted-runner-runbook.md`
-- `docs/deployment/oci-disaster-recovery-runbook.md`
-
-Rollback deve preservar volumes e voltar para commit conhecido + backup verificado. Nunca usar `docker compose down -v` sem autorizacao e backup.
+Os runbooks de provisionamento e laboratório descrevem procedimentos históricos ou de infraestrutura isolada; não são caminhos de release de produção.

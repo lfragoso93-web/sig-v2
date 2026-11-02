@@ -1,8 +1,10 @@
+> **Scope note (2026-11-01):** This document defines test/portfolio certification and preserves older environment observations. OCI is production on `main`; local Windows development uses `stable-15jun`. Any dated runtime status below is historical, not current production readiness.
+
 # Certificação funcional de carteira — PORTFOLIO-TEST-READY
 
 > Status em 05/10/2026: evidência histórica concluída e consumida pela promoção
 > da PR #362. As sequências abaixo registram o processo usado e não comandam o
-> trabalho atual. OCI/#284 é backlog futuro; `ready_for_real_data` permanece
+> trabalho atual. OCI e producao em `main`; `ready_for_real_data` permanece vinculado a identidade certificada.
 > separado sob a #384.
 
 ## Objetivo
@@ -500,5 +502,5 @@ O processo abaixo foi concluído por #158, #269, #227 e PR #362:
 
 1. preservar a evidência dos gates executados;
 2. selecionar um SHA exato já certificado localmente;
-3. manter OCI/#284 como backlog futuro, fora do caminho atual;
+3. manter os testes locais isolados da producao OCI; releases seguem o fluxo automatico de `main`;
 4. manter qualquer autorização para dados reais separada sob a #384.

@@ -1,3 +1,5 @@
+> **Current contract (2026-11-01):** Windows/local development uses `stable-15jun`; OCI production uses `main`. PRs target `main`; successful CI after merge triggers automatic deployment and exact-identity certification. The GitHub counts, SHAs, and PR states in this file are dated snapshots and must not be treated as current inventory.
+
 # Governança de Issues — SGI v2
 
 Atualizado em 19/10/2026.
@@ -59,7 +61,7 @@ Issues abertas, agrupadas sem alterar o estado do GitHub:
 
 - Gates/fatos: #149, #370, #408.
 - Backup/governança/schema: #83, #272, #293.
-- OCI backlog: #284.
+- #284: historical OCI infrastructure item; OCI currently runs production on `main`.
 - Providers/bootstrap: #127, #130, #253.
 - UX/ativo/navegação: #58, #90, #351, #353.
 - Renda Fixa/ferramentas: #355–#359.
@@ -86,7 +88,7 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 1. #158, #269 e #227 estão fechadas;
 2. a PR #362 promoveu a baseline arquitetural para `main`;
-3. OCI/#284 é backlog futuro e não bloqueia o desenvolvimento atual;
+3. O snapshot de 19/10 descrevia OCI/#284 como plano futuro; OCI hoje e producao em `main`.
 4. #384 está concluída e governa separadamente a autorização persistente para
    dados reais; a promoção vigente certifica apenas a identidade runtime exata;
 5. #344 foi concluída com todas as filhas #345–#350 fechadas e seus contratos
@@ -108,7 +110,7 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #227 — decisão formal GO/NO-GO, fechada;
 - #384 — readiness persistente e auditável, concluída com promoção operacional
   real e validação DB-first;
-- #284 — OCI, backlog futuro.
+- #284: historical OCI infrastructure item; OCI currently runs production on `main`.
 
 ### Hardening arquitetural
 
@@ -213,7 +215,7 @@ aberta foi identificada como duplicada ou sem destino/documentação:
   na stack de testes; quatro testes determinísticos, typecheck e build passaram.
   Revisão visual desktop/mobile segue pendente; simulador tributário de Renda
   Fixa permanece separado;
-- #284: backlog OCI fora do caminho local;
+- #284: historical OCI infrastructure item; OCI currently runs production on `main`.
 - #293: governança; #353 permanece P2 e não bloqueia jornada crítica;
 - #83 não faz mais parte do inventário aberto.
 

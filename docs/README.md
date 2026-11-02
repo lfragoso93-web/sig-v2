@@ -1,3 +1,5 @@
+> Current contract: Windows local development uses `stable-15jun`; OCI production runs `main` and deploys automatically after successful CI. Dated documents are historical snapshots. Current sources: root README, real-data certification runbook, OCI execution index, and runner runbook.
+
 # Catálogo e Índice da Documentação — SGI v2
 
 Este diretório centraliza os documentos de especificação, governança, arquitetura e runbooks operacionais do Sistema de Gestão Financeira Pessoal (SGI v2).
@@ -62,9 +64,9 @@ Este diretório centraliza os documentos de especificação, governança, arquit
 
 ## 6. Operações, Governança e Certificação
 
-* [`operations.md`](operations.md) — Guia de operações em produção, agendador em background e comandos do sistema.
+* [`operations.md`](operations.md) ? CLIs locais de pre-producao; releases OCI: `deployment/oci-execution-index.md`.
 * [`ISSUE_GOVERNANCE.md`](ISSUE_GOVERNANCE.md) — Políticas de branches (`stable-15jun` -> `main`), Pull Requests e CI/CD.
 * [`REAL_DATA_CERTIFICATION_RUNBOOK.md`](REAL_DATA_CERTIFICATION_RUNBOOK.md) — Procedimento de auditoria e certificação de datasets reais (`/ready`).
 * [`ADMIN_BACKUP_RESTORE_REHEARSAL.md`](ADMIN_BACKUP_RESTORE_REHEARSAL.md) — Procedimento de backup e restauração de dados.
 * [`USER_VALIDATION_RUNBOOK.md`](USER_VALIDATION_RUNBOOK.md) — Runbook de validação de funcionalidades com usuários.
-* [`DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) — Relatório diagnóstico de oportunidades de melhoria (Fases 1 a 4).
+* [`DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md) ? Snapshot diagnostico de 29/10/2026; backlog atual deve ser confirmado nas Issues.

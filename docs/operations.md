@@ -1,3 +1,9 @@
+# LOCAL AND PRE-PRODUCTION OPERATIONS - SCOPE
+
+This document contains inventory, backup, isolated restore, and rebuild CLIs for local validation on Windows/Docker, branch `stable-15jun`. It is not the OCI production deployment/operations runbook. Production runs `main`; releases go through GitHub Actions as described in `docs/deployment/oci-execution-index.md`. Do not run these procedures against the production database as part of a normal release.
+
+The observation below is a historical record of the local environment on 2026-10-16, not the current production state. For production identity, use workflow checks and `/ready`.
+
 # Operação — SGI v2
 
 > Última atualização do procedimento: 06/10/2026
@@ -45,9 +51,9 @@ ENABLE_BOOT_MARKET_SYNC=true
 
 Essa flag controla somente a sequência automática iniciada pelo `lifespan` do backend. As CLIs operacionais, o `full_market_rebuild` manual e os jobs do scheduler permanecem independentes e devem ser executados apenas quando necessários.
 
-## Regras operacionais
+## Regras para operacoes locais de pre-producao
 
-- trabalhar somente na `stable-15jun`;
+- desenvolvimento local em `stable-15jun`; producao OCI em `main` e deploy somente por CI/CD;
 - registrar o SHA completo da execução;
 - não reutilizar `run_id`, banco isolado ou diretório de artefatos após falha;
 - congelar importações e escritas concorrentes quando o runbook exigir;

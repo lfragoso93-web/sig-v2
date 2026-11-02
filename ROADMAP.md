@@ -1,3 +1,5 @@
+> **Current release contract (2026-11-01):** Local Windows development uses `stable-15jun`; OCI production runs `main`. Merged PRs deploy automatically after successful CI and the production workflow certifies the exact release identity. The roadmap and diagnosis snapshots below are dated historical planning/evidence, not a verified current open-issue inventory. Confirm current priorities in GitHub Issues and current release documentation before acting.
+
 # Roadmap - SGI v2
 
 > **Última Atualização:** 29/10/2026.
@@ -5,7 +7,7 @@
 > **Alembic Head Vigente:** `20261022_auth_oauth_mfa` (67 revisões lineares encadeadas).
 > **Branch Mandatória:** `stable-15jun`.
 
-## Baseline Vigente e Entregas Consolidadas — 29/10/2026
+## Snapshot historico de baseline e entregas (29/10/2026)
 
 - **Funcionalidades de Produto Entregues em `stable-15jun`:**
   - **Analysis Engine (#360) & Camada de IA (#361):** Motor determinístico DB-first de diagnóstico de diversificação e concentração integrado à camada de IA explicativa em linguagem natural (`frontend/src/pages/AnalisePage.tsx`).
@@ -17,7 +19,7 @@
   - **Tabela Oficial de Proventos (`dea616ee`):** Exibição de proventos com tipo, data com, data pagamento e valor unitário líquido.
 - **Relatório de Diagnóstico de Melhorias:** As 19 oportunidades técnicas mapeadas para as próximas rodadas estão detalhadas em [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md), com prioridades categorizadas de P1 a P3 (incluindo saldo de vendas pós-split e expansão do `PortfolioAccessContext`).
 
-## Proximo bloco ativo - fechar experiencia de Renda Fixa e priorizar ferramentas
+## Plano de trabalho registrado em 29/10/2026 (historico; nao e fila atual confirmada)
 
 - O ambiente unico de validacao assistida e o Compose `sig-v2`, publicado pelo Cloudflare Tunnel. Toda alteracao destinada aos usuarios deve ser publicada nessa imagem; nao usar `sgi-usertest`.
 - #355 tem contratos estruturados, associacao por termos equivalentes, prefill de Resumo/Tesouro e fluxos CSV. A rodada atual remove a escolha manual de tratamento fiscal e o campo separado de emissor; liquidez diaria oculta e limpa carencia.

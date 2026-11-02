@@ -171,23 +171,15 @@ cd backend
 
 ---
 
-## 8. Governança de Branches e Modelo de Release
+## 8. Governanca de Branches e Modelo de Release
 
-O desenvolvimento do backend do SGI v2 é rigidamente condicionado pela política de branches e governança do repositório:
+- Desenvolvimento local: Windows/PowerShell/Docker na branch `stable-15jun`.
+- Producao: OCI executa a branch `main`.
+- Alteracoes seguem por Pull Request para `main`; push direto e proibido. O CI valida o candidato e, apos merge/push bem-sucedido em `main`, `.github/workflows/deploy-oci.yml` faz deploy automatico do SHA exato.
+- O deploy salva backup previo, atualiza `APP_COMMIT_SHA`, reconstrui a aplicacao, valida os servicos e smoke, e exige certificacao persistida e `/ready` aprovado para a identidade runtime.
+- A certificacao e vinculada a ambiente, branch, SHA, dataset e revisao Alembic. CI e `/health` nao substituem esse gate.
 
-- **Branch Mandatória de Desenvolvimento (`stable-15jun`):**
-  - A branch `stable-15jun` é a **única branch permitida** para desenvolvimento contínuo, integração, testes e homologação de código.
-  - Todas as ramificações locais de trabalho (`feature/*`, `fix/*`, `chore/*`) e commits locais devem obrigatoriamente ter como base e destino final de integração a branch `stable-15jun`.
-  - Antes de sincronizar alterações via `git push origin stable-15jun`, é compulsório validar a integridade local com a suíte de testes (`pytest tests/`), o Architecture Doctor (`python -m app.doctor --all-static --format json`) e os linters configurados (`flake8 app`).
-
-- **Branch de Produção (`main`):**
-  - A branch `main` espelha fielmente o ambiente de produção e o estado homologado com dados reais certificados.
-  - O código em `main` é promovido **exclusivamente** a partir de macroblocos validados em `stable-15jun` por meio de Pull Requests formais, auditadas e com certificação verificável de integridade (SHA e dataset de produção).
-  - **É terminantemente proibido efetuar `git push` direto para a branch `main`**. O desenvolvimento direto em `main` invalida garantias de auditoria, a identidade de runtime (`/ready`) e a conformidade corporativa.
-
-Para aprofundamento das regras de governança e garantia pré-commit, consulte [`docs/DOCUMENTACAO_DO_SISTEMA.md`](../docs/DOCUMENTACAO_DO_SISTEMA.md#8-governança-e-ciclo-de-desenvolvimento).
-
----
+Consulte `docs/deployment/oci-execution-index.md`, `docs/deployment/oci-self-hosted-runner-runbook.md` e `docs/REAL_DATA_CERTIFICATION_RUNBOOK.md`.
 
 ## 9. Referências e Documentos Correlatos
 
