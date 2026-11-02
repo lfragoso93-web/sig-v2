@@ -21,6 +21,25 @@ necessária uma dependência de mensageria adicional.
 | startup bootstrap | assíncrono, não recorrente | mitigado por reserva e locks DB por estágio | manter contrato atual |
 | backfills após transação/CSV | BackgroundTasks locais | médio, derivados reconstruíveis | sem outbox neste momento |
 
+## Agendamentos recorrentes ativos
+
+Todos os horários usam `America/Sao_Paulo`. O cadastro está em
+`backend/app/core/scheduler.py`; as tarefas globais usam lease Redis para
+impedir execução concorrente entre réplicas.
+
+| Job | Horário | Escopo |
+| --- | --- | --- |
+| `sync_asset_dividends_morning` | segunda a sábado, 08:00 | Proventos; janela móvel de 90 dias para trás e 365 dias para frente. |
+| `notify_daily_dividend_payments` | segunda a sexta, 08:30 | E-mail dos pagamentos do dia; não coleta dados de provedores. |
+| `sync_benchmark_rates_daily` | segunda a sexta, 08:40 e 20:40 | CDI, Selic, IPCA e IGP-M; depende de `ENABLE_DAILY_BENCHMARK_SYNC`. |
+| `sync_ibov_benchmark_daily` | segunda a sexta, 08:42 e 20:42 | Fechamento do Ibovespa; depende da mesma configuração. |
+| `sync_corporate_events_daily` | segunda a sexta, 22:00 | Coleta eventos corporativos globais; não aplica eventos ao ledger. |
+
+Proventos e eventos reutilizam os estágios canônicos, com persistência
+idempotente e sem alterar transações ou projeções de carteira. A consulta Yahoo
+de proventos fica restrita à janela recorrente, sem baixar o histórico desde
+1970 a cada execução.
+
 ## Lock distribuído adotado
 
 O job `persist_daily_close_prices` usa uma lease Redis:
