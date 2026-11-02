@@ -1,6 +1,6 @@
 # Snapshots e rentabilidade TWR
 
-> Última atualização: 16/10/2026
+> Última atualização: 02/11/2026
 
 Este documento descreve como o SGI v2 reconstrói snapshots patrimoniais e calcula rentabilidade ponderada pelo tempo.
 
@@ -8,7 +8,7 @@ Este documento descreve como o SGI v2 reconstrói snapshots patrimoniais e calcu
 
 ## Papel do snapshot
 
-O snapshot diário consolida o estado da carteira em uma data:
+O snapshot patrimonial consolidado é criado diariamente às 21h (`America/Sao_Paulo`), inclusive em fins de semana e feriados. Cada registro representa o estado da carteira na data:
 
 - valor de mercado;
 - custo em aberto;
@@ -38,7 +38,7 @@ backfill_canonical_snapshots_with_returns()
 portfolio_snapshots
 ```
 
-O writer usa somente dados persistidos e não chama provedores. Lacuna de preço
+O writer usa somente dados persistidos e não chama provedores. Nos fins de semana e feriados, a carteira usa as cotações persistidas disponíveis. Ativos sem negociação usam o último preço persistido compatível com a janela de cobertura. Lacuna de preço
 persistido de ativo de mercado faz a data ser ignorada; cobertura incompleta de
 benchmark interrompe a reconstrução naquela data. Nenhum desses casos deve ser
 preenchido com cotação inventada.

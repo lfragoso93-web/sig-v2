@@ -1,9 +1,11 @@
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.portfolio_snapshot_twr_maintenance_service import (
+    _latest_weekday_close_date,
     _latest_snapshot_has_legacy_zero_twr,
     maintain_twr_snapshots_for_active_portfolios,
 )
@@ -151,3 +153,9 @@ class SnapshotStub:
         self.accumulated_return_pct = Decimal(accumulated_return_pct)
         self.daily_return_pct = Decimal(daily_return_pct)
         self.return_pct = Decimal(return_pct)
+
+
+def test_weekend_class_snapshot_target_is_last_weekday_close():
+    assert _latest_weekday_close_date(date(2026, 9, 5)) == date(2026, 9, 4)
+    assert _latest_weekday_close_date(date(2026, 9, 6)) == date(2026, 9, 4)
+    assert _latest_weekday_close_date(date(2026, 9, 7)) == date(2026, 9, 7)
