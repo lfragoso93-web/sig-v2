@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from app.core import distributed_job_lock as lock_module
-from app.core.distributed_job_lock import distributed_job_lock, scheduler_lock_key
+from app.core.distributed_job_lock import (
+    ScheduledJobFailed,
+    distributed_job_lock,
+    scheduler_lock_key,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +22,8 @@ class _FakeRedis:
     def __init__(self) -> None:
         self.now = 0
         self.values: dict[str, tuple[str, int]] = {}
+        self.hashes: dict[str, dict[str, str]] = {}
+        self.ttls: dict[str, int] = {}
 
     def advance(self, seconds: int) -> None:
         self.now += seconds
@@ -44,6 +50,16 @@ class _FakeRedis:
             return 0
         self.values.pop(key)
         return 1
+
+    async def hset(self, key: str, *, mapping: dict[str, str]):
+        self.hashes.setdefault(key, {}).update(mapping)
+
+    async def expire(self, key: str, ttl: int):
+        self.ttls[key] = ttl
+        return True
+
+    async def hgetall(self, key: str):
+        return self.hashes.get(key, {})
 
 
 async def _return(value):
@@ -152,3 +168,61 @@ async def test_redis_unavailable_fails_closed_and_logs_refusal(
     assert "scheduler_lock_refused" in caplog.text
     assert "reason=redis_unavailable" in caplog.text
     assert "reprocessing=True" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_successful_job_persists_latest_status(monkeypatch) -> None:
+    redis = _FakeRedis()
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+
+    async with distributed_job_lock(
+        job_name="persist_daily_close_prices",
+        period="daily",
+        ttl_seconds=120,
+    ) as acquired:
+        assert acquired is True
+
+    key = lock_module.scheduler_job_status_key("persist_daily_close_prices")
+    status = redis.hashes[key]
+    assert status["status"] == "succeeded"
+    assert status["last_started_at"]
+    assert status["last_finished_at"]
+    assert int(status["duration_ms"]) >= 0
+    assert redis.ttls[key] == 90 * 24 * 60 * 60
+
+
+@pytest.mark.asyncio
+async def test_failed_job_persists_error_type_and_reraises(monkeypatch) -> None:
+    redis = _FakeRedis()
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+
+    with pytest.raises(ScheduledJobFailed, match="RuntimeError") as failure:
+        async with distributed_job_lock(
+            job_name="sync_asset_dividends",
+            period="morning",
+            ttl_seconds=120,
+        ) as acquired:
+            assert acquired is True
+            raise RuntimeError("provider unavailable")
+
+    key = lock_module.scheduler_job_status_key("sync_asset_dividends")
+    status = redis.hashes[key]
+    assert status["status"] == "failed"
+    assert status["last_error_type"] == "RuntimeError"
+    assert "provider unavailable" not in str(status)
+    assert "provider unavailable" not in str(failure.value)
+
+
+@pytest.mark.asyncio
+async def test_job_status_reader_returns_only_requested_keys(monkeypatch) -> None:
+    redis = _FakeRedis()
+    redis.hashes[lock_module.scheduler_job_status_key("sync_asset_dividends")] = {
+        "status": "succeeded",
+    }
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+
+    result = await lock_module.read_scheduler_job_statuses(
+        ("sync_asset_dividends",)
+    )
+
+    assert result == {"sync_asset_dividends": {"status": "succeeded"}}

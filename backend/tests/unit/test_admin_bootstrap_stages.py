@@ -4,25 +4,19 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.database import get_db
 from app.main import app
 from app.models.user import User
 from app.routers.admin import require_superadmin
 from app.services.system_bootstrap_service import (
     BOOTSTRAP_SCHEMA_VERSION,
     CANONICAL_BOOTSTRAP_STAGES,
-    BootstrapStageResult,
-    SystemBootstrapReport,
     run_system_bootstrap,
 )
 from app.services.system_bootstrap_trigger_service import (
-    bootstrap_launch_reserved,
     reserve_system_bootstrap_launch,
     reset_bootstrap_launch_reservation_for_tests,
-    run_reserved_system_bootstrap,
 )
 from app.services.system_readiness_service import (
-    BootstrapReadinessState,
     get_bootstrap_readiness,
     reset_bootstrap_readiness_for_tests,
 )
@@ -103,6 +97,40 @@ async def test_admin_bootstrap_status_exposes_stages():
         fx = next(s for s in data["stages"] if s["id"] == "fx_rates")
         assert fx["name"] == "Taxas de Câmbio PTAX"
         assert fx["provider_dependent"] is True
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_scheduler_status_exposes_schedules_and_latest_runs():
+    app.dependency_overrides[require_superadmin] = _mock_superadmin
+    with patch(
+        "app.routers.admin_bootstrap.read_scheduler_job_statuses",
+        new=AsyncMock(
+            return_value={
+                "sync_asset_dividends": {
+                    "status": "failed",
+                    "last_error_type": "ProviderError",
+                    "last_finished_at": "2026-11-01T11:00:00+00:00",
+                }
+            }
+        ),
+    ) as read_statuses:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.get("/api/v1/admin/scheduler/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["timezone"] == "America/Sao_Paulo"
+    assert payload["status_retention_days"] == 90
+    dividends = next(
+        job for job in payload["jobs"] if job["id"] == "sync_asset_dividends_morning"
+    )
+    assert dividends["last_status"] == "failed"
+    assert dividends["last_error_type"] == "ProviderError"
+    read_statuses.assert_awaited_once()
     app.dependency_overrides.clear()
 
 

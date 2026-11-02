@@ -90,6 +90,7 @@ def start_scheduler() -> None:
                         "[scheduler] Erro ao atualizar cotações intradiárias: %s",
                         exc,
                     )
+                    raise
 
     crypto_offhours_weekdays, crypto_offhours_weekends = (
         _crypto_offhours_quote_triggers()
@@ -140,6 +141,7 @@ def start_scheduler() -> None:
                         "fora do pregão: %s",
                         exc,
                     )
+                    raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
@@ -189,6 +191,7 @@ def start_scheduler() -> None:
                     "[scheduler] Erro ao persistir fechamento diário de preços: %s",
                     exc,
                 )
+                raise
 
     if settings.ENABLE_DAILY_BENCHMARK_SYNC:
 
@@ -220,6 +223,7 @@ def start_scheduler() -> None:
                         logger.info("[scheduler] Índices macroeconômicos atualizados: %s", stats)
                     except Exception as exc:
                         logger.error("[scheduler] Erro ao sincronizar índices macroeconômicos: %s", exc)
+                        raise
 
         @scheduler.scheduled_job(
             _cron_trigger(day_of_week="mon-fri", hour="8,20", minute=42),
@@ -246,6 +250,7 @@ def start_scheduler() -> None:
                         logger.info("[scheduler] Fechamento do IBOV atualizado: %d registros", count)
                     except Exception as exc:
                         logger.error("[scheduler] Erro ao sincronizar fechamento do IBOV: %s", exc)
+                        raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=50),
@@ -278,6 +283,7 @@ def start_scheduler() -> None:
                         "[scheduler] Erro no fechamento diário do Tesouro: %s",
                         exc,
                     )
+                    raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=8, minute=30),
@@ -311,6 +317,7 @@ def start_scheduler() -> None:
                         "[scheduler] Erro ao enviar notificações de proventos: %s",
                         exc,
                     )
+                    raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-sat", hour=8, minute=0),
@@ -347,6 +354,7 @@ def start_scheduler() -> None:
                 logger.info("[scheduler] Sincronização de proventos: %s", result)
             except Exception as exc:
                 logger.error("[scheduler] Erro na sincronização de proventos: %s", exc)
+                raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=22, minute=0),
@@ -385,6 +393,7 @@ def start_scheduler() -> None:
                     "[scheduler] Erro na sincronização de eventos corporativos: %s",
                     exc,
                 )
+                raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
@@ -418,6 +427,7 @@ def start_scheduler() -> None:
                         "[scheduler] Erro na manutenção de snapshots TWR: %s",
                         exc,
                     )
+                    raise
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=30),
@@ -454,6 +464,7 @@ def start_scheduler() -> None:
                         "[scheduler] Erro ao atualizar indicadores fundamentalistas: %s",
                         exc,
                     )
+                    raise
 
     if settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT:
 
@@ -507,6 +518,7 @@ def start_scheduler() -> None:
                         "%s",
                         exc,
                     )
+                    raise
 
     scheduler.start()
     logger.info(

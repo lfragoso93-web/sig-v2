@@ -56,5 +56,7 @@ The running environment may be certified for an exact SHA and dataset. A new
 commit does not authorize rebuilding that runtime under a different identity.
 Before deployment or readiness changes, route to the `sgi-certification` skill.
 
-OCI/#284 is backlog unless the user explicitly brings it into scope. Never use
-volume deletion or broad cleanup as a development shortcut.
+Windows with `stable-15jun` is the development and validation environment;
+OCI runs production from `main` through the GitHub Actions release flow. Do not
+develop on the OCI host or perform normal releases by SSH. Never use volume
+deletion or broad cleanup as a development shortcut.

@@ -64,6 +64,8 @@ Este diretório centraliza os documentos de especificação, governança, arquit
 
 ## 6. Operações, Governança e Certificação
 
+* [`ROADMAP.md`](ROADMAP.md) — Backlog vivo, decisões de automação e papéis dos ambientes.
+* [`history/ROADMAP_GOVERNANCE_2026-10-20.md`](history/ROADMAP_GOVERNANCE_2026-10-20.md) — Fotografia histórica do roadmap de governança (20/10/2026).
 * [`operations.md`](operations.md) ? CLIs locais de pre-producao; releases OCI: `deployment/oci-execution-index.md`.
 * [`ISSUE_GOVERNANCE.md`](ISSUE_GOVERNANCE.md) — Políticas de branches (`stable-15jun` -> `main`), Pull Requests e CI/CD.
 * [`REAL_DATA_CERTIFICATION_RUNBOOK.md`](REAL_DATA_CERTIFICATION_RUNBOOK.md) — Procedimento de auditoria e certificação de datasets reais (`/ready`).

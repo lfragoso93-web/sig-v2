@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.core.cache import get_redis
@@ -21,6 +23,59 @@ if redis.call('get', KEYS[1]) == ARGV[1] then
 end
 return 0
 """
+_JOB_STATUS_RETENTION_SECONDS = 90 * 24 * 60 * 60
+
+
+class ScheduledJobFailed(RuntimeError):
+    """Sanitized exception surfaced to APScheduler after a failed job."""
+
+    def __init__(self, original_error_type: str) -> None:
+        self.original_error_type = original_error_type
+        super().__init__(f"scheduled job failed ({original_error_type})")
+
+
+def scheduler_job_status_key(job_name: str) -> str:
+    if not _LOCK_SEGMENT.fullmatch(job_name):
+        raise ValueError("job_name must be a safe lowercase lock segment")
+    return f"sgi:job:status:{job_name}"
+
+
+async def _record_job_status(client, key: str, values: dict[str, str]) -> None:
+    """Persist best-effort operational status without changing job outcome."""
+    try:
+        await client.hset(key, mapping=values)
+        await client.expire(key, _JOB_STATUS_RETENTION_SECONDS)
+    except Exception as exc:
+        logger.warning(
+            "scheduler_status_write_failed error_type=%s",
+            type(exc).__name__,
+        )
+
+
+async def read_scheduler_job_statuses(
+    job_names: tuple[str, ...],
+) -> dict[str, dict[str, str]]:
+    """Read the latest run status for a fixed list of known jobs."""
+    client = await get_redis()
+    if client is None:
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for job_name in job_names:
+        try:
+            values = await client.hgetall(scheduler_job_status_key(job_name))
+        except Exception as exc:
+            logger.warning(
+                "scheduler_status_read_failed job=%s error_type=%s",
+                job_name,
+                type(exc).__name__,
+            )
+            return {}
+        result[job_name] = {
+            key.decode() if isinstance(key, bytes) else str(key):
+            value.decode() if isinstance(value, bytes) else str(value)
+            for key, value in values.items()
+        }
+    return result
 
 
 def scheduler_lock_key(job_name: str, period: str) -> str:
@@ -96,8 +151,54 @@ async def distributed_job_lock(
         attempt,
         attempt > 1,
     )
+    status_key = scheduler_job_status_key(job_name)
+    started_at = datetime.now(timezone.utc).isoformat()
+    started_clock = time.monotonic()
+    await _record_job_status(
+        client,
+        status_key,
+        {
+            "job_name": job_name,
+            "status": "running",
+            "last_started_at": started_at,
+            "last_finished_at": "",
+            "duration_ms": "",
+            "last_error_type": "",
+            "lease_ttl_seconds": str(ttl_seconds),
+        },
+    )
     try:
         yield True
+    except Exception as exc:
+        error_type = getattr(exc, "original_error_type", type(exc).__name__)
+        await _record_job_status(
+            client,
+            status_key,
+            {
+                "status": "failed",
+                "last_finished_at": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": str(round((time.monotonic() - started_clock) * 1000)),
+                "last_error_type": error_type,
+            },
+        )
+        logger.error(
+            "scheduler_job_failed job=%s error_type=%s",
+            job_name,
+            error_type,
+        )
+        raise ScheduledJobFailed(error_type) from None
+    else:
+        await _record_job_status(
+            client,
+            status_key,
+            {
+                "status": "succeeded",
+                "last_finished_at": datetime.now(timezone.utc).isoformat(),
+                "duration_ms": str(round((time.monotonic() - started_clock) * 1000)),
+                "last_error_type": "",
+            },
+        )
+        logger.info("scheduler_job_succeeded job=%s", job_name)
     finally:
         try:
             released = bool(

@@ -1,3 +1,5 @@
+> Historical checkpoint from October 2026. Current contract: Windows local development uses `stable-15jun`; OCI production runs `main` with GitHub Actions deployment. See `docs/ROADMAP.md` and the current runbooks.
+
 # Continuidade de desenvolvimento — SGI v2
 
 > Documento de retomada do trabalho. Baseline atualizada em 17/10/2026; ver

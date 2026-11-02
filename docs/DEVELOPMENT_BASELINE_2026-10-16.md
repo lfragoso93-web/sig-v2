@@ -1,5 +1,7 @@
 # Baseline de desenvolvimento e ambiente — 16/10/2026
 
+> Registro historico: este retrato nao descreve o runtime produtivo atual. OCI executa `main`; Windows local usa `stable-15jun`. Releases atuais seguem `docs/deployment/oci-execution-index.md`.
+
 Este registro separa o checkout Git, as mudanças locais e o runtime observado.
 Ele não declara a certificação do runtime nem substitui os runbooks operacionais.
 
