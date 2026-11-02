@@ -38,6 +38,15 @@ def test_validate_fx_seed_identity_accepts_canonical_identity() -> None:
     )
 
 
+def test_validate_fx_seed_identity_accepts_main_only_with_production_opt_in() -> None:
+    validate_fx_seed_identity(
+        run_id="20260726-173000",
+        branch="main",
+        commit_sha=_VALID_SHA,
+        allow_production_branch=True,
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
