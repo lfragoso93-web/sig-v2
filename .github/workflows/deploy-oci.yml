@@ -42,7 +42,6 @@ jobs:
           port: ${{ secrets.OCI_SSH_PORT || 22 }}
           envs: TARGET_SHA,CI_WORKFLOW_RUN_ID,CI_WORKFLOW_CONCLUSION,CI_WORKFLOW_EVENT,CI_WORKFLOW_BRANCH
           command_timeout: 25m
-          script_stop: true
           script: |
             set -eu
 
