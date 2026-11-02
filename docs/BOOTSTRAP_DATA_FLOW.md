@@ -50,9 +50,15 @@ Este documento distingue cinco operações que não são equivalentes:
 
 Ambiente primário de desenvolvimento, correção e certificação pesada. O SHA candidato nasce e é validado aqui.
 
-### OCI
+### OCI produção
 
-Ambiente de homologação do SHA já certificado localmente. OCI valida deploy, migrations, persistência, restart, recursos, rede, tunnel e smoke. Falha de código encontrada na OCI deve ser corrigida localmente e resultar em novo SHA; não se desenvolve na VM.
+O ambiente produtivo acompanha `main`; o deploy normal é executado pelo GitHub
+Actions após merge e CI aprovado. A validação funcional e os testes completos
+acontecem antes, localmente em Windows na branch `stable-15jun`. O workflow de
+produção cria o backup pré-deploy e valida migrations, persistência, restart,
+serviços, smoke, identidade do release e `/ready`. Não se desenvolve na VM nem
+se faz release normal por SSH ou Compose. Uma falha observada em produção deve
+ser reproduzida e corrigida localmente, passar por PR e seguir o mesmo fluxo.
 
 ## 1. Universo B3 — autoridade e precedência
 
@@ -234,7 +240,7 @@ Para OCI, adicionalmente: checkout deve corresponder exatamente ao SHA certifica
 - #216 — gate agregado;
 - #158 — Promotion Reconciliation;
 - #227 — GO/NO-GO amplo;
-- #284 — homologação OCI;
+- #284 — histórico de implantação OCI; hoje é produção em `main`;
 - #384 — certificação persistente e revogável para dados reais;
 - #129 — eventos corporativos;
 - #253 — futura Central de Bootstrap;

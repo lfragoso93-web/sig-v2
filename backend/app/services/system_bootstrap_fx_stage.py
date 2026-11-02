@@ -18,12 +18,14 @@ async def run_system_bootstrap_fx_stage(
     context: SystemBootstrapExecutionContext,
     *,
     end_date: date | None = None,
+    allow_production_branch: bool = False,
 ) -> str:
     """Reconstrói a maior cobertura válida de USD-BRL via PTAX oficial."""
     validate_fx_seed_identity(
         run_id=context.run_id,
         branch=context.branch,
         commit_sha=context.commit_sha,
+        allow_production_branch=allow_production_branch,
     )
     target_end = end_date or datetime.now(UTC).date()
 

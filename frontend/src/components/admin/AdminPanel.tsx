@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, Unlock, BookOpen, Database, Server, Zap, Mail, Send, AlertTriangle, CheckCircle2,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, Unlock, BookOpen, Database, Server, Zap, Mail, Send, AlertTriangle, CheckCircle2, Clock3,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
@@ -20,6 +20,7 @@ import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
 import BackupPanel from '@/components/admin/BackupPanel'
 import ProviderConfigPanel from '@/components/admin/ProviderConfigPanel'
 import BootstrapPanel from '@/components/admin/BootstrapPanel'
+import ScheduledJobsPanel from '@/components/admin/ScheduledJobsPanel'
 import { isStrongPassword } from '@/utils/passwordPolicy'
 
 // ── Types ────────────────────────────────────────────
@@ -907,6 +908,7 @@ export default function AdminPanel() {
   const [openConfigs,   setOpenConfigs]   = useState(false)
   const [openProviders, setOpenProviders] = useState(false)
   const [openBootstrap, setOpenBootstrap] = useState(false)
+  const [openScheduler, setOpenScheduler] = useState(true)
   const [openAudit,     setOpenAudit]     = useState(false)
 
   return (
@@ -959,6 +961,16 @@ export default function AdminPanel() {
         onToggle={() => setOpenBootstrap(v => !v)}
       >
         <BootstrapPanel />
+      </AdminSectionCard>
+
+      <AdminSectionCard
+        icon={Clock3}
+        title="Tarefas agendadas"
+        subtitle="Próxima execução e resultado técnico mais recente das rotinas automáticas"
+        open={openScheduler}
+        onToggle={() => setOpenScheduler(v => !v)}
+      >
+        <ScheduledJobsPanel />
       </AdminSectionCard>
 
       <AdminSectionCard

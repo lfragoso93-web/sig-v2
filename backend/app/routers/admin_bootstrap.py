@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.distributed_job_lock import read_scheduler_job_statuses
 from app.models.user import User
 from app.routers.admin import require_superadmin
 from app.services.system_bootstrap_execution_context import (
@@ -35,10 +36,27 @@ from app.services.system_readiness_service import get_bootstrap_readiness
 from app.services.user_test_readiness_service import (
     build_user_test_readiness,
 )
+from app.core.scheduler import scheduler
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["admin-bootstrap"])
+
+_SCHEDULED_JOB_STATUS_BINDINGS = (
+    ("update_quotes_intraday_full_hour", "update_quotes_intraday", "Cotações de mercado", True),
+    ("update_crypto_quotes_offhours_weekdays", "update_crypto_quotes", "Cotações de cripto fora do pregão", True),
+    ("update_crypto_quotes_weekends", "update_crypto_quotes", "Cotações de cripto no fim de semana", True),
+    ("persist_daily_close_prices", "persist_daily_close_prices", "Fechamento de preços", True),
+    ("sync_benchmark_rates_daily", "sync_benchmark_rates_daily", "Benchmarks macroeconômicos", True),
+    ("sync_ibov_benchmark_daily", "sync_ibov_benchmark_daily", "Fechamento do Ibovespa", True),
+    ("persist_treasury_daily_close", "persist_treasury_daily_close", "Fechamento do Tesouro Direto", True),
+    ("notify_daily_dividend_payments", "notify_daily_dividend_payments", "Resumo diário de proventos por e-mail", True),
+    ("sync_asset_dividends_morning", "sync_asset_dividends", "Coleta global de proventos", True),
+    ("sync_corporate_events_daily", "sync_corporate_events", "Coleta global de eventos corporativos", True),
+    ("portfolio_snapshot_auto_maintenance", "portfolio_snapshot_auto_maintenance", "Manutenção de snapshots e TWR", True),
+    ("refresh_asset_fundamentals_daily", "refresh_asset_fundamentals_daily", "Indicadores fundamentalistas", True),
+    ("audit_b3_market_calendar_monthly", "audit_b3_market_calendar", "Auditoria mensal do calendário B3", settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT),
+)
 
 
 class BootstrapTriggerRequest(BaseModel):
@@ -63,6 +81,46 @@ async def admin_system_bootstrap_status(
     return {
         **readiness.to_dict(),
         "launch_reserved": bootstrap_launch_reserved(),
+    }
+
+
+@router.get("/scheduler/status")
+async def admin_scheduler_status(
+    _: User = Depends(require_superadmin),
+):
+    """Expose configured schedules and their latest Redis-backed run status."""
+    configured_jobs = {job.id: job for job in scheduler.get_jobs()}
+    lock_names = tuple(
+        sorted({lock_name for _, lock_name, _, _ in _SCHEDULED_JOB_STATUS_BINDINGS})
+    )
+    statuses = await read_scheduler_job_statuses(lock_names)
+    jobs = []
+    for job_id, lock_name, name, enabled in _SCHEDULED_JOB_STATUS_BINDINGS:
+        configured = configured_jobs.get(job_id)
+        run_status = statuses.get(lock_name, {})
+        jobs.append(
+            {
+                "id": job_id,
+                "name": name,
+                "enabled": bool(enabled and configured),
+                "next_run_at": (
+                    configured.next_run_time.isoformat()
+                    if configured and configured.next_run_time
+                    else None
+                ),
+                "last_status": run_status.get("status", "never_run"),
+                "last_started_at": run_status.get("last_started_at") or None,
+                "last_finished_at": run_status.get("last_finished_at") or None,
+                "duration_ms": run_status.get("duration_ms") or None,
+                "last_error_type": run_status.get("last_error_type") or None,
+                "lease_ttl_seconds": run_status.get("lease_ttl_seconds") or None,
+            }
+        )
+    return {
+        "timezone": "America/Sao_Paulo",
+        "status_retention_days": 90,
+        "status_store_available": len(statuses) == len(lock_names),
+        "jobs": jobs,
     }
 
 

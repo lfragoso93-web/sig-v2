@@ -307,10 +307,19 @@ async def run_system_bootstrap(
         ("asset_price_history", _bootstrap_asset_price_history),
         ("international_price_history", _bootstrap_international_price_history),
         ("benchmarks", _bootstrap_benchmarks),
-        ("fx_rates", lambda: run_system_bootstrap_fx_stage(context)),
+        (
+            "fx_rates",
+            lambda: run_system_bootstrap_fx_stage(
+                context,
+                allow_production_branch=context.branch == "main",
+            ),
+        ),
         (
             "asset_dividends",
-            lambda: run_system_bootstrap_dividends_stage(context),
+            lambda: run_system_bootstrap_dividends_stage(
+                context,
+                allow_production_branch=context.branch == "main",
+            ),
         ),
         (
             "corporate_events",
