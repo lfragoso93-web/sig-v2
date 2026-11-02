@@ -20,6 +20,6 @@ redis==8.1.0
 reportlab==5.1.0
 slowapi>=0.1.10
 limits>=5.8.0
-pytest==9.1.1
+pytest==9.2.0
 pytest-asyncio==1.4.0
 aiosqlite==0.22.1
