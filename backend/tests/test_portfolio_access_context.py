@@ -26,6 +26,7 @@ from app.services.portfolio_performance_access_service import (
     get_authorized_daily_evolution,
     get_authorized_monthly_benchmarks,
 )
+from app.services import portfolio_positions_access_service
 
 
 def _user_access(*, user_id: int = 3, portfolio_id: int = 7) -> PortfolioAccessContext:
@@ -99,6 +100,24 @@ async def test_cross_user_portfolio_access_is_denied_before_sensitive_read() -> 
     ownership_query = str(db.execute.await_args.args[0])
     assert "portfolios.id" in ownership_query
     assert "portfolios.user_id" in ownership_query
+
+
+@pytest.mark.asyncio
+async def test_positions_access_denial_stops_before_position_service() -> None:
+    db = AsyncMock()
+    ownership_result = Mock()
+    ownership_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = ownership_result
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=99,
+        permissions=frozenset({portfolio_positions_access_service.READ_PORTFOLIO_POSITIONS}),
+    )
+
+    with pytest.raises(PortfolioAccessDenied):
+        await portfolio_positions_access_service.get_authorized_legacy_positions(db, access)
+
+    assert db.execute.await_count == 1
 
 
 @pytest.mark.asyncio

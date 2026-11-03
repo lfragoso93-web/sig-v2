@@ -15,6 +15,7 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.access_context import PortfolioAccessContext
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.asset_portfolio_insight import AssetPortfolioInsightResponse
@@ -37,9 +38,11 @@ from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliation
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services import csv_import_service
-from app.services.canonical_positions_service import (
-    export_canonical_positions_csv,
-    get_canonical_portfolio_positions,
+from app.services.canonical_positions_service import export_canonical_positions_csv
+from app.services.portfolio_positions_access_service import (
+    READ_PORTFOLIO_POSITIONS,
+    get_authorized_canonical_positions,
+    get_authorized_canonical_summary,
 )
 from app.services.class_target_service import get_targets_with_current
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
@@ -56,13 +59,23 @@ from app.services.portfolio_service import (
     list_portfolios,
     update_portfolio,
 )
-from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
 logger = logging.getLogger(__name__)
 _SAFE_TICKER_RE = re.compile(r"^[A-Za-z0-9^.-]{1,32}\Z")
 
 router = APIRouter(tags=["portfolios"])
+
+
+def _positions_access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada ou sem permissao")
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_POSITIONS}),
+    )
+
 
 _CSV_MESSAGE_EXACT = {
     "CSV file is empty or invalid": "O arquivo CSV está vazio ou inválido",
@@ -182,7 +195,9 @@ async def portfolio_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_canonical_portfolio_summary(db, portfolio_id, current_user.id)
+    return await get_authorized_canonical_summary(
+        db, _positions_access_context(portfolio_id, current_user)
+    )
 
 
 @router.get(
@@ -195,7 +210,9 @@ async def portfolio_positions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_canonical_portfolio_positions(db, portfolio_id, current_user.id)
+    return await get_authorized_canonical_positions(
+        db, _positions_access_context(portfolio_id, current_user)
+    )
 
 
 @router.get(
@@ -394,8 +411,9 @@ async def export_portfolio_positions_csv(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    groups = await get_canonical_portfolio_positions(db, portfolio_id, current_user.id)
+    groups = await get_authorized_canonical_positions(
+        db, _positions_access_context(portfolio_id, current_user)
+    )
     csv_content = export_canonical_positions_csv(groups)
     return Response(
         content=csv_content,
