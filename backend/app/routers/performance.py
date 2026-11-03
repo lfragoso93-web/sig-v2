@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.portfolio_evolution import (
     PortfolioClassAvailabilityResponse,
@@ -14,29 +13,28 @@ from app.schemas.portfolio_evolution import (
     PortfolioDailyEvolutionResponse,
     PortfolioMonthlyEvolutionResponse,
 )
-from app.services.performance_service import get_portfolio_performance
-from app.services.portfolio_class_reconciliation_service import (
-    reconcile_latest_class_snapshots,
-)
-from app.services.portfolio_class_snapshot_read_service import (
-    get_class_twr_availability,
-    get_daily_class_evolution,
-    get_monthly_class_evolution,
-)
-from app.services.portfolio_snapshot_read_service import (
-    get_enriched_daily_evolution,
-    get_enriched_monthly_evolution,
+from app.services.portfolio_performance_access_service import (
+    READ_PORTFOLIO_PERFORMANCE,
+    get_authorized_class_availability,
+    get_authorized_class_daily_evolution,
+    get_authorized_class_monthly_evolution,
+    get_authorized_class_reconciliation,
+    get_authorized_daily_evolution,
+    get_authorized_monthly_evolution,
+    get_authorized_performance,
 )
 
 router = APIRouter(tags=["performance"])
 
 
-async def _assert_portfolio_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    result = await db.execute(
-        select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user_id)
+def _access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada ou sem permissao")
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_PERFORMANCE}),
     )
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
 
 
 @router.get("/{portfolio_id}/performance")
@@ -45,8 +43,7 @@ async def portfolio_performance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_portfolio_performance(db, portfolio_id, current_user.id)
+    return await get_authorized_performance(db, _access_context(portfolio_id, current_user))
 
 
 @router.get(
@@ -64,8 +61,9 @@ async def evolution_daily(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_enriched_daily_evolution(db, portfolio_id, days=days)
+    return await get_authorized_daily_evolution(
+        db, _access_context(portfolio_id, current_user), days=days
+    )
 
 
 @router.get(
@@ -83,8 +81,9 @@ async def evolution_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_enriched_monthly_evolution(db, portfolio_id, months=months)
+    return await get_authorized_monthly_evolution(
+        db, _access_context(portfolio_id, current_user), months=months
+    )
 
 
 @router.get(
@@ -96,8 +95,9 @@ async def class_performance_availability(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_class_twr_availability(db, portfolio_id)
+    return await get_authorized_class_availability(
+        db, _access_context(portfolio_id, current_user)
+    )
 
 
 @router.get(
@@ -109,8 +109,9 @@ async def class_performance_reconciliation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await reconcile_latest_class_snapshots(db, portfolio_id)
+    return await get_authorized_class_reconciliation(
+        db, _access_context(portfolio_id, current_user)
+    )
 
 
 @router.get(
@@ -124,8 +125,9 @@ async def class_evolution_daily(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_daily_class_evolution(db, portfolio_id, asset_type, days=days)
+    return await get_authorized_class_daily_evolution(
+        db, _access_context(portfolio_id, current_user), asset_type, days=days
+    )
 
 
 @router.get(
@@ -139,5 +141,6 @@ async def class_evolution_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    return await get_monthly_class_evolution(db, portfolio_id, asset_type, months=months)
+    return await get_authorized_class_monthly_evolution(
+        db, _access_context(portfolio_id, current_user), asset_type, months=months
+    )

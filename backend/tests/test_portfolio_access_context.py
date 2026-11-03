@@ -14,10 +14,18 @@ from app.repositories.portfolio_access_repository import (
     get_accessible_transaction,
 )
 from app.routers import dividends as dividends_router
+from app.routers import performance as performance_router
+from app.routers import rentabilidade as rentabilidade_router
 from app.routers import transactions as transactions_router
 from app.schemas.transaction import TransactionUpdate
 from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividends
 from app.services.transaction_write_service import WRITE_PORTFOLIO_TRANSACTIONS
+from app.services.portfolio_performance_access_service import (
+    READ_PORTFOLIO_PERFORMANCE,
+    READ_PORTFOLIO_RENTABILIDADE,
+    get_authorized_daily_evolution,
+    get_authorized_monthly_benchmarks,
+)
 
 
 def _user_access(*, user_id: int = 3, portfolio_id: int = 7) -> PortfolioAccessContext:
@@ -280,3 +288,64 @@ def test_system_maintenance_declares_system_context() -> None:
     assert access.user_id is None
     assert access.purpose == "background_nightly_twr_maintenance"
     assert MAINTAIN_PORTFOLIO_SNAPSHOTS in access.permissions
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reader", "permission"),
+    [
+        (get_authorized_daily_evolution, READ_PORTFOLIO_PERFORMANCE),
+        (get_authorized_monthly_benchmarks, READ_PORTFOLIO_RENTABILIDADE),
+    ],
+)
+async def test_performance_read_denies_cross_user_before_data_query(reader, permission):
+    db = AsyncMock()
+    result = Mock()
+    result.scalar_one_or_none.return_value = None
+    db.execute.return_value = result
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=99,
+        permissions=frozenset({permission}),
+    )
+
+    with pytest.raises(PortfolioAccessDenied):
+        if reader is get_authorized_daily_evolution:
+            await reader(db, access, days=365)
+        else:
+            await reader(db, access, months=12)
+
+    assert db.execute.await_count == 1
+    query = str(db.execute.await_args.args[0])
+    assert "portfolios.id" in query
+    assert "portfolios.user_id" in query
+
+
+@pytest.mark.asyncio
+async def test_performance_routers_pass_explicit_user_context(monkeypatch):
+    captured = []
+
+    async def _read(db, access, **kwargs):
+        captured.append(access)
+        return []
+
+    monkeypatch.setattr(performance_router, "get_authorized_daily_evolution", _read)
+    monkeypatch.setattr(rentabilidade_router, "get_authorized_monthly_benchmarks", _read)
+
+    await performance_router.evolution_daily(
+        portfolio_id=7,
+        days=10,
+        db=AsyncMock(),
+        current_user=SimpleNamespace(id=3),
+    )
+    await rentabilidade_router.rentabilidade_benchmarks_monthly(
+        portfolio_id=7,
+        months=12,
+        db=AsyncMock(),
+        current_user=SimpleNamespace(id=3),
+    )
+
+    assert [(item.user_id, item.portfolio_id, item.permissions) for item in captured] == [
+        (3, 7, frozenset({READ_PORTFOLIO_PERFORMANCE})),
+        (3, 7, frozenset({READ_PORTFOLIO_RENTABILIDADE})),
+    ]
