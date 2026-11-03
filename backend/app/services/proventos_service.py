@@ -10,8 +10,10 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import asset_type_label
+from app.core.access_context import PortfolioAccessContext
 from app.core.clock import SYSTEM_CLOCK, Clock
 from app.models.dividend_enums import DividendStatus, DividendType
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
@@ -20,6 +22,7 @@ from app.services.canonical_dividend_entitlement_reader import (
 )
 
 _MONEY_STEP = Decimal("0.01")
+READ_PORTFOLIO_PROVENTOS = "read:portfolio_proventos"
 
 
 def _enum_text(value: object) -> str:
@@ -106,7 +109,7 @@ def _eligible_cash(
     ]
 
 
-async def get_summary(
+async def _get_summary_projection(
     db: AsyncSession,
     portfolio_id: int,
     status: DividendStatus | None = None,
@@ -168,7 +171,7 @@ async def get_summary(
     }
 
 
-async def list_items(
+async def _list_items_projection(
     db: AsyncSession,
     portfolio_id: int,
     status: DividendStatus | None = None,
@@ -235,7 +238,7 @@ async def list_items(
     }
 
 
-async def get_monthly_history(
+async def _get_monthly_history_projection(
     db: AsyncSession,
     portfolio_id: int,
     status: DividendStatus | None = None,
@@ -312,7 +315,7 @@ def _monthly_payload(
     return result
 
 
-async def get_distribution(
+async def _get_distribution_projection(
     db: AsyncSession,
     portfolio_id: int,
     months: int = 12,
@@ -358,3 +361,105 @@ async def get_distribution(
 
 def _optional_float(value: Decimal | None) -> float | None:
     return None if value is None else float(value)
+
+
+async def _require_proventos_access(
+    db: AsyncSession, access: PortfolioAccessContext
+) -> None:
+    await get_accessible_portfolio(
+        db, access, required_permission=READ_PORTFOLIO_PROVENTOS
+    )
+
+
+async def get_summary(
+    db: AsyncSession,
+    access: PortfolioAccessContext,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+) -> dict:
+    await _require_proventos_access(db, access)
+    return await _get_summary_projection(
+        db,
+        access.portfolio_id,
+        status=status,
+        year=year,
+        asset_type=asset_type,
+        dividend_type=dividend_type,
+        clock=clock,
+    )
+
+
+async def list_items(
+    db: AsyncSession,
+    access: PortfolioAccessContext,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+) -> dict:
+    await _require_proventos_access(db, access)
+    return await _list_items_projection(
+        db,
+        access.portfolio_id,
+        status=status,
+        year=year,
+        asset_type=asset_type,
+        dividend_type=dividend_type,
+        page=page,
+        page_size=page_size,
+        clock=clock,
+    )
+
+
+async def get_monthly_history(
+    db: AsyncSession,
+    access: PortfolioAccessContext,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+) -> list[dict]:
+    await _require_proventos_access(db, access)
+    return await _get_monthly_history_projection(
+        db,
+        access.portfolio_id,
+        status=status,
+        year=year,
+        asset_type=asset_type,
+        dividend_type=dividend_type,
+        clock=clock,
+    )
+
+
+async def get_distribution(
+    db: AsyncSession,
+    access: PortfolioAccessContext,
+    months: int = 12,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+) -> list[dict]:
+    await _require_proventos_access(db, access)
+    return await _get_distribution_projection(
+        db,
+        access.portfolio_id,
+        months=months,
+        status=status,
+        year=year,
+        asset_type=asset_type,
+        dividend_type=dividend_type,
+        clock=clock,
+    )
