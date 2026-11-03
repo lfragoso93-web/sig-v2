@@ -132,6 +132,10 @@ async def _allow_portfolio(*_args, **_kwargs):
     return object()
 
 
+async def _allow_existing_transaction(transaction):
+    return transaction
+
+
 async def _reject_crypto(_db, ticker, _asset_type):
     raise HTTPException(
         status_code=422,
@@ -346,7 +350,11 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
         currency="BRL",
     )
     db = _WriteSpySession(existing)
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transactions,
+        "get_accessible_transaction",
+        lambda _db, _access, **_kwargs: _allow_existing_transaction(existing),
+    )
     monkeypatch.setattr(
         transactions, "_validate_crypto_transaction_asset", _reject_crypto
     )
@@ -358,7 +366,7 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
             payload=TransactionUpdate(ticker="APT"),
             background_tasks=BackgroundTasks(),
             db=db,
-            current_user=object(),
+            current_user=SimpleNamespace(id=1),
         )
 
     assert exc_info.value.status_code == 422
@@ -383,7 +391,11 @@ async def test_partial_update_preserves_omitted_fields(monkeypatch) -> None:
         notes="original",
     )
     db = _WriteSpySession(existing)
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transactions,
+        "get_accessible_transaction",
+        lambda _db, _access, **_kwargs: _allow_existing_transaction(existing),
+    )
     monkeypatch.setattr(
         transactions, "_validate_crypto_transaction_asset", _allow_crypto
     )
@@ -394,7 +406,7 @@ async def test_partial_update_preserves_omitted_fields(monkeypatch) -> None:
         payload=TransactionUpdate(price=110),
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.price == 110
@@ -422,7 +434,11 @@ async def test_partial_update_can_clear_notes(monkeypatch) -> None:
         notes="original",
     )
     db = _WriteSpySession(existing)
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transactions,
+        "get_accessible_transaction",
+        lambda _db, _access, **_kwargs: _allow_existing_transaction(existing),
+    )
     monkeypatch.setattr(
         transactions, "_validate_crypto_transaction_asset", _allow_crypto
     )
@@ -433,7 +449,7 @@ async def test_partial_update_can_clear_notes(monkeypatch) -> None:
         payload=TransactionUpdate(notes=None),
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.notes is None
