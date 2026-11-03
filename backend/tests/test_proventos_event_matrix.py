@@ -6,12 +6,14 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.proventos_service import (
+    READ_PORTFOLIO_PROVENTOS,
     get_distribution,
     get_monthly_history,
     get_summary,
@@ -63,10 +65,15 @@ async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
         await db.flush()
     await db.flush()
 
-    summary = await get_summary(db, portfolio.id)
-    history = await get_monthly_history(db, portfolio.id)
-    distribution = await get_distribution(db, portfolio.id)
-    items = await list_items(db, portfolio.id)
+    access = PortfolioAccessContext.for_system(
+        portfolio_id=portfolio.id,
+        permissions=frozenset({READ_PORTFOLIO_PROVENTOS}),
+        purpose="proventos_event_matrix_readonly_test",
+    )
+    summary = await get_summary(db, access)
+    history = await get_monthly_history(db, access)
+    distribution = await get_distribution(db, access)
+    items = await list_items(db, access)
 
     assert summary["total_liquido_recebido"] == 0.0
     assert summary["total_bruto_recebido"] == 0.0

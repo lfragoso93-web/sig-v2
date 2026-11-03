@@ -12,10 +12,10 @@ from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
 )
 from app.services.proventos_service import (
-    get_distribution,
-    get_monthly_history,
-    get_summary,
-    list_items,
+    _get_distribution_projection as get_distribution,
+    _get_monthly_history_projection as get_monthly_history,
+    _get_summary_projection as get_summary,
+    _list_items_projection as list_items,
 )
 
 
