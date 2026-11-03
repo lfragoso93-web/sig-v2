@@ -27,6 +27,7 @@ from app.services.portfolio_performance_access_service import (
     get_authorized_monthly_benchmarks,
 )
 from app.services import portfolio_positions_access_service
+from app.services import portfolio_objectives_access_service
 
 
 def _user_access(*, user_id: int = 3, portfolio_id: int = 7) -> PortfolioAccessContext:
@@ -116,6 +117,42 @@ async def test_positions_access_denial_stops_before_position_service() -> None:
 
     with pytest.raises(PortfolioAccessDenied):
         await portfolio_positions_access_service.get_authorized_legacy_positions(db, access)
+
+    assert db.execute.await_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("entrypoint", "permission"),
+    [
+        (
+            portfolio_objectives_access_service.get_authorized_goals,
+            portfolio_objectives_access_service.READ_PORTFOLIO_GOALS,
+        ),
+        (
+            portfolio_objectives_access_service.set_authorized_class_targets,
+            portfolio_objectives_access_service.WRITE_PORTFOLIO_CLASS_TARGETS,
+        ),
+    ],
+)
+async def test_objective_access_denial_stops_before_domain_query(
+    entrypoint, permission: str
+) -> None:
+    db = AsyncMock()
+    ownership_result = Mock()
+    ownership_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = ownership_result
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=99,
+        permissions=frozenset({permission}),
+    )
+
+    with pytest.raises(PortfolioAccessDenied):
+        if entrypoint is portfolio_objectives_access_service.set_authorized_class_targets:
+            await entrypoint(db, access, [("ACAO", 50.0)])
+        else:
+            await entrypoint(db, access)
 
     assert db.execute.await_count == 1
 
