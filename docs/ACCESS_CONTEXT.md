@@ -79,6 +79,7 @@ sistêmico implícito.
 | CSV/importações | writer recebe contexto do usuário; carteira ausente e sem acesso têm a mesma resposta | concluída neste bloco |
 | Manutenção TWR agendada e rebuild completo | contexto `for_system` com finalidade e permissão `maintain:portfolio_snapshots`, validado no repositório antes da leitura/reconstrução | concluída neste bloco |
 | Seeds de transação sintética | `seed_transactions` valida a carteira existente com contexto sistêmico e permissão explícita antes da leitura do estado; todas as gravações usam o escritor canônico; ticker do Tesouro sintético só permanece exato quando confirmado pelo catálogo | concluída neste bloco |
+| Ciclo local de certificação de snapshots sintéticos | valida a carteira com `maintain:portfolio_snapshots` e finalidade explícita antes de ler ou invalidar snapshots | concluída neste bloco |
 | Outros rebuilds completos e seeds | avaliar cada fluxo sistêmico restante separadamente, mantendo os contratos de propriedade sintética | migrar em blocos separados |
 
 O inventário indica risco estrutural, não uma vulnerabilidade confirmada em

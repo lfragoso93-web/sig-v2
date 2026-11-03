@@ -32,6 +32,8 @@ def test_snapshot_cycle_uses_canonical_persistence_contracts():
 
     for token in (
         "load_certification_portfolio_identity",
+        "authorize_system_snapshot_maintenance",
+        'purpose="synthetic_snapshot_certification_cycle"',
         "backfill_canonical_snapshots_with_returns",
         "invalidate_snapshots_from",
         "end_date=target_date",
@@ -43,6 +45,9 @@ def test_snapshot_cycle_uses_canonical_persistence_contracts():
     ):
         assert token in source
     assert "calc_snapshot_at_date" not in source
+    assert source.index("load_certification_portfolio_identity(db)") < source.index(
+        "authorize_system_snapshot_maintenance("
+    ) < source.index("baseline_row = await _rebuild_to_target(")
 
 
 def test_snapshot_cycle_mutation_is_exactly_scoped_to_cert303_petr4():
