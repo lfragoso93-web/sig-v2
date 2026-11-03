@@ -13,7 +13,9 @@ from app.certification.portfolio_irpf_expectations import (
     EXPECTED_DISPOSALS_2026,
     EXPECTED_SYNTHETIC_IRPF_2026,
 )
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import AsyncSessionLocal
+from app.services.irpf_access_service import require_irpf_access, READ_PORTFOLIO_IRPF
 from app.services.irpf_annual_integrated_assessment_service import (
     assess_annual_integrated_operations,
 )
@@ -32,7 +34,13 @@ async def main() -> None:
     failures: list[str] = []
 
     async with AsyncSessionLocal() as db:
-        portfolio_id, _ = await load_certification_portfolio_identity(db)
+        portfolio_id, user_id = await load_certification_portfolio_identity(db)
+        access = PortfolioAccessContext.for_user(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            permissions=frozenset({READ_PORTFOLIO_IRPF}),
+        )
+        await require_irpf_access(db, access)
         disposals = await load_realized_disposals(
             db,
             portfolio_id,

@@ -54,3 +54,19 @@ def test_synthetic_irpf_certification_cli_is_read_only_and_uses_canonical_pipeli
         "delete(",
     ):
         assert forbidden not in source
+
+
+def test_synthetic_irpf_cli_authorizes_portfolio_before_fiscal_reads() -> None:
+    source = Path("app/cli/portfolio_irpf_certification.py").read_text(
+        encoding="utf-8"
+    )
+
+    for token in (
+        "PortfolioAccessContext.for_user(",
+        "READ_PORTFOLIO_IRPF",
+        "await require_irpf_access(db, access)",
+    ):
+        assert token in source
+    assert source.index("await require_irpf_access(db, access)") < source.index(
+        "disposals = await load_realized_disposals("
+    )
