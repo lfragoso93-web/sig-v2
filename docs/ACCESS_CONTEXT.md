@@ -77,7 +77,8 @@ sistêmico implícito.
 | Metas financeiras | rotas constroem contexto; serviços validam ownership e `read:portfolio_goals` ou `write:portfolio_goals` antes do CRUD | concluída neste bloco |
 | Class targets | rotas constroem contexto; serviços validam ownership e `read:portfolio_class_targets` ou `write:portfolio_class_targets` antes de listar ou alterar | concluída neste bloco |
 | CSV/importações | writer recebe contexto do usuário; carteira ausente e sem acesso têm a mesma resposta | concluída neste bloco |
-| Rebuilds, seeds e schedulers | seleção sistêmica direta de carteiras | exigir `for_system` antes de migrar |
+| Manutenção agendada de snapshots TWR | contexto `for_system` com finalidade e permissão `maintain:portfolio_snapshots`, validado no repositório antes da leitura/reconstrução | concluída neste bloco |
+| Rebuilds completos e seeds | seleção sistêmica de carteiras ainda sem validação uniforme por contexto | migrar em blocos separados |
 
 O inventário indica risco estrutural, não uma vulnerabilidade confirmada em
 cada rota. As migrações seguintes devem permanecer verticais e revisáveis.

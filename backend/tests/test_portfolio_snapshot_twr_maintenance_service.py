@@ -92,6 +92,34 @@ async def test_maintenance_rebuilds_class_snapshots_once_then_skips_when_current
     class_backfill.assert_awaited_once_with(db, 1)
 
 
+@pytest.mark.asyncio
+async def test_maintenance_denies_missing_system_scope_before_snapshot_queries():
+    db = AsyncMock()
+    portfolio_result = MagicMock()
+    portfolio_result.all.return_value = [SimpleRow(1)]
+    denied_result = MagicMock()
+    denied_result.scalar_one_or_none.return_value = None
+    db.execute.side_effect = [portfolio_result, denied_result]
+    needs = AsyncMock(return_value=True)
+    backfill = AsyncMock()
+
+    with (
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service._portfolio_needs_twr_rebuild",
+            needs,
+        ),
+        patch(
+            "app.services.portfolio_snapshot_twr_maintenance_service.backfill_canonical_snapshots_with_returns",
+            backfill,
+        ),
+    ):
+        result = await maintain_twr_snapshots_for_active_portfolios(db)
+
+    assert result["errors"] == 1
+    needs.assert_not_awaited()
+    backfill.assert_not_awaited()
+
+
 def test_detects_latest_snapshot_overwritten_with_zero_twr():
     previous = SnapshotStub(
         accumulated_return_pct="8.125",
