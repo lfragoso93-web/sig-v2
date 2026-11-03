@@ -19,6 +19,7 @@ from app.services.fixed_income_contract_service import (
 )
 from app.services.transaction_write_service import (
     TransactionWriteError,
+    WRITE_PORTFOLIO_TRANSACTIONS,
     add_transaction_record,
 )
 
@@ -38,6 +39,14 @@ def _contract_payload(**overrides) -> FixedIncomeContractCreate:
     }
     values.update(overrides)
     return FixedIncomeContractCreate(**values)
+
+
+def _system_write_access(portfolio_id: int) -> PortfolioAccessContext:
+    return PortfolioAccessContext.for_system(
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+        purpose="transaction-write-test",
+    )
 
 
 @pytest.mark.parametrize(
@@ -80,6 +89,7 @@ async def test_contract_create_list_and_link_transaction(db, portfolio, user) ->
     tx = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB TESTE",
             asset_type="RENDA_FIXA",
@@ -105,6 +115,7 @@ async def test_transaction_writer_creates_contract_and_transaction_together(
     tx = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB ATOMICO",
             asset_type="RENDA_FIXA",
@@ -132,6 +143,7 @@ async def test_transaction_writer_reuses_only_equivalent_contracts_in_portfolio(
     first = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB XP 110 CDI",
             asset_type="RENDA_FIXA",
@@ -146,6 +158,7 @@ async def test_transaction_writer_reuses_only_equivalent_contracts_in_portfolio(
     equivalent = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB XP 110 CDI",
             asset_type="RENDA_FIXA",
@@ -162,6 +175,7 @@ async def test_transaction_writer_reuses_only_equivalent_contracts_in_portfolio(
     different_terms = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB XP 110 CDI",
             asset_type="RENDA_FIXA",
@@ -189,6 +203,7 @@ async def test_transaction_writer_reuses_legacy_issuer_when_title_name_contains_
     legacy = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB BANCO EXEMPLO",
             asset_type="RENDA_FIXA",
@@ -205,6 +220,7 @@ async def test_transaction_writer_reuses_legacy_issuer_when_title_name_contains_
     without_separate_issuer = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB BANCO EXEMPLO",
             asset_type="RENDA_FIXA",
@@ -229,6 +245,7 @@ async def test_transaction_writer_never_reuses_equivalent_contract_across_portfo
     first = await add_transaction_record(
         db,
         portfolio_id=portfolio.id,
+        access=_system_write_access(portfolio.id),
         payload=TransactionCreate(
             ticker="CDB XP 110 CDI",
             asset_type="RENDA_FIXA",
@@ -248,6 +265,7 @@ async def test_transaction_writer_never_reuses_equivalent_contract_across_portfo
     second = await add_transaction_record(
         db,
         portfolio_id=other_portfolio.id,
+        access=_system_write_access(other_portfolio.id),
         payload=TransactionCreate(
             ticker="CDB XP 110 CDI",
             asset_type="RENDA_FIXA",
@@ -275,6 +293,7 @@ async def test_transaction_writer_rejects_nested_contract_for_other_asset_class(
         await add_transaction_record(
             db,
             portfolio_id=portfolio.id,
+            access=_system_write_access(portfolio.id),
             payload=TransactionCreate(
                 ticker="PETR4",
                 asset_type="ACAO",
@@ -317,10 +336,11 @@ async def test_transaction_writer_rejects_contract_from_another_portfolio(
         user,
     )
 
-    with pytest.raises(TransactionWriteError, match="nao encontrado"):
+    with pytest.raises(PortfolioAccessDenied, match="sem permissao"):
         await add_transaction_record(
             db,
             portfolio_id=portfolio.id + 1,
+            access=_system_write_access(portfolio.id + 1),
             payload=TransactionCreate(
                 ticker="CDB TESTE",
                 asset_type="RENDA_FIXA",
@@ -348,6 +368,7 @@ async def test_transaction_writer_rejects_contract_for_other_asset_class(
         await add_transaction_record(
             db,
             portfolio_id=portfolio.id,
+            access=_system_write_access(portfolio.id),
             payload=TransactionCreate(
                 ticker="PETR4",
                 asset_type="ACAO",

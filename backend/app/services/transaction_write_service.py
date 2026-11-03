@@ -9,12 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from decimal import Decimal
 
-from app.core.access_context import PortfolioAccessContext
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.models.asset import Asset
 from app.models.asset_alias import AssetAlias
 from app.models.transaction import OperationType, Transaction
 from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
     require_catalog_crypto_asset,
@@ -38,6 +39,9 @@ from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 class TransactionWriteError(ValueError):
     """Raised when a transaction violates canonical write rules."""
+
+
+WRITE_PORTFOLIO_TRANSACTIONS = "write:portfolio_transactions"
 
 
 async def resolve_fixed_income_contract_for_write(
@@ -190,6 +194,7 @@ async def add_transaction_record(
     db: AsyncSession,
     *,
     portfolio_id: int,
+    access: PortfolioAccessContext,
     payload: TransactionCreate,
     flush: bool = False,
 ) -> Transaction:
@@ -198,6 +203,14 @@ async def add_transaction_record(
     This function deliberately does not commit, refresh, or schedule snapshots/cache
     invalidation; callers own transaction boundaries and post-commit orchestration.
     """
+    if access.portfolio_id != portfolio_id:
+        raise PortfolioAccessDenied("Carteira nao encontrada ou sem permissao")
+    await get_accessible_portfolio(
+        db,
+        access,
+        required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+    )
+
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
     fixed_income_contract_id = payload.fixed_income_contract_id
@@ -324,6 +337,7 @@ async def create_transaction_record(
     db: AsyncSession,
     *,
     portfolio_id: int,
+    access: PortfolioAccessContext,
     payload: TransactionCreate,
 ) -> Transaction:
     """Persist one transaction using the canonical domain write path.
@@ -334,6 +348,7 @@ async def create_transaction_record(
     transaction = await add_transaction_record(
         db,
         portfolio_id=portfolio_id,
+        access=access,
         payload=payload,
     )
     await db.commit()

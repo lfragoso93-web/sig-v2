@@ -3,10 +3,35 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate
 from app.services import transaction_write_service as sut
+
+
+def _system_access(portfolio_id: int = 303) -> PortfolioAccessContext:
+    return PortfolioAccessContext.for_system(
+        portfolio_id=portfolio_id,
+        permissions=frozenset({sut.WRITE_PORTFOLIO_TRANSACTIONS}),
+        purpose="transaction-write-test",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _allow_access_for_write_service_unit_tests(monkeypatch):
+    async def _allow(*_args, **_kwargs):
+        return object()
+
+    monkeypatch.setattr(sut, "get_accessible_portfolio", _allow)
+
+    async def _known_asset(ticker, _asset_type):
+        return (ticker in {"PETR4", "VALE3"}, ticker)
+
+    monkeypatch.setattr(
+        "app.services.asset_provider_verification_service.verify_market_asset_exists",
+        _known_asset,
+    )
 
 
 @pytest.mark.asyncio
@@ -33,6 +58,7 @@ async def test_create_transaction_record_persists_and_resolves_non_crypto_asset(
     result = await sut.create_transaction_record(
         db,
         portfolio_id=303,
+        access=_system_access(),
         payload=payload,
     )
 
@@ -69,6 +95,7 @@ async def test_add_transaction_record_preserves_caller_transaction_boundary() ->
     result = await sut.add_transaction_record(
         db,
         portfolio_id=303,
+        access=_system_access(),
         payload=payload,
         flush=True,
     )
@@ -100,7 +127,9 @@ async def test_create_transaction_record_rejects_sell_above_current_quantity() -
     )
 
     with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente"):
-        await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+        await sut.create_transaction_record(
+            db, portfolio_id=303, access=_system_access(), payload=payload
+        )
 
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
@@ -124,7 +153,9 @@ async def test_sell_quantity_lookup_is_scoped_by_asset_type() -> None:
     )
 
     with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente"):
-        await sut.add_transaction_record(db, portfolio_id=303, payload=payload)
+        await sut.add_transaction_record(
+            db, portfolio_id=303, access=_system_access(), payload=payload
+        )
 
     statement = db.execute.await_args.args[0]
     assert "transactions.asset_type" in str(statement)
@@ -160,6 +191,7 @@ async def test_treasury_sell_normalizes_human_title_before_quantity_lookup() -> 
         result = await sut.add_transaction_record(
             db,
             portfolio_id=303,
+            access=_system_access(),
             payload=payload,
         )
 
@@ -195,7 +227,9 @@ async def test_create_transaction_record_requires_crypto_eligibility() -> None:
         side_effect=Exception("unexpected"),
     ):
         with pytest.raises(Exception, match="unexpected"):
-            await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+            await sut.create_transaction_record(
+                db, portfolio_id=303, access=_system_access(), payload=payload
+            )
 
 
 @pytest.mark.asyncio
@@ -222,7 +256,9 @@ async def test_create_transaction_rejects_non_existent_asset() -> None:
         return_value=(False, None),
     ):
         with pytest.raises(sut.TransactionWriteError, match="não existe no catálogo e não foi encontrado nos provedores"):
-            await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+            await sut.create_transaction_record(
+                db, portfolio_id=303, access=_system_access(), payload=payload
+            )
 
 
 @pytest.mark.asyncio
@@ -251,7 +287,9 @@ async def test_create_crypto_transaction_by_name_resolves_and_saves_ticker() -> 
         new_callable=AsyncMock,
         return_value=fake_crypto_asset,
     ):
-        result = await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+        result = await sut.create_transaction_record(
+            db, portfolio_id=303, access=_system_access(), payload=payload
+        )
 
     assert result.ticker == "BTC"
     assert result.asset_type == "CRIPTO"
@@ -285,7 +323,9 @@ async def test_create_crypto_rejects_non_existent_crypto() -> None:
             return_value=(False, None),
         ):
             with pytest.raises(sut.TransactionWriteError, match="não existe no catálogo e não foi encontrada nos provedores"):
-                await sut.create_transaction_record(db, portfolio_id=303, payload=payload)
+                await sut.create_transaction_record(
+                    db, portfolio_id=303, access=_system_access(), payload=payload
+                )
 
 
 @pytest.mark.asyncio
@@ -338,7 +378,9 @@ async def test_sell_quantity_respects_corporate_action_splits() -> None:
             date="2026-01-15",
             currency="BRL",
         )
-        tx = await sut.create_transaction_record(db, portfolio_id=303, payload=payload_150)
+        tx = await sut.create_transaction_record(
+            db, portfolio_id=303, access=_system_access(), payload=payload_150
+        )
         assert tx.quantity == 150
         assert tx.ticker == "PETR4"
 
@@ -360,4 +402,6 @@ async def test_sell_quantity_respects_corporate_action_splits() -> None:
             currency="BRL",
         )
         with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente para venda de PETR4. Posicao atual: 200.0000 | Tentativa: 250.0000"):
-            await sut.create_transaction_record(db, portfolio_id=303, payload=payload_250)
+            await sut.create_transaction_record(
+                db, portfolio_id=303, access=_system_access(), payload=payload_250
+            )
