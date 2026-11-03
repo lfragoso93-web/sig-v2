@@ -12,6 +12,7 @@ from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
+from app.repositories.portfolio_access_repository import get_accessible_transaction
 from app.schemas.transaction import (
     CorporateLifecycleEventOut,
     PagedTransactions,
@@ -343,17 +344,20 @@ async def update_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
-
-    result = await db.execute(
-        select(Transaction).where(
-            Transaction.id == transaction_id,
-            Transaction.portfolio_id == portfolio_id,
-        )
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
     )
-    tx = result.scalar_one_or_none()
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+    try:
+        tx = await get_accessible_transaction(
+            db,
+            access,
+            transaction_id=transaction_id,
+            required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
     asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
@@ -468,17 +472,20 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
-
-    result = await db.execute(
-        select(Transaction).where(
-            Transaction.id == transaction_id,
-            Transaction.portfolio_id == portfolio_id,
-        )
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
     )
-    tx = result.scalar_one_or_none()
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+    try:
+        tx = await get_accessible_transaction(
+            db,
+            access,
+            transaction_id=transaction_id,
+            required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     tx_date = tx.date
 

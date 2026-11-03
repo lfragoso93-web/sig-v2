@@ -1,6 +1,7 @@
 # Access Context e autorização por carteira
 
-> Estado em 06/10/2026: contrato canônico introduzido na vertical de dividendos.
+> Atualizado em 03/11/2026: edição e exclusão de transações agora carregam a
+> transação sob ownership e permissão no repositório.
 
 ## Regra
 
@@ -68,7 +69,7 @@ sistêmico implícito.
 | --- | --- | --- |
 | Dividendos | contexto completo em controller/service/repository | concluída neste bloco |
 | Transações (criação/CSV) | escritor canônico exige `write:portfolio_transactions` e valida ownership no repository | concluída neste bloco |
-| Transações (edição/exclusão) | ownership validado na rota antes da leitura/escrita | revisar em bloco separado |
+| Transações (edição/exclusão) | consulta no repositório vincula transação, carteira, ownership e `write:portfolio_transactions`; ausência e falta de acesso retornam a mesma resposta | concluída neste bloco |
 | IRPF | ownership local no router; serviços recebem `portfolio_id` | alta |
 | Proventos | ownership local no router; serviços recebem `portfolio_id` | alta |
 | Rentabilidade | ownership local no router; serviços recebem IDs | média |

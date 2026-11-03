@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi import BackgroundTasks
@@ -42,10 +43,6 @@ class _LifecycleSession:
         pass
 
 
-async def _allow_portfolio(*_args, **_kwargs):
-    return object()
-
-
 async def _allow_validation(*_args, **_kwargs):
     return None
 
@@ -71,8 +68,6 @@ def _transaction(
     )
 
 
-
-
 @pytest.mark.asyncio
 async def test_fixed_income_buy_to_sell_updates_canonical_transaction(
     monkeypatch,
@@ -80,7 +75,10 @@ async def test_fixed_income_buy_to_sell_updates_canonical_transaction(
     tx = _transaction(transaction_id=101)
     db = _LifecycleSession(tx)
 
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    async def _allow_transaction(_db, _access, **_kwargs):
+        return tx
+
+    monkeypatch.setattr(transactions, "get_accessible_transaction", _allow_transaction)
     monkeypatch.setattr(
         transactions,
         "_validate_crypto_transaction_asset",
@@ -94,7 +92,7 @@ async def test_fixed_income_buy_to_sell_updates_canonical_transaction(
         payload=TransactionUpdate(operation="sell"),
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.operation == OperationType.sell
@@ -109,7 +107,10 @@ async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transac
     tx.fixed_income_contract_id = 77
     db = _LifecycleSession(tx)
 
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    async def _allow_transaction(_db, _access, **_kwargs):
+        return tx
+
+    monkeypatch.setattr(transactions, "get_accessible_transaction", _allow_transaction)
     monkeypatch.setattr(
         transactions,
         "_validate_crypto_transaction_asset",
@@ -122,7 +123,7 @@ async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transac
         payload=TransactionUpdate(asset_type="ACAO"),
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.asset_type == "ACAO"
@@ -134,7 +135,11 @@ async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transac
 async def test_edit_can_create_and_link_structured_contract_atomically(monkeypatch) -> None:
     tx = _transaction(transaction_id=104)
     db = _LifecycleSession(tx)
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+
+    async def _allow_transaction(_db, _access, **_kwargs):
+        return tx
+
+    monkeypatch.setattr(transactions, "get_accessible_transaction", _allow_transaction)
     monkeypatch.setattr(
         transactions,
         "_validate_crypto_transaction_asset",
@@ -168,7 +173,7 @@ async def test_edit_can_create_and_link_structured_contract_atomically(monkeypat
         payload=payload,
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.fixed_income_contract_id == 123
@@ -182,14 +187,17 @@ async def test_delete_fixed_income_transaction_deletes_canonical_transaction(
     tx = _transaction(transaction_id=103)
     db = _LifecycleSession(tx)
 
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    async def _allow_transaction(_db, _access, **_kwargs):
+        return tx
+
+    monkeypatch.setattr(transactions, "get_accessible_transaction", _allow_transaction)
 
     await transactions.delete_transaction(
         portfolio_id=1,
         transaction_id=103,
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert tx in db.deleted
