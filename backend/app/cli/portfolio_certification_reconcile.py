@@ -18,7 +18,12 @@ from app.certification.portfolio_synthetic_fixture import (
 )
 from app.core.access_context import PortfolioAccessContext
 from app.core.database import AsyncSessionLocal
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividends
+from app.services.portfolio_performance_access_service import (
+    READ_PORTFOLIO_PERFORMANCE,
+)
+from app.services.portfolio_positions_access_service import READ_PORTFOLIO_POSITIONS
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
@@ -52,7 +57,23 @@ async def main() -> None:
         access = PortfolioAccessContext.for_user(
             user_id=user_id,
             portfolio_id=portfolio_id,
-            permissions=frozenset({READ_PORTFOLIO_DIVIDENDS}),
+            permissions=frozenset(
+                {
+                    READ_PORTFOLIO_DIVIDENDS,
+                    READ_PORTFOLIO_PERFORMANCE,
+                    READ_PORTFOLIO_POSITIONS,
+                }
+            ),
+        )
+        await get_accessible_portfolio(
+            db,
+            access,
+            required_permission=READ_PORTFOLIO_POSITIONS,
+        )
+        await get_accessible_portfolio(
+            db,
+            access,
+            required_permission=READ_PORTFOLIO_PERFORMANCE,
         )
         positions = await build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
