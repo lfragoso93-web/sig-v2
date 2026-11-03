@@ -24,6 +24,9 @@ from app.models.transaction import OperationType, Transaction
 from app.services.portfolio_snapshot_canonical_twr_service import (
     backfill_canonical_snapshots_with_returns,
 )
+from app.services.portfolio_snapshot_access_service import (
+    authorize_system_snapshot_maintenance,
+)
 from app.services.portfolio_snapshot_service import invalidate_snapshots_from
 
 _MONEY = Decimal("0.01")
@@ -136,6 +139,11 @@ async def main() -> None:
 
     async with AsyncSessionLocal() as db:
         portfolio_id, _ = await load_certification_portfolio_identity(db)
+        await authorize_system_snapshot_maintenance(
+            db,
+            portfolio_id,
+            purpose="synthetic_snapshot_certification_cycle",
+        )
 
         baseline_row = await _rebuild_to_target(
             db, portfolio_id, target_date, commit=True
