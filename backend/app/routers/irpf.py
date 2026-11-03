@@ -10,11 +10,9 @@ from fastapi.responses import Response
 from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
-from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.core.deps import get_current_user
-from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.irpf import (
@@ -27,11 +25,16 @@ from app.schemas.irpf import (
     IRPFReportOut,
 )
 from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
-from app.services.irpf_bens_direitos_service import calc_bens_direitos
+from app.services.irpf_access_service import (
+    READ_PORTFOLIO_IRPF,
+    require_irpf_access,
+    read_irpf_assets,
+    read_irpf_capital_gains,
+    read_irpf_income,
+)
 from app.services.irpf_canonical_export_service import build_irpf_canonical_export
 from app.services.irpf_export_service import generate_irpf_csv, generate_irpf_pdf
 from app.services.irpf_report_service import generate_irpf_report
-from app.services.irpf_tax_service import calc_ganhos_capital, calc_rendimentos
 
 router = APIRouter(tags=["irpf"])
 
@@ -39,25 +42,14 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-READ_PORTFOLIO_IRPF = "read:portfolio_irpf"
-
-
-async def _get_portfolio(
-    portfolio_id: int,
-    user: User,
-    db: AsyncSession,
-) -> Portfolio:
-    access = PortfolioAccessContext.for_user(
+def _access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
+    return PortfolioAccessContext.for_user(
         user_id=user.id,
         portfolio_id=portfolio_id,
         permissions=frozenset({READ_PORTFOLIO_IRPF}),
     )
-    try:
-        return await get_accessible_portfolio(
-            db, access, required_permission=READ_PORTFOLIO_IRPF
-        )
-    except PortfolioAccessDenied as exc:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.") from exc
 
 
 @router.get("/{portfolio_id}/irpf/anos", response_model=list[int])
@@ -67,7 +59,8 @@ async def list_anos(
     current_user: CurrentUser,
 ):
     """Retorna os anos com transacoes disponiveis na carteira."""
-    await _get_portfolio(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
+    await require_irpf_access(db, access)
     result = await db.execute(
         select(extract("year", Transaction.date).label("year"))
         .where(Transaction.portfolio_id == portfolio_id)
@@ -86,9 +79,9 @@ async def get_irpf_report(
     refresh: bool = False,
 ):
     """Retorna o relatorio IRPF completo, sempre projetado read-only em memoria."""
-    await _get_portfolio(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
     _ = refresh  # Compatibilidade do contrato HTTP legado; nao existe cache persistido.
-    return await generate_irpf_report(db, portfolio_id, year)
+    return await generate_irpf_report(db, access, year)
 
 
 @router.get(
@@ -102,8 +95,8 @@ async def get_canonical_irpf_assessment(
     current_user: CurrentUser,
 ):
     """Retorna a apuracao anual canonica read-only da carteira autorizada."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    contract = await build_irpf_annual_assessment(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    contract = await build_irpf_annual_assessment(db, access, year)
     return IrpfAnnualAssessmentOut.model_validate(contract.to_dict())
 
 
@@ -118,8 +111,8 @@ async def get_canonical_irpf_assets(
     current_user: CurrentUser,
 ):
     """Retorna Bens e Direitos canônicos em envelope público versionado."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    items = await calc_bens_direitos(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    items = await read_irpf_assets(db, access, year)
     total_cost = sum(Decimal(str(item.custo_total)) for item in items)
     return IrpfAssetsAssessmentOut(
         schema_version="irpf-assets-assessment.v1",
@@ -141,8 +134,8 @@ async def get_canonical_irpf_capital_gains(
     current_user: CurrentUser,
 ):
     """Retorna Ganhos de Capital em envelope público versionado."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    months = await calc_ganhos_capital(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    months = await read_irpf_capital_gains(db, access, year)
     return IrpfCapitalGainsAssessmentOut(
         schema_version="irpf-capital-gains-assessment.v1",
         portfolio_id=portfolio_id,
@@ -167,8 +160,8 @@ async def get_canonical_irpf_income(
     current_user: CurrentUser,
 ):
     """Retorna dividendos e JCP canônicos em envelope público versionado."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    dividends, jcp = await calc_rendimentos(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    dividends, jcp = await read_irpf_income(db, access, year)
     return IrpfIncomeAssessmentOut(
         schema_version="irpf-income-assessment.v1",
         portfolio_id=portfolio_id,
@@ -194,8 +187,8 @@ async def download_irpf_pdf(
     current_user: CurrentUser,
 ):
     """Gera e retorna o relatorio IRPF canônico em PDF."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    report = await build_irpf_canonical_export(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    report = await build_irpf_canonical_export(db, access, year)
 
     try:
         pdf_bytes = generate_irpf_pdf(report)
@@ -219,8 +212,8 @@ async def download_irpf_csv(
     current_user: CurrentUser,
 ):
     """Gera e retorna o relatorio IRPF canônico em CSV."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    report = await build_irpf_canonical_export(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    report = await build_irpf_canonical_export(db, access, year)
     csv_content = generate_irpf_csv(report)
 
     return Response(
@@ -240,8 +233,8 @@ async def get_bens_direitos(
     current_user: CurrentUser,
 ):
     """Retorna Bens e Direitos projetados canonicamente em 31/12."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    return await calc_bens_direitos(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    return await read_irpf_assets(db, access, year)
 
 
 @router.get(
@@ -255,8 +248,8 @@ async def get_ganhos_capital(
     current_user: CurrentUser,
 ):
     """Retorna ganhos de capital mensais com detalhamento por venda."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    return await calc_ganhos_capital(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    return await read_irpf_capital_gains(db, access, year)
 
 
 @router.get("/{portfolio_id}/irpf/{year}/rendimentos")
@@ -267,6 +260,6 @@ async def get_rendimentos(
     current_user: CurrentUser,
 ):
     """Retorna dividendos e JCP do ano."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    dividendos, jcp = await calc_rendimentos(db, portfolio_id, year)
+    access = _access_context(portfolio_id, current_user)
+    dividendos, jcp = await read_irpf_income(db, access, year)
     return {"dividendos": dividendos, "jcp": jcp}

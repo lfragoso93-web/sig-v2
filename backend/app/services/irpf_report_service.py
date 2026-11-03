@@ -4,18 +4,22 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.schemas.irpf import IRPFReportOut, IRPFResumo
+from app.services.irpf_access_service import require_irpf_access
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
-from app.services.irpf_service import calc_ganhos_capital, calc_rendimentos
+from app.services.irpf_tax_service import calc_ganhos_capital, calc_rendimentos
 
 
 async def generate_irpf_report(
     db: AsyncSession,
-    portfolio_id: int,
+    access: PortfolioAccessContext,
     year: int,
 ) -> IRPFReportOut:
     """Gera o relatório exclusivamente em memória usando leitores canônicos."""
 
+    portfolio_id = access.portfolio_id
+    await require_irpf_access(db, access)
     bens = await calc_bens_direitos(db, portfolio_id, year)
     ganhos = await calc_ganhos_capital(db, portfolio_id, year)
     dividendos, jcp = await calc_rendimentos(db, portfolio_id, year)

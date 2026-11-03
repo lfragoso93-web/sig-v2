@@ -14,9 +14,11 @@ from decimal import Decimal
 from enum import Enum
 
 from app.core.database import AsyncSessionLocal
+from app.core.access_context import PortfolioAccessContext
 from app.services.irpf_annual_assessment_service import (
     build_irpf_annual_assessment,
 )
+from app.services.irpf_access_service import READ_PORTFOLIO_IRPF
 
 
 def _configure_output() -> None:
@@ -55,7 +57,11 @@ async def _main(arguments: argparse.Namespace) -> int:
     async with AsyncSessionLocal() as db:
         contract = await build_irpf_annual_assessment(
             db,
-            portfolio_id=arguments.portfolio_id,
+            access=PortfolioAccessContext.for_system(
+                portfolio_id=arguments.portfolio_id,
+                permissions=frozenset({READ_PORTFOLIO_IRPF}),
+                purpose="irpf_annual_assessment_cli_readonly",
+            ),
             year=arguments.year,
         )
         await db.rollback()
