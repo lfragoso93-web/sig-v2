@@ -23,3 +23,19 @@ def test_reconciliation_cli_reuses_shared_certification_identity():
 
     assert "load_certification_portfolio_identity" in source
     assert "select(Portfolio.id, User.id)" not in source
+
+
+def test_reconciliation_cli_authorizes_positions_and_performance_before_reads():
+    source = Path("app/cli/portfolio_certification_reconcile.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "get_accessible_portfolio" in source
+    assert "READ_PORTFOLIO_POSITIONS" in source
+    assert "READ_PORTFOLIO_PERFORMANCE" in source
+    assert source.index("get_accessible_portfolio(") < source.index(
+        "positions = await build_positions_at("
+    )
+    assert source.index("required_permission=READ_PORTFOLIO_PERFORMANCE") < source.index(
+        "positions = await build_positions_at("
+    )
