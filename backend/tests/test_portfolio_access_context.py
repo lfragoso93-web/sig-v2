@@ -6,12 +6,18 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
-from app.repositories.portfolio_access_repository import get_accessible_portfolio
+from app.repositories.portfolio_access_repository import (
+    get_accessible_portfolio,
+    get_accessible_transaction,
+)
 from app.routers import dividends as dividends_router
+from app.routers import transactions as transactions_router
+from app.schemas.transaction import TransactionUpdate
 from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividends
+from app.services.transaction_write_service import WRITE_PORTFOLIO_TRANSACTIONS
 
 
 def _user_access(*, user_id: int = 3, portfolio_id: int = 7) -> PortfolioAccessContext:
@@ -103,6 +109,75 @@ async def test_repository_rejects_missing_permission_without_querying_database()
             required_permission=READ_PORTFOLIO_DIVIDENDS,
         )
 
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_transaction_repository_filters_transaction_by_portfolio_owner() -> None:
+    db = AsyncMock()
+    result = Mock()
+    transaction = SimpleNamespace(id=41, portfolio_id=7)
+    result.scalar_one_or_none.return_value = transaction
+    db.execute.return_value = result
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=7,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+    )
+
+    resolved = await get_accessible_transaction(
+        db,
+        access,
+        transaction_id=41,
+        required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+    )
+
+    assert resolved is transaction
+    query = str(db.execute.await_args.args[0])
+    assert "transactions.id" in query
+    assert "transactions.portfolio_id" in query
+    assert "portfolios.user_id" in query
+
+
+@pytest.mark.asyncio
+async def test_transaction_repository_rejects_missing_write_permission_without_query() -> None:
+    db = AsyncMock()
+    access = PortfolioAccessContext.for_user(
+        user_id=3,
+        portfolio_id=7,
+        permissions=frozenset({READ_PORTFOLIO_DIVIDENDS}),
+    )
+
+    with pytest.raises(PortfolioAccessDenied):
+        await get_accessible_transaction(
+            db,
+            access,
+            transaction_id=41,
+            required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        )
+
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize("endpoint", ["update_transaction", "delete_transaction"])
+@pytest.mark.asyncio
+async def test_transaction_mutations_return_404_for_nonpositive_portfolio_id(endpoint):
+    db = AsyncMock()
+    handler = getattr(transactions_router, endpoint)
+    kwargs = {
+        "portfolio_id": 0,
+        "transaction_id": 41,
+        "background_tasks": BackgroundTasks(),
+        "db": db,
+        "current_user": SimpleNamespace(id=3),
+    }
+    if endpoint == "update_transaction":
+        kwargs["payload"] = TransactionUpdate(price=100)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await handler(**kwargs)
+
+    assert exc_info.value.status_code == 404
     db.execute.assert_not_awaited()
 
 
