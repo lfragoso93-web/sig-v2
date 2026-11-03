@@ -21,6 +21,8 @@ async def get_accessible_portfolio(
     query = select(Portfolio).where(Portfolio.id == access.portfolio_id)
     if access.principal_kind is AccessPrincipalKind.USER:
         query = query.where(Portfolio.user_id == access.user_id)
+    elif access.principal_kind is not AccessPrincipalKind.SYSTEM:
+        raise PortfolioAccessDenied("Carteira nao encontrada ou sem permissao")
 
     result = await db.execute(query)
     portfolio = result.scalar_one_or_none()

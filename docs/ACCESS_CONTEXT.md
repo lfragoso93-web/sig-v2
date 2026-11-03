@@ -42,6 +42,10 @@ access = PortfolioAccessContext.for_system(
 Criar um contexto não concede acesso automaticamente. O repository ainda deve
 chamar `access.require(...)` e aplicar o escopo de ownership correspondente.
 
+`principal_kind` deve ser um membro tipado de `AccessPrincipalKind`; strings
+ou valores desconhecidos sao rejeitados na construcao e pelo repository,
+antes de qualquer consulta sem filtro de proprietÃ¡rio.
+
 ## Primeira vertical migrada
 
 `GET /api/v1/portfolios/{portfolio_id}/dividends` cobre o fluxo completo:
