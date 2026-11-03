@@ -22,7 +22,7 @@ from app.services.canonical_dividend_entitlement import (
 from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
 )
-from app.services.proventos_service import list_items
+from app.services.proventos_service import _list_items_projection as list_items
 from tests.query_budget import QueryBudgetExceeded, assert_max_queries
 
 ROOT = Path(__file__).resolve().parents[2]

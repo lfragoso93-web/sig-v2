@@ -1,15 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import (
-    PortfolioAccessContext,
-    PortfolioAccessDenied,
-)
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.models.dividend_enums import DividendStatus, DividendType
-from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.proventos import (
     ProventosDistributionResponse,
@@ -18,6 +13,7 @@ from app.schemas.proventos import (
     ProventosSummaryResponse,
 )
 from app.services.proventos_service import (
+    READ_PORTFOLIO_PROVENTOS,
     get_distribution,
     get_monthly_history,
     get_summary,
@@ -27,21 +23,14 @@ from app.services.proventos_service import (
 router = APIRouter(prefix="/portfolios/{portfolio_id}/proventos", tags=["proventos"])
 
 
-READ_PORTFOLIO_PROVENTOS = "read:portfolio_proventos"
-
-
-async def _assert_owner(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
-    access = PortfolioAccessContext.for_user(
+def _access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
+    return PortfolioAccessContext.for_user(
         user_id=user.id,
         portfolio_id=portfolio_id,
         permissions=frozenset({READ_PORTFOLIO_PROVENTOS}),
     )
-    try:
-        return await get_accessible_portfolio(
-            db, access, required_permission=READ_PORTFOLIO_PROVENTOS
-        )
-    except PortfolioAccessDenied as exc:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.") from exc
 
 
 def _parse_status(status: str | None) -> DividendStatus | None:
@@ -77,10 +66,10 @@ async def proventos_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_owner(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
     return await get_summary(
         db,
-        portfolio_id,
+        access,
         status=_parse_status(status),
         year=year,
         asset_type=asset_type,
@@ -100,10 +89,10 @@ async def list_proventos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_owner(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
     return await list_items(
         db,
-        portfolio_id,
+        access,
         status=_parse_status(status),
         year=year,
         asset_type=asset_type,
@@ -126,10 +115,10 @@ async def proventos_historico_mensal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_owner(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
     return await get_monthly_history(
         db,
-        portfolio_id,
+        access,
         status=_parse_status(status),
         year=year,
         asset_type=asset_type,
@@ -151,10 +140,10 @@ async def proventos_distribuicao(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _assert_owner(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user)
     return await get_distribution(
         db,
-        portfolio_id,
+        access,
         months=months,
         status=_parse_status(status),
         year=year,
