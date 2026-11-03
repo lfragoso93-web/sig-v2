@@ -331,6 +331,19 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         return None
 
     lower = value.lower()
+    if value.upper().startswith("CERT303-"):
+        synthetic_exact = await db.execute(
+            select(Asset.ticker).where(
+                Asset.asset_type == _TREASURY_TYPE,
+                func.lower(Asset.ticker) == lower,
+                Asset.provider == "synthetic-certification",
+                Asset.provider_status == "synthetic-owned",
+            )
+        )
+        found = synthetic_exact.scalars().first()
+        if found:
+            return str(found)
+
     canonical = canonical_treasury_symbol_from_text(value)
     if canonical and canonical.lower() != lower:
         canonical_exists = await db.execute(

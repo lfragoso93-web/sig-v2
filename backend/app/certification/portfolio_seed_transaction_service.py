@@ -9,7 +9,6 @@ from datetime import date, datetime, timezone
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import PortfolioAccessContext
 from app.certification.portfolio_seed_asset_policy import build_synthetic_asset_plan
 from app.certification.portfolio_seed_contract import SyntheticSeedContractError
 from app.certification.portfolio_synthetic_fixture import (
@@ -26,6 +25,9 @@ from app.services.asset_universe_membership_service import (
 from app.services.transaction_write_service import (
     WRITE_PORTFOLIO_TRANSACTIONS,
     create_transaction_record,
+)
+from app.services.portfolio_system_access_service import (
+    authorize_system_portfolio_operation,
 )
 
 SYNTHETIC_CDB_TICKER = "CERT303-CDB-SYN-CDI-2028"
@@ -186,30 +188,6 @@ async def _reconcile_existing_certification_notes(
     )
 
 
-async def _create_owned_transaction(
-    db: AsyncSession,
-    *,
-    portfolio_id: int,
-    row: dict[str, str],
-    ticker: str,
-) -> None:
-    db.add(
-        Transaction(
-            portfolio_id=portfolio_id,
-            ticker=ticker,
-            asset_type=row["asset_type"],
-            operation=OperationType(row["operation"]),
-            quantity=float(row["quantity"]),
-            price=float(row["price"]),
-            fees=float(row.get("fees", "0") or 0),
-            date=date.fromisoformat(row["date"]),
-            currency=row.get("currency", "BRL"),
-            notes=row.get("notes"),
-        )
-    )
-    await db.commit()
-
-
 async def _require_owned_asset(
     db: AsyncSession,
     *,
@@ -313,6 +291,12 @@ async def seed_transactions(
     portfolio_id: int,
 ) -> SyntheticTransactionSeedResult:
     """Seed the complete synthetic transaction fixture through canonical writes."""
+    access = await authorize_system_portfolio_operation(
+        db,
+        portfolio_id,
+        permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        purpose="synthetic_certification_transaction_seed",
+    )
     fixture = load_portfolio_synthetic_certification_fixture()
     plan = build_synthetic_asset_plan(fixture)
     await _assert_existing_transactions_are_expected(
@@ -363,34 +347,22 @@ async def seed_transactions(
             reused += 1
             continue
 
-        if identity.ticker == SYNTHETIC_TREASURY_TICKER:
-            await _create_owned_transaction(
-                db,
-                portfolio_id=portfolio_id,
-                row=row,
+        await create_transaction_record(
+            db,
+            portfolio_id=portfolio_id,
+            access=access,
+            payload=TransactionCreate(
                 ticker=identity.ticker,
-            )
-        else:
-            await create_transaction_record(
-                db,
-                portfolio_id=portfolio_id,
-                access=PortfolioAccessContext.for_system(
-                    portfolio_id=portfolio_id,
-                    permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
-                    purpose="synthetic_certification_transaction_seed",
-                ),
-                payload=TransactionCreate(
-                    ticker=identity.ticker,
-                    asset_type=identity.asset_type,
-                    operation=row["operation"],
-                    quantity=float(row["quantity"]),
-                    price=float(row["price"]),
-                    fees=float(row.get("fees", "0") or 0),
-                    date=date.fromisoformat(row["date"]),
-                    currency=row.get("currency", "BRL"),
-                    notes=row.get("notes"),
-                ),
-            )
+                asset_type=identity.asset_type,
+                operation=row["operation"],
+                quantity=float(row["quantity"]),
+                price=float(row["price"]),
+                fees=float(row.get("fees", "0") or 0),
+                date=date.fromisoformat(row["date"]),
+                currency=row.get("currency", "BRL"),
+                notes=row.get("notes"),
+            ),
+        )
         created += 1
 
     return SyntheticTransactionSeedResult(

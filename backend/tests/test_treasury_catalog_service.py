@@ -9,8 +9,28 @@ from app.models.asset import Asset
 from app.services.treasury_catalog_service import (
     _name,
     format_friendly_treasury_title,
+    resolve_treasury_symbol,
     seed_treasury_assets,
 )
+
+
+@pytest.mark.asyncio
+async def test_treasury_resolution_preserves_owned_synthetic_exact_ticker() -> None:
+    db = MagicMock()
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = "CERT303-TESOURO-SELIC-2029"
+    db.execute = AsyncMock(return_value=result)
+
+    resolved = await resolve_treasury_symbol(
+        db,
+        "CERT303-TESOURO-SELIC-2029",
+    )
+
+    assert resolved == "CERT303-TESOURO-SELIC-2029"
+    statement = db.execute.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "assets.provider = 'synthetic-certification'" in sql
+    assert "assets.provider_status = 'synthetic-owned'" in sql
 
 
 def test_format_friendly_treasury_title_renda_all_variants() -> None:
