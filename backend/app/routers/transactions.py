@@ -81,6 +81,19 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
+def _transaction_write_access(
+    portfolio_id: int,
+    user: User,
+) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+    )
+
+
 async def _validate_crypto_transaction_asset(
     db: AsyncSession,
     ticker: str,
@@ -344,11 +357,7 @@ async def update_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    access = PortfolioAccessContext.for_user(
-        user_id=current_user.id,
-        portfolio_id=portfolio_id,
-        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
-    )
+    access = _transaction_write_access(portfolio_id, current_user)
     try:
         tx = await get_accessible_transaction(
             db,
@@ -472,11 +481,7 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    access = PortfolioAccessContext.for_user(
-        user_id=current_user.id,
-        portfolio_id=portfolio_id,
-        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
-    )
+    access = _transaction_write_access(portfolio_id, current_user)
     try:
         tx = await get_accessible_transaction(
             db,

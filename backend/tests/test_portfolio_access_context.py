@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.repositories.portfolio_access_repository import (
@@ -14,6 +14,8 @@ from app.repositories.portfolio_access_repository import (
     get_accessible_transaction,
 )
 from app.routers import dividends as dividends_router
+from app.routers import transactions as transactions_router
+from app.schemas.transaction import TransactionUpdate
 from app.services.dividend_service import READ_PORTFOLIO_DIVIDENDS, list_dividends
 from app.services.transaction_write_service import WRITE_PORTFOLIO_TRANSACTIONS
 
@@ -154,6 +156,28 @@ async def test_transaction_repository_rejects_missing_write_permission_without_q
             required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
         )
 
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize("endpoint", ["update_transaction", "delete_transaction"])
+@pytest.mark.asyncio
+async def test_transaction_mutations_return_404_for_nonpositive_portfolio_id(endpoint):
+    db = AsyncMock()
+    handler = getattr(transactions_router, endpoint)
+    kwargs = {
+        "portfolio_id": 0,
+        "transaction_id": 41,
+        "background_tasks": BackgroundTasks(),
+        "db": db,
+        "current_user": SimpleNamespace(id=3),
+    }
+    if endpoint == "update_transaction":
+        kwargs["payload"] = TransactionUpdate(price=100)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await handler(**kwargs)
+
+    assert exc_info.value.status_code == 404
     db.execute.assert_not_awaited()
 
 
