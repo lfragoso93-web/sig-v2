@@ -1,7 +1,7 @@
 # Access Context e autorização por carteira
 
-> Atualizado em 03/11/2026: edição/exclusão de transações, IRPF e Proventos
-> validam ownership e permissão no repositório por contexto explícito.
+> Atualizado em 03/11/2026: edição/exclusão de transações, IRPF, Proventos e
+> Rentabilidade validam ownership e permissão no repositório por contexto explícito.
 
 ## Regra
 
@@ -72,7 +72,7 @@ sistêmico implícito.
 | Transações (edição/exclusão) | consulta no repositório vincula transação, carteira, ownership e `write:portfolio_transactions`; ausência e falta de acesso retornam a mesma resposta | concluída neste bloco |
 | IRPF | endpoints constroem contexto de usuário; serviços de relatório, apuração, exportação e seções validam ownership e `read:portfolio_irpf` no repositório; CLI usa contexto sistêmico com finalidade | concluída neste bloco |
 | Proventos | endpoints constroem contexto de usuário; summary/lista/histórico/distribuição validam ownership e `read:portfolio_proventos` no repositório; helpers de projeção internos recebem o ID já autorizado | concluída neste bloco |
-| Rentabilidade | ownership local no router; serviços recebem IDs | média |
+| Rentabilidade (página e legado) | 12 endpoints constroem contexto; entrypoints de serviço validam ownership e `read:portfolio_rentabilidade` ou `read:portfolio_performance` no repositório antes de ler snapshots, posições ou benchmarks | concluída neste bloco |
 | Posições/resumo | validações duplicadas entre router e service | média |
 | Metas e class targets | ownership local no router | média |
 | CSV/importações | writer recebe contexto do usuário; carteira ausente e sem acesso têm a mesma resposta | concluída neste bloco |
