@@ -20,6 +20,9 @@ from app.services.portfolio_canonical_valuation_service import (
 from app.services.portfolio_snapshot_canonical_twr_service import (
     backfill_canonical_snapshots_with_returns,
 )
+from app.services.portfolio_snapshot_access_service import (
+    authorize_system_snapshot_maintenance,
+)
 
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
@@ -68,8 +71,17 @@ async def _rebuild_all_canonical_twr_snapshots() -> dict:
     for portfolio_id in portfolio_ids:
         try:
             async with AsyncSessionLocal() as db:
-                snapshots += await backfill_canonical_snapshots_with_returns(db, portfolio_id)
-                latest = await calculate_canonical_portfolio_totals(db, portfolio_id, date.today())
+                access = await authorize_system_snapshot_maintenance(
+                    db,
+                    portfolio_id,
+                    purpose="full_market_rebuild_canonical_twr",
+                )
+                snapshots += await backfill_canonical_snapshots_with_returns(
+                    db, access.portfolio_id
+                )
+                latest = await calculate_canonical_portfolio_totals(
+                    db, access.portfolio_id, date.today()
+                )
 
             fixed_income_invested += Decimal(str(latest.get("fixed_income_invested", 0)))
             fixed_income_current += Decimal(str(latest.get("fixed_income_current", 0)))
