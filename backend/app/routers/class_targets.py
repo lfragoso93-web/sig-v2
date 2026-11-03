@@ -8,35 +8,35 @@ Endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.models.portfolio import Portfolio
 from app.schemas.position import ClassTargetOut, ClassTargetIn, ClassTargetBulkIn
-from app.services.class_target_service import (
-    get_targets,
-    upsert_target,
-    bulk_upsert_targets,
-    delete_target,
+from app.services.portfolio_objectives_access_service import (
+    READ_PORTFOLIO_CLASS_TARGETS,
+    WRITE_PORTFOLIO_CLASS_TARGETS,
+    delete_authorized_class_target,
+    get_authorized_class_targets,
+    set_authorized_class_target,
+    set_authorized_class_targets,
 )
 import math
 
 router = APIRouter(tags=['class-targets'])
 
 
-async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user.id,
-        )
+def _access_context(
+    portfolio_id: int, user: User, permission: str
+) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail='Carteira nao encontrada ou sem permissao')
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({permission}),
     )
-    p = result.scalar_one_or_none()
-    if not p:
-        raise HTTPException(status_code=404, detail='Carteira nao encontrada.')
-    return p
 
 
 @router.get('/{portfolio_id}/class-targets', response_model=list[ClassTargetOut])
@@ -45,8 +45,8 @@ async def list_class_targets(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
-    targets = await get_targets(db, portfolio_id)
+    access = _access_context(portfolio_id, current_user, READ_PORTFOLIO_CLASS_TARGETS)
+    targets = await get_authorized_class_targets(db, access)
     return [ClassTargetOut(asset_type=t.asset_type, target_pct=float(t.target_pct)) for t in targets]
 
 
@@ -57,7 +57,7 @@ async def set_class_targets_bulk(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user, WRITE_PORTFOLIO_CLASS_TARGETS)
     items: list[tuple[str, float]] = []
     for item in body.targets:
         if not math.isfinite(item.target_pct) or item.target_pct < 0 or item.target_pct > 100:
@@ -66,7 +66,7 @@ async def set_class_targets_bulk(
                 detail=f'O percentual de {item.asset_type} deve estar entre 0 e 100.',
             )
         items.append((item.asset_type.upper(), item.target_pct))
-    targets = await bulk_upsert_targets(db, portfolio_id, items)
+    targets = await set_authorized_class_targets(db, access, items)
     return [ClassTargetOut(asset_type=t.asset_type, target_pct=float(t.target_pct)) for t in targets]
 
 
@@ -78,10 +78,12 @@ async def set_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
+    access = _access_context(portfolio_id, current_user, WRITE_PORTFOLIO_CLASS_TARGETS)
     if not math.isfinite(body.target_pct) or body.target_pct < 0 or body.target_pct > 100:
         raise HTTPException(status_code=422, detail='O percentual da meta deve estar entre 0% e 100%.')
-    target = await upsert_target(db, portfolio_id, asset_type.upper(), body.target_pct)
+    target = await set_authorized_class_target(
+        db, access, asset_type.upper(), body.target_pct
+    )
     return ClassTargetOut(asset_type=target.asset_type, target_pct=float(target.target_pct))
 
 
@@ -92,7 +94,7 @@ async def remove_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_portfolio(portfolio_id, current_user, db)
-    removed = await delete_target(db, portfolio_id, asset_type.upper())
+    access = _access_context(portfolio_id, current_user, WRITE_PORTFOLIO_CLASS_TARGETS)
+    removed = await delete_authorized_class_target(db, access, asset_type.upper())
     if not removed:
         raise HTTPException(status_code=404, detail='Meta nao encontrada.')

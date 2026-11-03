@@ -74,7 +74,8 @@ sistêmico implícito.
 | Proventos | endpoints constroem contexto de usuário; summary/lista/histórico/distribuição validam ownership e `read:portfolio_proventos` no repositório; helpers de projeção internos recebem o ID já autorizado | concluída neste bloco |
 | Rentabilidade (página e legado) | 12 endpoints constroem contexto; entrypoints de serviço validam ownership e `read:portfolio_rentabilidade` ou `read:portfolio_performance` no repositório antes de ler snapshots, posições ou benchmarks | concluída neste bloco |
 | Posições/resumo | endpoints legado, canônico e exportação constroem contexto e validam ownership + `read:portfolio_positions` no repositório | concluída neste bloco |
-| Metas e class targets | ownership local no router | média |
+| Metas financeiras | rotas constroem contexto; serviços validam ownership e `read:portfolio_goals` ou `write:portfolio_goals` antes do CRUD | concluída neste bloco |
+| Class targets | rotas constroem contexto; serviços validam ownership e `read:portfolio_class_targets` ou `write:portfolio_class_targets` antes de listar ou alterar | concluída neste bloco |
 | CSV/importações | writer recebe contexto do usuário; carteira ausente e sem acesso têm a mesma resposta | concluída neste bloco |
 | Rebuilds, seeds e schedulers | seleção sistêmica direta de carteiras | exigir `for_system` antes de migrar |
 

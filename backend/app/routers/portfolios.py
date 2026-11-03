@@ -44,7 +44,10 @@ from app.services.portfolio_positions_access_service import (
     get_authorized_canonical_positions,
     get_authorized_canonical_summary,
 )
-from app.services.class_target_service import get_targets_with_current
+from app.services.portfolio_objectives_access_service import (
+    READ_PORTFOLIO_CLASS_TARGETS,
+    get_authorized_class_targets_with_current,
+)
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.portfolio_delete_service import delete_portfolio_safely
@@ -349,8 +352,14 @@ async def get_portfolio_targets_with_current(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
-    return await get_targets_with_current(db, portfolio_id, current_distribution)
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada ou sem permissao")
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CLASS_TARGETS}),
+    )
+    return await get_authorized_class_targets_with_current(db, access)
 
 
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse)
