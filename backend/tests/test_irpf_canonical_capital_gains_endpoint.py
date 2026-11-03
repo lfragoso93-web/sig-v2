@@ -35,18 +35,14 @@ async def test_canonical_capital_gains_endpoint_returns_versioned_envelope() -> 
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ) as authorize,
-        patch(
-            "app.routers.irpf.calc_ganhos_capital",
+            "app.routers.irpf.read_irpf_capital_gains",
             new=AsyncMock(return_value=months),
         ) as calculate,
     ):
         result = await get_canonical_irpf_capital_gains(7, 2024, db, user)
 
-    authorize.assert_awaited_once_with(7, user, db)
-    calculate.assert_awaited_once_with(db, 7, 2024)
+    args, _ = calculate.await_args
+    assert args[0] is db and args[1].user_id == 9 and args[2] == 2024
     assert result.schema_version == "irpf-capital-gains-assessment.v1"
     assert result.total_sales_brl == Decimal(1000)
     assert result.total_gross_profit_brl == Decimal(200)

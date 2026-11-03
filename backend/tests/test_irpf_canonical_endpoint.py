@@ -30,18 +30,17 @@ async def test_canonical_endpoint_authorizes_portfolio_and_returns_v1_contract()
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ) as authorize,
-        patch(
             "app.routers.irpf.build_irpf_annual_assessment",
             new=AsyncMock(return_value=contract),
         ) as build,
     ):
         result = await get_canonical_irpf_assessment(7, 2024, db, user)
 
-    authorize.assert_awaited_once_with(7, user, db)
-    build.assert_awaited_once_with(db, 7, 2024)
+    args, _ = build.await_args
+    assert args[0] is db
+    assert args[1].portfolio_id == 7
+    assert args[1].user_id == 9
+    assert args[2] == 2024
     assert result.schema_version == "irpf-annual-assessment.v1"
     assert result.portfolio_id == 7
     assert result.year == 2024
@@ -54,21 +53,12 @@ async def test_canonical_endpoint_does_not_build_for_unauthorized_portfolio() ->
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(
-                side_effect=HTTPException(
-                    status_code=404,
-                    detail="Carteira nao encontrada.",
-                )
-            ),
-        ),
-        patch(
             "app.routers.irpf.build_irpf_annual_assessment",
             new=AsyncMock(),
         ) as build,
         pytest.raises(HTTPException) as exc_info,
     ):
-        await get_canonical_irpf_assessment(7, 2024, db, user)
+        await get_canonical_irpf_assessment(0, 2024, db, user)
 
     assert exc_info.value.status_code == 404
     build.assert_not_awaited()
@@ -81,10 +71,6 @@ async def test_canonical_endpoint_propagates_invalid_year_without_legacy_fallbac
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ),
-        patch(
             "app.routers.irpf.build_irpf_annual_assessment",
             new=AsyncMock(side_effect=ValueError("ano fiscal inválido")),
         ) as build,
@@ -92,4 +78,7 @@ async def test_canonical_endpoint_propagates_invalid_year_without_legacy_fallbac
     ):
         await get_canonical_irpf_assessment(7, 1899, db, user)
 
-    build.assert_awaited_once_with(db, 7, 1899)
+    args, _ = build.await_args
+    assert args[0] is db
+    assert args[1].portfolio_id == 7
+    assert args[2] == 1899

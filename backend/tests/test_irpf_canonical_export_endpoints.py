@@ -37,10 +37,6 @@ async def test_pdf_endpoint_uses_only_canonical_export_composition() -> None:
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ),
-        patch(
             "app.routers.irpf.build_irpf_canonical_export",
             new=AsyncMock(return_value=export),
         ) as compose,
@@ -52,7 +48,8 @@ async def test_pdf_endpoint_uses_only_canonical_export_composition() -> None:
     ):
         response = await download_irpf_pdf(7, 2024, db, user)
 
-    compose.assert_awaited_once_with(db, 7, 2024)
+    args, _ = compose.await_args
+    assert args[0] is db and args[1].user_id == 9 and args[2] == 2024
     generate.assert_called_once_with(export)
     assert response.media_type == "application/pdf"
     assert response.body == b"%PDF"
@@ -66,10 +63,6 @@ async def test_csv_endpoint_uses_only_canonical_export_composition() -> None:
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ),
-        patch(
             "app.routers.irpf.build_irpf_canonical_export",
             new=AsyncMock(return_value=export),
         ) as compose,
@@ -81,7 +74,8 @@ async def test_csv_endpoint_uses_only_canonical_export_composition() -> None:
     ):
         response = await download_irpf_csv(7, 2024, db, user)
 
-    compose.assert_awaited_once_with(db, 7, 2024)
+    args, _ = compose.await_args
+    assert args[0] is db and args[1].user_id == 9 and args[2] == 2024
     generate.assert_called_once_with(export)
     assert response.media_type == "text/csv"
     assert response.body == b"ok"

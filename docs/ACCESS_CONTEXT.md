@@ -1,7 +1,7 @@
 # Access Context e autorização por carteira
 
-> Atualizado em 03/11/2026: edição e exclusão de transações agora carregam a
-> transação sob ownership e permissão no repositório.
+> Atualizado em 03/11/2026: edição/exclusão de transações e serviços IRPF
+> validam ownership e permissão no repositório por contexto explícito.
 
 ## Regra
 
@@ -70,7 +70,7 @@ sistêmico implícito.
 | Dividendos | contexto completo em controller/service/repository | concluída neste bloco |
 | Transações (criação/CSV) | escritor canônico exige `write:portfolio_transactions` e valida ownership no repository | concluída neste bloco |
 | Transações (edição/exclusão) | consulta no repositório vincula transação, carteira, ownership e `write:portfolio_transactions`; ausência e falta de acesso retornam a mesma resposta | concluída neste bloco |
-| IRPF | ownership local no router; serviços recebem `portfolio_id` | alta |
+| IRPF | endpoints constroem contexto de usuário; serviços de relatório, apuração, exportação e seções validam ownership e `read:portfolio_irpf` no repositório; CLI usa contexto sistêmico com finalidade | concluída neste bloco |
 | Proventos | ownership local no router; serviços recebem `portfolio_id` | alta |
 | Rentabilidade | ownership local no router; serviços recebem IDs | média |
 | Posições/resumo | validações duplicadas entre router e service | média |
