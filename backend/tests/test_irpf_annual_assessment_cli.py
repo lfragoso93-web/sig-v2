@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.cli.irpf_annual_assessment import _main
+from app.core.access_context import AccessPrincipalKind
 
 
 @pytest.mark.asyncio
@@ -35,7 +36,12 @@ async def test_cli_emits_contract_and_rolls_back(capsys: pytest.CaptureFixture[s
         exit_code = await _main(SimpleNamespace(portfolio_id=7, year=2024))
 
     assert exit_code == 0
-    build.assert_awaited_once_with(session, portfolio_id=7, year=2024)
+    args, kwargs = build.await_args
+    assert args[0] is session
+    assert kwargs["access"].principal_kind is AccessPrincipalKind.SYSTEM
+    assert kwargs["access"].portfolio_id == 7
+    assert kwargs["access"].purpose == "irpf_annual_assessment_cli_readonly"
+    assert kwargs["year"] == 2024
     session.rollback.assert_awaited_once()
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema_version"] == "irpf-annual-assessment.v1"

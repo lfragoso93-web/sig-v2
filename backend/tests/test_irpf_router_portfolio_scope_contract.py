@@ -11,6 +11,10 @@ def test_irpf_user_endpoints_validate_portfolio_ownership() -> None:
     endpoint_names = (
         "list_anos",
         "get_irpf_report",
+        "get_canonical_irpf_assessment",
+        "get_canonical_irpf_assets",
+        "get_canonical_irpf_capital_gains",
+        "get_canonical_irpf_income",
         "download_irpf_pdf",
         "download_irpf_csv",
         "get_bens_direitos",
@@ -26,20 +30,16 @@ def test_irpf_user_endpoints_validate_portfolio_ownership() -> None:
             else len(source)
         )
         endpoint_source = source[start:end]
-        assert "await _get_portfolio(portfolio_id, current_user, db)" in endpoint_source
+        assert "_access_context(portfolio_id, current_user)" in endpoint_source
 
 
-def test_portfolio_lookup_is_scoped_by_current_user() -> None:
+def test_context_is_authorized_at_service_boundary() -> None:
     source = ROUTER_PATH.read_text(encoding="utf-8")
-    helper_start = source.index("async def _get_portfolio(")
+    helper_start = source.index("def _access_context(")
     helper_end = source.index("\n@router.", helper_start)
     helper_source = source[helper_start:helper_end]
 
-    assert (
-        ("Portfolio.id == portfolio_id" in helper_source and "Portfolio.user_id == user.id" in helper_source)
-        or (
-            "PortfolioAccessContext.for_user" in helper_source
-            and "get_accessible_portfolio" in helper_source
-        )
-    )
+    assert "PortfolioAccessContext.for_user" in helper_source
+    assert "READ_PORTFOLIO_IRPF" in helper_source
     assert "status_code=404" in helper_source
+    assert "require_irpf_access(db, access)" in source

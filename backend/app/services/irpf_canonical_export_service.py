@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.schemas.irpf import BemDireito, GanhoCapitalMensal, JCPItem, RendimentoIsento
 from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
@@ -34,10 +35,11 @@ class IrpfCanonicalExport:
 
 async def build_irpf_canonical_export(
     db: AsyncSession,
-    portfolio_id: int,
+    access: PortfolioAccessContext,
     year: int,
 ) -> IrpfCanonicalExport:
-    annual = await build_irpf_annual_assessment(db, portfolio_id, year)
+    portfolio_id = access.portfolio_id
+    annual = await build_irpf_annual_assessment(db, access, year)
     bens_direitos = await calc_bens_direitos(db, portfolio_id, year)
     ganhos_mensais = await calc_ganhos_capital(db, portfolio_id, year)
     dividendos, jcp = await calc_rendimentos(db, portfolio_id, year)

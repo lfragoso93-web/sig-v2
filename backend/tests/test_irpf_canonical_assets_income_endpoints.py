@@ -32,18 +32,14 @@ async def test_canonical_assets_endpoint_returns_versioned_envelope() -> None:
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ) as authorize,
-        patch(
-            "app.routers.irpf.calc_bens_direitos",
+            "app.routers.irpf.read_irpf_assets",
             new=AsyncMock(return_value=items),
         ) as calculate,
     ):
         result = await get_canonical_irpf_assets(7, 2024, db, user)
 
-    authorize.assert_awaited_once_with(7, user, db)
-    calculate.assert_awaited_once_with(db, 7, 2024)
+    args, _ = calculate.await_args
+    assert args[0] is db and args[1].user_id == 9 and args[2] == 2024
     assert result.schema_version == "irpf-assets-assessment.v1"
     assert result.total_cost_brl == Decimal("123.40")
     assert result.items == items
@@ -72,18 +68,14 @@ async def test_canonical_income_endpoint_returns_versioned_envelope() -> None:
 
     with (
         patch(
-            "app.routers.irpf._get_portfolio",
-            new=AsyncMock(return_value=SimpleNamespace(id=7, user_id=9)),
-        ) as authorize,
-        patch(
-            "app.routers.irpf.calc_rendimentos",
+            "app.routers.irpf.read_irpf_income",
             new=AsyncMock(return_value=(dividends, jcp)),
         ) as calculate,
     ):
         result = await get_canonical_irpf_income(7, 2024, db, user)
 
-    authorize.assert_awaited_once_with(7, user, db)
-    calculate.assert_awaited_once_with(db, 7, 2024)
+    args, _ = calculate.await_args
+    assert args[0] is db and args[1].user_id == 9 and args[2] == 2024
     assert result.schema_version == "irpf-income-assessment.v1"
     assert result.total_dividends_brl == Decimal("80.25")
     assert result.total_jcp_gross_brl == Decimal("100.00")
