@@ -331,7 +331,7 @@ async def test_http_controller_hides_cross_portfolio_denial(monkeypatch) -> None
 
 
 def test_system_maintenance_declares_system_context() -> None:
-    from app.services.portfolio_snapshot_twr_maintenance_service import (
+    from app.services.portfolio_snapshot_access_service import (
         MAINTAIN_PORTFOLIO_SNAPSHOTS,
     )
 
@@ -344,6 +344,46 @@ def test_system_maintenance_declares_system_context() -> None:
     assert access.user_id is None
     assert access.purpose == "background_nightly_twr_maintenance"
     assert MAINTAIN_PORTFOLIO_SNAPSHOTS in access.permissions
+
+
+@pytest.mark.asyncio
+async def test_system_snapshot_access_requires_repository_scope() -> None:
+    from app.services.portfolio_snapshot_access_service import (
+        authorize_system_snapshot_maintenance,
+    )
+
+    db = AsyncMock()
+    result = Mock()
+    result.scalar_one_or_none.return_value = SimpleNamespace(id=12)
+    db.execute.return_value = result
+
+    access = await authorize_system_snapshot_maintenance(
+        db, 12, purpose="full_market_rebuild_canonical_twr"
+    )
+
+    assert access.principal_kind.value == "system"
+    assert access.purpose == "full_market_rebuild_canonical_twr"
+    query = str(db.execute.await_args.args[0])
+    assert "portfolios.id" in query
+
+
+@pytest.mark.asyncio
+async def test_system_snapshot_access_denial_stops_at_repository() -> None:
+    from app.services.portfolio_snapshot_access_service import (
+        authorize_system_snapshot_maintenance,
+    )
+
+    db = AsyncMock()
+    result = Mock()
+    result.scalar_one_or_none.return_value = None
+    db.execute.return_value = result
+
+    with pytest.raises(PortfolioAccessDenied):
+        await authorize_system_snapshot_maintenance(
+            db, 12, purpose="full_market_rebuild_canonical_twr"
+        )
+
+    assert db.execute.await_count == 1
 
 
 @pytest.mark.asyncio
