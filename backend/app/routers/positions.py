@@ -8,33 +8,30 @@ nao pertence a requests de leitura de posicao/resumo.
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.position import AssetGroupOut, PortfolioSummary
-from app.services.portfolio_service import (
-    get_portfolio_positions,
-    get_portfolio_summary,
+from app.services.portfolio_positions_access_service import (
+    READ_PORTFOLIO_POSITIONS,
+    get_authorized_legacy_positions,
+    get_authorized_legacy_summary,
 )
 
 router = APIRouter(tags=["positions"])
 
 
-async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user.id,
-        )
+def _access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada ou sem permissao")
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_POSITIONS}),
     )
-    portfolio = result.scalar_one_or_none()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return portfolio
 
 
 @router.get("/{portfolio_id}/positions", response_model=List[AssetGroupOut])
@@ -44,8 +41,7 @@ async def list_positions(
     current_user: User = Depends(get_current_user),
 ):
     """Lista posicoes agrupadas usando somente dados persistidos."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    return await get_portfolio_positions(db, portfolio_id, current_user.id)
+    return await get_authorized_legacy_positions(db, _access_context(portfolio_id, current_user))
 
 
 @router.get("/{portfolio_id}/positions/summary", response_model=PortfolioSummary)
@@ -55,5 +51,4 @@ async def portfolio_summary(
     current_user: User = Depends(get_current_user),
 ):
     """Retorna o resumo consolidado usando somente dados persistidos."""
-    await _get_portfolio(portfolio_id, current_user, db)
-    return await get_portfolio_summary(db, portfolio_id, current_user.id)
+    return await get_authorized_legacy_summary(db, _access_context(portfolio_id, current_user))

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.routers.portfolios import portfolio_positions
+from app.services.portfolio_positions_access_service import READ_PORTFOLIO_POSITIONS
 
 
 @pytest.mark.asyncio
@@ -12,10 +13,13 @@ async def test_positions_endpoint_uses_canonical_contract():
     db = AsyncMock()
 
     with patch(
-        "app.routers.portfolios.get_canonical_portfolio_positions",
+        "app.routers.portfolios.get_authorized_canonical_positions",
         new=AsyncMock(return_value=expected),
     ) as service:
         result = await portfolio_positions(3, db=db, current_user=user)
 
     assert result == expected
-    service.assert_awaited_once_with(db, 3, 9)
+    access = service.await_args.args[1]
+    assert access.portfolio_id == 3
+    assert access.user_id == 9
+    assert access.permissions == frozenset({READ_PORTFOLIO_POSITIONS})
