@@ -132,7 +132,10 @@ ARCHITECTURE_CHECKS = (
         title="Acesso sensivel por carteira exige contexto explicito",
         severity=DoctorSeverity.ERROR,
         kind=DoctorCheckKind.BEHAVIORAL,
-        evidence=("backend/tests/test_portfolio_access_context.py",),
+        evidence=(
+            "backend/tests/test_portfolio_access_context.py",
+            "backend/tests/test_transaction_write_access.py",
+        ),
     ),
     DoctorCatalogEntry(
         finding_id="SGI015",

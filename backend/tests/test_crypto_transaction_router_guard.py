@@ -4,6 +4,7 @@ import ast
 import inspect
 import textwrap
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
@@ -18,6 +19,7 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
+from app.services import transaction_write_service
 from app.services.transaction_write_service import TransactionWriteError
 
 
@@ -247,7 +249,7 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
             payload=_payload("APT"),
             background_tasks=BackgroundTasks(),
             db=db,
-            current_user=object(),
+            current_user=SimpleNamespace(id=1),
         )
 
     assert exc_info.value.status_code == 422
@@ -259,6 +261,9 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
 async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     db = _WriteSpySession(execute_value=None)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transaction_write_service, "get_accessible_portfolio", _allow_portfolio
+    )
 
     result = await transactions.create_transaction(
         portfolio_id=1,
@@ -275,7 +280,7 @@ async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
         ),
         background_tasks=BackgroundTasks(),
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.ticker == "CDB-TESTE"
@@ -296,6 +301,9 @@ async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
     db = _WriteSpySession(execute_value=None)
     background_tasks = BackgroundTasks()
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(
+        transaction_write_service, "get_accessible_portfolio", _allow_portfolio
+    )
 
     result = await transactions.create_transaction(
         portfolio_id=303,
@@ -312,7 +320,7 @@ async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
         ),
         background_tasks=background_tasks,
         db=db,
-        current_user=object(),
+        current_user=SimpleNamespace(id=1),
     )
 
     assert result.ticker == row["ticker"]

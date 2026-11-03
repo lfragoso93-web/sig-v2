@@ -66,6 +66,7 @@ def test_import_csv_transactions_uses_canonical_write_boundary():
     source = inspect.getsource(csv_import_service.import_csv_transactions)
 
     assert "add_transaction_record(" in source
+    assert "access=access" in source
     assert "Transaction(" not in source
 
 
@@ -110,6 +111,9 @@ async def test_legacy_fixed_income_csv_remains_unlinked_and_uses_canonical_write
     assert result["success"] is True
     assert result["imported_count"] == 1
     payload = writer.await_args.kwargs["payload"]
+    access = writer.await_args.kwargs["access"]
+    assert access.user_id == 7
+    assert access.portfolio_id == 12
     assert payload.asset_type == "RENDA_FIXA"
     assert payload.fixed_income_contract_id is None
     assert payload.fixed_income_contract is None
@@ -591,6 +595,8 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         existing_tx_result = MagicMock()
         existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+        writer_asset_result = MagicMock()
+        writer_asset_result.scalar_one_or_none.return_value = MagicMock()
 
         coverage_result = MagicMock()
         coverage_result.all.return_value = [
@@ -609,7 +615,14 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
         alias_result.scalar_one_or_none = MagicMock(return_value=None)
 
         db.execute = AsyncMock(
-            side_effect=[portfolio_result, existing_tx_result, coverage_result, alias_result, asset_result]
+            side_effect=[
+                portfolio_result,
+                existing_tx_result,
+                coverage_result,
+                portfolio_result,
+                alias_result,
+                writer_asset_result,
+            ]
         )
         db.commit = AsyncMock()
         db.add = MagicMock()
@@ -810,7 +823,7 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,"""
         result = await import_csv_transactions(content, 1, 1, db)
 
         assert result["success"] is False
-        assert "not found" in result["global_errors"][0].lower()
+        assert result["global_errors"] == ["Carteira nao encontrada ou sem permissao"]
 
     async def test_import_unauthorized_user(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
@@ -818,18 +831,15 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,"""
 
         db = AsyncMock(spec=AsyncSession)
         
-        portfolio = MagicMock(spec=Portfolio)
-        portfolio.user_id = 999
-        
         portfolio_result = MagicMock()
-        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=portfolio_result)
 
         result = await import_csv_transactions(content, 1, 1, db)
 
         assert result["success"] is False
-        assert "Unauthorized" in result["global_errors"][0]
+        assert result["global_errors"] == ["Carteira nao encontrada ou sem permissao"]
 
     async def test_import_with_validation_errors(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes

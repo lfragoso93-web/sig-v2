@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.certification.portfolio_seed_asset_policy import build_synthetic_asset_plan
 from app.certification.portfolio_seed_contract import SyntheticSeedContractError
 from app.certification.portfolio_synthetic_fixture import (
@@ -22,7 +23,10 @@ from app.services.asset_universe_membership_service import (
     CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
     CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
 )
-from app.services.transaction_write_service import create_transaction_record
+from app.services.transaction_write_service import (
+    WRITE_PORTFOLIO_TRANSACTIONS,
+    create_transaction_record,
+)
 
 SYNTHETIC_CDB_TICKER = "CERT303-CDB-SYN-CDI-2028"
 LEGACY_SYNTHETIC_CDB_NOTES = "synthetic fixed income CDI"
@@ -370,6 +374,11 @@ async def seed_transactions(
             await create_transaction_record(
                 db,
                 portfolio_id=portfolio_id,
+                access=PortfolioAccessContext.for_system(
+                    portfolio_id=portfolio_id,
+                    permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+                    purpose="synthetic_certification_transaction_seed",
+                ),
                 payload=TransactionCreate(
                     ticker=identity.ticker,
                     asset_type=identity.asset_type,
