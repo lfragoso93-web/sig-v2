@@ -302,6 +302,9 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     execute_results.append(_price_coverage_result(fixture))
 
     for transaction in transactions:
+        # The canonical transaction writer validates ownership for each row.
+        execute_results.append(portfolio_result)
+
         if transaction["asset_type"] != "TESOURO_DIRETO":
             alias_result = MagicMock()
             alias_result.scalar_one_or_none.return_value = None
@@ -352,6 +355,11 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
             "app.services.transaction_write_service."
             "require_catalog_crypto_asset",
             new=AsyncMock(),
+        ),
+        patch(
+            "app.services.asset_provider_verification_service."
+            "verify_market_asset_exists",
+            new=AsyncMock(side_effect=lambda ticker, _asset_type: (True, ticker)),
         ),
         patch(
             "app.services.transaction_write_service."

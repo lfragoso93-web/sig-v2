@@ -43,6 +43,7 @@ from app.services.transaction_service import (
 from app.services.transaction_write_service import (
     _current_quantity,
     TransactionWriteError,
+    WRITE_PORTFOLIO_TRANSACTIONS,
     create_transaction_record,
     resolve_fixed_income_contract_for_write,
 )
@@ -301,8 +302,15 @@ async def create_transaction(
         tx = await create_transaction_record(
             db,
             portfolio_id=portfolio_id,
+            access=PortfolioAccessContext.for_user(
+                user_id=current_user.id,
+                portfolio_id=portfolio_id,
+                permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+            ),
             payload=payload,
         )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.") from exc
     except TransactionWriteError as exc:
         detail = str(exc)
         status_code = 400 if detail.startswith("Quantidade insuficiente") else 422

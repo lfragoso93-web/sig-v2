@@ -67,13 +67,14 @@ sistêmico implícito.
 | Superfície | Estado observado | Prioridade de migração |
 | --- | --- | --- |
 | Dividendos | contexto completo em controller/service/repository | concluída neste bloco |
-| Transações | ownership local no router; IDs livres abaixo da borda | alta |
+| Transações (criação/CSV) | escritor canônico exige `write:portfolio_transactions` e valida ownership no repository | concluída neste bloco |
+| Transações (edição/exclusão) | ownership validado na rota antes da leitura/escrita | revisar em bloco separado |
 | IRPF | ownership local no router; serviços recebem `portfolio_id` | alta |
 | Proventos | ownership local no router; serviços recebem `portfolio_id` | alta |
 | Rentabilidade | ownership local no router; serviços recebem IDs | média |
 | Posições/resumo | validações duplicadas entre router e service | média |
 | Metas e class targets | ownership local no router | média |
-| CSV/importações | validação própria por `portfolio_id` + `user_id` | alta em writes |
+| CSV/importações | writer recebe contexto do usuário; carteira ausente e sem acesso têm a mesma resposta | concluída neste bloco |
 | Rebuilds, seeds e schedulers | seleção sistêmica direta de carteiras | exigir `for_system` antes de migrar |
 
 O inventário indica risco estrutural, não uma vulnerabilidade confirmada em

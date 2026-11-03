@@ -2,6 +2,7 @@ from datetime import date
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext
 from app.models.asset import Asset, AssetType
 from app.models.asset_alias import AssetAlias
 from app.models.portfolio import Portfolio
@@ -14,7 +15,10 @@ from app.services.asset_service import (
     get_or_create_asset,
     search_assets,
 )
-from app.services.transaction_write_service import add_transaction_record
+from app.services.transaction_write_service import (
+    WRITE_PORTFOLIO_TRANSACTIONS,
+    add_transaction_record,
+)
 
 
 @pytest.mark.asyncio
@@ -170,7 +174,18 @@ async def test_add_transaction_record_resolves_alias_to_canonical_ticker(
         price=10.0,
         date="2023-01-15",
     )
-    tx = await add_transaction_record(db, portfolio_id=portfolio.id, payload=payload, flush=True)
+    access = PortfolioAccessContext.for_system(
+        portfolio_id=portfolio.id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
+        purpose="ticker-resolution-test",
+    )
+    tx = await add_transaction_record(
+        db,
+        portfolio_id=portfolio.id,
+        access=access,
+        payload=payload,
+        flush=True,
+    )
 
     # Recorded transaction must resolve to canonical ticker BHIA3
     assert tx.ticker == "BHIA3"

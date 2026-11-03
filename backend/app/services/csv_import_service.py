@@ -10,12 +10,14 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
 from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.fixed_income_contract import FixedIncomeContract
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
+from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.schemas.fixed_income_contract import FixedIncomeContractCreate
 from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
@@ -25,6 +27,7 @@ from app.services.crypto_transaction_eligibility_service import (
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_write_service import (
     TransactionWriteError,
+    WRITE_PORTFOLIO_TRANSACTIONS,
     add_transaction_record,
 )
 from app.services.treasury_catalog_service import resolve_treasury_symbol
@@ -685,16 +688,19 @@ async def import_csv_transactions(
         "global_errors": [],
     }
 
-    portfolio = await db.execute(
-        select(Portfolio).where(Portfolio.id == portfolio_id)
+    access = PortfolioAccessContext.for_user(
+        user_id=user_id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_TRANSACTIONS}),
     )
-    portfolio_obj = portfolio.scalar_one_or_none()
-    if not portfolio_obj:
-        result["global_errors"].append(f"Portfolio {portfolio_id} not found")
-        return result
-
-    if portfolio_obj.user_id != user_id:
-        result["global_errors"].append("Unauthorized: Portfolio belongs to different user")
+    try:
+        await get_accessible_portfolio(
+            db,
+            access,
+            required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        )
+    except PortfolioAccessDenied:
+        result["global_errors"].append("Carteira nao encontrada ou sem permissao")
         return result
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
@@ -765,6 +771,7 @@ async def import_csv_transactions(
             transaction = await add_transaction_record(
                 db,
                 portfolio_id=portfolio_id,
+                access=access,
                 payload=TransactionCreate(
                     ticker=ticker,
                     asset_type=asset_type,
