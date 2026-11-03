@@ -15,6 +15,9 @@ _FX_READER = _BACKEND_ROOT / "app" / "services" / "fx_rate_reader.py"
 _FX_INTEGRATION = _BACKEND_ROOT / "app" / "integrations" / "fx_rate.py"
 _GOALS_ROUTER = _BACKEND_ROOT / "app" / "routers" / "goals.py"
 _GOALS_SERVICE = _BACKEND_ROOT / "app" / "services" / "goals_service.py"
+_OBJECTIVES_ACCESS_SERVICE = (
+    _BACKEND_ROOT / "app" / "services" / "portfolio_objectives_access_service.py"
+)
 
 
 def test_fx_policy_requires_db_first_and_forbids_fixed_fallback() -> None:
@@ -50,8 +53,10 @@ def test_goal_policy_keeps_goals_canonical_and_goal_allocations_protected() -> N
 def test_runtime_goal_flow_uses_goals_contract_only() -> None:
     router_source = _GOALS_ROUTER.read_text(encoding="utf-8")
     service_source = _GOALS_SERVICE.read_text(encoding="utf-8")
+    access_source = _OBJECTIVES_ACCESS_SERVICE.read_text(encoding="utf-8")
 
-    assert "app.services.goals_service" in router_source
+    assert "app.services.portfolio_objectives_access_service" in router_source
+    assert "from app.services.goals_service import" in access_source
     assert "from app.models.goal import Goal" in service_source
     assert "goal_allocations" not in router_source.lower()
     assert "goal_allocations" not in service_source.lower()
