@@ -301,10 +301,7 @@ async def test_export_positions_router_checks_portfolio_access_and_returns_downl
     user = SimpleNamespace(id=11)
     mock_groups = [{"label": "Ações", "positions": []}]
     with patch(
-        "app.routers.portfolios.get_portfolio",
-        new_callable=AsyncMock,
-    ) as get_portfolio, patch(
-        "app.routers.portfolios.get_canonical_portfolio_positions",
+        "app.routers.portfolios.get_authorized_canonical_positions",
         new_callable=AsyncMock,
         return_value=mock_groups,
     ) as get_positions, patch(
@@ -317,8 +314,9 @@ async def test_export_positions_router_checks_portfolio_access_and_returns_downl
             current_user=user,
         )
 
-    get_portfolio.assert_awaited_once_with(db, 5, 11)
-    get_positions.assert_awaited_once_with(db, 5, 11)
+    access = get_positions.await_args.args[1]
+    assert access.portfolio_id == 5
+    assert access.user_id == 11
     export_csv.assert_called_once_with(mock_groups)
     assert response.media_type.startswith("text/csv")
     assert response.body == b"classe,ticker\n"
