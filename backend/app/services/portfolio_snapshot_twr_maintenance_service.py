@@ -8,8 +8,6 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import PortfolioAccessContext
-from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -30,9 +28,11 @@ from app.services.portfolio_class_snapshot_service import (
 from app.services.portfolio_snapshot_canonical_twr_service import (
     backfill_canonical_snapshots_with_returns,
 )
+from app.services.portfolio_snapshot_access_service import (
+    authorize_system_snapshot_maintenance,
+)
 
 logger = logging.getLogger(__name__)
-MAINTAIN_PORTFOLIO_SNAPSHOTS = "maintain:portfolio_snapshots"
 _MONEY_TOLERANCE = Decimal("0.01")
 _RETURN_TOLERANCE = Decimal("0.000001")
 
@@ -204,15 +204,10 @@ async def maintain_twr_snapshots_for_active_portfolios(
 
     for portfolio_id in portfolio_ids:
         try:
-            access = PortfolioAccessContext.for_system(
-                portfolio_id=portfolio_id,
-                permissions=frozenset({MAINTAIN_PORTFOLIO_SNAPSHOTS}),
-                purpose="background_nightly_twr_maintenance",
-            )
-            await get_accessible_portfolio(
+            access = await authorize_system_snapshot_maintenance(
                 db,
-                access,
-                required_permission=MAINTAIN_PORTFOLIO_SNAPSHOTS,
+                portfolio_id,
+                purpose="background_nightly_twr_maintenance",
             )
             rebuild_consolidated = await _portfolio_needs_twr_rebuild(db, access.portfolio_id)
             rebuild_classes = await _portfolio_needs_class_twr_rebuild(db, access.portfolio_id)

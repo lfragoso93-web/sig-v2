@@ -12,6 +12,9 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
+from app.services.portfolio_snapshot_access_service import (
+    authorize_system_snapshot_maintenance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -212,9 +215,14 @@ async def _rebuild_all_twr_snapshots() -> dict[str, int]:
     for portfolio_id in portfolio_ids:
         try:
             async with AsyncSessionLocal() as db:
-                snapshots += await backfill_canonical_snapshots_with_returns(
+                access = await authorize_system_snapshot_maintenance(
                     db,
                     portfolio_id,
+                    purpose="full_market_rebuild_twr",
+                )
+                snapshots += await backfill_canonical_snapshots_with_returns(
+                    db,
+                    access.portfolio_id,
                 )
             processed += 1
         except Exception:
