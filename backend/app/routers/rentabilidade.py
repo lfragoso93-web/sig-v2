@@ -12,37 +12,32 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
+from app.core.access_context import PortfolioAccessContext
 from app.core.database import get_db
-from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.schemas.rentabilidade import RentabilidadeKpisResponse
-from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
-from app.services.rentabilidade_asset_result_service import get_canonical_asset_results
-from app.services.rentabilidade_class_service import get_canonical_class_performance
-from app.services.rentabilidade_benchmark_service import get_persisted_monthly_benchmarks
-from app.services.rentabilidade_reconciliation_service import reconcile_rentabilidade_page
+from app.services.portfolio_performance_access_service import (
+    READ_PORTFOLIO_RENTABILIDADE,
+    get_authorized_monthly_benchmarks,
+    get_authorized_rentabilidade_assets,
+    get_authorized_rentabilidade_classes,
+    get_authorized_rentabilidade_kpis,
+    get_authorized_rentabilidade_reconciliation,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rentabilidade"])
 
 
-READ_PORTFOLIO_RENTABILIDADE = "read:portfolio_rentabilidade"
-
-
-async def _assert_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    access = PortfolioAccessContext.for_user(
-        user_id=user_id,
+def _access_context(portfolio_id: int, user: User) -> PortfolioAccessContext:
+    if portfolio_id <= 0:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada ou sem permissao")
+    return PortfolioAccessContext.for_user(
+        user_id=user.id,
         portfolio_id=portfolio_id,
         permissions=frozenset({READ_PORTFOLIO_RENTABILIDADE}),
     )
-    try:
-        await get_accessible_portfolio(
-            db, access, required_permission=READ_PORTFOLIO_RENTABILIDADE
-        )
-    except PortfolioAccessDenied as exc:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada.") from exc
 
 
 @router.get(
@@ -55,8 +50,9 @@ async def rentabilidade_kpis(
     current_user: User = Depends(get_current_user),
 ):
     """KPIs monetários atuais e TWR fechado, com referências independentes."""
-    await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_rentabilidade_kpis(db, portfolio_id, current_user.id)
+    return await get_authorized_rentabilidade_kpis(
+        db, _access_context(portfolio_id, current_user)
+    )
 
 
 @router.get("/{portfolio_id}/rentabilidade/ativos")
@@ -66,8 +62,9 @@ async def rentabilidade_ativos(
     current_user: User = Depends(get_current_user),
 ):
     """Resultado monetário por ativo; percentuais simples não representam TWR."""
-    await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_canonical_asset_results(db, portfolio_id, current_user.id)
+    return await get_authorized_rentabilidade_assets(
+        db, _access_context(portfolio_id, current_user)
+    )
 
 
 @router.get("/{portfolio_id}/rentabilidade/classes")
@@ -77,8 +74,9 @@ async def rentabilidade_classes(
     current_user: User = Depends(get_current_user),
 ):
     """Valuation atual e TWR fechado por classe, quando disponível."""
-    await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_canonical_class_performance(db, portfolio_id, current_user.id)
+    return await get_authorized_rentabilidade_classes(
+        db, _access_context(portfolio_id, current_user)
+    )
 
 
 @router.get("/{portfolio_id}/rentabilidade/benchmarks/monthly")
@@ -89,8 +87,9 @@ async def rentabilidade_benchmarks_monthly(
     current_user: User = Depends(get_current_user),
 ):
     """Retornos mensais de benchmarks lidos exclusivamente do banco."""
-    await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_persisted_monthly_benchmarks(db, months=months)
+    return await get_authorized_monthly_benchmarks(
+        db, _access_context(portfolio_id, current_user), months=months
+    )
 
 
 @router.get("/{portfolio_id}/rentabilidade/reconciliation")
@@ -100,5 +99,6 @@ async def rentabilidade_reconciliation(
     current_user: User = Depends(get_current_user),
 ):
     """Reconcilia Rentabilidade com summary.v2 e totais canônicos por classe."""
-    await _assert_owner(db, portfolio_id, current_user.id)
-    return await reconcile_rentabilidade_page(db, portfolio_id, current_user.id)
+    return await get_authorized_rentabilidade_reconciliation(
+        db, _access_context(portfolio_id, current_user)
+    )
