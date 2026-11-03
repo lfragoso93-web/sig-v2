@@ -39,6 +39,17 @@ def test_user_context_requires_explicit_identity_scope_and_permission() -> None:
         )
 
 
+@pytest.mark.parametrize("principal_kind", ["user", "system", None])
+def test_context_rejects_untyped_principal_kind(principal_kind) -> None:
+    with pytest.raises(ValueError, match="AccessPrincipalKind"):
+        PortfolioAccessContext(
+            principal_kind=principal_kind,
+            user_id=3,
+            portfolio_id=7,
+            permissions=frozenset({READ_PORTFOLIO_DIVIDENDS}),
+        )
+
+
 def test_system_context_requires_explicit_purpose_and_never_impersonates_user() -> None:
     with pytest.raises(ValueError, match="explicit purpose"):
         PortfolioAccessContext.for_system(
@@ -119,6 +130,24 @@ async def test_explicit_system_context_uses_scoped_portfolio_lookup() -> None:
     assert "portfolios.id" in ownership_query
     where_clause = ownership_query.partition("WHERE")[2]
     assert "portfolios.user_id" not in where_clause
+
+
+@pytest.mark.asyncio
+async def test_repository_fails_closed_for_unrecognized_principal() -> None:
+    db = AsyncMock()
+    access = object.__new__(PortfolioAccessContext)
+    object.__setattr__(access, "principal_kind", "system")
+    object.__setattr__(access, "portfolio_id", 7)
+    object.__setattr__(access, "permissions", frozenset({READ_PORTFOLIO_DIVIDENDS}))
+
+    with pytest.raises(PortfolioAccessDenied):
+        await get_accessible_portfolio(
+            db,
+            access,
+            required_permission=READ_PORTFOLIO_DIVIDENDS,
+        )
+
+    db.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

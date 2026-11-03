@@ -25,6 +25,8 @@ class PortfolioAccessContext:
     request_id: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.principal_kind, AccessPrincipalKind):
+            raise ValueError("principal_kind must be an AccessPrincipalKind")
         if self.portfolio_id <= 0:
             raise ValueError("portfolio_id must be positive")
         if not self.permissions:
