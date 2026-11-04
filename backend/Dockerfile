@@ -63,6 +63,14 @@ COPY --chown=app:app backend/ /app/
 COPY --chown=app:app .agents/ /app/.agents/
 COPY --chown=app:app README.md /app/README.md
 COPY --chown=app:app docs/snapshots.md /docs/snapshots.md
+COPY --chown=app:app \
+    docs/DOCUMENTACAO_DO_SISTEMA.md \
+    docs/rentabilidade.md \
+    docs/TOOLS_CALCULATORS.md \
+    docs/snapshots.md \
+    docs/GOALS_AND_ANALYSIS_CONTRACT.md \
+    docs/CORPORATE_ACTIONS.md \
+    /app/help_docs/
 
 # Normaliza line endings e garante permissao de execucao antes de cair privilegio.
 RUN sed -i 's/\r//' /app/entrypoint.sh \
