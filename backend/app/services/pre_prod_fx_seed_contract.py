@@ -139,6 +139,7 @@ class PreProdFxSeedResult:
             run_id=self.run_id,
             branch=self.branch,
             commit_sha=self.commit_sha,
+            allow_production_branch=True,
         )
         if self.source != FX_SEED_SOURCE:
             raise FxSeedContractError(

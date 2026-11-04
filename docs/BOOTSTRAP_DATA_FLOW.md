@@ -60,6 +60,13 @@ serviços, smoke, identidade do release e `/ready`. Não se desenvolve na VM nem
 se faz release normal por SSH ou Compose. Uma falha observada em produção deve
 ser reproduzida e corrigida localmente, passar por PR e seguir o mesmo fluxo.
 
+O bootstrap escolhe sua identidade de branch pelo ambiente: `ENVIRONMENT=production`
+usa `main`; os ambientes locais de desenvolvimento usam `stable-15jun`. Essa
+identidade operacional independe de um `APP_BRANCH` desatualizado. A CLI isolada
+de seed PTAX para pré-produção continua restrita a `stable-15jun`; o estágio PTAX
+do bootstrap global aceita `main` somente quando executado pelo contexto de
+produção.
+
 ## 1. Universo B3 — autoridade e precedência
 
 Para ativos B3 (`ACAO`, `FII`, `ETF_NACIONAL`, `BDR`):
