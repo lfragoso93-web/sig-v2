@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import inspect
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -16,7 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.distributed_job_lock import read_scheduler_job_statuses
+from app.core.distributed_job_lock import (
+    read_scheduler_job_history,
+    read_scheduler_job_statuses,
+    scheduler_execution_source,
+)
 from app.models.user import User
 from app.routers.admin import require_superadmin
 from app.services.system_bootstrap_execution_context import (
@@ -57,6 +62,18 @@ _SCHEDULED_JOB_STATUS_BINDINGS = (
     ("refresh_asset_fundamentals_daily", "refresh_asset_fundamentals_daily", "Indicadores fundamentalistas", True),
     ("audit_b3_market_calendar_monthly", "audit_b3_market_calendar", "Auditoria mensal do calendário B3", settings.ENABLE_B3_MARKET_CALENDAR_MONTHLY_AUDIT),
 )
+
+_MANUAL_JOB_BINDINGS = frozenset(job_id for job_id, _, _, enabled in _SCHEDULED_JOB_STATUS_BINDINGS if enabled)
+
+
+async def _run_manual_scheduler_job(job_id: str, actor_user_id: int) -> None:
+    job = scheduler.get_job(job_id)
+    if job is None:
+        raise RuntimeError("scheduled_job_not_active")
+    with scheduler_execution_source("manual", actor_user_id):
+        result = job.func(*job.args, **job.kwargs)
+        if inspect.isawaitable(result):
+            await result
 
 
 class BootstrapTriggerRequest(BaseModel):
@@ -114,6 +131,8 @@ async def admin_scheduler_status(
                 "duration_ms": run_status.get("duration_ms") or None,
                 "last_error_type": run_status.get("last_error_type") or None,
                 "lease_ttl_seconds": run_status.get("lease_ttl_seconds") or None,
+                "trigger_source": run_status.get("trigger_source") or None,
+                "triggered_by_user_id": run_status.get("triggered_by_user_id") or None,
             }
         )
     return {
@@ -122,6 +141,43 @@ async def admin_scheduler_status(
         "status_store_available": len(statuses) == len(lock_names),
         "jobs": jobs,
     }
+
+
+@router.get("/scheduler/{job_id}/history")
+async def admin_scheduler_history(
+    job_id: str,
+    limit: int = Query(30, ge=1, le=100),
+    _: User = Depends(require_superadmin),
+):
+    binding = next(
+        (item for item in _SCHEDULED_JOB_STATUS_BINDINGS if item[0] == job_id),
+        None,
+    )
+    if binding is None:
+        raise HTTPException(status_code=404, detail="Agendamento desconhecido")
+    job = await read_scheduler_job_history(binding[1], limit=limit)
+    return {"job_id": job_id, "runs": job}
+
+
+@router.post("/scheduler/{job_id}/run", status_code=status.HTTP_202_ACCEPTED)
+async def admin_run_scheduler_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    actor: User = Depends(require_superadmin),
+):
+    binding = next(
+        (item for item in _SCHEDULED_JOB_STATUS_BINDINGS if item[0] == job_id),
+        None,
+    )
+    if binding is None or job_id not in _MANUAL_JOB_BINDINGS:
+        raise HTTPException(status_code=404, detail="Agendamento desconhecido")
+    if not binding[3]:
+        raise HTTPException(status_code=409, detail="Agendamento desativado")
+    configured = next((job for job in scheduler.get_jobs() if job.id == job_id), None)
+    if configured is None:
+        raise HTTPException(status_code=409, detail="Agendamento não está ativo")
+    background_tasks.add_task(_run_manual_scheduler_job, job_id, actor.id)
+    return {"status": "accepted", "job_id": job_id}
 
 
 @router.get("/bootstrap/user-test-readiness")

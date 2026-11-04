@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ScheduledJobsPanel from './ScheduledJobsPanel'
 import api from '@/services/api'
 
-vi.mock('@/services/api', () => ({ default: { get: vi.fn() } }))
+vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 
 function renderPanel() {
   const queryClient = new QueryClient({
@@ -47,6 +47,40 @@ describe('ScheduledJobsPanel', () => {
     expect(await screen.findByText(/há tarefa agendada com falha/i)).toBeDefined()
     expect(screen.getByText(/Falhou \(ProviderError\)/)).toBeDefined()
     expect(screen.getByText('3000 ms')).toBeDefined()
+  })
+
+  it('shows manual execution and history controls for enabled jobs', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: {
+        timezone: 'America/Sao_Paulo', status_retention_days: 90, status_store_available: true,
+        jobs: [{
+          id: 'refresh_asset_fundamentals_daily', name: 'Fundamentos', enabled: true,
+          next_run_at: null, last_status: 'never_run', last_started_at: null,
+          last_finished_at: null, duration_ms: null, last_error_type: null,
+          lease_ttl_seconds: null, trigger_source: null,
+        }],
+      },
+    })
+    renderPanel()
+    expect(await screen.findByRole('button', { name: 'Executar Fundamentos agora' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Ver histórico de Fundamentos' })).toBeDefined()
+  })
+
+  it('allows retrying a run whose Redis lease has expired', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: {
+        timezone: 'America/Sao_Paulo', status_retention_days: 90, status_store_available: true,
+        jobs: [{
+          id: 'refresh_asset_fundamentals_daily', name: 'Fundamentos', enabled: true,
+          next_run_at: null, last_status: 'running', last_started_at: '2020-01-01T00:00:00Z',
+          last_finished_at: null, duration_ms: null, last_error_type: null,
+          lease_ttl_seconds: '1', trigger_source: 'manual', triggered_by_user_id: '1',
+        }],
+      },
+    })
+    renderPanel()
+    const runButton = await screen.findByRole('button', { name: 'Executar Fundamentos agora' })
+    expect((runButton as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('warns when Redis status history is unavailable', async () => {

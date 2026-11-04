@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, Clock3, Loader2, MinusCircle, XCircle } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, CheckCircle2, Clock3, Loader2, MinusCircle, XCircle, Play, History } from 'lucide-react'
+import { useState } from 'react'
 import api from '@/services/api'
 
 interface ScheduledJob {
@@ -13,7 +14,10 @@ interface ScheduledJob {
   duration_ms: string | null
   last_error_type: string | null
   lease_ttl_seconds: string | null
+  trigger_source: string | null
+  triggered_by_user_id: string | null
 }
+type RunRecord = { status: string; started_at: string; finished_at: string; duration_ms: string; error_type: string; trigger_source: string; triggered_by_user_id: string }
 
 interface SchedulerStatus {
   timezone: string
@@ -45,10 +49,32 @@ function isStaleRun(job: ScheduledJob) {
 }
 
 export default function ScheduledJobsPanel() {
+  const queryClient = useQueryClient()
+  const [historyJobId, setHistoryJobId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const { data, isLoading, isError } = useQuery<SchedulerStatus>({
     queryKey: ['admin-scheduler-status'],
     queryFn: () => api.get('/admin/scheduler/status').then(response => response.data),
-    refetchInterval: 60_000,
+    refetchInterval: historyJobId ? 2_000 : 60_000,
+  })
+  const historyQuery = useQuery<{ job_id: string; runs: RunRecord[] }>({
+    queryKey: ['admin-scheduler-history', historyJobId],
+    queryFn: () => api.get('/admin/scheduler/' + historyJobId + '/history', { params: { limit: 30 } }).then(response => response.data),
+    enabled: historyJobId !== null,
+    refetchInterval: historyJobId ? 2_000 : false,
+  })
+  const runMutation = useMutation({
+    mutationFn: (jobId: string) => api.post('/admin/scheduler/' + jobId + '/run'),
+    onSuccess: (_result, jobId) => {
+      setNotice('Execução manual solicitada. O estado será atualizado em instantes.')
+      setHistoryJobId(jobId)
+      void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-status'] })
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-history', jobId] })
+        void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-status'] })
+      }, 1500)
+    },
+    onError: () => setNotice('Não foi possível iniciar. Verifique se o job já está executando e consulte o histórico.'),
   })
 
   if (isLoading) return <div className="py-4 text-center"><Loader2 size={18} className="animate-spin mx-auto" /></div>
@@ -72,20 +98,29 @@ export default function ScheduledJobsPanel() {
       <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
         Horário: {data.timezone}. O resultado mais recente fica disponível por {data.status_retention_days} dias. Execução registrada indica conclusão técnica, não valida a qualidade dos dados de origem.
       </p>
+      {notice && <p role="status" className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{notice}</p>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
           <thead><tr style={{ color: 'var(--color-text-muted)' }}>
-            <th className="px-2 py-2">Tarefa</th><th className="px-2 py-2">Estado</th><th className="px-2 py-2">Última execução</th><th className="px-2 py-2">Próxima</th><th className="px-2 py-2">Duração</th>
+            <th className="px-2 py-2">Tarefa</th><th className="px-2 py-2">Estado</th><th className="px-2 py-2">Última execução</th><th className="px-2 py-2">Próxima</th><th className="px-2 py-2">Duração</th><th className="px-2 py-2">Ações</th>
           </tr></thead>
           <tbody>{data.jobs.map(job => <tr key={job.id} className="border-t" style={{ borderColor: 'var(--color-divider)' }}>
             <td className="px-2 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{job.name}</td>
             <td className="px-2 py-2"><JobState job={job} /></td>
             <td className="px-2 py-2" style={{ color: 'var(--color-text-muted)' }}>{formatDate(job.last_finished_at)}</td>
             <td className="px-2 py-2" style={{ color: 'var(--color-text-muted)' }}>{job.enabled ? formatDate(job.next_run_at) : '—'}</td>
-            <td className="px-2 py-2 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{job.duration_ms ? `${job.duration_ms} ms` : '—'}</td>
+            <td className="px-2 py-2 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{job.duration_ms ? `${job.duration_ms} ms` : '—'}{job.trigger_source === 'manual' ? <span className="ml-1">(manual)</span> : null}</td>
+            <td className="px-2 py-2"><div className="flex gap-2">
+              <button type="button" disabled={!job.enabled || runMutation.isPending || (job.last_status === 'running' && !isStaleRun(job))} title="Executar agora" aria-label={`Executar ${job.name} agora`} className="rounded border p-1.5 disabled:opacity-40" style={{ borderColor: 'var(--color-border)' }} onClick={() => { if (window.confirm(`Executar agora: ${job.name}?`)) runMutation.mutate(job.id) }}><Play size={14} /></button>
+              <button type="button" title="Ver histórico" aria-label={`Ver histórico de ${job.name}`} className="rounded border p-1.5" style={{ borderColor: 'var(--color-border)' }} onClick={() => setHistoryJobId(current => current === job.id ? null : job.id)}><History size={14} /></button>
+            </div></td>
           </tr>)}</tbody>
         </table>
       </div>
+      {historyJobId && <section className="rounded-lg border p-3" style={{ borderColor: 'var(--color-divider)' }}>
+        <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">Histórico: {data.jobs.find(job => job.id === historyJobId)?.name}</h3><button type="button" className="text-xs underline" onClick={() => setHistoryJobId(null)}>Fechar</button></div>
+        {historyQuery.isLoading ? <p className="text-xs">Carregando histórico…</p> : !historyQuery.data?.runs.length ? <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhuma execução registrada.</p> : <div className="space-y-2">{historyQuery.data.runs.map((run, index) => <div key={index} className="flex flex-wrap gap-x-3 text-xs" style={{ color: 'var(--color-text-muted)' }}><span>{run.status === 'succeeded' ? 'Concluiu' : 'Falhou'}</span><span>{formatDate(run.started_at)}</span><span>{run.duration_ms} ms</span><span>{run.trigger_source === 'manual' ? (run.triggered_by_user_id ? 'Manual · usuário #' + run.triggered_by_user_id : 'Manual') : 'Agendada'}</span>{run.error_type && <span className="text-red-400">Erro: {run.error_type}</span>}</div>)}</div>}
+      </section>}
     </div>
   )
 }
