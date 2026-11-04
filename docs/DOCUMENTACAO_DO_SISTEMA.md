@@ -48,7 +48,26 @@ Solicitações de recuperação de senha são limitadas por conta: duas solicita
 - O merge para `main` aciona o fluxo de CI/CD responsável pelo deploy em produção. A prontidão do sistema depende também da validação de identidade e certificação correspondentes à versão implantada.
 - Alterações de banco de dados são versionadas por migrações do Alembic e aplicadas pelo processo de publicação da aplicação.
 
-## 7. Guias relacionados
+## 7. Central de ajuda
+
+A rota protegida `/carteira/ajuda`, acessível pelo menu do usuário no topo da
+aplicação, reúne perguntas e respostas sobre navegação, operações, dados,
+rentabilidade, ferramentas, IRPF e segurança. É possível pesquisar por texto e
+filtrar por categoria; os atalhos levam às páginas correspondentes. O assistente
+documental consulta um conjunto explícito de manuais funcionais, retorna trechos
+com título e seção de origem e não lê dados da carteira nem grava conversas. A
+rota `/api/v1/help/ask` exige autenticação, aceita perguntas de 3 a 500
+caracteres e limita a 10 consultas por minuto por endereço de origem. Quando a
+documentação não contém evidência suficiente, informa que não encontrou resposta.
+
+Nesta versão, as respostas são recuperação de trechos documentais, sem geração
+por modelo de linguagem. O assistente de Análise continua separado e responde
+sobre alocação, riscos e proventos da carteira selecionada.
+
+A IA disponível em Análise usa as métricas determinísticas e não responde sobre
+o conteúdo completo da documentação.
+
+## 8. Guias relacionados
 
 - [Guia do backend](../backend/README.md)
 - [Guia do frontend](../frontend/README.md)
