@@ -106,6 +106,8 @@ async def test_asset_analysis_reads_catalog_history_and_cached_fields(monkeypatc
     assert response["dividends"][0]["value_per_unit"] == 0.5
     assert response["corporate_events"][0]["requires_review"] is True
     assert response["reports"] == []
+    event_query = db.execute.await_args_list[2].args[0]
+    assert "corporate_events.portfolio_id IS NULL" in str(event_query)
     cached_reader.assert_awaited_once_with("PETR4", "ACAO")
 
 

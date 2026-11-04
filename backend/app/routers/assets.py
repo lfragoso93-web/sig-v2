@@ -417,7 +417,10 @@ async def get_asset_analysis(
     events = (
         await db.execute(
             select(CorporateEvent)
-            .where(CorporateEvent.asset_id == asset.id)
+            .where(
+                CorporateEvent.asset_id == asset.id,
+                CorporateEvent.portfolio_id.is_(None),
+            )
             .order_by(CorporateEvent.effective_date.desc().nullslast(), CorporateEvent.id.desc())
             .limit(100)
         )
