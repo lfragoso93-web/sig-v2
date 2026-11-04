@@ -257,6 +257,7 @@ export default function Sidebar() {
             <div className="ml-3 flex flex-col gap-0.5 border-l pl-2 mt-0.5" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.09)' }}>
               <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" />
               <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" />
+              <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" />
             </div>
           )}
         </div>
@@ -361,6 +362,7 @@ export default function Sidebar() {
               >
                 <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" compact />
                 <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" compact />
+                <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" compact />
               </div>
             )}
           </div>

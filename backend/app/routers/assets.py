@@ -129,6 +129,21 @@ class AssetDetailResponse(BaseModel):
     price_history: list[PricePoint] = []
 
 
+class AssetComparisonRequest(BaseModel):
+    asset_ids: list[int]
+
+
+class AssetComparisonItem(BaseModel):
+    id: int
+    ticker: str
+    name: Optional[str] = None
+    asset_type: str
+    currency: str
+    last_price: Optional[float] = None
+    last_price_updated_at: Optional[str] = None
+    enrichment: dict
+
+
 def _treasury_indexer(value: str) -> str:
     upper = value.upper()
     if "SELIC" in upper:
@@ -329,6 +344,44 @@ async def search_assets_endpoint(
     _=Depends(get_current_user),
 ):
     return await search_assets(db, q, asset_type, limit)
+
+
+@router.post("/comparison", response_model=list[AssetComparisonItem])
+async def compare_assets(
+    payload: AssetComparisonRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Compara até 6 ativos do catálogo usando apenas fundamentos em cache."""
+    if not 2 <= len(payload.asset_ids) <= 6:
+        raise HTTPException(status_code=422, detail="Selecione de 2 a 6 ativos distintos")
+    if len(set(payload.asset_ids)) != len(payload.asset_ids):
+        raise HTTPException(status_code=422, detail="A lista contém ativos repetidos")
+
+    result = await db.execute(select(Asset).where(Asset.id.in_(payload.asset_ids)))
+    assets_by_id = {asset.id: asset for asset in result.scalars().all()}
+    if len(assets_by_id) != len(payload.asset_ids):
+        raise HTTPException(status_code=404, detail="Um ou mais ativos não estão no catálogo")
+
+    from app.services.asset_enrichment_service import asset_enrichment_service
+
+    comparisons: list[AssetComparisonItem] = []
+    for asset_id in payload.asset_ids:
+        asset = assets_by_id[asset_id]
+        enrichment = await asset_enrichment_service.get_cached_asset_enrichment(
+            asset.ticker, asset.asset_type
+        )
+        comparisons.append(AssetComparisonItem(
+            id=asset.id,
+            ticker=asset.ticker,
+            name=asset.name,
+            asset_type=asset.asset_type,
+            currency=asset.currency,
+            last_price=float(asset.last_price) if asset.last_price is not None else None,
+            last_price_updated_at=asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None,
+            enrichment=enrichment,
+        ))
+    return comparisons
 
 
 @router.post("/", response_model=AssetResponse)

@@ -182,6 +182,7 @@ const shortcuts = [
   { label: 'Rentabilidade', href: '/carteira/rentabilidade', icon: ChartNoAxesCombined },
   { label: 'Proventos', href: '/carteira/proventos', icon: Landmark },
   { label: 'Calculadoras', href: '/carteira/ferramentas/rendimentos', icon: Calculator },
+  { label: 'Comparar ativos', href: '/carteira/ferramentas/comparador', icon: ChartNoAxesCombined },
 ]
 
 export default function HelpPage() {

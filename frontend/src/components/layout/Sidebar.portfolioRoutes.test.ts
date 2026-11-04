@@ -22,5 +22,7 @@ describe('Sidebar portfolio route hierarchy', () => {
     expect(sidebarSource).toContain("location.pathname.startsWith('/carteira/ferramentas/')")
     expect(sidebarSource).toContain('label="Calculadora"')
     expect(sidebarSource).toContain('label="Simulador RF"')
+    expect(sidebarSource).toContain('label="Comparar ativos"')
+    expect(sidebarSource).toContain("/carteira/ferramentas/comparador")
   })
 })

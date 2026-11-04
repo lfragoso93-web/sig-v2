@@ -202,6 +202,10 @@ A gaveta consolidada lateral `AssetDetailDrawer.tsx` provê inspeção completa 
 
 Nenhum provedor externo é acionado no fluxo de renderização (`read path`) para completar logos, cotações ou indicadores.
 
+## Comparador de ativos
+
+A ferramenta `/carteira/ferramentas/comparador` permite selecionar de 2 a 6 ativos persistidos no catálogo e comparar preço conhecido, cobertura e indicadores fundamentalistas por classe. A busca usa `GET /assets/search`; `POST /assets/comparison` valida IDs do catálogo e lê somente caches de enriquecimento já existentes. A comparação não consulta provedores, não grava dados, identifica campos ausentes como indisponíveis e exibe a data conhecida do último preço. A cobertura pode ser `UNKNOWN` e os dados em cache podem ter datas de referência diferentes.
+
 ## Bootstrap e rebuild
 
 O fluxo canônico está detalhado em `docs/BOOTSTRAP_DATA_FLOW.md`.
