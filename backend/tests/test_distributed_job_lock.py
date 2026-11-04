@@ -11,6 +11,7 @@ from app.core import distributed_job_lock as lock_module
 from app.core.distributed_job_lock import (
     ScheduledJobFailed,
     distributed_job_lock,
+    scheduler_execution_source,
     scheduler_lock_key,
 )
 
@@ -24,6 +25,7 @@ class _FakeRedis:
         self.values: dict[str, tuple[str, int]] = {}
         self.hashes: dict[str, dict[str, str]] = {}
         self.ttls: dict[str, int] = {}
+        self.lists: dict[str, list[str]] = {}
 
     def advance(self, seconds: int) -> None:
         self.now += seconds
@@ -79,6 +81,15 @@ class _FakeRedis:
 
     async def hgetall(self, key: str):
         return self.hashes.get(key, {})
+
+    async def lpush(self, key: str, value: str):
+        self.lists.setdefault(key, []).insert(0, value)
+
+    async def ltrim(self, key: str, start: int, end: int):
+        self.lists[key] = self.lists.get(key, [])[start:end + 1]
+
+    async def lrange(self, key: str, start: int, end: int):
+        return self.lists.get(key, [])[start:end + 1]
 
 
 async def _return(value):
@@ -318,3 +329,21 @@ async def test_job_status_reader_returns_only_requested_keys(monkeypatch) -> Non
     )
 
     assert result == {"sync_asset_dividends": {"status": "succeeded"}}
+
+
+@pytest.mark.asyncio
+async def test_job_lock_records_bounded_history_with_trigger_source(monkeypatch) -> None:
+    redis = _FakeRedis()
+    monkeypatch.setattr(lock_module, "get_redis", lambda: _return(redis))
+
+    with scheduler_execution_source("manual"):
+        async with distributed_job_lock(
+            job_name="sync_asset_dividends", period="morning", ttl_seconds=30,
+        ) as acquired:
+            assert acquired
+
+    history = await lock_module.read_scheduler_job_history("sync_asset_dividends")
+    assert len(history) == 1
+    assert history[0]["status"] == "succeeded"
+    assert history[0]["trigger_source"] == "manual"
+    assert history[0]["error_type"] == ""

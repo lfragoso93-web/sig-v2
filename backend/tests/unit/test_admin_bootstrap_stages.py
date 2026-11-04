@@ -1,5 +1,6 @@
 """Testes unitários para a Central de Bootstrap por etapas (Issue #253)."""
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -7,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.models.user import User
 from app.routers.admin import require_superadmin
+from app.routers.admin_bootstrap import _run_manual_scheduler_job
 from app.services.system_bootstrap_service import (
     BOOTSTRAP_SCHEMA_VERSION,
     CANONICAL_BOOTSTRAP_STAGES,
@@ -132,6 +134,67 @@ async def test_admin_scheduler_status_exposes_schedules_and_latest_runs():
     assert dividends["last_error_type"] == "ProviderError"
     read_statuses.assert_awaited_once()
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_scheduler_manual_trigger_is_allowlisted_and_async():
+    app.dependency_overrides[require_superadmin] = _mock_superadmin
+    with patch(
+        "app.routers.admin_bootstrap.scheduler.get_jobs",
+        return_value=[SimpleNamespace(id="sync_asset_dividends_morning")],
+    ), patch(
+        "app.routers.admin_bootstrap._run_manual_scheduler_job",
+        new=AsyncMock(),
+    ) as run_job:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            accepted = await client.post(
+                "/api/v1/admin/scheduler/sync_asset_dividends_morning/run"
+            )
+            unknown = await client.post(
+                "/api/v1/admin/scheduler/arbitrary/run"
+            )
+
+    assert accepted.status_code == 202
+    assert accepted.json() == {
+        "status": "accepted",
+        "job_id": "sync_asset_dividends_morning",
+    }
+    assert unknown.status_code == 404
+    run_job.assert_awaited_once_with("sync_asset_dividends_morning", 1)
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_scheduler_history_is_limited_and_unknown_jobs_rejected():
+    app.dependency_overrides[require_superadmin] = _mock_superadmin
+    with patch(
+        "app.routers.admin_bootstrap.read_scheduler_job_history",
+        new=AsyncMock(return_value=[{"status": "succeeded"}]),
+    ) as read_history:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            history = await client.get(
+                "/api/v1/admin/scheduler/sync_asset_dividends_morning/history?limit=10"
+            )
+            unknown = await client.get(
+                "/api/v1/admin/scheduler/arbitrary/history"
+            )
+
+    assert history.status_code == 200
+    assert history.json()["runs"] == [{"status": "succeeded"}]
+    read_history.assert_awaited_once_with("sync_asset_dividends", limit=10)
+    assert unknown.status_code == 404
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_manual_runner_invokes_registered_job_function():
+    callback = AsyncMock()
+    job = SimpleNamespace(func=callback, args=(), kwargs={})
+    with patch("app.routers.admin_bootstrap.scheduler.get_job", return_value=job):
+        await _run_manual_scheduler_job("sync_asset_dividends_morning", 1)
+    callback.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
