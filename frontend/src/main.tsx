@@ -36,6 +36,7 @@ const WelcomePage               = lazy(() => import('@/pages/WelcomePage'))
 const RendaVariavelPage         = lazy(() => import('@/pages/patrimonio/RendaVariavelPage'))
 const TesouroDiretoPage         = lazy(() => import('@/pages/patrimonio/TesouroDiretoPage'))
 const RendaFixaPage             = lazy(() => import('@/pages/patrimonio/RendaFixaPage'))
+const HelpPage                  = lazy(() => import('@/pages/HelpPage'))
 
 function RouteSuspense({ children }: { children: React.ReactNode }) {
   return (
@@ -125,6 +126,7 @@ const router = createBrowserRouter([
           { path: 'ferramentas/renda-fixa', element: <RouteSuspense><FixedIncomeCalculatorPage /></RouteSuspense> },
           { path: 'irpf',          element: <RouteSuspense><IRPFPage /></RouteSuspense> },
           { path: 'configuracoes', element: <RouteSuspense><Configuracoes /></RouteSuspense> },
+          { path: 'ajuda',         element: <RouteSuspense><HelpPage /></RouteSuspense> },
           { path: 'patrimonio',                element: <RouteSuspense><PatrimonioPage /></RouteSuspense> },
           { path: 'patrimonio/renda-variavel', element: <RouteSuspense><RendaVariavelPage /></RouteSuspense> },
           { path: 'patrimonio/tesouro',        element: <RouteSuspense><TesouroDiretoPage /></RouteSuspense> },

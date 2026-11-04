@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, FileUp, LogOut, Settings } from 'lucide-react'
+import { BookOpen, ChevronDown, FileUp, LogOut, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAppStore } from '@/store/appStore'
@@ -107,6 +107,22 @@ export default function UserMenu() {
             </div>
 
             <div style={{ padding: 'var(--space-1)' }}>
+              <button
+                onClick={() => { setOpen(false); navigate('/carteira/ajuda') }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center',
+                  gap: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)',
+                  borderRadius: 'var(--radius-md)', border: 'none',
+                  background: 'transparent', color: 'var(--color-text)',
+                  fontSize: 'var(--text-xs)', cursor: 'pointer', textAlign: 'left',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <BookOpen size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                Ajuda
+              </button>
+
               <button
                 onClick={() => { setOpen(false); navigate('/carteira/configuracoes') }}
                 style={{

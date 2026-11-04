@@ -30,6 +30,7 @@ from app.routers import (
     fx,
     fixed_income_contracts,
     goals,
+    help_chat,
     irpf,
     performance,
     portfolios,
@@ -212,6 +213,7 @@ app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags
 app.include_router(rentabilidade.router,   prefix=f"{PREFIX}/portfolios",   tags=["rentabilidade"])
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags=["goals"])
+app.include_router(help_chat.router,       prefix=f"{PREFIX}/help",          tags=["help"])
 
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
