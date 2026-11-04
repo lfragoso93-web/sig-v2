@@ -66,6 +66,23 @@ describe('ScheduledJobsPanel', () => {
     expect(screen.getByRole('button', { name: 'Ver histórico de Fundamentos' })).toBeDefined()
   })
 
+  it('allows retrying a run whose Redis lease has expired', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: {
+        timezone: 'America/Sao_Paulo', status_retention_days: 90, status_store_available: true,
+        jobs: [{
+          id: 'refresh_asset_fundamentals_daily', name: 'Fundamentos', enabled: true,
+          next_run_at: null, last_status: 'running', last_started_at: '2020-01-01T00:00:00Z',
+          last_finished_at: null, duration_ms: null, last_error_type: null,
+          lease_ttl_seconds: '1', trigger_source: 'manual', triggered_by_user_id: '1',
+        }],
+      },
+    })
+    renderPanel()
+    const runButton = await screen.findByRole('button', { name: 'Executar Fundamentos agora' })
+    expect((runButton as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('warns when Redis status history is unavailable', async () => {
     vi.mocked(api.get).mockResolvedValue({
       data: {

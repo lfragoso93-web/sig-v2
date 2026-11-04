@@ -55,19 +55,24 @@ export default function ScheduledJobsPanel() {
   const { data, isLoading, isError } = useQuery<SchedulerStatus>({
     queryKey: ['admin-scheduler-status'],
     queryFn: () => api.get('/admin/scheduler/status').then(response => response.data),
-    refetchInterval: 60_000,
+    refetchInterval: historyJobId ? 2_000 : 60_000,
   })
   const historyQuery = useQuery<{ job_id: string; runs: RunRecord[] }>({
     queryKey: ['admin-scheduler-history', historyJobId],
     queryFn: () => api.get('/admin/scheduler/' + historyJobId + '/history', { params: { limit: 30 } }).then(response => response.data),
     enabled: historyJobId !== null,
+    refetchInterval: historyJobId ? 2_000 : false,
   })
   const runMutation = useMutation({
     mutationFn: (jobId: string) => api.post('/admin/scheduler/' + jobId + '/run'),
     onSuccess: (_result, jobId) => {
       setNotice('Execução manual solicitada. O estado será atualizado em instantes.')
       setHistoryJobId(jobId)
-      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ['admin-scheduler-status'] }), 1500)
+      void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-status'] })
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-history', jobId] })
+        void queryClient.invalidateQueries({ queryKey: ['admin-scheduler-status'] })
+      }, 1500)
     },
     onError: () => setNotice('Não foi possível iniciar. Verifique se o job já está executando e consulte o histórico.'),
   })
@@ -106,7 +111,7 @@ export default function ScheduledJobsPanel() {
             <td className="px-2 py-2" style={{ color: 'var(--color-text-muted)' }}>{job.enabled ? formatDate(job.next_run_at) : '—'}</td>
             <td className="px-2 py-2 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{job.duration_ms ? `${job.duration_ms} ms` : '—'}{job.trigger_source === 'manual' ? <span className="ml-1">(manual)</span> : null}</td>
             <td className="px-2 py-2"><div className="flex gap-2">
-              <button type="button" disabled={!job.enabled || runMutation.isPending || job.last_status === 'running'} title="Executar agora" aria-label={`Executar ${job.name} agora`} className="rounded border p-1.5 disabled:opacity-40" style={{ borderColor: 'var(--color-border)' }} onClick={() => { if (window.confirm(`Executar agora: ${job.name}?`)) runMutation.mutate(job.id) }}><Play size={14} /></button>
+              <button type="button" disabled={!job.enabled || runMutation.isPending || (job.last_status === 'running' && !isStaleRun(job))} title="Executar agora" aria-label={`Executar ${job.name} agora`} className="rounded border p-1.5 disabled:opacity-40" style={{ borderColor: 'var(--color-border)' }} onClick={() => { if (window.confirm(`Executar agora: ${job.name}?`)) runMutation.mutate(job.id) }}><Play size={14} /></button>
               <button type="button" title="Ver histórico" aria-label={`Ver histórico de ${job.name}`} className="rounded border p-1.5" style={{ borderColor: 'var(--color-border)' }} onClick={() => setHistoryJobId(current => current === job.id ? null : job.id)}><History size={14} /></button>
             </div></td>
           </tr>)}</tbody>
