@@ -33,6 +33,7 @@ const AnalisePage               = lazy(() => import('@/pages/AnalisePage'))
 const IncomeCalculatorPage      = lazy(() => import('@/pages/IncomeCalculatorPage'))
 const FixedIncomeCalculatorPage = lazy(() => import('@/pages/FixedIncomeCalculatorPage'))
 const AssetComparisonPage      = lazy(() => import('@/pages/AssetComparisonPage'))
+const AssetAnalysisPage        = lazy(() => import('@/pages/AssetAnalysisPage'))
 const WelcomePage               = lazy(() => import('@/pages/WelcomePage'))
 const RendaVariavelPage         = lazy(() => import('@/pages/patrimonio/RendaVariavelPage'))
 const TesouroDiretoPage         = lazy(() => import('@/pages/patrimonio/TesouroDiretoPage'))
@@ -126,6 +127,7 @@ const router = createBrowserRouter([
           { path: 'ferramentas/rendimentos', element: <RouteSuspense><IncomeCalculatorPage /></RouteSuspense> },
           { path: 'ferramentas/renda-fixa', element: <RouteSuspense><FixedIncomeCalculatorPage /></RouteSuspense> },
           { path: 'ferramentas/comparador', element: <RouteSuspense><AssetComparisonPage /></RouteSuspense> },
+          { path: 'ferramentas/analise-ativos', element: <RouteSuspense><AssetAnalysisPage /></RouteSuspense> },
           { path: 'irpf',          element: <RouteSuspense><IRPFPage /></RouteSuspense> },
           { path: 'configuracoes', element: <RouteSuspense><Configuracoes /></RouteSuspense> },
           { path: 'ajuda',         element: <RouteSuspense><HelpPage /></RouteSuspense> },
