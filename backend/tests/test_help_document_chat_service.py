@@ -52,6 +52,51 @@ def test_help_chat_returns_no_answer_when_documentation_has_no_match(tmp_path: P
     assert "Tente reformular" in result.answer
 
 
+def test_help_chat_excerpt_keeps_the_matching_passage_when_it_is_late_in_section(
+    tmp_path: Path,
+) -> None:
+    filler = "A simulacao usa premissas constantes e nao inclui marcacao a mercado. " * 22
+    (tmp_path / "TOOLS_CALCULATORS.md").write_text(
+        "# Ferramentas\n\n## Simulador\n\n"
+        "O simulador calcula o valor futuro com premissas fixas. "
+        f"{filler}"
+        "O simulador nao modela resgate antecipado.",
+        encoding="utf-8",
+    )
+
+    result = HelpDocumentChatService(tmp_path).answer(
+        "O simulador considera resgate antecipado?"
+    )
+
+    assert result.sources
+    assert "nao modela resgate antecipado" in result.sources[0].excerpt.casefold()
+    assert len(result.sources[0].excerpt) <= 700
+
+
+def test_help_chat_excludes_superseded_corporate_action_status_sections(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "CORPORATE_ACTIONS.md").write_text(
+        "# Eventos corporativos\n\n"
+        "## Liquidação de frações\n\n"
+        "A liquidação de frações é apresentada quando o evento confirmado gera saldo fracionário.\n\n"
+        "## Estado de publicação — 16/10/2026\n\n"
+        "KLBN11 permanece pendente em conflito e ainda precisa de validação.\n\n"
+        "## Próximos blocos\n\n"
+        "KLBN11 continua pendente até a próxima entrega.\n\n"
+        "## Conclusão da reconciliação KLBN11 — 21/10/2026\n\n"
+        "A reconciliação KLBN11 foi concluída e a issue foi fechada.",
+        encoding="utf-8",
+    )
+
+    result = HelpDocumentChatService(tmp_path).answer(
+        "KLBN11 permanece pendente em conflito?"
+    )
+
+    assert result.sources == []
+    assert "Tente reformular" in result.answer
+
+
 @pytest.mark.parametrize("question", ["", "  ", "oi", "x" * 501])
 def test_help_chat_question_has_bounded_nonempty_length(question: str) -> None:
     with pytest.raises(ValidationError):

@@ -27,6 +27,19 @@ _NO_MATCH_ANSWER = (
     "Não encontrei uma resposta suficiente nos documentos disponíveis. "
     "Tente reformular a pergunta ou consulte as perguntas frequentes desta página."
 )
+_CORPORATE_ACTION_SECTIONS = frozenset(
+    {
+        "objetivo",
+        "arquitetura canonica",
+        "fontes",
+        "convencao de fator",
+        "liquidacao de fracoes",
+        "idempotencia e auditoria",
+        "candidatos cross-provider",
+        "seguranca operacional",
+        "avisos de eventos corporativos futuros",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -83,6 +96,53 @@ def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
     return chunks
 
 
+def _is_searchable_section(filename: str, section: str) -> bool:
+    normalized = _normalize(section)
+    if normalized.startswith(("pendencias", "roadmap", "historico", "diagnostico historico")):
+        return False
+    if filename == "CORPORATE_ACTIONS.md":
+        return normalized in _CORPORATE_ACTION_SECTIONS
+    return True
+
+
+def _relevant_excerpt(text: str, query_tokens: set[str], max_chars: int = 700) -> str:
+    """Keep the strongest matching passage inside the displayed citation."""
+    matches = [
+        (match.start(), match.end())
+        for match in re.finditer(r"\w+", text, flags=re.UNICODE)
+        if _normalize(match.group(0)) in query_tokens
+    ]
+    if not matches or len(text) <= max_chars:
+        return text[:max_chars].strip()
+
+    left = 0
+    best_window = matches[0]
+    best_count = 0
+    for right, match in enumerate(matches):
+        while match[1] - matches[left][0] > max_chars:
+            left += 1
+        count = right - left + 1
+        if count > best_count:
+            best_count = count
+            best_window = (matches[left][0], match[1])
+
+    context_before = min(180, max_chars - (best_window[1] - best_window[0]))
+    start = max(0, best_window[0] - context_before)
+    end = min(len(text), start + max_chars)
+    if end == len(text):
+        start = max(0, end - max_chars)
+    elif start > 0:
+        next_space = text.find(" ", start)
+        if next_space != -1 and next_space < best_window[0]:
+            start = next_space + 1
+            end = min(len(text), start + max_chars)
+    if end < len(text):
+        previous_space = text.rfind(" ", start, end)
+        if previous_space > best_window[1]:
+            end = previous_space
+    return text[start:end].strip()
+
+
 class HelpDocumentChatService:
     """Read-only lexical retrieval over an explicit allowlist of user docs."""
 
@@ -110,8 +170,8 @@ class HelpDocumentChatService:
                     section_texts.append((heading.group(1).strip(), content[heading.end():end]))
 
             for section, section_text in section_texts:
-                # Historical action lists and roadmaps are not current user guidance.
-                if _normalize(section).startswith(("pendencias", "roadmap", "historico", "diagnostico historico")):
+                # Dated implementation snapshots in this design doc are not current guidance.
+                if not _is_searchable_section(filename, section):
                     continue
                 for text in _split_paragraphs(_clean_markdown(section_text)):
                     tokens = _tokens(f"{section} {text}")
@@ -164,7 +224,7 @@ class HelpDocumentChatService:
             HelpChatSource(
                 document=chunk.document,
                 section=chunk.section,
-                excerpt=chunk.text[:700].strip(),
+                excerpt=_relevant_excerpt(chunk.text, query),
             )
             for chunk in selected
         ]
