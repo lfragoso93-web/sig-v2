@@ -1143,6 +1143,72 @@ class AssetEnrichmentService:
 
         return result
 
+    async def get_cached_asset_enrichment(
+        self, ticker: str, asset_type: Optional[str] = None
+    ) -> dict[str, Any]:
+        """Read only previously cached enrichment; never call a market provider."""
+        clean_ticker = ticker.strip().upper()
+        tipo = (asset_type or "").upper()
+        result: dict[str, Any] = {
+            "ticker": clean_ticker,
+            "asset_class": tipo or "OUTRO",
+            "coverage_status": "UNKNOWN",
+            "capabilities": {},
+            "fii_indicators": None,
+            "stock_fundamentals": None,
+            "etf_indicators": None,
+            "bdr_indicators": None,
+            "crypto_indicators": None,
+            "treasury_indicators": None,
+            "international_profile": None,
+            "dividend_history": [],
+            "dividend_metrics": None,
+        }
+
+        report = await asset_coverage_service.get_coverage(clean_ticker)
+        if report:
+            result["coverage_status"] = report.status
+            result["capabilities"] = report.capabilities
+
+        if tipo in ("CRIPTO", "CRYPTO") or clean_ticker in {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "DOT", "LINK", "LTC", "BNB"}:
+            result["asset_class"] = "CRIPTO"
+            result["crypto_indicators"] = await self._get_cached(f"crypto_indicators:{clean_ticker}")
+            return result
+
+        if tipo in ("TESOURO_DIRETO", "RENDA_FIXA") or clean_ticker.lower().startswith("tesouro-"):
+            result["asset_class"] = "TESOURO_DIRETO"
+            result["treasury_indicators"] = await self._get_cached(f"treasury_indicators:{clean_ticker.lower()}")
+            return result
+
+        dividend_cache = await self._get_cached(f"dividend_history:v2:{clean_ticker}")
+        if isinstance(dividend_cache, dict):
+            result["dividend_history"] = dividend_cache.get("history") or []
+            result["dividend_metrics"] = dividend_cache.get("metrics")
+
+        if tipo.startswith("ETF"):
+            result["asset_class"] = "ETF"
+            result["etf_indicators"] = await self._get_cached(f"etf_indicators:{clean_ticker}")
+            return result
+        if tipo == "BDR" or clean_ticker.endswith(("34", "35")):
+            result["asset_class"] = "BDR"
+            result["bdr_indicators"] = await self._get_cached(f"bdr_indicators:{clean_ticker}")
+            return result
+        if tipo == "FII" or (not tipo and clean_ticker.endswith("11")):
+            result["asset_class"] = "FII"
+            result["fii_indicators"] = await self._get_cached(f"fii_indicators:{clean_ticker}")
+            return result
+
+        international = await self._get_cached(f"intl_fundamentals:{clean_ticker}")
+        if isinstance(international, dict):
+            result["asset_class"] = "STOCK"
+            result["stock_fundamentals"] = international.get("stock_fundamentals")
+            result["international_profile"] = international.get("international_profile")
+            return result
+
+        result["asset_class"] = "ACAO"
+        result["stock_fundamentals"] = await self._get_cached(f"stock_fundamentals:{clean_ticker}")
+        return result
+
     # -------------------------------------------------------------------------
     # Helpers de Cache
     # -------------------------------------------------------------------------
