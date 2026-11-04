@@ -46,10 +46,10 @@ const labels: Record<string, string> = {
   last_payment_date: 'Último pagamento', frequency: 'Frequência', dy_12m: 'DY (12 meses)',
 }
 
-function formatValue(value: unknown): string {
+export function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Indisponível'
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
-  if (typeof value === 'number') return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(value)
+  if (typeof value === 'number') return new Intl.NumberFormat('pt-BR', { maximumSignificantDigits: 8 }).format(value)
   if (Array.isArray(value)) return value.length ? `${value.length} registros` : 'Sem registros'
   if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([key, item]) => `${labels[key] ?? key}: ${formatValue(item)}`).join(' · ')
   return String(value)
