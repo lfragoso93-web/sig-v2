@@ -97,6 +97,24 @@ def test_help_chat_excludes_superseded_corporate_action_status_sections(
     assert "Tente reformular" in result.answer
 
 
+def test_help_chat_answers_the_suggested_twr_question_from_current_documentation() -> None:
+    repository_docs = Path(__file__).resolve().parents[2] / "docs"
+    document_root = (
+        repository_docs
+        if (repository_docs / "snapshots.md").is_file()
+        and (repository_docs / "CORPORATE_ACTIONS.md").is_file()
+        else Path(__file__).resolve().parents[1] / "help_docs"
+    )
+
+    result = HelpDocumentChatService(document_root).answer(
+        "Como é calculado o TWR acumulado?"
+    )
+
+    assert result.sources
+    assert any(source.section == "Retorno acumulado" for source in result.sources)
+    assert any("accumulated_return_pct" in source.excerpt for source in result.sources)
+
+
 @pytest.mark.parametrize("question", ["", "  ", "oi", "x" * 501])
 def test_help_chat_question_has_bounded_nonempty_length(question: str) -> None:
     with pytest.raises(ValidationError):

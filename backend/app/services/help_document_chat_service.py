@@ -19,7 +19,7 @@ _ALLOWED_DOCUMENTS = (
     ("CORPORATE_ACTIONS.md", "Eventos corporativos"),
 )
 _WORD_PATTERN = re.compile(r"[a-z0-9]{3,}")
-_HEADING_PATTERN = re.compile(r"^#{1,4}\s+(.+?)\s*#*\s*$", re.MULTILINE)
+_HEADING_PATTERN = re.compile(r"^(#{1,4})\s+(.+?)\s*#*\s*$", re.MULTILINE)
 _STOP_WORDS = frozenset(
     "a o as os um uma uns umas de da do das dos em no na nos nas por para com sem que como qual quais quando onde porque e ou se ao aos pelo pela pelos pelas sua seu suas seus isso esta este esse essa isto mais menos muito muita sobre entre desde ate ser ter pode podem sistema carteira dados voce usuario usar do da faz fazer sao foi".split()
 )
@@ -65,7 +65,7 @@ def _tokens(value: str) -> tuple[str, ...]:
 def _clean_markdown(value: str) -> str:
     cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
     cleaned = re.sub(r"```[^\n]*\n?(.*?)```", r"\1", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"[`*_~]", "", cleaned)
+    cleaned = re.sub(r"[`*~]", "", cleaned)
     cleaned = re.sub(r"^\s*[-|>]+\s*", "", cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r"\|", " · ", cleaned)
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
@@ -159,22 +159,31 @@ class HelpDocumentChatService:
             content = path.read_text(encoding="utf-8")
             headings = list(_HEADING_PATTERN.finditer(content))
             if not headings:
-                section_texts = [(display_name, content)]
+                section_texts = [(display_name, display_name, content)]
             else:
-                section_texts: list[tuple[str, str]] = []
+                section_texts: list[tuple[str, str, str]] = []
                 first_heading = headings[0]
                 if content[:first_heading.start()].strip():
-                    section_texts.append((display_name, content[:first_heading.start()]))
+                    section_texts.append(
+                        (display_name, display_name, content[:first_heading.start()])
+                    )
+                heading_path: list[str] = []
                 for index, heading in enumerate(headings):
                     end = headings[index + 1].start() if index + 1 < len(headings) else len(content)
-                    section_texts.append((heading.group(1).strip(), content[heading.end():end]))
+                    level = len(heading.group(1))
+                    title = heading.group(2).strip()
+                    heading_path = heading_path[: level - 1]
+                    heading_path.append(title)
+                    section_texts.append(
+                        (title, " ".join(heading_path), content[heading.end():end])
+                    )
 
-            for section, section_text in section_texts:
+            for section, heading_context, section_text in section_texts:
                 # Dated implementation snapshots in this design doc are not current guidance.
                 if not _is_searchable_section(filename, section):
                     continue
                 for text in _split_paragraphs(_clean_markdown(section_text)):
-                    tokens = _tokens(f"{section} {text}")
+                    tokens = _tokens(f"{heading_context} {section} {text}")
                     if tokens:
                         chunks.append(_DocumentChunk(display_name, section, text, tokens))
         return tuple(chunks)
