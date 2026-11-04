@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
+from app.models.asset_dividend import AssetDividend
+from app.models.corporate_event import CorporateEvent
 from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services import csv_import_service
@@ -382,6 +385,104 @@ async def compare_assets(
             enrichment=enrichment,
         ))
     return comparisons
+
+
+@router.get("/analysis/{asset_id}")
+async def get_asset_analysis(
+    asset_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Read-only asset research view backed by catalog, persisted history and cache."""
+    asset = await db.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Ativo não encontrado no catálogo")
+
+    prices = (
+        await db.execute(
+            select(AssetPrice)
+            .where(AssetPrice.asset_id == asset.id)
+            .order_by(AssetPrice.timestamp.desc())
+            .limit(90)
+        )
+    ).scalars().all()
+    dividends = (
+        await db.execute(
+            select(AssetDividend)
+            .where(AssetDividend.asset_id == asset.id)
+            .order_by(AssetDividend.ex_date.desc(), AssetDividend.id.desc())
+            .limit(100)
+        )
+    ).scalars().all()
+    events = (
+        await db.execute(
+            select(CorporateEvent)
+            .where(CorporateEvent.asset_id == asset.id)
+            .order_by(CorporateEvent.effective_date.desc().nullslast(), CorporateEvent.id.desc())
+            .limit(100)
+        )
+    ).scalars().all()
+    from app.services.asset_enrichment_service import asset_enrichment_service
+
+    enrichment = await asset_enrichment_service.get_cached_asset_enrichment(
+        asset.ticker, asset.asset_type
+    )
+    return {
+        "asset": {
+            "id": asset.id,
+            "ticker": asset.ticker,
+            "name": asset.name,
+            "asset_type": asset.asset_type,
+            "currency": asset.currency,
+            "sector": asset.sector,
+            "sub_sector": asset.sub_sector,
+            "isin_code": asset.isin_code,
+            "provider": asset.provider,
+            "provider_status": asset.provider_status,
+            "provider_last_sync_at": asset.provider_last_sync_at.isoformat() if asset.provider_last_sync_at else None,
+            "last_price": float(asset.last_price) if asset.last_price is not None else None,
+            "last_price_updated_at": asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None,
+        },
+        "enrichment": enrichment,
+        "price_history": [
+            {
+                "timestamp": row.timestamp.isoformat(),
+                "open": float(row.open) if row.open is not None else None,
+                "high": float(row.high) if row.high is not None else None,
+                "low": float(row.low) if row.low is not None else None,
+                "close": float(row.close),
+                "volume": float(row.volume) if row.volume is not None else None,
+                "source": row.source,
+            }
+            for row in reversed(prices)
+        ],
+        "dividends": [
+            {
+                "record_date": row.record_date.isoformat() if row.record_date else None,
+                "ex_date": row.ex_date.isoformat(),
+                "payment_date": row.payment_date.isoformat() if row.payment_date else None,
+                "type": row.dividend_type.value if hasattr(row.dividend_type, "value") else str(row.dividend_type),
+                "value_per_unit": float(row.value_per_unit),
+                "source": row.source,
+                "remarks": row.remarks,
+            }
+            for row in dividends
+        ],
+        "corporate_events": [
+            {
+                "event_type": row.event_type,
+                "status": row.status,
+                "reconciliation_status": row.reconciliation_status,
+                "requires_review": row.requires_review,
+                "effective_date": row.effective_date.isoformat() if row.effective_date else None,
+                "announcement_date": row.announcement_date.isoformat() if row.announcement_date else None,
+                "description": row.description,
+                "source_provider": row.source_provider,
+            }
+            for row in events
+        ],
+        "reports": [],
+    }
 
 
 @router.post("/", response_model=AssetResponse)

@@ -206,6 +206,10 @@ Nenhum provedor externo é acionado no fluxo de renderização (`read path`) par
 
 A ferramenta `/carteira/ferramentas/comparador` permite selecionar de 2 a 6 ativos persistidos no catálogo e comparar preço conhecido, cobertura e indicadores fundamentalistas por classe. A busca usa `GET /assets/search`; `POST /assets/comparison` valida IDs do catálogo e lê somente caches de enriquecimento já existentes. A comparação não consulta provedores, não grava dados, identifica campos ausentes como indisponíveis e exibe a data conhecida do último preço. A cobertura pode ser `UNKNOWN` e os dados em cache podem ter datas de referência diferentes.
 
+A ferramenta `/carteira/ferramentas/analise-ativos` permite pesquisar um ativo e consultar seus metadados de catálogo, enriquecimento cacheado, até 90 preços persistidos, até 100 proventos e até 100 eventos corporativos. A rota `GET /assets/analysis/{asset_id}` é autenticada e somente leitura; não atualiza provedores. Eventos exibem estado e reconciliação, inclusive quando exigem revisão. O sistema ainda não armazena relatórios gerenciais anexados por ativo, então a tela informa essa ausência.
+
+O painel administrativo de agendamentos permite disparar manualmente jobs ativos e consultar até 30 execuções recentes por job. O endpoint manual usa uma lista fixa de operações e invoca a mesma função registrada no APScheduler, compartilhando lease Redis, nome de status e idempotência. A execução é assíncrona; o histórico guarda horário, duração, origem, ID do SuperAdmin e tipo do erro por até 90 dias, limitado às 100 execuções mais recentes. Falha ou indisponibilidade do Redis mantém a execução fechada. O status técnico não certifica qualidade nem cobertura dos dados retornados.
+
 ## Bootstrap e rebuild
 
 O fluxo canônico está detalhado em `docs/BOOTSTRAP_DATA_FLOW.md`.
