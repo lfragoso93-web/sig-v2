@@ -100,6 +100,23 @@ def test_result_serializes_canonical_contract() -> None:
     assert payload["after"]["pairs"][0]["pair"] == "USD-BRL"
 
 
+def test_result_accepts_production_branch_identity() -> None:
+    result = PreProdFxSeedResult(
+        run_id="20260726-173000",
+        branch="main",
+        commit_sha=_VALID_SHA,
+        started_at="2026-07-26T20:30:00+00:00",
+        finished_at="2026-07-26T20:30:01+00:00",
+        duration_seconds=1.0,
+        ok=True,
+        before=_state(),
+        after=_state(),
+        imported={"USD-BRL": 0},
+    )
+
+    assert result.branch == "main"
+
+
 @pytest.mark.parametrize(
     "after",
     [

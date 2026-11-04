@@ -15,6 +15,8 @@ VALID_SHA = "a" * 40
 
 def test_bootstrap_context_uses_explicit_sha_and_canonical_branch(monkeypatch) -> None:
     monkeypatch.delenv(BOOTSTRAP_COMMIT_SHA_ENV, raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("APP_BRANCH", "main")
     context = build_system_bootstrap_execution_context(
         commit_sha=VALID_SHA,
         now=datetime(2026, 8, 8, 1, 2, 3, tzinfo=UTC),
@@ -24,6 +26,30 @@ def test_bootstrap_context_uses_explicit_sha_and_canonical_branch(monkeypatch) -
     assert context.branch == BOOTSTRAP_BRANCH == "stable-15jun"
     assert context.commit_sha == VALID_SHA
     assert not hasattr(context, "history_start_date")
+
+
+def test_production_bootstrap_uses_main_even_when_app_branch_is_stale(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("APP_BRANCH", "stable-15jun")
+
+    context = build_system_bootstrap_execution_context(
+        commit_sha=VALID_SHA,
+        now=datetime(2026, 8, 8, 1, 2, 3, tzinfo=UTC),
+    )
+
+    assert context.branch == "main"
+
+
+def test_non_production_bootstrap_uses_stable_branch(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("APP_BRANCH", "main")
+
+    context = build_system_bootstrap_execution_context(
+        commit_sha=VALID_SHA,
+        now=datetime(2026, 8, 8, 1, 2, 3, tzinfo=UTC),
+    )
+
+    assert context.branch == "stable-15jun"
 
 
 def test_bootstrap_context_requires_full_sha(monkeypatch) -> None:

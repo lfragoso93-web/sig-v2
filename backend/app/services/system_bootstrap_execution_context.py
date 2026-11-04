@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 BOOTSTRAP_BRANCH = "stable-15jun"
+PRODUCTION_BOOTSTRAP_BRANCH = "main"
 BOOTSTRAP_BRANCHES = {BOOTSTRAP_BRANCH, "main"}
 BOOTSTRAP_COMMIT_SHA_ENV = "SGI_BOOTSTRAP_COMMIT_SHA"
 DEFAULT_BOOTSTRAP_COMMIT_SHA = "0" * 40
@@ -60,8 +61,15 @@ def build_system_bootstrap_execution_context(
             f"commit_sha ausente; informe-o explicitamente ou configure {BOOTSTRAP_COMMIT_SHA_ENV}"
         )
 
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    branch = (
+        PRODUCTION_BOOTSTRAP_BRANCH
+        if environment == "production"
+        else BOOTSTRAP_BRANCH
+    )
+
     return SystemBootstrapExecutionContext(
         run_id=current.strftime("%Y%m%d-%H%M%S"),
-        branch=os.getenv("APP_BRANCH", BOOTSTRAP_BRANCH).strip(),
+        branch=branch,
         commit_sha=resolved_sha,
     )
