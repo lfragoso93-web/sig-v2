@@ -87,7 +87,7 @@ function formatField(key: string, value: unknown, currency = 'BRL'): string {
   if (dateFields.has(key) || key.endsWith('_at')) return safeDate(value)
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (typeof value === 'number') {
-    const explicitCurrency = key.endsWith('_usd') ? 'USD' : key.endsWith('_brl') ? 'BRL' : currency
+    const explicitCurrency = key === 'total_paid_12m' || key.endsWith('_brl') ? 'BRL' : key.endsWith('_usd') ? 'USD' : currency
     if (moneyFields.has(key) || key.startsWith('price_')) return money(value, explicitCurrency)
     if (percentFields.has(key)) return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(value)}%`
     return new Intl.NumberFormat('pt-BR', { maximumSignificantDigits: 8 }).format(value)

@@ -45,7 +45,7 @@ describe('AssetAnalysisPage', () => {
       if (url === '/assets/search') return { data: [{ id: 9, ticker: 'AAPL', name: 'Apple Inc.', asset_type: 'STOCK' }] }
       return { data: {
         asset: { id: 9, ticker: 'AAPL', name: 'Apple Inc.', asset_type: 'STOCK', currency: 'USD', last_price: 100 },
-        enrichment: { ticker: 'AAPL', asset_class: 'STOCK', coverage_status: 'FULL', stock_fundamentals: { target_price: 120, market_cap_usd: 2_000_000 } },
+        enrichment: { ticker: 'AAPL', asset_class: 'STOCK', coverage_status: 'FULL', stock_fundamentals: { target_price: 120, market_cap_usd: 2_000_000 }, dividend_metrics: { total_paid_12m: 123.45 } },
         price_history: [], dividends: [], corporate_events: [], reports: [],
       } }
     })
@@ -57,6 +57,7 @@ describe('AssetAnalysisPage', () => {
 
     expect(await screen.findByText(/US\$\s?100,00/)).toBeDefined()
     expect(screen.getByText(/US\$\s?2\.000\.000,00/)).toBeDefined()
+    expect(screen.getByText(/R\$\s?123,45/)).toBeDefined()
     expect(screen.getByText(/Moeda de negociação: USD/)).toBeDefined()
     expect(screen.getByText('Cobertura completa')).toBeDefined()
   })
