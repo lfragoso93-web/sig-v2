@@ -194,6 +194,7 @@ export default function AssetAnalysisPage() {
   const [searchParams, setSearchParams] = useSafeSearchParams()
   const initialTicker = searchParams.get('ticker')?.trim() || ''
   const initialId = searchParams.get('id')?.trim() || ''
+  const urlParam = initialTicker || initialId
 
   const [search, setSearch] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -201,24 +202,6 @@ export default function AssetAnalysisPage() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const normalized = search.trim()
-
-  // Sincronizar parâmetro de busca inicial da URL se presente
-  useEffect(() => {
-    if (!selected && (initialTicker || initialId)) {
-      const activeParam = initialTicker || initialId
-      api.get(`/assets/analysis/${encodeURIComponent(activeParam)}`)
-        .then(response => {
-          if (response?.data?.asset) {
-            const asset = response.data.asset as CatalogAsset
-            setSelected(asset)
-            setSearch(asset.ticker)
-          }
-        })
-        .catch(() => {
-          // Permanece sem seleção inicial se a busca da URL não for encontrada
-        })
-    }
-  }, [initialTicker, initialId, selected])
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -231,6 +214,14 @@ export default function AssetAnalysisPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Se o parâmetro de URL mudar ou for limpo (ex.: botão Voltar do navegador), sincronizar
+  useEffect(() => {
+    if (!urlParam && selected && !isDropdownOpen) {
+      setSelected(null)
+      setSearch('')
+    }
+  }, [urlParam, selected, isDropdownOpen])
+
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
     queryKey: ['asset-analysis-search', normalized],
     queryFn: () => api.get('/assets/search', { params: { q: normalized, limit: 15 } }).then(response => response.data),
@@ -238,7 +229,8 @@ export default function AssetAnalysisPage() {
     staleTime: 60_000,
   })
 
-  const targetIdentifier = selected?.id ? String(selected.id) : (initialTicker || initialId || null)
+  // Priorizar parâmetro da URL ativo sobre a seleção interna para respeitar histórico do navegador
+  const targetIdentifier = urlParam || (selected?.id ? String(selected.id) : null)
 
   const { data, isLoading, isError } = useQuery<AssetAnalysis>({
     queryKey: ['asset-analysis', targetIdentifier],
@@ -247,13 +239,15 @@ export default function AssetAnalysisPage() {
     staleTime: 60_000,
   })
 
-  // Sincronizar ativo selecionado quando data for carregado via URL
+  // Sincronizar ativo selecionado quando data for carregado via URL ou histórico de navegação
   useEffect(() => {
-    if (data?.asset && !selected) {
-      setSelected(data.asset as CatalogAsset)
-      setSearch(String(data.asset.ticker))
+    if (data?.asset) {
+      if (!selected || selected.id !== data.asset.id || selected.ticker !== data.asset.ticker) {
+        setSelected(data.asset as CatalogAsset)
+        setSearch(String(data.asset.ticker))
+      }
     }
-  }, [data, selected])
+  }, [data?.asset, selected])
 
   function handleSelect(asset: CatalogAsset) {
     setSelected(asset)

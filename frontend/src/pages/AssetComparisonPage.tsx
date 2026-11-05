@@ -67,14 +67,16 @@ function useSafeSearchParams() {
 export default function AssetComparisonPage() {
   const [searchParams] = useSafeSearchParams()
   const initialTickersParam = searchParams.get('tickers') || searchParams.get('add') || ''
+  const initializedParamRef = useRef<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<CatalogAsset[]>([])
   const normalizedSearch = search.trim()
 
-  // Carregar tickers iniciais da URL se informados
+  // Carregar tickers iniciais da URL apenas na inicialização do parâmetro, sem reinserir ao remover
   useEffect(() => {
-    if (initialTickersParam && selected.length === 0) {
+    if (initialTickersParam && initializedParamRef.current !== initialTickersParam) {
+      initializedParamRef.current = initialTickersParam
       const tokens = initialTickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
       tokens.slice(0, 6).forEach(token => {
         api.get('/assets/search', { params: { q: token, limit: 3 } })
@@ -90,7 +92,7 @@ export default function AssetComparisonPage() {
           .catch(() => {})
       })
     }
-  }, [initialTickersParam, selected.length])
+  }, [initialTickersParam])
 
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
     queryKey: ['asset-comparison-search', normalizedSearch],
