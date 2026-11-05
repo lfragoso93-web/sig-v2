@@ -372,6 +372,12 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (tab.assetType === 'CRIPTO') {
       return CRYPTO_SYNONYMS[raw] || raw
     }
+    if (['ACAO', 'FII', 'ETF_NACIONAL', 'BDR'].includes(tab.assetType)) {
+      const oddMatch = raw.match(/^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$/)
+      if (oddMatch) {
+        return oddMatch[1]
+      }
+    }
     return raw
   }, [ticker, tab.assetType])
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(effectiveQuoteTicker, !!tab.brapiEnabled && !isEditMode, date)
@@ -572,6 +578,12 @@ export default function AddTransactionModal({ onClose }: Props) {
     let finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
     if (tab.assetType === 'CRIPTO') {
       finalTicker = CRYPTO_SYNONYMS[finalTicker] || finalTicker
+    }
+    if (['ACAO', 'FII', 'ETF_NACIONAL', 'BDR'].includes(tab.assetType)) {
+      const oddMatch = finalTicker.match(/^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$/)
+      if (oddMatch) {
+        finalTicker = oddMatch[1]
+      }
     }
     const contractFields: {
       fixed_income_contract_id?: number | null

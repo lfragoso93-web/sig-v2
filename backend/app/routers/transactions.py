@@ -13,6 +13,7 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.repositories.portfolio_access_repository import get_accessible_transaction
+from app.core.asset_types import normalize_b3_equity_ticker
 from app.schemas.transaction import (
     CorporateLifecycleEventOut,
     PagedTransactions,
@@ -370,6 +371,8 @@ async def update_transaction(
 
     ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
     asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
+    if asset_type in {"ACAO", "FII", "ETF_NACIONAL", "BDR", "ETF", "AÇÃO"}:
+        ticker = normalize_b3_equity_ticker(ticker, asset_type)
     operation = (
         _to_operation(payload.operation)
         if payload.operation is not None
