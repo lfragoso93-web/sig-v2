@@ -4,31 +4,35 @@ As transações registradas no SGI formam o livro-razão (ledger) canônico da c
 
 ---
 
-## 1. Tipos de Operação Suportados
+## 1. Operações Manuais: Compra e Venda
 
-O SGI contempla todas as modalidades operacionais do mercado de capitais:
+O formulário de lançamento de transações do SGI é dedicado às operações de negociação executadas pelo investidor:
 
-| Tipo | Descrição | Impacto na Carteira |
+| Operação | Descrição | Impacto na Carteira |
 | :--- | :--- | :--- |
-| **Compra** | Aquisição de novos ativos (ações, cotas, títulos, contratos). | Aumenta a quantidade em custódia e recalcula o preço médio ponderado. |
-| **Venda** | Alienação total ou parcial de ativos em carteira. | Reduz a quantidade em custódia, apura o resultado fiscal (lucro/prejuízo) e mantém o preço médio inalterado. |
-| **Desdobramento (Split)** | Aumento da quantidade de cotas/ações sem alteração no valor investido. | Aumenta o número de papéis e reduz proporcionalmente o preço médio. |
-| **Grupamento (Reverse Split)** | Redução da quantidade de cotas/ações sem alteração no valor investido. | Reduz o número de papéis e eleva proporcionalmente o preço médio. |
-| **Bonificação em Ativos** | Distribuição gratuita de novas ações aos acionistas. | Aumenta a quantidade e incorpora o custo de atribuição informado pela empresa ao custo total. |
-| **Rendimento / Provento** | Pagamento monetário de dividendos, JCP ou aluguéis de FIIs. | Registra a receita em dinheiro sem alterar a quantidade de cotas em custódia. |
+| **Compra (`buy`)** | Aquisição de novos ativos (ações, cotas, títulos, contratos). | Aumenta a quantidade em custódia e recalcula o preço médio ponderado pelo custo total pago (incluindo taxas). |
+| **Venda (`sell`)** | Alienação total ou parcial de ativos em carteira. | Reduz a quantidade em custódia, apura o resultado fiscal (lucro ou prejuízo líquido) e mantém inalterado o preço médio unitário das cotas remanescentes. |
 
 ---
 
-## 2. Como Lançar uma Operação
+## 2. Proventos e Eventos Corporativos: Processamento Automático
 
-Você pode registrar uma transação de duas maneiras:
+Eventos de proventos e alterações societárias não devem ser cadastrados como compras ou vendas manuais:
+- **Dividendos, JCP e Rendimentos**: São calculados e provisionados automaticamente pelo módulo de **Proventos** a partir da sua posição em custódia na Data Com.
+- **Desdobramentos (Splits), Grupamentos e Bonificações**: São identificados e incorporados automaticamente pelo motor de **Eventos Corporativos** do SGI com base nos comunicados oficiais da B3, ajustando sua quantidade e seu preço médio histórico sem que você precise lançar operações manuais.
+
+---
+
+## 3. Como Lançar uma Operação
+
+Você pode registrar uma compra ou venda de duas maneiras:
 1. Pelo atalho rápido de teclado: pressione **`Alt + N`** em qualquer página da carteira.
 2. Pela interface: acesse a página de **Transações** no menu lateral e clique no botão **+ Nova Transação**.
 
 ### Campos do formulário:
 - **Carteira**: Selecione a qual carteira a operação pertence.
-- **Ativo (Ticker)**: Digite o código do ativo (ex.: `PETR4`, `HGLG11`, `AAPL`, `BTC`). O sistema buscará automaticamente o ativo cadastrado no catálogo.
-- **Tipo de Operação**: Escolha entre Compra, Venda, etc.
+- **Ativo (Ticker)**: Digite o código do ativo (ex.: `PETR4`, `MXRF11`, `AAPL`, `BTC`). O sistema buscará automaticamente o ativo cadastrado no catálogo.
+- **Tipo de Operação**: Escolha entre **Compra** ou **Venda**.
 - **Data da Operação**: Data em que o negócio foi efetivamente executado na corretora.
 - **Quantidade**: Número de papéis, cotas ou fração negociada.
 - **Preço Unitário**: Preço de execução por unidade do ativo.
@@ -37,7 +41,7 @@ Você pode registrar uma transação de duas maneiras:
 
 ---
 
-## 3. Edição e Exclusão de Transações
+## 4. Edição e Exclusão de Transações
 
 O SGI oferece total flexibilidade para correção de lançamentos:
 1. Na lista da página **Transações**, localize a operação desejada utilizando os filtros de busca.
@@ -47,10 +51,10 @@ O SGI oferece total flexibilidade para correção de lançamentos:
 
 ---
 
-## 4. Filtros e Pesquisa Avançada
+## 5. Filtros e Pesquisa Avançada
 
 A tela de Transações conta com ferramentas poderosas de filtragem para auditoria e conferência:
 - **Busca por Ticker**: Filtre todas as operações de um papel específico (ex.: apenas `VALE3`).
-- **Filtro por Tipo**: Isole apenas compras, vendas ou proventos.
+- **Filtro por Tipo**: Isole compras ou vendas.
 - **Intervalo de Datas**: Defina o período inicial e final para conferir um mês específico ou ano fiscal.
 - **Ordenação**: Ordene cronologicamente por data da transação ou por valor financeiro total.
