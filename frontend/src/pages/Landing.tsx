@@ -138,7 +138,7 @@ export default function Landing() {
         flexDirection: 'column',
         background: 'var(--color-bg)',
         color: 'var(--color-text)',
-        overflowX: 'hidden',
+        overflowX: 'clip',
         position: 'relative',
       }}
     >
