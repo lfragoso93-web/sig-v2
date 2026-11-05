@@ -8,9 +8,11 @@ A página de **Patrimônio** apresenta a radiografia completa de todos os ativos
 
 No SGI, a custódia não é digitada manualmente; ela é uma projeção matemática rigorosa do seu histórico de transações:
 - **Quantidade em Aberto**: Soma das compras deduzida das vendas e ajustada por eventos corporativos (splits, grupamentos e bonificações).
-- **Preço Médio de Aquisição (PM)**: Calculado pela média ponderada pelo custo de cada compra, acrescido das taxas e custos operacionais informados:
-  $$\text{Preço Médio} = \frac{\sum (\text{Quantidade Comprada} \times \text{Preço Unitário} + \text{Custos})}{\text{Quantidade Total Comprada}}$$
-- **Vendas não alteram o preço médio**: A realização de lucros ou prejuízos reduz o saldo de cotas, mas preserva o custo unitário médio das unidades remanescentes.
+- **Preço Médio de Aquisição (PM)**: Calculado cronologicamente a partir do saldo remanescente da posição:
+  * Em cada nova compra, o custo da operação (preço dos ativos acrescido de taxas operacionais) é somado ao saldo de custo remanescente da carteira, recalculando o preço médio ponderado:
+    $$\text{Novo Preço Médio} = \frac{\text{Custo Remanescente Anterior} + \text{Custo da Nova Compra}}{\text{Quantidade Remanescente Anterior} + \text{Quantidade Comprada}}$$
+  * **Vendas parciais mantêm o preço médio**: A venda abate proporcionalmente a quantidade e o custo total da posição ao preço médio vigente, preservando o custo médio unitário das unidades remanescentes.
+  * **Encerramento de posição**: Caso a quantidade chegue a zero, a posição é liquidada. Uma compra posterior inicia um novo ciclo de preço médio com base exclusiva na nova aquisição.
 
 ---
 
