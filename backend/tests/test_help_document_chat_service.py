@@ -169,6 +169,8 @@ async def test_help_chat_answer_async_synthesizes_with_gemini(
         ]
     }
 
+    captured_requests = []
+
     class MockAsyncClient:
         def __init__(self, *args, **kwargs):
             pass
@@ -180,6 +182,7 @@ async def test_help_chat_answer_async_synthesizes_with_gemini(
             pass
 
         async def post(self, url, **kwargs):
+            captured_requests.append((url, kwargs))
             return httpx.Response(
                 200,
                 json=mock_gemini_response,
@@ -193,6 +196,10 @@ async def test_help_chat_answer_async_synthesizes_with_gemini(
     assert res.mode == "llm"
     assert "CSV" in res.answer
     assert res.sources
+    assert len(captured_requests) == 1
+    req_url, req_kwargs = captured_requests[0]
+    assert "key=" not in str(req_url)
+    assert req_kwargs["headers"]["x-goog-api-key"] == "fake-gemini-key"
 
 
 @pytest.mark.asyncio

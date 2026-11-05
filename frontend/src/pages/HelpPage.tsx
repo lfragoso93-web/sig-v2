@@ -101,14 +101,14 @@ const articles: HelpArticle[] = [
     question: 'Posso importar operações por CSV?',
     answer:
       'Sim. No menu do usuário, escolha Importar CSV. A importação é associada à carteira selecionada; revise o arquivo e o resultado apresentado antes de continuar. Os dados importados passam a compor o histórico de transações.',
-    keywords: 'arquivo csv importar planilha upload extrato notas',
+    keywords: 'arquivo csv importar planilha upload extrato notas importacao csv',
   },
   {
     category: 'Carteira e dados',
     question: 'Com que frequência os preços e o patrimônio são atualizados?',
     answer:
       'A rotina de preços roda de hora em hora em dias úteis entre 09h e 18h. Criptoativos também são atualizados de hora em hora fora dessa janela e nos fins de semana. O snapshot oficial da carteira é diário às 21h, inclusive sábados, domingos e feriados, usando os dados persistidos disponíveis.',
-    keywords: 'cotação atualização preço fechamento snapshot horário fim de semana',
+    keywords: 'cotação atualização preço fechamento snapshot 21h horário fim de semana',
   },
   {
     category: 'Carteira e dados',
@@ -126,7 +126,7 @@ const articles: HelpArticle[] = [
       'É um evento do ativo, como split, grupamento, bonificação ou subscrição, que pode alterar a quantidade projetada ou gerar um direito. Eventos sem data ou evidência suficiente permanecem pendentes; o sistema não deve inventar preço, caixa ou liquidação de frações.',
     href: '/carteira/patrimonio',
     action: 'Abrir Patrimônio',
-    keywords: 'split grupamento bonificação subscrição fração ação desdobramento',
+    keywords: 'split grupamento bonificação subscrição fração ação desdobramento eventos e splits evento corporativo',
   },
   {
     category: 'Rentabilidade',
@@ -442,7 +442,7 @@ export default function HelpPage() {
                   <button
                     key={pill}
                     type="button"
-                    onClick={() => setQuery(pill)}
+                    onClick={() => { setQuery(pill); setCategory('Tudo'); }}
                     className="rounded-full border px-2.5 py-1 text-xs transition-colors hover:border-primary"
                     style={{
                       borderColor: 'var(--color-border)',

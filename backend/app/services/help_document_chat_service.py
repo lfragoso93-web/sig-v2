@@ -165,7 +165,7 @@ def _clean_markdown(value: str) -> str:
     cleaned = re.sub(r"```[^\n]*\n?(.*?)```", r"\1", cleaned, flags=re.DOTALL)
     cleaned = re.sub(r"[`*~]", "", cleaned)
     cleaned = re.sub(
-        r"^\s*[-|> graphics]+\s*", "", cleaned, flags=re.MULTILINE
+        r"^\s*[-|>#*]+\s*", "", cleaned, flags=re.MULTILINE
     )
     cleaned = re.sub(r"\|", " · ", cleaned)
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
@@ -318,8 +318,9 @@ async def _synthesize_answer_with_llm(
             model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{model}:generateContent?key={gemini_key}"
+                f"{model}:generateContent"
             )
+            headers = {"x-goog-api-key": gemini_key}
             payload = {
                 "contents": [
                     {
@@ -333,7 +334,7 @@ async def _synthesize_answer_with_llm(
                 },
             }
             async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
