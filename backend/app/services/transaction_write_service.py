@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,6 +213,10 @@ async def add_transaction_record(
     )
 
     ticker = payload.ticker.strip().upper()
+    # Normalizar ações fracionárias da B3 para o lote padrão canônico (ex: PETR4F -> PETR4)
+    odd_match = re.match(r"^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$", ticker)
+    if odd_match:
+        ticker = odd_match.group(1)
     asset_type = payload.asset_type
     fixed_income_contract_id = payload.fixed_income_contract_id
     if payload.fixed_income_contract is not None and fixed_income_contract_id is not None:

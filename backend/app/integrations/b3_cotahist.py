@@ -6,6 +6,7 @@ usada pelo B3 Historical Market Rebuild para baixar cada arquivo anual uma únic
 from __future__ import annotations
 
 import io
+import re
 import logging
 import zipfile
 from dataclasses import dataclass
@@ -22,9 +23,19 @@ _URLS = (
     "https://bvmf.bmfbovespa.com.br/InstDados/SerHist/COTAHIST_A{year}.ZIP",
     "https://bvmf.bmfbovespa.com.br/InstDados/SerHist/COTAHIST_A{year}.zip",
 )
-_VALID_MARKETS = {"010", "020"}
+_VALID_MARKETS = {"010"}
 _CENTS = Decimal("100")
-_SUPPORTED_SPOT_MARKETS = {"010", "020"}
+_SUPPORTED_SPOT_MARKETS = {"010"}
+_ODD_LOT_PATTERN = re.compile(r"^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$")
+
+
+def normalize_b3_equity_ticker(ticker: str) -> str:
+    cleaned = ticker.strip().upper()
+    match = _ODD_LOT_PATTERN.match(cleaned)
+    if match:
+        return match.group(1)
+    return cleaned
+
 _RIGHTS_OR_RECEIPTS_MARKERS = {
     "DIR",
     "DIREITO",
@@ -327,9 +338,10 @@ async def fetch_b3_cotahist(
     end_year: int,
 ) -> list[tuple[datetime, float]]:
     """Busca fechamentos anuais oficiais da B3 para um ticker."""
+    canonical_ticker = normalize_b3_equity_ticker(ticker)
     rows_by_date: dict[datetime, float] = {}
     for year in range(start_year, end_year + 1):
-        series = await fetch_b3_cotahist_year_bulk(year, [ticker])
-        for timestamp, close in series.get(ticker.upper(), []):
+        series = await fetch_b3_cotahist_year_bulk(year, [canonical_ticker])
+        for timestamp, close in series.get(canonical_ticker, []):
             rows_by_date[timestamp] = close
     return sorted(rows_by_date.items(), key=lambda item: item[0])

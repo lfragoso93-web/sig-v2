@@ -4,6 +4,7 @@ from app.integrations.b3_cotahist import (
     CotahistAssetType,
     CotahistClassificationStatus,
     classify_cotahist_record,
+    normalize_b3_equity_ticker,
     parse_cotahist_record,
 )
 
@@ -105,6 +106,7 @@ def test_parser_extracts_only_sgi_canonical_fields_with_decimal() -> None:
 
 
 def test_parser_rejects_non_spot_market_and_invalid_record() -> None:
+    assert parse_cotahist_record(_record(market="020")) is None
     assert parse_cotahist_record(_record(market="030")) is None
     assert parse_cotahist_record(_record(record_type="99")) is None
     assert parse_cotahist_record("short") is None
@@ -171,15 +173,22 @@ def test_classifier_classifies_bdr_deterministically_from_specification() -> Non
     assert result.asset_type == CotahistAssetType.BDR
 
 
-def test_classifier_accepts_fractional_market_with_same_asset_rule() -> None:
+def test_classifier_rejects_fractional_market_and_accepts_standard_spot() -> None:
+    assert parse_cotahist_record(_record(ticker="WEGE3F", market="020")) is None
+
     result = _classified_record(
-        ticker="WEGE3F",
-        market="020",
+        ticker="WEGE3",
+        market="010",
         specification="ON      NM",
     )
 
     assert result.status == CotahistClassificationStatus.CLASSIFIED
     assert result.asset_type == CotahistAssetType.ACAO
+    assert normalize_b3_equity_ticker("PETR4F") == "PETR4"
+    assert normalize_b3_equity_ticker("B3SA3F") == "B3SA3"
+    assert normalize_b3_equity_ticker("BOVA11F") == "BOVA11"
+    assert normalize_b3_equity_ticker("MRSA3BF") == "MRSA3B"
+    assert normalize_b3_equity_ticker("WEGE3") == "WEGE3"
 
 
 def test_classifier_rejects_rights_subscription_and_options() -> None:
