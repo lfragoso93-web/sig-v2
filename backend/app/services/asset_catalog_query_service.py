@@ -75,9 +75,13 @@ async def suggest_assets_from_catalog(
     if not normalized:
         return []
 
+    from app.core.asset_types import normalize_b3_equity_ticker
     from app.services.crypto_transaction_eligibility_service import _CRYPTO_NAME_TO_TICKER
 
     search_terms = [normalized]
+    base_equity = normalize_b3_equity_ticker(normalized)
+    if base_equity != normalized and base_equity not in search_terms:
+        search_terms.append(base_equity)
     mapped_crypto = _CRYPTO_NAME_TO_TICKER.get(normalized)
     if mapped_crypto and mapped_crypto not in search_terms:
         search_terms.append(mapped_crypto)

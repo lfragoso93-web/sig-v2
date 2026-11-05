@@ -245,8 +245,9 @@ async def _find_catalog_asset(
     ticker: str,
     asset_type: Optional[str] = None,
 ) -> Optional[Asset]:
+    from app.core.asset_types import normalize_b3_equity_ticker
     normalized = ticker.strip().upper()
-    candidates = {normalized, _crypto_candidate(normalized)}
+    candidates = {normalized, _crypto_candidate(normalized), normalize_b3_equity_ticker(normalized)}
     stmt = select(Asset).where(func.upper(Asset.ticker).in_(candidates))
     if asset_type:
         stmt = stmt.where(Asset.asset_type == asset_type.strip().upper())

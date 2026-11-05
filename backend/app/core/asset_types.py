@@ -11,6 +11,7 @@ Nunca importar AssetType diretamente nos serviços de cotação —
 usar os sets abaixo para evitar divergência entre arquivos.
 """
 
+import re
 from app.models.asset import AssetType
 
 # Rótulos públicos canônicos. APIs e componentes de apresentação devem
@@ -124,3 +125,35 @@ def yf_ticker(ticker: str, asset_type: AssetType) -> str:
     if asset_type == AssetType.CRIPTO:
         return t if t.endswith("-USD") else f"{t}-USD"
     return t
+
+
+_ODD_LOT_PATTERN = re.compile(r"^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$")
+_B3_EQUITY_TYPES = frozenset({
+    AssetType.ACAO,
+    AssetType.FII,
+    AssetType.ETF_NACIONAL,
+    AssetType.BDR,
+})
+
+
+def normalize_b3_equity_ticker(ticker: str, asset_type: AssetType | str | None = None) -> str:
+    """Normaliza tickers de ações/fundos fracionários da B3 (terminados em 'F') para o lote padrão.
+
+    Exemplos:
+        PETR4F -> PETR4
+        VALE3F -> VALE3
+        BOVA11F -> BOVA11
+    """
+    cleaned = str(ticker or "").strip().upper()
+    if asset_type is not None:
+        try:
+            norm_type = asset_type if isinstance(asset_type, AssetType) else AssetType(str(asset_type).upper())
+            if norm_type not in _B3_EQUITY_TYPES:
+                return cleaned
+        except ValueError:
+            if str(asset_type).upper() not in {"ACAO", "FII", "ETF_NACIONAL", "BDR", "ETF", "AÇÃO"}:
+                return cleaned
+    match = _ODD_LOT_PATTERN.match(cleaned)
+    if match:
+        return match.group(1)
+    return cleaned

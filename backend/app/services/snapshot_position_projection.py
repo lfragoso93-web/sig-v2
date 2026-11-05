@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
+from app.core.asset_types import normalize_b3_equity_ticker
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_engine import NormalizedCorporateAction
 from app.services.position_timeline_projection import (
@@ -77,8 +78,8 @@ def project_transaction_timelines(
     metadata: dict[str, tuple[str, bool]] = {}
 
     for tx in transaction_list:
-        ticker = str(tx.ticker).strip().upper()
         asset_type = _asset_type_value(tx.asset_type)
+        ticker = normalize_b3_equity_ticker(str(tx.ticker).strip().upper(), asset_type)
         is_usd = (
             str(getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
             or asset_type in _USD_ASSET_TYPES

@@ -173,9 +173,15 @@ async def list_transactions_paginated(
         count_base = count_base.where(func.upper(Transaction.asset_type) == at)
 
     if ticker:
+        from app.core.asset_types import normalize_b3_equity_ticker
         t = ticker.strip().upper()
-        base = base.where(Transaction.ticker == t)
-        count_base = count_base.where(Transaction.ticker == t)
+        base_t = normalize_b3_equity_ticker(t)
+        if base_t != t:
+            base = base.where(Transaction.ticker.in_([t, base_t]))
+            count_base = count_base.where(Transaction.ticker.in_([t, base_t]))
+        else:
+            base = base.where(Transaction.ticker == t)
+            count_base = count_base.where(Transaction.ticker == t)
 
     if operation:
         try:

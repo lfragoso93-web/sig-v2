@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.asset_types import normalize_b3_equity_ticker
 from app.core.cache import cache_delete, cache_get, cache_set
 from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
@@ -196,14 +197,17 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     if usd_dates_needed:
         fx_map = await get_usd_brl_batch(db, usd_dates_needed)
 
-    tickers = sorted({str(tx.ticker).strip().upper() for tx in transactions})
+    tickers = sorted({
+        normalize_b3_equity_ticker(str(tx.ticker).strip().upper(), _asset_type_str(tx.asset_type))
+        for tx in transactions
+    })
     actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
 
     movements_by_ticker: dict[str, list[PositionMovement]] = {}
     metadata_by_ticker: dict[str, dict] = {}
     for tx in transactions:
-        ticker = str(tx.ticker).strip().upper()
         asset_type = _asset_type_str(tx.asset_type)
+        ticker = normalize_b3_equity_ticker(str(tx.ticker).strip().upper(), asset_type)
         is_usd = (
             (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
             or asset_type in _USD_ASSET_TYPES

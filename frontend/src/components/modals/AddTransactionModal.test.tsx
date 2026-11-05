@@ -162,6 +162,34 @@ describe('AddTransactionModal', () => {
     })
   })
 
+  it('normaliza ticker de acao fracionaria da B3 (ex: PETR4F) para lote padrao ao salvar', async () => {
+    setup()
+
+    fireEvent.change(screen.getByPlaceholderText(/PETR4 ou Petrobras/i), {
+      target: { value: 'petr4f' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('0'), {
+      target: { value: '15' },
+    })
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+      target: { value: '38.50' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar/i }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith({
+      portfolioId: 42,
+      data: expect.objectContaining({
+        ticker: 'PETR4',
+        asset_type: 'ACAO',
+        operation: 'buy',
+        quantity: 15,
+        price: 38.5,
+        currency: 'BRL',
+      }),
+    })
+  })
+
   it('envia a classe canonica selecionada no payload de lancamento', async () => {
     setup()
 

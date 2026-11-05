@@ -70,7 +70,9 @@ async def verify_market_asset_exists(
 
     # Ativos B3: consultar BRAPI
     if normalized_type in {"ACAO", "FII", "ETF_NACIONAL", "BDR"}:
+        from app.core.asset_types import normalize_b3_equity_ticker
         from app.integrations.brapi import fetch_asset_info, fetch_ticker_suggestions
+        normalized_ticker = normalize_b3_equity_ticker(normalized_ticker, normalized_type)
 
         try:
             info = await fetch_asset_info(normalized_ticker)
