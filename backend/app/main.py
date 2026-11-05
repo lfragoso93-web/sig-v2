@@ -112,8 +112,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="SGI v2 API",
-    description="Sistema de Gerenciamento de Investimentos",
+    title="SGI API",
+    description="Sistema de Gestão de Investimentos",
     version="2.0.0",
     lifespan=lifespan,
 )

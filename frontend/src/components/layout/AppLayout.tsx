@@ -17,6 +17,10 @@ export default function AppLayout() {
   const location = useLocation()
   const navigationType = useNavigationType()
 
+  useEffect(() => {
+    document.title = 'SGI - Sistema de Gestão de Investimentos'
+  }, [])
+
   // Atalho de produtividade global: Alt+N abre o modal de Novo Lançamento
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
