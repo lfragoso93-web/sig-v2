@@ -22,14 +22,14 @@ function launchConfetti() {
       `height:${size}px`,
       `background:${colors[Math.floor(Math.random() * colors.length)]}`,
       `border-radius:${Math.random() > 0.5 ? '50%' : '2px'}`,
-      `animation:sig-fall ${1.2 + Math.random() * 1.4}s ${Math.random() * 0.5}s linear both`,
+      `animation:sgi-fall ${1.2 + Math.random() * 1.4}s ${Math.random() * 0.5}s linear both`,
     ].join(';')
     layer.appendChild(c)
   }
-  if (!document.getElementById('sig-confetti-style')) {
+  if (!document.getElementById('sgi-confetti-style')) {
     const style = document.createElement('style')
-    style.id = 'sig-confetti-style'
-    style.textContent = '@keyframes sig-fall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}'
+    style.id = 'sgi-confetti-style'
+    style.textContent = '@keyframes sgi-fall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}'
     document.head.appendChild(style)
   }
   setTimeout(() => document.body.removeChild(layer), 2800)
