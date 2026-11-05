@@ -1,13 +1,16 @@
+from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.models.asset import Asset
-from app.models.transaction import Transaction
+from app.models.transaction import OperationType, Transaction
 from app.routers.assets import _find_catalog_asset
 from app.services.asset_catalog_query_service import suggest_assets_from_catalog
 from app.services.asset_provider_verification_service import verify_market_asset_exists
+from app.services.snapshot_position_projection import project_transaction_timelines
 from app.services.transaction_service import list_transactions_paginated
 
 
@@ -42,7 +45,6 @@ async def test_find_catalog_asset_resolves_fractional_query_to_standard_asset():
     assert result is not None
     assert result.ticker == "PETR4"
 
-    # Verify that the query candidates contained PETR4
     call_args = db.execute.call_args[0][0]
     compiled_stmt = str(call_args)
     assert "assets" in compiled_stmt.lower()
@@ -93,3 +95,40 @@ async def test_list_transactions_paginated_matches_base_and_fractional_ticker():
     assert res["total"] == 2
     assert len(res["items"]) == 2
     assert all(tx.ticker == "PETR4" for tx in res["items"])
+
+
+def test_project_transaction_timelines_unifies_fractional_and_standard_ticker():
+    tx1 = Transaction(
+        id=1,
+        portfolio_id=1,
+        ticker="PETR4F",
+        asset_type="ACAO",
+        operation=OperationType.buy,
+        quantity=Decimal("100"),
+        price=Decimal("30.00"),
+        fees=Decimal("0"),
+        date=date(2026, 1, 10),
+    )
+    tx2 = Transaction(
+        id=2,
+        portfolio_id=1,
+        ticker="PETR4",
+        asset_type="ACAO",
+        operation=OperationType.sell,
+        quantity=Decimal("50"),
+        price=Decimal("35.00"),
+        fees=Decimal("0"),
+        date=date(2026, 1, 15),
+    )
+
+    timelines = project_transaction_timelines(
+        transactions=[tx1, tx2],
+        actions_by_ticker={},
+        target_date=date(2026, 1, 20),
+    )
+
+    assert "PETR4" in timelines
+    assert "PETR4F" not in timelines
+    proj, asset_type, is_usd = timelines["PETR4"]
+    assert proj.quantity == Decimal("50")
+    assert proj.average_price == Decimal("30.00")

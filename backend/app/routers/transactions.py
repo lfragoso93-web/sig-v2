@@ -3,7 +3,7 @@ from datetime import date, date as DateType
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
@@ -369,6 +369,7 @@ async def update_transaction(
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
+    old_ticker = tx.ticker
     ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
     asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
     if asset_type in {"ACAO", "FII", "ETF_NACIONAL", "BDR", "ETF", "AÇÃO"}:
@@ -456,6 +457,17 @@ async def update_transaction(
     tx.currency = currency
     tx.notes = notes
     tx.fixed_income_contract_id = fixed_income_contract_id
+
+    if old_ticker != ticker and normalize_b3_equity_ticker(old_ticker, tx.asset_type) == ticker:
+        await db.execute(
+            update(Transaction)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.ticker == old_ticker,
+                Transaction.asset_type == tx.asset_type,
+            )
+            .values(ticker=ticker)
+        )
 
     await db.commit()
     await db.refresh(tx)
