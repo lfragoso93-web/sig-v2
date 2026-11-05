@@ -12,21 +12,26 @@ O SGI disponibiliza um importador em lote por arquivo CSV para que você possa m
 
 ---
 
-## 2. Estrutura das Colunas do Arquivo CSV
+## 2. Estrutura Canônica das Colunas (Modelo Oficial)
 
-Para garantir leitura imediata e sem erros, seu arquivo deve conter um cabeçalho com as seguintes colunas essenciais:
+O importador exige as seguintes 9 colunas obrigatórias no cabeçalho do arquivo `.csv`:
 
-| Coluna | Descrição | Exemplo |
+| Coluna | Descrição | Valores Aceitos / Exemplo |
 | :--- | :--- | :--- |
-| `data` | Data de execução do negócio no formato `AAAA-MM-DD` ou `DD/MM/AAAA` | `2026-03-15` ou `15/03/2026` |
-| `tipo` | Tipo da operação: `COMPRA`, `VENDA`, `DIVIDENDO`, `JCP`, etc. | `COMPRA` |
-| `ticker` | Código do ativo negociado | `PETR4`, `MXRF11`, `IVVB11` |
-| `quantidade` | Quantidade de cotas ou ações (número positivo) | `100` |
-| `preco` | Preço unitário de execução | `38.50` |
-| `taxas` | Custos operacionais, corretagem e emolumentos (opcional) | `1.25` |
-| `notas` | Anotações ou identificador da nota de corretagem (opcional) | `Nota 12345 Corretora X` |
+| `ticker` | Código do ativo negociado | `PETR4`, `MXRF11`, `IVVB11`, `AAPL`, `BTC` |
+| `asset_type` | Classe do ativo no catálogo | `ACAO`, `FII`, `ETF_NACIONAL`, `ETF_INTERNACIONAL`, `BDR`, `STOCK`, `CRIPTO`, `TESOURO_DIRETO`, `RENDA_FIXA` |
+| `operation` | Tipo da operação executada | `buy` (compra) ou `sell` (venda) |
+| `quantity` | Quantidade de cotas ou frações negociadas | `100`, `50.5` |
+| `price` | Preço unitário pago ou recebido | `25.50`, `80.00` |
+| `date` | Data de execução no formato `AAAA-MM-DD` | `2024-01-15`, `2026-03-20` |
+| `fees` | Custos operacionais, corretagem e emolumentos | `10.00`, `0.00` |
+| `currency` | Moeda da transação | `BRL` (Real) ou `USD` (Dólar) |
+| `notes` | Anotações ou número da nota (opcional) | `Compra inicial`, `Nota Corretora X` |
 
-> **Dica**: O importador aceita tanto ponto (`.`) quanto vírgula (`,`) como separador decimal para valores monetários e quantidades.
+> **Exemplo de Linha CSV:**  
+> `PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial`
+
+Para ativos de Renda Fixa com regras de indexação e vencimento, o arquivo suporta colunas complementares opcionais (como `fixed_income_product_type`, `fixed_income_rate_value`, `fixed_income_maturity_date`), presentes no modelo para download.
 
 ---
 
@@ -37,8 +42,8 @@ Ao selecionar ou arrastar o arquivo `.csv` para o importador:
 2. É exibida uma tabela de **Pré-visualização** indicando:
    - Linhas válidas prontas para gravação.
    - Detecção automática de ativos existentes no catálogo.
-   - Linhas com inconformidades ou campos ausentes destacados em amarelo/vermelho.
-3. Se houver divergências (por exemplo, um ticker não reconhecido ou uma data inválida), o sistema indicará com precisão o número da linha e o motivo da inconsistência.
+   - Linhas com inconformidades ou campos ausentes destacados para correção.
+3. Se houver divergências (por exemplo, um cabeçalho ausente ou um ticker não reconhecido), o sistema indicará com precisão o motivo da inconsistência.
 
 ---
 

@@ -62,6 +62,16 @@ _CORPORATE_ACTION_SECTIONS = frozenset(
         "candidatos cross-provider",
         "seguranca operacional",
         "avisos de eventos corporativos futuros",
+        "tipos de eventos corporativos",
+        "desdobramento (split)",
+        "desdobramento",
+        "grupamento (reverse split)",
+        "grupamento",
+        "bonificacao em acoes",
+        "bonificacao",
+        "subscricao (direito de preferencia)",
+        "subscricao",
+        "preservacao da integridade historica",
     }
 )
 
@@ -144,9 +154,9 @@ _ROUTE_DEFINITIONS = (
     ),
     (
         ("csv", "importar", "importacao", "upload", "planilha"),
-        "Importar CSV",
-        "/carteira/importar-csv",
-        "Importação de notas e extratos em lote",
+        "Transações",
+        "/carteira/transacoes",
+        "Histórico e administração de operações",
     ),
     (
         ("seguranca", "senha", "2fa", "mfa", "totp", "configuracao", "configuracoes", "perfil"),
@@ -226,12 +236,16 @@ def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
 
 def _is_searchable_section(filename: str, section: str) -> bool:
     normalized = _normalize(section)
-    if normalized.startswith(
+    clean_heading = re.sub(r"^\d+\.\s*", "", normalized).strip()
+    if clean_heading.startswith(
         ("pendencias", "roadmap", "historico", "diagnostico historico")
     ):
         return False
     if filename == "CORPORATE_ACTIONS.md":
-        return normalized in _CORPORATE_ACTION_SECTIONS
+        return (
+            clean_heading in _CORPORATE_ACTION_SECTIONS
+            or normalized in _CORPORATE_ACTION_SECTIONS
+        )
     return True
 
 
