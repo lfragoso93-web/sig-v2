@@ -66,7 +66,7 @@ describe('AssetAnalysisPage', () => {
       if (url === '/assets/search') return { data: [{ id: 12, ticker: 'SHIB', name: 'Shiba Inu', asset_type: 'CRIPTO' }] }
       return { data: {
         asset: { id: 12, ticker: 'SHIB', name: 'Shiba Inu', asset_type: 'CRIPTO', currency: 'BTC', last_price: 0.00001234 },
-        enrichment: { ticker: 'SHIB', asset_class: 'CRIPTO', coverage_status: 'UNSUPPORTED', crypto_indicators: { price_brl: 0.00001234 } },
+        enrichment: { ticker: 'SHIB', asset_class: 'CRIPTO', coverage_status: 'UNSUPPORTED', capabilities: { price_history: true }, crypto_indicators: { price_brl: 0.00001234 } },
         price_history: [{ timestamp: '2026-11-03', close: 0.00001234 }], dividends: [], corporate_events: [], reports: [],
       } }
     })
@@ -79,5 +79,6 @@ describe('AssetAnalysisPage', () => {
     expect(await screen.findByText('Cobertura não suportada')).toBeDefined()
     expect(screen.getByText(/R\$\s?0,00001234/)).toBeDefined()
     expect(screen.getAllByText(/BTC\s?0,00001234/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('heading', { name: 'Cobertura por tipo de dado' })).toBeDefined()
   })
 })
