@@ -43,4 +43,4 @@ def test_purge_synthetic_cert_entities_migration_contract() -> None:
     assert "DELETE FROM portfolios" in source
     assert "DELETE FROM users" in source
     assert "DELETE FROM assets WHERE id = ANY(:aids)" in source
-    assert "DELETE FROM rate_histories WHERE source = 'synthetic-certification'" in source
+    assert "DELETE FROM rate_history WHERE source = 'synthetic-certification'" in source

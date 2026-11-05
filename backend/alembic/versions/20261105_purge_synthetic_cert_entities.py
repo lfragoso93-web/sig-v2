@@ -140,7 +140,7 @@ def upgrade() -> None:
 
     # 8. Remover taxas de benchmark sintéticas de certificação (source = 'synthetic-certification')
     bind.execute(sa.text("DELETE FROM rate_history_coverages WHERE source = 'synthetic-certification'"))
-    bind.execute(sa.text("DELETE FROM rate_histories WHERE source = 'synthetic-certification'"))
+    bind.execute(sa.text("DELETE FROM rate_history WHERE source = 'synthetic-certification'"))
 
 
 def downgrade() -> None:
