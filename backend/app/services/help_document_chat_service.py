@@ -315,7 +315,7 @@ async def _synthesize_answer_with_llm(
     gemini_key = getattr(settings, "GEMINI_API_KEY", None)
     if gemini_key:
         try:
-            model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{model}:generateContent"
