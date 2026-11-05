@@ -25,6 +25,7 @@ def test_local_compose_healthchecks_gate_stateful_services() -> None:
     backend_service = compose["services"]["backend"]
     frontend_service = compose["services"]["frontend"]
 
+    assert backend_service["environment"]["ENVIRONMENT"] == "development"
     assert "pg_isready" in " ".join(db_service["healthcheck"]["test"])
     assert (
         backend_service["depends_on"]["db"]["condition"] == "service_healthy"

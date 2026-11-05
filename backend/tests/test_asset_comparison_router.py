@@ -118,3 +118,26 @@ async def test_asset_analysis_requires_catalog_asset():
     with pytest.raises(HTTPException) as missing:
         await get_asset_analysis(99, db, None)
     assert missing.value.status_code == 404
+@pytest.mark.asyncio
+async def test_asset_analysis_resolves_by_ticker_symbol(monkeypatch):
+    from app.services.asset_enrichment_service import asset_enrichment_service
+
+    asset = SimpleNamespace(
+        id=14, ticker="VALE3", name="Vale", asset_type="ACAO", currency="BRL",
+        sector="Materials", sub_sector="Mining", isin_code="BRVALEACNOR0", provider="brapi",
+        provider_status="active", provider_last_sync_at=None, last_price=65.0,
+        last_price_updated_at=None,
+    )
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[
+        SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: asset)),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+    ])
+    cached_reader = AsyncMock(return_value={"ticker": "VALE3", "coverage_status": "FULL"})
+    monkeypatch.setattr(asset_enrichment_service, "get_cached_asset_enrichment", cached_reader)
+
+    response = await get_asset_analysis("vale3", db, None)
+    assert response["asset"]["id"] == 14
+    assert response["asset"]["ticker"] == "VALE3"

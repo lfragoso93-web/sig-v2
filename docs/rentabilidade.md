@@ -76,6 +76,19 @@ accumulated_return_pct do snapshot mais recente
 
 Representa o retorno acumulado da carteira desde a primeira data processada.
 
+### Matriz anual
+
+Na matriz histórica, **No Ano** é o retorno composto dos retornos mensais do
+ano-calendário. **Acumulado desde o início** é o TWR acumulado desde a primeira
+data processada, obtido do snapshot de fechamento daquele ano. Os percentuais
+mensais e anuais não devem ser somados aritmeticamente para calcular o acumulado.
+
+Exemplo: um fechamento de 2024 em `-28,672%`, seguido de retorno composto de
+`+43,2183%` em 2025, resulta em aproximadamente `+2,1547%` acumulados desde o
+início: `(1 - 0,28672) × (1 + 0,432183) - 1`. Esse valor pode diferir da
+composição feita sobre percentuais mensais arredondados que aparecem na tela,
+pois o cálculo usa a série persistida com sua precisão completa.
+
 ---
 
 ## Composição

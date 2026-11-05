@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AssetAnalysisPage from './AssetAnalysisPage'
 import api from '@/services/api'
@@ -21,7 +22,13 @@ describe('AssetAnalysisPage', () => {
       } }
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={client}><AssetAnalysisPage /></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AssetAnalysisPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
 
     fireEvent.change(screen.getByLabelText('Encontre um ativo no catálogo'), { target: { value: 'PE' } })
     fireEvent.click(await screen.findByRole('button', { name: /PETR4.*Petrobras/ }))
@@ -37,6 +44,7 @@ describe('AssetAnalysisPage', () => {
     expect(screen.getByRole('heading', { name: 'Eventos corporativos' })).toBeDefined()
     expect(screen.getByText('Nenhum relatório vinculado')).toBeDefined()
     expect(screen.getByText(/dados informativos armazenados no sistema/i)).toBeDefined()
+    expect(screen.getByRole('link', { name: /Comparar ativo/ })).toBeDefined()
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/assets/analysis/7'))
   })
 
@@ -50,7 +58,13 @@ describe('AssetAnalysisPage', () => {
       } }
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={client}><AssetAnalysisPage /></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AssetAnalysisPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
 
     fireEvent.change(screen.getByLabelText('Encontre um ativo no catálogo'), { target: { value: 'AA' } })
     fireEvent.click(await screen.findByRole('button', { name: /AAPL.*Apple Inc/ }))
@@ -72,7 +86,13 @@ describe('AssetAnalysisPage', () => {
       } }
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={client}><AssetAnalysisPage /></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AssetAnalysisPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
 
     fireEvent.change(screen.getByLabelText('Encontre um ativo no catálogo'), { target: { value: 'SH' } })
     fireEvent.click(await screen.findByRole('button', { name: /SHIB.*Shiba Inu/ }))
@@ -81,5 +101,30 @@ describe('AssetAnalysisPage', () => {
     expect(screen.getByText(/R\$\s?0,00001234/)).toBeDefined()
     expect(screen.getAllByText(/BTC\s?0,00001234/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('heading', { name: 'Cobertura por tipo de dado' })).toBeDefined()
+  })
+
+  it('loads directly from initial URL ticker search parameter', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/assets/analysis/')) {
+        return { data: {
+          asset: { id: 14, ticker: 'VALE3', name: 'Vale S.A.', asset_type: 'ACAO', currency: 'BRL', last_price: 62.1 },
+          enrichment: { ticker: 'VALE3', asset_class: 'ACAO', coverage_status: 'FULL', capabilities: {} },
+          price_history: [], dividends: [], corporate_events: [], reports: [],
+        } }
+      }
+      return { data: null }
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/carteira/ferramentas/analise-ativos?ticker=VALE3']}>
+          <AssetAnalysisPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    expect(await screen.findByRole('heading', { name: 'VALE3' })).toBeDefined()
+    expect(screen.getByText(/Vale S\.A\./)).toBeDefined()
+    expect(screen.getByText(/R\$\s?62,10/)).toBeDefined()
   })
 })
