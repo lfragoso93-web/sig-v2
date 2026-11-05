@@ -237,6 +237,51 @@ const articles: HelpArticle[] = [
     keywords: 'imposto declaração darf imposto de renda fiscal irpf',
   },
   {
+    category: 'Carteira e dados',
+    question: 'Quais são as 8 classes de ativos suportadas pelo SGI?',
+    answer:
+      'O SGI suporta Ações Brasileiras (B3), Fundos Imobiliários (FIIs), Tesouro Direto (Selic, Prefixado e IPCA+), Renda Fixa Privada (CDB, LCI, LCA, CRI, CRA e Debêntures), Fundos de Índice (ETFs), Criptomoedas (24/7), BDRs e Ativos Internacionais cotados em Dólar (USD). Cada classe possui seu tratamento patrimonial e fiscal específico.',
+    href: '/carteira/patrimonio',
+    action: 'Ver Patrimônio',
+    keywords: 'classes ativos multiclasse acoes fii tesouro renda fixa cripto bdr internacional dolar',
+  },
+  {
+    category: 'Carteira e dados',
+    question: 'Como cadastrar ativos internacionais cotados em dólar (USD)?',
+    answer:
+      'Ao lançar uma operação de ativo negociado no exterior (ex.: AAPL, MSFT, NVDA), selecione o ticker correspondente e informe os valores na moeda da operação. O SGI converte os valores para Reais com base na cotação oficial do Banco Central (PTAX) e mantém a custódia refletida em ambas as moedas.',
+    href: '/carteira/transacoes',
+    action: 'Lançar Transação',
+    keywords: 'internacional exterior dolar usd nyse nasdaq ptax moeda estrangeira',
+  },
+  {
+    category: 'Recursos',
+    question: 'Como funciona a isenção de R$ 20.000 para ações no IRPF?',
+    answer:
+      'No mercado à vista de ações brasileiras (operações normais/swing trade), vendas que somem até R$ 20.000,00 no mês calendário têm qualquer lucro totalmente isento de Imposto de Renda. Se o total de vendas no mês ultrapassar R$ 20.000,00, todo o lucro líquido obtido no mês é tributado a 15%. Atenção: FIIs, ETFs e Day Trade não possuem essa faixa de isenção.',
+    href: '/carteira/irpf',
+    action: 'Abrir IRPF',
+    keywords: 'isencao 20 mil 20000 acoes swing trade darf imposto ganho capital aliquota',
+  },
+  {
+    category: 'Recursos',
+    question: 'Como funciona a compensação de prejuízos no IRPF?',
+    answer:
+      'Prejuízos acumulados em vendas anteriores abatem automaticamente lucros futuros do mesmo mercado e modalidade (Swing Trade abate Swing Trade, Day Trade abate Day Trade, e FIIs abatem FIIs). O SGI controla o saldo devedor histórico para calcular o imposto devido estritamente após a compensação integral das perdas passadas.',
+    href: '/carteira/irpf',
+    action: 'Conferir prejuízos acumulados',
+    keywords: 'prejuizo compensacao abate perdas acumulado darf fiscal irpf',
+  },
+  {
+    category: 'Recursos',
+    question: 'Como funciona o rebalanceamento inteligente por aportes?',
+    answer:
+      'Em vez de forçar a venda de ativos que valorizaram (gerando custos e impostos), o motor de metas do SGI compara a alocação atual da carteira com seus pesos ideais e calcula onde aplicar novos recursos para aproximar a carteira do alvo estratégico sem girar o patrimônio.',
+    href: '/carteira/metas',
+    action: 'Abrir Metas',
+    keywords: 'rebalanceamento aporte inteligente alocacao alvo desvio pesos meta',
+  },
+  {
     category: 'Conta e segurança',
     question: 'Como altero meus dados ou minha senha?',
     answer:

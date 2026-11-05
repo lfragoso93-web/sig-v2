@@ -22,11 +22,19 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_DOCUMENTS = (
     ("DOCUMENTACAO_DO_SISTEMA.md", "Manual do sistema"),
+    ("navegacao_e_carteiras.md", "Navegação e carteiras"),
+    ("autenticacao_e_seguranca.md", "Autenticação e segurança"),
+    ("transacoes_e_operacoes.md", "Transações e operações"),
+    ("importacao_csv.md", "Importação de dados CSV"),
+    ("patrimonio_e_custodia.md", "Patrimônio e custódia"),
     ("rentabilidade.md", "Rentabilidade"),
+    ("proventos_e_dividendos.md", "Proventos e dividendos"),
+    ("radar_fiscal_irpf.md", "Radar fiscal e IRPF"),
+    ("GOALS_AND_ANALYSIS_CONTRACT.md", "Metas e rebalanceamento"),
+    ("CORPORATE_ACTIONS.md", "Eventos corporativos"),
+    ("cotacoes_e_mercado.md", "Cotações e dados de mercado"),
     ("TOOLS_CALCULATORS.md", "Calculadoras e simuladores"),
     ("snapshots.md", "Snapshots e TWR"),
-    ("GOALS_AND_ANALYSIS_CONTRACT.md", "Metas e análise de carteira"),
-    ("CORPORATE_ACTIONS.md", "Eventos corporativos"),
 )
 _WORD_PATTERN = re.compile(r"[a-z0-9]{3,}")
 _HEADING_PATTERN = re.compile(r"^(#{1,4})\s+(.+?)\s*#*\s*$", re.MULTILINE)
@@ -54,6 +62,16 @@ _CORPORATE_ACTION_SECTIONS = frozenset(
         "candidatos cross-provider",
         "seguranca operacional",
         "avisos de eventos corporativos futuros",
+        "tipos de eventos corporativos",
+        "desdobramento (split)",
+        "desdobramento",
+        "grupamento (reverse split)",
+        "grupamento",
+        "bonificacao em acoes",
+        "bonificacao",
+        "subscricao (direito de preferencia)",
+        "subscricao",
+        "preservacao da integridade historica",
     }
 )
 
@@ -134,6 +152,24 @@ _ROUTE_DEFINITIONS = (
         "/carteira/ferramentas/comparador",
         "Comparação lado a lado de múltiplos e histórico",
     ),
+    (
+        ("csv", "importar", "importacao", "upload", "planilha"),
+        "Transações",
+        "/carteira/transacoes",
+        "Histórico e administração de operações",
+    ),
+    (
+        ("seguranca", "senha", "2fa", "mfa", "totp", "configuracao", "configuracoes", "perfil"),
+        "Configurações",
+        "/carteira/configuracoes",
+        "Segurança da conta, 2FA e preferências",
+    ),
+    (
+        ("ajuda", "suporte", "duvidas", "manual"),
+        "Central de Ajuda",
+        "/carteira/ajuda",
+        "Base de conhecimento e atendimento",
+    ),
 )
 
 
@@ -200,12 +236,16 @@ def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
 
 def _is_searchable_section(filename: str, section: str) -> bool:
     normalized = _normalize(section)
-    if normalized.startswith(
+    clean_heading = re.sub(r"^\d+\.\s*", "", normalized).strip()
+    if clean_heading.startswith(
         ("pendencias", "roadmap", "historico", "diagnostico historico")
     ):
         return False
     if filename == "CORPORATE_ACTIONS.md":
-        return normalized in _CORPORATE_ACTION_SECTIONS
+        return (
+            clean_heading in _CORPORATE_ACTION_SECTIONS
+            or normalized in _CORPORATE_ACTION_SECTIONS
+        )
     return True
 
 
@@ -290,7 +330,7 @@ async def _synthesize_answer_with_llm(
     context_text = "\n\n".join(context_blocks)
 
     system_instruction = (
-        "Você é o Assistente Oficial do SGI v2 (Sistema de Gestão de "
+        "Você é o Assistente Oficial do SGI (Sistema de Gestão de "
         "Investimentos). Seu papel é responder dúvidas de forma concisa, "
         "educada e precisa em Português do Brasil.\n\n"
         "REGRAS:\n"
@@ -302,7 +342,11 @@ async def _synthesize_answer_with_llm(
         "clareza que o tema não está detalhado na documentação oficial "
         "disponível.\n"
         "4. Não invente dados de mercado, rentabilidades ou parâmetros "
-        "fictícios."
+        "fictícios.\n"
+        "5. Jamais mencione detalhes internos de engenharia de software "
+        "(como branches, issues, números de pull request, datas de desenvolvimento, "
+        "migrações de banco ou comandos técnicos de infraestrutura); atenha-se "
+        "estritamente às funcionalidades, regras financeiras e navegação da interface."
     )
 
     user_prompt = (

@@ -235,3 +235,35 @@ async def test_help_chat_answer_async_falls_back_when_llm_fails(
     assert res.mode == "deterministic"
     assert res.sources
     assert "Encontrei estes trechos" in res.answer
+
+
+def test_help_chat_uses_backend_help_docs_and_excludes_engineering_jargon() -> None:
+    from app.services.help_document_chat_service import _default_document_root
+    root = _default_document_root()
+    assert root.name == "help_docs"
+    assert root.is_dir()
+
+    service = HelpDocumentChatService(root)
+    assert len(service._chunks) >= 50
+
+    # Test answer on IRPF
+    res_irpf = service.answer("Como funciona a isenção de 20 mil para ações no IRPF?")
+    assert res_irpf.sources
+    assert any("20.000" in s.excerpt for s in res_irpf.sources)
+
+    # Test answer on CSV import
+    res_csv = service.answer("Como importar transações por planilha CSV?")
+    assert res_csv.sources
+    assert any("csv" in s.excerpt.lower() for s in res_csv.sources)
+
+    # Test answer on 2FA
+    res_2fa = service.answer("Como ativar a autenticação de dois fatores 2FA?")
+    assert res_2fa.sources
+    assert any("totp" in s.excerpt.lower() or "autenticador" in s.excerpt.lower() for s in res_2fa.sources)
+
+    # Ensure no citations in the entire corpus contain unwanted engineering jargon
+    unwanted = ["stable-15jun", "pull request", "alembic", "issue #", "dockerfile"]
+    for chunk in service._chunks:
+        chunk_lower = chunk.text.lower()
+        for term in unwanted:
+            assert term not in chunk_lower, f"Unwanted term '{term}' found in {chunk.document} section '{chunk.section}'"
