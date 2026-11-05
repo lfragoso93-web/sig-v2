@@ -36,6 +36,7 @@ def normalize_b3_equity_ticker(ticker: str) -> str:
         return match.group(1)
     return cleaned
 
+
 _RIGHTS_OR_RECEIPTS_MARKERS = {
     "DIR",
     "DIREITO",
