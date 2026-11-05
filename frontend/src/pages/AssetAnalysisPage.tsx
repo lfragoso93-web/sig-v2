@@ -76,9 +76,9 @@ function safeDate(value: unknown): string {
 
 function money(value: number, currency: string): string {
   try {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency, maximumFractionDigits: 4 }).format(value)
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency, maximumFractionDigits: 8 }).format(value)
   } catch {
-    return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(value)} ${currency}`
+    return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(value)} ${currency}`
   }
 }
 
@@ -167,7 +167,7 @@ export default function AssetAnalysisPage() {
   const currency = String(data?.asset.currency || 'BRL').toUpperCase()
   const fundamentals = data ? availableSections(data) : []
   const coverage = String(data?.enrichment.coverage_status ?? 'UNKNOWN').toUpperCase()
-  const coverageLabel = coverage === 'COMPLETE' ? 'Completa' : coverage === 'PARTIAL' ? 'Parcial' : 'Ainda não avaliada'
+  const coverageLabel = coverage === 'FULL' ? 'completa' : coverage === 'PARTIAL' ? 'parcial' : coverage === 'UNSUPPORTED' ? 'não suportada' : 'ainda não avaliada'
   const catalogFields: Array<[string, string, unknown]> = data ? ([
     ['Classe', 'asset_type', data.asset.asset_type], ['Setor', 'sector', data.asset.sector], ['Subsetor', 'sub_sector', data.asset.sub_sector], ['ISIN', 'isin_code', data.asset.isin_code],
     ['Provedor', 'provider', data.asset.provider], ['Situação do provedor', 'provider_status', data.asset.provider_status],
@@ -199,7 +199,7 @@ export default function AssetAnalysisPage() {
     {data && <>
       <section className="card overflow-hidden">
         <div className="flex flex-col justify-between gap-5 p-5 sm:flex-row sm:items-start sm:p-6">
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-2xl font-bold tracking-tight">{String(data.asset.ticker)}</h2><span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: coverage === 'COMPLETE' ? 'rgb(34 197 94 / 12%)' : 'var(--color-surface-2)', color: coverage === 'COMPLETE' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>Cobertura {coverageLabel.toLowerCase()}</span></div>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-2xl font-bold tracking-tight">{String(data.asset.ticker)}</h2><span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: coverage === 'FULL' ? 'rgb(34 197 94 / 12%)' : 'var(--color-surface-2)', color: coverage === 'FULL' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>Cobertura {coverageLabel}</span></div>
             <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>{String(data.asset.name ?? 'Nome não informado')} · Moeda de negociação: {currency}</p>
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{catalogFields.map(([label, field, value]) => <span key={field}><span className="font-medium" style={{ color: 'var(--color-text)' }}>{label}:</span> {formatField(field, value, currency)}</span>)}</div>
           </div>
