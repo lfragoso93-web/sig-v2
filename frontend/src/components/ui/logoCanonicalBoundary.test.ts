@@ -13,6 +13,7 @@ describe('canonical application logo', () => {
   it.each([
     'src/components/layout/Topbar.tsx',
     'src/components/layout/AuthLayout.tsx',
+    'src/pages/Landing.tsx',
   ])('keeps LogoSGI mounted in %s', (relativePath) => {
     const source = readFileSync(sourcePath(relativePath), 'utf8')
     expect(source).toContain("@/components/ui/LogoSGI")

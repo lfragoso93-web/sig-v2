@@ -1,5 +1,5 @@
 /**
- * LogoSGI — marca visual do SIG v2
+ * LogoSGI — marca visual do SGI
  *
  * Variantes:
  *   <LogoSGI size={24} iconOnly />          → só ícone (favicon/sidebar colapsada)
@@ -30,7 +30,7 @@ export default function LogoSGI({
     <span
       className={`inline-flex items-center select-none ${className ?? ''}`}
       style={{ gap: Math.round(8 * r) }}
-      aria-label="SIG — Sistema de Gestão de Investimentos"
+      aria-label="SGI - Sistema de Gestão de Investimentos"
     >
       {/* ── Ícone ────────────────────────────────────────────── */}
       <svg
@@ -87,7 +87,7 @@ export default function LogoSGI({
               color:         'var(--color-text)',
             }}
           >
-            SIG
+            SGI
           </span>
 
           {/* Subtítulo — apenas na variante auth */}

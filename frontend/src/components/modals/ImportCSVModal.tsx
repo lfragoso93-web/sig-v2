@@ -370,7 +370,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
               </div>
               <input id="file-input" type="file" accept=".csv" onChange={handleFileSelect} style={{ display: 'none' }} />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                Formatos suportados: <strong>Modelo canônico SGI v2</strong> ({REQUIRED_COLUMNS.join(', ')}) ou <strong>Área do Investidor B3</strong> (arquivos de Negociação e Movimentação com detecção automática).
+                Formatos suportados: <strong>Modelo canônico SGI</strong> ({REQUIRED_COLUMNS.join(', ')}) ou <strong>Área do Investidor B3</strong> (arquivos de Negociação e Movimentação com detecção automática).
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 Para Renda Fixa, os campos de contrato são opcionais. Repita a mesma <strong>fixed_income_contract_key</strong> nas aplicações vinculadas ao mesmo contrato; arquivos antigos continuam aceitos.
