@@ -49,7 +49,7 @@ Para garantir que robôs maliciosos não tentem descobrir senhas por repetição
 
 ---
 
-## 5. Sessões Seguras e Logout
+## 5. Sessões Seguras e Encerramento (Logout)
 
-- **Sessões Criptografadas**: Suas sessões utilizam tokens seguros protegidos contra interceptação.
-- **Encerramento de Sessão**: Ao utilizar computadores compartilhados, lembre-se sempre de clicar em **Sair** no menu do usuário na barra superior para invalidar imediatamente o token da sessão ativa.
+- **Sessões Protegidas**: As comunicações entre o navegador e o SGI utilizam conexões criptografadas e tokens de autenticação para proteger o tráfego de dados.
+- **Encerramento de Sessão (Logout)**: Ao utilizar computadores ou dispositivos compartilhados, lembre-se sempre de clicar em **Sair** no menu do usuário na barra superior. Esta ação limpa imediatamente os tokens de acesso armazenados no navegador e encerra a sessão ativa local.

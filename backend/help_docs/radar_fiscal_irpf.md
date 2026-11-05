@@ -1,6 +1,6 @@
 # Radar Fiscal e Imposto de Renda (IRPF)
 
-A página de **IRPF** atua como um radar fiscal contínuo para apoiar o investidor na apuração mensal de resultados, controle de limites de isenção, compensação de prejuízos e emissão de DARF.
+A página de **IRPF** atua como um radar fiscal contínuo para apoiar o investidor na apuração mensal de resultados, controle de limites de isenção, compensação de prejuízos e memória de cálculo para apuração de DARF.
 
 ---
 
@@ -39,14 +39,15 @@ Se você realizou vendas com prejuízo:
 
 ---
 
-## 4. Emissão de DARF
+## 4. Apuração e Memória de Cálculo de DARF
 
 Quando for apurado imposto devido em determinado mês:
-- O SGI calcula o valor líquido do imposto, deduzindo eventuais retenções de "imposto dedo-duro" (IRRF retido pela corretora nas notas).
+- O SGI calcula o valor líquido do imposto devido, deduzindo eventuais retenções de "imposto dedo-duro" (IRRF retido pela corretora nas notas), permitindo a exportação do relatório de memória de cálculo e a sinalização de meses quitados.
+- **Importante**: O SGI não emite a guia DARF bancária com código de barras nem possui integração com o Sicalc Web. A emissão do documento de arrecadação e o pagamento devem ser realizados pelo investidor diretamente no Sicalcweb da Receita Federal ou pelo internet banking utilizando os dados fornecidos pelo SGI.
 - **Código de Receita**:
   * Operações de Bolsa (Pessoa Física): **6015**
-- **Vencimento**: O imposto deve ser pago até o último dia útil do mês subsequente ao das operações.
-- **Valor mínimo**: Caso o imposto devido no mês seja inferior a R$ 10,00, a legislação veda o pagamento avulso; o valor é acumulado para recolhimento quando ultrapassar R$ 10,00.
+- **Vencimento**: O imposto deve ser recolhido até o último dia útil do mês subsequente ao das operações.
+- **Valor mínimo**: Caso o imposto devido no mês seja inferior a R$ 10,00, a legislação veda o pagamento avulso; o valor é acumulado para recolhimento futuro quando ultrapassar R$ 10,00.
 
 ---
 

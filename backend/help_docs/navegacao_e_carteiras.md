@@ -52,7 +52,7 @@ A interface do SGI foi desenvolvida para oferecer ergonomia visual e agilidade:
   * **Rentabilidade**: Gráficos de retorno acumulado (TWR), matriz mensal/anual e comparação contra benchmarks (CDI e IBOV).
   * **Proventos**: Calendário e histórico de dividendos, JCP e rendimentos recebidos.
   * **Metas & Análise**: Planejamento de metas patrimoniais e rebalanceamento inteligente de ativos.
-  * **IRPF**: Painel fiscal para conferência de ganhos, limites de isenção e emissão de DARF.
+  * **IRPF**: Painel fiscal para conferência de ganhos, limites de isenção e cálculo de DARF.
   * **Ferramentas**: Calculadora de juros compostos e simulador comparativo de renda fixa.
 
 ---

@@ -12,7 +12,7 @@ A plataforma abrange:
 - **Gestão Multicarteira**: Criação e administração de carteiras independentes (ex.: Previdência, FIIs, Investimentos Internacionais, Reserva de Emergência).
 - **Cobertura Multiclasse de Ativos**: Ações Brasileiras, Fundos Imobiliários (FIIs), Tesouro Direto, Renda Fixa Privada, ETFs, Criptomoedas, BDRs e Ações Internacionais (cotadas em Dólar/USD).
 - **Rentabilidade Ponderada no Tempo (TWR e MWR)**: Cálculo rigoroso que expurga distorções causadas por novos aportes e resgates.
-- **Radar Fiscal e IRPF**: Apuração mensal de ganhos de capital, controle de limites de isenção, compensação de prejuízos acumulados e emissão de DARF.
+- **Radar Fiscal e IRPF**: Apuração mensal de ganhos de capital, controle de limites de isenção, compensação de prejuízos acumulados e apuração de DARF.
 - **Gestão por Metas e Rebalanceamento Inteligente**: Definição de alocações alvo estratégicas e cálculo de novos aportes para rebalanceamento patrimonial sem necessidade de venda de ativos.
 
 ---
