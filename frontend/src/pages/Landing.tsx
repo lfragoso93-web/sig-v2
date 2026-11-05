@@ -1,9 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   TrendingUp,
-  Wallet,
   ShieldCheck,
-  BarChart2,
   ArrowRight,
   ChevronRight,
   Layers,
@@ -12,10 +10,6 @@ import {
   Lock,
   Clock,
   CheckCircle2,
-  DollarSign,
-  Globe2,
-  HelpCircle,
-  PieChart,
 } from 'lucide-react'
 import LogoSGI from '@/components/ui/LogoSGI'
 
