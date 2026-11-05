@@ -32,7 +32,7 @@ export function EulaContent() {
     <div className="flex flex-col gap-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
       <div className="rounded-lg p-3 bg-[var(--color-surface-offset)] border border-[var(--color-border)] text-[var(--color-text)]">
         <p className="font-semibold text-sm mb-1 text-[var(--color-primary)]">
-          Termo de Adesão, Isenção de Responsabilidade e Política de Uso da Plataforma SIG
+          Termo de Adesão, Isenção de Responsabilidade e Política de Uso da Plataforma SGI
         </p>
         <p className="text-[11px] text-[var(--color-text-muted)]">
           Última atualização: Outubro de 2026. Leia atentamente todas as disposições antes de prosseguir.
@@ -42,8 +42,8 @@ export function EulaContent() {
       <section>
         <h4 className="font-bold text-[var(--color-text)] mb-1">1. Natureza Exclusiva de Ferramenta Tecnológica e Gerencial</h4>
         <p>
-          O <strong>SIG (Sistema de Investimentos)</strong> é um software de organização pessoal e consolidação gerencial de carteiras de investimentos. 
-          O SIG <strong>não é</strong> instituição financeira, corretora de valores, consultoria financeira ou casa de análise. A plataforma 
+          O <strong>SGI (Sistema de Gestão de Investimentos)</strong> é um software de organização pessoal e consolidação gerencial de carteiras de investimentos. 
+          O SGI <strong>não é</strong> instituição financeira, corretora de valores, consultoria financeira ou casa de análise. A plataforma 
           <strong>não realiza</strong> recomendações de compra, venda, alocação de ativos ou assessoria de investimentos, e suas funcionalidades 
           não são reguladas pela Comissão de Valores Mobiliários (CVM) ou pelo Banco Central do Brasil (BACEN).
         </p>
@@ -54,7 +54,7 @@ export function EulaContent() {
         <p>
           Todo e qualquer dado inserido no sistema — incluindo, mas não se limitando a: transações de compra e venda, quantidades, preços pagos, 
           taxas, custos, datas e notas de corretagem — é de <strong>responsabilidade única, exclusiva e intransferível do usuário</strong>. 
-          O SIG não audita, não valida e não tem obrigação de conferir a fidedignidade ou a integridade dos dados cadastrados pelo usuário ou 
+          O SGI não audita, não valida e não tem obrigação de conferir a fidedignidade ou a integridade dos dados cadastrados pelo usuário ou 
           importados via planilhas/extratos.
         </p>
       </section>
@@ -62,10 +62,10 @@ export function EulaContent() {
       <section>
         <h4 className="font-bold text-[var(--color-text)] mb-1">3. Cotações, Proventos, Indicadores e Provedores Externos</h4>
         <p>
-          O compromisso do SIG é exclusivamente o de empregar esforços razoáveis para disponibilizar cotações, indicadores macroeconômicos (como CDI, 
+          O compromisso do SGI é exclusivamente o de empregar esforços razoáveis para disponibilizar cotações, indicadores macroeconômicos (como CDI, 
           IPCA e IBOVESPA) e eventos corporativos de maneira clara e o mais próxima possível da realidade do mercado. Contudo, tais informações 
           são obtidas de fontes e provedores públicos ou de terceiros (como B3, Banco Central, BRAPI, Yahoo Finance, etc.) e estão sujeitas 
-          a atrasos operacionais (delays), indisponibilidades, divergências de arredondamento ou inconsistências técnicas fora do controle do SIG.
+          a atrasos operacionais (delays), indisponibilidades, divergências de arredondamento ou inconsistências técnicas fora do controle do SGI.
         </p>
       </section>
 
@@ -83,7 +83,7 @@ export function EulaContent() {
       <section>
         <h4 className="font-bold text-[var(--color-text)] mb-1">5. Isenção Ampla e Total de Responsabilidade</h4>
         <p>
-          Em nenhuma circunstância o SIG, seus desenvolvedores, mantenedores ou operadores serão responsabilizados por quaisquer danos diretos, 
+          Em nenhuma circunstância o SGI, seus desenvolvedores, mantenedores ou operadores serão responsabilizados por quaisquer danos diretos, 
           indiretos, lucros cessantes, perdas financeiras, multas fiscais ou decisões de investimento tomadas com base nas visualizações, análises, 
           gráficos ou relatórios gerados pela plataforma. O uso de todos os recursos é de livre e espontânea vontade e sob o 
           <strong>risco exclusivo do usuário</strong>.

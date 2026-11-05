@@ -174,7 +174,7 @@ export default function LoginPage() {
           Entrar
         </h2>
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>
-          Sistema de Gestão de Investimentos
+          Acesse sua conta para continuar
         </p>
       </div>
 

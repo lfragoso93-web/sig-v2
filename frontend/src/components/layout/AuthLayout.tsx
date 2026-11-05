@@ -11,9 +11,6 @@ export default function AuthLayout() {
       <div className="auth-panel">
         <div className="auth-brand">
           <LogoSGI size={46} variant="auth" />
-          <p className="auth-brand-caption" style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            Sistema de Gestão de Investimentos
-          </p>
         </div>
 
         <div className="auth-card">
@@ -21,7 +18,7 @@ export default function AuthLayout() {
         </div>
 
         <p className="auth-footer-note">
-          SIG &mdash; Uso interno
+          SGI &mdash; Uso interno
         </p>
       </div>
     </div>

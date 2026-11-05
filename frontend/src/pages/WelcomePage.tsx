@@ -43,7 +43,7 @@ const STEPS = [
     color: 'var(--color-primary)',
     label: 'Passo 1 de 5',
     title: 'Suas Carteiras',
-    desc: 'No SIG, tudo gira em torno de carteiras. Crie uma para cada corretora, estratégia ou perfil e acompanhe cada uma de forma independente.',
+    desc: 'No SGI, tudo gira em torno de carteiras. Crie uma para cada corretora, estratégia ou perfil e acompanhe cada uma de forma independente.',
     pills: ['📂 Múltiplas carteiras', '🔀 Por corretora ou estratégia', '📊 Relatórios individuais', '🎯 Metas por carteira'],
   },
   {
@@ -61,7 +61,7 @@ const STEPS = [
     color: 'var(--color-gold)',
     label: 'Passo 3 de 5',
     title: 'Lançamentos',
-    desc: 'Registre suas compras, vendas e proventos. O SIG calcula automaticamente preço médio, posição atual, IR a pagar e rentabilidade de cada ativo.',
+    desc: 'Registre suas compras, vendas e proventos. O SGI calcula automaticamente preço médio, posição atual, IR a pagar e rentabilidade de cada ativo.',
     pills: ['📥 Compra & venda', '💵 Dividendos e JCP', '📋 Preço médio automático', '🔢 Cálculo de IR'],
   },
   {
@@ -196,7 +196,7 @@ export default function WelcomePage() {
             }}>
               <TrendingUp size={16} color="white" />
             </div>
-            <span style={{ fontSize: '.875rem', fontWeight: 700, letterSpacing: '-.02em', color: 'var(--color-text)' }}>SIG</span>
+            <span style={{ fontSize: '.875rem', fontWeight: 700, letterSpacing: '-.02em', color: 'var(--color-text)' }}>SGI</span>
           </div>
           <button
             onClick={handleSkip}
@@ -228,7 +228,7 @@ export default function WelcomePage() {
               {(user?.name ?? user?.email ?? '?')[0].toUpperCase()}
             </div>
             <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-.02em', color: 'var(--color-text)', marginBottom: '.375rem' }}>
-              Bem-vindo ao SIG, {user?.name?.split(' ')[0] ?? 'você'}! 👋
+              Bem-vindo ao SGI, {user?.name?.split(' ')[0] ?? 'você'}! 👋
             </h1>
             <p style={{ fontSize: '.8125rem', color: 'var(--color-text-muted)', maxWidth: '38ch', margin: '0 auto', lineHeight: 1.6 }}>
               Você está a poucos passos de ter o controle completo dos seus investimentos.
@@ -359,7 +359,7 @@ export default function WelcomePage() {
         </div>
 
         <p style={{ fontSize: '.6875rem', color: 'var(--color-text-faint)', textAlign: 'center' }}>
-          SIG · Sistema de Investimentos e Gestão
+          SGI · Sistema de Gestão de Investimentos
         </p>
       </div>
     </div>
