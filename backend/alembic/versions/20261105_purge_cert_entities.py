@@ -142,6 +142,10 @@ def upgrade() -> None:
 
     # 8. Remover usuários sintéticos / de teste que não possuam mais carteiras
     if user_ids:
+        bind.execute(
+            sa.text("UPDATE corporate_events SET reviewed_by_user_id = NULL WHERE reviewed_by_user_id = ANY(:uids)"),
+            {"uids": user_ids},
+        )
         bind.execute(sa.text("""
             DELETE FROM users
             WHERE id = ANY(:uids)
