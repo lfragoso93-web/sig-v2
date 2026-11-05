@@ -405,3 +405,47 @@ async def test_sell_quantity_respects_corporate_action_splits() -> None:
             await sut.create_transaction_record(
                 db, portfolio_id=303, access=_system_access(), payload=payload_250
             )
+
+
+@pytest.mark.asyncio
+async def test_create_transaction_normalizes_fractional_ticker_to_standard_lot() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = MagicMock()
+    db.execute = AsyncMock(return_value=asset_result)
+    payload = TransactionCreate(
+        ticker="PETR4F",
+        asset_type="ACAO",
+        operation="buy",
+        quantity=5,
+        price=30.0,
+        date="2026-08-28",
+    )
+
+    created = await sut.create_transaction_record(
+        db,
+        portfolio_id=303,
+        payload=payload,
+        access=_system_access(portfolio_id=303),
+    )
+
+    assert created.ticker == "PETR4"
+
+    payload_b3 = TransactionCreate(
+        ticker="B3SA3F",
+        asset_type="ACAO",
+        operation="buy",
+        quantity=5,
+        price=12.0,
+        date="2026-08-28",
+    )
+    created_b3 = await sut.create_transaction_record(
+        db,
+        portfolio_id=303,
+        payload=payload_b3,
+        access=_system_access(portfolio_id=303),
+    )
+    assert created_b3.ticker == "B3SA3"

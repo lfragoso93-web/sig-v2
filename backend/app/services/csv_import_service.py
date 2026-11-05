@@ -1,4 +1,5 @@
 import csv
+import re
 import io
 import logging
 from datetime import date as DateType
@@ -288,6 +289,10 @@ def _normalize_csv_ticker(ticker: str, asset_type: str) -> str:
     normalized = ticker.strip().upper()
     if asset_type.strip().upper() == AssetType.CRIPTO.value:
         return CRYPTO_TICKER_ALIASES.get(normalized, normalized)
+    # Normalizar ações fracionárias da B3 para o lote padrão canônico (ex: PETR4F -> PETR4)
+    odd_match = re.match(r"^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$", normalized)
+    if odd_match:
+        return odd_match.group(1)
     return normalized
 
 

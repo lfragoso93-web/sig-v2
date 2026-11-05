@@ -17,6 +17,7 @@ from app.services.asset_universe_membership_service import (
 )
 from app.services.csv_import_service import (
     CSVRow,
+    _normalize_csv_ticker,
     _parse_date,
     _validate_writer_preflight,
     export_transactions_csv,
@@ -27,6 +28,17 @@ from app.services.csv_import_service import (
 from app.services.transaction_write_service import TransactionWriteError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+
+def test_normalize_csv_ticker_normalizes_fractional_shares_to_standard_lot():
+    assert _normalize_csv_ticker("PETR4F", "ACAO") == "PETR4"
+    assert _normalize_csv_ticker("VALE3F", "ACAO") == "VALE3"
+    assert _normalize_csv_ticker("BBAS3F", "ACAO") == "BBAS3"
+    assert _normalize_csv_ticker("B3SA3F", "ACAO") == "B3SA3"
+    assert _normalize_csv_ticker("BOVA11F", "ETF_NACIONAL") == "BOVA11"
+    assert _normalize_csv_ticker("PETR4", "ACAO") == "PETR4"
+    assert _normalize_csv_ticker("BTC", "CRIPTO") == "BTC"
 
 
 class TestGenerateCSVTemplate:
