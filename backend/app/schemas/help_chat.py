@@ -13,6 +13,16 @@ class HelpChatSource(BaseModel):
     excerpt: str
 
 
+class HelpChatRouteSuggestion(BaseModel):
+    label: str
+    path: str
+    description: str
+
+
 class HelpChatResponse(BaseModel):
     answer: str
     sources: list[HelpChatSource] = Field(default_factory=list)
+    suggested_routes: list[HelpChatRouteSuggestion] = Field(
+        default_factory=list
+    )
+    mode: str = "deterministic"

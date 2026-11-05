@@ -125,3 +125,113 @@ def test_help_chat_question_trims_outer_whitespace() -> None:
     request = HelpChatQuestionRequest(question="  Como calculo o TWR?  ")
 
     assert request.question == "Como calculo o TWR?"
+
+
+def test_help_chat_suggests_routes_for_navigation(tmp_path: Path) -> None:
+    (tmp_path / "rentabilidade.md").write_text(
+        "# Rentabilidade\n\n## TWR\n\nO TWR mede o desempenho sem aportes.",
+        encoding="utf-8",
+    )
+    result = HelpDocumentChatService(tmp_path).answer(
+        "Como funciona o TWR e a rentabilidade?"
+    )
+    assert result.sources
+    assert any(
+        route.path == "/carteira/rentabilidade"
+        for route in result.suggested_routes
+    )
+
+
+@pytest.mark.asyncio
+async def test_help_chat_answer_async_synthesizes_with_gemini(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+    from app.core.config import settings
+
+    (tmp_path / "DOCUMENTACAO_DO_SISTEMA.md").write_text(
+        "# Manual\n\n## Importação\n\nÉ possível importar via arquivo CSV.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key")
+
+    mock_gemini_response = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": "Você pode importar transações via CSV."
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    captured_requests = []
+
+    class MockAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, **kwargs):
+            captured_requests.append((url, kwargs))
+            return httpx.Response(
+                200,
+                json=mock_gemini_response,
+                request=httpx.Request("POST", url),
+            )
+
+    monkeypatch.setattr(httpx, "AsyncClient", MockAsyncClient)
+
+    service = HelpDocumentChatService(tmp_path)
+    res = await service.answer_async("Como importar arquivo CSV?")
+    assert res.mode == "llm"
+    assert "CSV" in res.answer
+    assert res.sources
+    assert len(captured_requests) == 1
+    req_url, req_kwargs = captured_requests[0]
+    assert "key=" not in str(req_url)
+    assert req_kwargs["headers"]["x-goog-api-key"] == "fake-gemini-key"
+
+
+@pytest.mark.asyncio
+async def test_help_chat_answer_async_falls_back_when_llm_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+    from app.core.config import settings
+
+    (tmp_path / "DOCUMENTACAO_DO_SISTEMA.md").write_text(
+        "# Manual\n\n## Transações\n\nTransações registram compras e vendas.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key")
+
+    class FailingAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, **kwargs):
+            raise RuntimeError("API timeout or network failure")
+
+    monkeypatch.setattr(httpx, "AsyncClient", FailingAsyncClient)
+
+    service = HelpDocumentChatService(tmp_path)
+    res = await service.answer_async("Como registrar transações?")
+    assert res.mode == "deterministic"
+    assert res.sources
+    assert "Encontrei estes trechos" in res.answer

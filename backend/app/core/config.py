@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: Optional[str] = None
 
+    # AI / LLM Support (optional free-tier providers for grounded help chat)
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
     @model_validator(mode="after")
     def resolve_provider_compatibility(self) -> "Settings":
         quotes_token = self.QUOTES_PROVIDER_TOKEN or self.BRAPI_TOKEN
