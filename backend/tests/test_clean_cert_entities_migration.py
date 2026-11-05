@@ -22,12 +22,12 @@ def test_clean_cert_entities_migration_contract() -> None:
 
 
 def test_purge_synthetic_cert_entities_migration_contract() -> None:
-    migration_path = BACKEND_ROOT / "alembic/versions/20261105_purge_synthetic_cert_entities.py"
-    assert migration_path.exists(), "Migration 20261105_purge_synthetic_cert_entities must exist"
+    migration_path = BACKEND_ROOT / "alembic/versions/20261105_purge_cert_entities.py"
+    assert migration_path.exists(), "Migration 20261105_purge_cert_entities must exist"
 
     source = migration_path.read_text(encoding="utf-8")
 
-    assert 'revision: str = "20261105_purge_synthetic_cert_entities"' in source
+    assert 'revision: str = "20261105_purge_cert_entities"' in source
     assert 'down_revision: str | None = "20261105_clean_cert_entities"' in source
 
     # Verifica preservação absoluta da tabela de auditoria de certificação de dados reais

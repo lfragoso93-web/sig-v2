@@ -1,6 +1,6 @@
 """purge synthetic certification portfolios, transactions, assets and test users from production db
 
-Revision ID: 20261105_purge_synthetic_cert_entities
+Revision ID: 20261105_purge_cert_entities
 Revises: 20261105_clean_cert_entities
 Create Date: 2026-11-05
 """
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20261105_purge_synthetic_cert_entities"
+revision: str = "20261105_purge_cert_entities"
 down_revision: str | None = "20261105_clean_cert_entities"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
