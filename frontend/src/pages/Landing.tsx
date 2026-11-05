@@ -121,7 +121,7 @@ const FAQS = [
   },
   {
     q: 'Como o SGI trata a segurança e a privacidade dos meus dados?',
-    a: 'Sua segurança é prioridade absoluta. O SGI oferece autenticação em dois fatores (2FA / MFA via TOTP), isolamento lógico individualizado de contas, senhas com hashing de alta resistência e zero compartilhamento de saldos ou dados financeiros com modelos de IA públicos.',
+    a: 'Sua segurança é prioridade absoluta. O SGI oferece autenticação em dois fatores (2FA / MFA via TOTP), isolamento lógico individualizado de contas e senhas com hashing de alta resistência. O assistente de ajuda interno não tem acesso automático aos seus saldos, transações ou custódia, limitando o envio a provedores externos de IA estritamente às dúvidas que você redigir.',
   },
   {
     q: 'Posso cadastrar mais de uma carteira de investimentos?',
@@ -957,11 +957,11 @@ export default function Landing() {
                   <Sparkles size={28} />
                 </div>
                 <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--color-text)', marginBottom: '0.5rem' }}>
-                  Zero Exposição de Saldos a Modelos de IA
+                  Assistente IA sem Acesso à Custódia
                 </h4>
                 <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.6, color: 'var(--color-text-muted)', margin: 0 }}>
-                  Nosso assistente de IA é estritamente fundamentado na documentação de ajuda e regras regulatórias. Seus saldos,
-                  valores e notas nunca são enviados a servidores externos de terceiros.
+                  Nosso assistente é fundamentado na documentação de ajuda e regras regulatórias. Ele não possui acesso
+                  automático aos seus saldos ou transações (apenas o texto digitado nas suas perguntas é processado).
                 </p>
               </div>
             </div>
