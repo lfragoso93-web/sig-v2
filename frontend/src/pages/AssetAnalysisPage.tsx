@@ -1,9 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, ArrowDownToLine, CalendarDays, ChartNoAxesCombined, CircleDollarSign, FileText, Search } from 'lucide-react'
+import {
+  Activity,
+  ArrowDownToLine,
+  CalendarDays,
+  ChartNoAxesCombined,
+  CircleDollarSign,
+  FileText,
+  Search,
+  X,
+} from 'lucide-react'
 import api from '@/services/api'
 
-type CatalogAsset = { id: number; ticker: string; name: string | null; asset_type: string }
+type CatalogAsset = { id: number; ticker: string; name: string | null; asset_type: string; currency?: string }
 type DataRow = Record<string, unknown>
 type AssetAnalysis = {
   asset: DataRow
@@ -125,127 +135,360 @@ function availableSections(data: AssetAnalysis) {
 
 function DataTable({ title, rows, currency, empty }: { title: string; rows: DataRow[]; currency: string; empty: string }) {
   const keys = Array.from(new Set(rows.flatMap(row => Object.keys(row))))
-  return <section className="card overflow-hidden">
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
-      <h3 className="font-semibold">{title}</h3><span className="rounded-full px-2.5 py-1 text-xs" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>{rows.length} registros</span>
-    </div>
-    {!rows.length ? <p className="p-5 text-sm" style={{ color: 'var(--color-text-muted)' }}>{empty}</p> :
-      <div className="overflow-x-auto"><table className="w-full min-w-max text-left text-sm">
-        <thead><tr style={{ color: 'var(--color-text-muted)', background: 'var(--color-surface-2)' }}>{keys.map(key => <th key={key} className="px-4 py-3 font-medium">{humanize(key)}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={index} className="border-t" style={{ borderColor: 'var(--color-border)' }}>{keys.map(key => <td key={key} className="max-w-sm px-4 py-3 align-top tabular-nums">{formatField(key, row[key], currency)}</td>)}</tr>)}</tbody>
-      </table></div>}
-  </section>
+  return (
+    <section className="card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
+        <h3 className="font-semibold">{title}</h3>
+        <span className="rounded-full px-2.5 py-1 text-xs" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>{rows.length} registros</span>
+      </div>
+      {!rows.length ? (
+        <p className="p-5 text-sm" style={{ color: 'var(--color-text-muted)' }}>{empty}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max text-left text-sm">
+            <thead>
+              <tr style={{ color: 'var(--color-text-muted)', background: 'var(--color-surface-2)' }}>
+                {keys.map(key => <th key={key} className="px-4 py-3 font-medium">{humanize(key)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index} className="border-t transition-colors hover:bg-[var(--color-surface-offset)]" style={{ borderColor: 'var(--color-border)' }}>
+                  {keys.map(key => <td key={key} className="max-w-sm px-4 py-3 align-top tabular-nums">{formatField(key, row[key], currency)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
 }
 
 function MetricCard({ name, value, currency }: { name: string; value: unknown; currency: string }) {
-  return <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-2)' }}>
-    <dt className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{humanize(name)}</dt>
-    <dd className="mt-1 break-words text-sm font-semibold tabular-nums">{formatField(name, value, currency)}</dd>
-  </div>
+  return (
+    <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-2)' }}>
+      <dt className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{humanize(name)}</dt>
+      <dd className="mt-1 break-words text-sm font-semibold tabular-nums">{formatField(name, value, currency)}</dd>
+    </div>
+  )
 }
 
 function SectionLink({ href, icon: Icon, children, count }: { href: string; icon: typeof Activity; children: string; count?: number }) {
-  return <a href={href} className="flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-black/5" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-    <Icon size={15} />{children}{count !== undefined && <span className="rounded-full px-1.5 text-xs" style={{ background: 'var(--color-surface-2)' }}>{count}</span>}
-  </a>
+  return (
+    <a href={href} className="flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-[var(--color-surface-2)]" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+      <Icon size={15} />{children}{count !== undefined && <span className="rounded-full px-1.5 text-xs" style={{ background: 'var(--color-surface-2)' }}>{count}</span>}
+    </a>
+  )
+}
+
+function useSafeSearchParams() {
+  try {
+    return useSearchParams()
+  } catch {
+    return [new URLSearchParams(), () => {}] as const
+  }
 }
 
 export default function AssetAnalysisPage() {
+  const [searchParams, setSearchParams] = useSafeSearchParams()
+  const initialTicker = searchParams.get('ticker')?.trim() || ''
+  const initialId = searchParams.get('id')?.trim() || ''
+  const urlParam = initialTicker || initialId
+
   const [search, setSearch] = useState('')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [selected, setSelected] = useState<CatalogAsset | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
   const normalized = search.trim()
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Se o parâmetro de URL mudar ou for limpo (ex.: botão Voltar do navegador), sincronizar
+  useEffect(() => {
+    if (!urlParam && selected && !isDropdownOpen) {
+      setSelected(null)
+      setSearch('')
+    }
+  }, [urlParam, selected, isDropdownOpen])
+
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
     queryKey: ['asset-analysis-search', normalized],
     queryFn: () => api.get('/assets/search', { params: { q: normalized, limit: 15 } }).then(response => response.data),
-    enabled: normalized.length >= 2, staleTime: 60_000,
+    enabled: normalized.length >= 2 && isDropdownOpen,
+    staleTime: 60_000,
   })
+
+  // Priorizar parâmetro da URL ativo sobre a seleção interna para respeitar histórico do navegador
+  const targetIdentifier = urlParam || (selected?.id ? String(selected.id) : null)
+
   const { data, isLoading, isError } = useQuery<AssetAnalysis>({
-    queryKey: ['asset-analysis', selected?.id],
-    queryFn: () => api.get('/assets/analysis/' + selected!.id).then(response => response.data),
-    enabled: selected !== null, staleTime: 60_000,
+    queryKey: ['asset-analysis', targetIdentifier],
+    queryFn: () => api.get('/assets/analysis/' + encodeURIComponent(targetIdentifier!)).then(response => response.data),
+    enabled: targetIdentifier !== null,
+    staleTime: 60_000,
   })
-  const currency = String(data?.asset.currency || 'BRL').toUpperCase()
-  const fundamentals = data ? availableSections(data) : []
-  const coverage = String(data?.enrichment.coverage_status ?? 'UNKNOWN').toUpperCase()
+
+  // Sincronizar ativo selecionado quando data for carregado via URL ou histórico de navegação
+  useEffect(() => {
+    if (data?.asset) {
+      if (!selected || selected.id !== data.asset.id || selected.ticker !== data.asset.ticker) {
+        setSelected(data.asset as CatalogAsset)
+        setSearch(String(data.asset.ticker))
+      }
+    }
+  }, [data?.asset, selected])
+
+  function handleSelect(asset: CatalogAsset) {
+    setSelected(asset)
+    setSearch(asset.ticker)
+    setIsDropdownOpen(false)
+    setSearchParams({ ticker: asset.ticker })
+  }
+
+  function handleClear() {
+    setSelected(null)
+    setSearch('')
+    setIsDropdownOpen(false)
+    setSearchParams({})
+  }
+
+  const currency = String(data?.asset?.currency || 'BRL').toUpperCase()
+  const fundamentals = data?.enrichment ? availableSections(data) : []
+  const coverage = String(data?.enrichment?.coverage_status ?? 'UNKNOWN').toUpperCase()
   const coverageLabel = coverage === 'FULL' ? 'completa' : coverage === 'PARTIAL' ? 'parcial' : coverage === 'UNSUPPORTED' ? 'não suportada' : 'ainda não avaliada'
-  const catalogFields: Array<[string, string, unknown]> = data ? ([
+  const catalogFields: Array<[string, string, unknown]> = data?.asset ? ([
     ['Classe', 'asset_type', data.asset.asset_type], ['Setor', 'sector', data.asset.sector], ['Subsetor', 'sub_sector', data.asset.sub_sector], ['ISIN', 'isin_code', data.asset.isin_code],
     ['Provedor', 'provider', data.asset.provider], ['Situação do provedor', 'provider_status', data.asset.provider_status],
   ] as Array<[string, string, unknown]>).filter(([, , value]) => value !== null && value !== undefined && value !== '') : []
 
-  return <div className="page-container space-y-5 pb-10">
-    <header>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Pesquisa</p>
-      <h1 className="page-title">Análise de ativos</h1>
-      <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>Consulte em um só lugar os fundamentos, cotações históricas, proventos e eventos registrados no sistema.</p>
-    </header>
+  return (
+    <div className="page-container space-y-5 pb-10">
+      <header>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Pesquisa</p>
+        <h1 className="page-title">Análise de ativos</h1>
+        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>Consulte em um só lugar os fundamentos, cotações históricas, proventos e eventos registrados no sistema.</p>
+      </header>
 
-    <section className="card p-4 sm:p-5">
-      <label htmlFor="asset-analysis-search" className="mb-2 block text-sm font-medium">Encontre um ativo no catálogo</label>
-      <div className="relative max-w-2xl"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} /><input id="asset-analysis-search" className="input w-full pl-10" value={search} onChange={event => { setSearch(event.target.value); setSelected(null) }} placeholder="Busque por ticker ou nome, por exemplo PETR4 ou Bitcoin" autoComplete="off" /></div>
-      {normalized.length >= 2 && <div className="mt-2 max-w-2xl overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        {isFetching ? <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Buscando no catálogo…</p> : matches.map(asset => <button key={asset.id} type="button" className="block w-full border-b p-3 text-left text-sm last:border-0 hover:bg-black/5" style={{ borderColor: 'var(--color-border)' }} onClick={() => { setSelected(asset); setSearch(asset.ticker + ' — ' + (asset.name ?? asset.asset_type)) }}><span className="font-semibold">{asset.ticker}</span><span style={{ color: 'var(--color-text-muted)' }}> — {asset.name ?? asset.asset_type}</span></button>)}
-        {!isFetching && !matches.length && <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Nenhum ativo encontrado no catálogo.</p>}
-      </div>}
-    </section>
-
-    {isLoading && <p role="status" className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Carregando dados disponíveis…</p>}
-    {isError && <p role="alert" className="rounded-lg border border-red-500/30 p-3 text-sm text-red-400">Não foi possível carregar os dados deste ativo. Tente novamente.</p>}
-    {!selected && !isLoading && <section className="card flex flex-col items-center px-5 py-12 text-center">
-      <div className="mb-3 rounded-full p-3" style={{ background: 'var(--color-surface-2)', color: 'var(--color-primary)' }}><ChartNoAxesCombined size={24} /></div>
-      <h2 className="font-semibold">Escolha um ativo para começar</h2><p className="mt-1 max-w-md text-sm" style={{ color: 'var(--color-text-muted)' }}>A análise reúne os dados existentes no catálogo. A abertura desta página não inicia consultas a provedores.</p>
-    </section>}
-
-    {data && <>
-      <section className="card overflow-hidden">
-        <div className="flex flex-col justify-between gap-5 p-5 sm:flex-row sm:items-start sm:p-6">
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-2xl font-bold tracking-tight">{String(data.asset.ticker)}</h2><span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: coverage === 'FULL' ? 'rgb(34 197 94 / 12%)' : 'var(--color-surface-2)', color: coverage === 'FULL' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>Cobertura {coverageLabel}</span></div>
-            <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>{String(data.asset.name ?? 'Nome não informado')} · Moeda de negociação: {currency}</p>
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>{catalogFields.map(([label, field, value]) => <span key={field}><span className="font-medium" style={{ color: 'var(--color-text)' }}>{label}:</span> {formatField(field, value, currency)}</span>)}</div>
-          </div>
-          <div className="shrink-0 rounded-xl p-4 sm:min-w-52 sm:text-right" style={{ background: 'var(--color-surface-2)' }}>
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Último preço registrado</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{data.asset.last_price == null ? '—' : money(Number(data.asset.last_price), currency)}</p>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{data.asset.last_price_updated_at ? `Referência: ${safeDate(data.asset.last_price_updated_at)}` : 'Data de referência indisponível'}</p>
-          </div>
+      <section className="card p-4 sm:p-5" ref={containerRef}>
+        <label htmlFor="asset-analysis-search" className="mb-2 block text-sm font-medium">Encontre um ativo no catálogo</label>
+        <div className="relative max-w-2xl">
+          <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
+          <input
+            id="asset-analysis-search"
+            className="input w-full pl-10 pr-10"
+            value={search}
+            onChange={event => {
+              setSearch(event.target.value)
+              setIsDropdownOpen(true)
+            }}
+            onFocus={() => {
+              if (normalized.length >= 2) setIsDropdownOpen(true)
+            }}
+            placeholder="Busque por ticker ou nome, por exemplo PETR4 ou Bitcoin"
+            autoComplete="off"
+          />
+          {(search || selected) && (
+            <button
+              type="button"
+              onClick={handleClear}
+              aria-label="Limpar pesquisa"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 transition-colors hover:bg-[var(--color-surface-2)]"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
-        <div className="flex items-start gap-2 border-t px-5 py-3 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}><Activity size={14} className="mt-0.5 shrink-0" /><p>Dados informativos armazenados no sistema. Cada seção pode ter uma data de referência própria; valores e indicadores não representam recomendação de investimento.</p></div>
+
+        {isDropdownOpen && normalized.length >= 2 && (
+          <div className="mt-2 max-w-2xl overflow-hidden rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            {isFetching ? (
+              <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Buscando no catálogo…</p>
+            ) : matches.map(asset => (
+              <button
+                key={asset.id}
+                type="button"
+                className="block w-full border-b p-3 text-left text-sm last:border-0 transition-colors hover:bg-[var(--color-surface-offset)]"
+                style={{ borderColor: 'var(--color-border)' }}
+                onClick={() => handleSelect(asset)}
+              >
+                <span className="font-semibold">{asset.ticker}</span>
+                <span style={{ color: 'var(--color-text-muted)' }}> — {asset.name ?? asset.asset_type}</span>
+              </button>
+            ))}
+            {!isFetching && !matches.length && (
+              <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Nenhum ativo encontrado no catálogo.</p>
+            )}
+          </div>
+        )}
       </section>
 
-      <nav aria-label="Seções da análise" className="flex gap-2 overflow-x-auto pb-1">
-        <SectionLink href="#fundamentos" icon={CircleDollarSign}>Fundamentos</SectionLink>
-        <SectionLink href="#historico" icon={ChartNoAxesCombined} count={data.price_history.length}>Histórico</SectionLink>
-        <SectionLink href="#proventos" icon={ArrowDownToLine} count={data.dividends.length}>Proventos</SectionLink>
-        <SectionLink href="#eventos" icon={CalendarDays} count={data.corporate_events.length}>Eventos</SectionLink>
-        <SectionLink href="#relatorios" icon={FileText} count={data.reports.length}>Relatórios</SectionLink>
-      </nav>
+      {isLoading && <p role="status" className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Carregando dados disponíveis…</p>}
+      {isError && <p role="alert" className="rounded-lg border border-red-500/30 p-3 text-sm text-red-400">Não foi possível carregar os dados deste ativo. Tente novamente.</p>}
 
-      <section id="fundamentos" className="scroll-mt-6 space-y-4">
-        <div><h2 className="text-lg font-semibold">Fundamentos e indicadores</h2><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Indicadores disponíveis para a classe deste ativo, conforme o último enriquecimento armazenado.</p></div>
-        {!fundamentals.length && !data.enrichment.dividend_metrics ? <div className="card p-5 text-sm" style={{ color: 'var(--color-text-muted)' }}>Ainda não há fundamentos armazenados para este ativo.</div> : <div className="grid gap-4 xl:grid-cols-2">
-          {fundamentals.map(([key, value]) => <section key={key} className="card p-4 sm:p-5"><h3 className="mb-3 font-semibold">{humanize(key)}</h3>
-            {typeof value === 'object' && value !== null && !Array.isArray(value) ? <dl className="grid gap-2 sm:grid-cols-2">{Object.entries(value as DataRow).filter(([, item]) => item !== null && item !== undefined && item !== '').map(([field, fieldValue]) => <MetricCard key={field} name={field} value={fieldValue} currency={currency} />)}</dl> : <p className="text-sm">{formatField(key, value, currency)}</p>}
-          </section>)}
-          {data.enrichment.dividend_metrics != null && <section className="card p-4 sm:p-5"><h3 className="mb-3 font-semibold">Proventos (12 meses)</h3><dl className="grid gap-2 sm:grid-cols-2">{Object.entries(data.enrichment.dividend_metrics as DataRow).filter(([, item]) => item !== null && item !== undefined && item !== '').map(([field, value]) => <MetricCard key={field} name={field} value={value} currency={currency} />)}</dl></section>}
-        </div>}
-        {data.enrichment.capabilities != null && <section className="card p-4 sm:p-5"><h3 className="mb-3 font-semibold">Cobertura por tipo de dado</h3><dl className="grid gap-2 sm:grid-cols-2">{Object.entries(data.enrichment.capabilities as DataRow).map(([field, value]) => <MetricCard key={field} name={field} value={value} currency={currency} />)}</dl></section>}
-      </section>
+      {!targetIdentifier && !isLoading && (
+        <section className="card flex flex-col items-center px-5 py-12 text-center">
+          <div className="mb-3 rounded-full p-3" style={{ background: 'var(--color-surface-2)', color: 'var(--color-primary)' }}><ChartNoAxesCombined size={24} /></div>
+          <h2 className="font-semibold">Escolha um ativo para começar</h2>
+          <p className="mt-1 max-w-md text-sm" style={{ color: 'var(--color-text-muted)' }}>A análise reúne os dados existentes no catálogo. A abertura desta página não inicia consultas a provedores.</p>
+        </section>
+      )}
 
-      <section id="historico" className="scroll-mt-6 space-y-3"><div><h2 className="text-lg font-semibold">Histórico de preços</h2><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Até 90 registros persistidos, em ordem cronológica. Valores na moeda de negociação ({currency}).</p></div>
-        <DataTable title="Cotações" rows={data.price_history} currency={currency} empty="Não há cotações históricas armazenadas para este ativo." />
-      </section>
+      {data?.asset && (
+        <>
+          <section className="card overflow-hidden">
+            <div className="flex flex-col justify-between gap-5 p-5 sm:flex-row sm:items-start sm:p-6">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-2xl font-bold tracking-tight">{String(data.asset.ticker)}</h2>
+                  <span
+                    className="rounded-full px-2.5 py-1 text-xs font-medium"
+                    style={{
+                      background: coverage === 'FULL' ? 'oklch(from var(--color-success) l c h / 0.15)' : 'var(--color-surface-2)',
+                      color: coverage === 'FULL' ? 'var(--color-success)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    Cobertura {coverageLabel}
+                  </span>
+                  <Link
+                    to={`/carteira/ferramentas/comparador?add=${encodeURIComponent(String(data.asset.ticker))}`}
+                    className="btn btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium"
+                  >
+                    <ChartNoAxesCombined size={13} /> Comparar ativo
+                  </Link>
+                </div>
+                <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>{String(data.asset.name ?? 'Nome não informado')} · Moeda de negociação: {currency}</p>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {catalogFields.map(([label, field, value]) => (
+                    <span key={field}><span className="font-medium" style={{ color: 'var(--color-text)' }}>{label}:</span> {formatField(field, value, currency)}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="shrink-0 rounded-xl p-4 sm:min-w-52 sm:text-right" style={{ background: 'var(--color-surface-2)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Último preço registrado</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{data.asset.last_price == null ? '—' : money(Number(data.asset.last_price), currency)}</p>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{data.asset.last_price_updated_at ? `Referência: ${safeDate(data.asset.last_price_updated_at)}` : 'Data de referência indisponível'}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 border-t px-5 py-3 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+              <Activity size={14} className="mt-0.5 shrink-0" />
+              <p>Dados informativos armazenados no sistema. Cada seção pode ter uma data de referência própria; valores e indicadores não representam recomendação de investimento.</p>
+            </div>
+          </section>
 
-      <section id="proventos" className="scroll-mt-6 space-y-3"><div><h2 className="text-lg font-semibold">Proventos</h2><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos monetários cadastrados e respectivos valores por unidade.</p></div>
-        <DataTable title="Proventos registrados" rows={data.dividends} currency={currency} empty="Não há proventos armazenados para este ativo." />
-      </section>
+          <nav aria-label="Seções da análise" className="flex gap-2 overflow-x-auto pb-1">
+            <SectionLink href="#fundamentos" icon={CircleDollarSign}>Fundamentos</SectionLink>
+            <SectionLink href="#historico" icon={ChartNoAxesCombined} count={data.price_history.length}>Histórico</SectionLink>
+            <SectionLink href="#proventos" icon={ArrowDownToLine} count={data.dividends.length}>Proventos</SectionLink>
+            <SectionLink href="#eventos" icon={CalendarDays} count={data.corporate_events.length}>Eventos</SectionLink>
+            <SectionLink href="#relatorios" icon={FileText} count={data.reports.length}>Relatórios</SectionLink>
+          </nav>
 
-      <section id="eventos" className="scroll-mt-6 space-y-3"><div><h2 className="text-lg font-semibold">Eventos corporativos</h2><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos gerais do ativo que não estão vinculados a uma carteira específica.</p></div>
-        <DataTable title="Eventos registrados" rows={data.corporate_events} currency={currency} empty="Não há eventos corporativos gerais armazenados para este ativo." />
-      </section>
+          <section id="fundamentos" className="scroll-mt-6 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Fundamentos e indicadores</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Indicadores disponíveis para a classe deste ativo, conforme o último enriquecimento armazenado.</p>
+            </div>
+            {!fundamentals.length && !data.enrichment.dividend_metrics ? (
+              <div className="card p-5 text-sm" style={{ color: 'var(--color-text-muted)' }}>Ainda não há fundamentos armazenados para este ativo.</div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {fundamentals.map(([key, value]) => (
+                  <section key={key} className="card p-4 sm:p-5">
+                    <h3 className="mb-3 font-semibold">{humanize(key)}</h3>
+                    {typeof value === 'object' && value !== null && !Array.isArray(value) ? (
+                      <dl className="grid gap-2 sm:grid-cols-2">
+                        {Object.entries(value as DataRow).filter(([, item]) => item !== null && item !== undefined && item !== '').map(([field, fieldValue]) => (
+                          <MetricCard key={field} name={field} value={fieldValue} currency={currency} />
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="text-sm">{formatField(key, value, currency)}</p>
+                    )}
+                  </section>
+                ))}
+                {data.enrichment.dividend_metrics != null && (
+                  <section className="card p-4 sm:p-5">
+                    <h3 className="mb-3 font-semibold">Proventos (12 meses)</h3>
+                    <dl className="grid gap-2 sm:grid-cols-2">
+                      {Object.entries(data.enrichment.dividend_metrics as DataRow).filter(([, item]) => item !== null && item !== undefined && item !== '').map(([field, value]) => (
+                        <MetricCard key={field} name={field} value={value} currency={currency} />
+                      ))}
+                    </dl>
+                  </section>
+                )}
+              </div>
+            )}
+            {data.enrichment.capabilities != null && (
+              <section className="card p-4 sm:p-5">
+                <h3 className="mb-3 font-semibold">Cobertura por tipo de dado</h3>
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  {Object.entries(data.enrichment.capabilities as DataRow).map(([field, value]) => (
+                    <MetricCard key={field} name={field} value={value} currency={currency} />
+                  ))}
+                </dl>
+              </section>
+            )}
+          </section>
 
-      <section id="relatorios" className="scroll-mt-6 space-y-3"><div><h2 className="text-lg font-semibold">Relatórios gerenciais</h2><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Documentos vinculados diretamente a este ativo.</p></div>
-        <div className="card p-5">{data.reports.length ? <p className="text-sm">Há {data.reports.length} relatório(s) disponível(is).</p> : <div className="flex items-start gap-3"><div className="rounded-lg p-2" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}><FileText size={18} /></div><div><p className="font-medium">Nenhum relatório vinculado</p><p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>O sistema ainda não possui relatórios gerenciais anexados a este ativo.</p></div></div>}</div>
-      </section>
-    </>}
-  </div>
+          <section id="historico" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Histórico de preços</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Até 90 registros persistidos, em ordem cronológica. Valores na moeda de negociação ({currency}).</p>
+            </div>
+            <DataTable title="Cotações" rows={data.price_history} currency={currency} empty="Não há cotações históricas armazenadas para este ativo." />
+          </section>
+
+          <section id="proventos" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Proventos</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos monetários cadastrados e respectivos valores por unidade.</p>
+            </div>
+            <DataTable title="Proventos registrados" rows={data.dividends} currency={currency} empty="Não há proventos armazenados para este ativo." />
+          </section>
+
+          <section id="eventos" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Eventos corporativos</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos gerais do ativo que não estão vinculados a uma carteira específica.</p>
+            </div>
+            <DataTable title="Eventos registrados" rows={data.corporate_events} currency={currency} empty="Não há eventos corporativos gerais armazenados para este ativo." />
+          </section>
+
+          <section id="relatorios" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Relatórios gerenciais</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Documentos vinculados diretamente a este ativo.</p>
+            </div>
+            <div className="card p-5">
+              {data.reports.length ? (
+                <p className="text-sm">Há {data.reports.length} relatório(s) disponível(is).</p>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg p-2" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
+                    <FileText size={18} />
+                  </div>
+                  <div>
+                    <p className="font-medium">Nenhum relatório vinculado</p>
+                    <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>O sistema ainda não possui relatórios gerenciais anexados a este ativo.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  )
 }

@@ -60,3 +60,15 @@ Windows with `stable-15jun` is the development and validation environment;
 OCI runs production from `main` through the GitHub Actions release flow. Do not
 develop on the OCI host or perform normal releases by SSH. Never use volume
 deletion or broad cleanup as a development shortcut.
+
+For every validation that needs the application runtime, use the local Docker
+development stack and localhost. First confirm the Docker Linux engine is
+available and the checkout is on `stable-15jun`. Start only the services from
+the base `docker-compose.yml`; do not include `docker-compose.oci.yml` or any
+OCI override, so `cloudflared` and its tunnel are never started locally. Do not
+load production secrets or point local services at production data. If Docker
+is unavailable, report validation as blocked rather than claiming it passed.
+After validation, stop the local stack with `docker compose down` (without
+`-v`) and confirm it is stopped. Preserve named volumes and local database
+contents. If validation fails, stop the services started for that validation
+the same way.

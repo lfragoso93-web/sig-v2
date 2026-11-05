@@ -378,13 +378,13 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
         <div className="section-card-header flex-wrap gap-3">
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
-              <span className="section-card-title">Tabela de rentabilidade em crescimento e mensal</span>
+              <span className="section-card-title">Tabela de rentabilidade mensal e acumulada</span>
               <TwrHelpPopover />
             </div>
             <span className="text-xs mt-0.5" style={{ color: 'var(--color-text-faint)' }}>
               {tableMode === 'progressive'
-                ? 'Evolução progressiva acumulada mês a mês comparada aos benchmarks'
-                : 'Matriz histórica anual (Ano × Mês) com acumulado no ano (YTD) e crescimento desde o início'}
+                ? 'Retornos compostos mês a mês comparados aos benchmarks'
+                : 'Matriz histórica (Ano × Mês), retorno composto no ano e retorno acumulado desde o início'}
             </span>
           </div>
 
@@ -401,7 +401,7 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
                 color: tableMode === 'progressive' ? '#fff' : 'var(--color-text-muted)',
               }}
             >
-              Evolução em crescimento
+              Evolução acumulada
             </button>
             <button
               type="button"
@@ -540,7 +540,7 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
                     No Ano
                   </th>
                   <th className="pb-2.5 text-right text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
-                    Em Crescimento
+                    Acumulado desde o início
                   </th>
                 </tr>
               </thead>

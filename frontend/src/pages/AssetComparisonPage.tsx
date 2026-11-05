@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Search, X } from 'lucide-react'
+import { ArrowRight, Plus, Search, X } from 'lucide-react'
 import api from '@/services/api'
 
 type CatalogAsset = { id: number; ticker: string; name: string | null; asset_type: string; currency?: string }
@@ -55,10 +56,44 @@ export function formatValue(value: unknown): string {
   return String(value)
 }
 
+function useSafeSearchParams() {
+  try {
+    return useSearchParams()
+  } catch {
+    return [new URLSearchParams(), () => {}] as const
+  }
+}
+
 export default function AssetComparisonPage() {
+  const [searchParams] = useSafeSearchParams()
+  const initialTickersParam = searchParams.get('tickers') || searchParams.get('add') || ''
+  const initializedParamRef = useRef<string | null>(null)
+
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<CatalogAsset[]>([])
   const normalizedSearch = search.trim()
+
+  // Carregar tickers iniciais da URL apenas na inicialização do parâmetro, sem reinserir ao remover
+  useEffect(() => {
+    if (initialTickersParam && initializedParamRef.current !== initialTickersParam) {
+      initializedParamRef.current = initialTickersParam
+      const tokens = initialTickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+      tokens.slice(0, 6).forEach(token => {
+        api.get('/assets/search', { params: { q: token, limit: 3 } })
+          .then(res => {
+            const match = (res.data as CatalogAsset[]).find(a => a.ticker.toUpperCase() === token) || res.data[0]
+            if (match) {
+              setSelected(current => {
+                if (current.some(item => item.id === match.id) || current.length >= 6) return current
+                return [...current, match]
+              })
+            }
+          })
+          .catch(() => {})
+      })
+    }
+  }, [initialTickersParam])
+
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
     queryKey: ['asset-comparison-search', normalizedSearch],
     queryFn: () => api.get('/assets/search', { params: { q: normalizedSearch, limit: 12 } }).then(response => response.data),
@@ -83,6 +118,7 @@ export default function AssetComparisonPage() {
   return (
     <div className="page-container space-y-5">
       <header>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Comparação</p>
         <h1 className="page-title">Comparar ativos</h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
           Pesquise no catálogo e compare fundamentos e indicadores disponíveis. A comparação não consulta provedores externos.
@@ -96,40 +132,104 @@ export default function AssetComparisonPage() {
           <input id="asset-comparison-search" className="input w-full pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Busque por ticker ou nome" autoComplete="off" />
         </div>
         {normalizedSearch.length >= 2 && (
-          <div className="mt-2 max-w-xl overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-2)' }}>
-            {isFetching ? <p className="p-3 text-sm">Buscando no catálogo…</p> : matches.filter(asset => !selectedIds.includes(asset.id)).map(asset => (
-              <button key={asset.id} type="button" onClick={() => addAsset(asset)} disabled={selected.length >= 6} className="flex w-full items-center gap-2 border-b p-3 text-left text-sm last:border-0 hover:bg-black/5">
-                <Plus size={15} /><span className="font-semibold">{asset.ticker}</span><span>{asset.name}</span><span className="ml-auto text-xs">{asset.asset_type}</span>
+          <div className="mt-2 max-w-xl overflow-hidden rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            {isFetching ? <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Buscando no catálogo…</p> : matches.filter(asset => !selectedIds.includes(asset.id)).map(asset => (
+              <button
+                key={asset.id}
+                type="button"
+                onClick={() => addAsset(asset)}
+                disabled={selected.length >= 6}
+                className="flex w-full items-center gap-2 border-b p-3 text-left text-sm last:border-0 transition-colors hover:bg-[var(--color-surface-offset)]"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <Plus size={15} /><span className="font-semibold">{asset.ticker}</span><span>{asset.name}</span><span className="ml-auto text-xs" style={{ color: 'var(--color-text-muted)' }}>{asset.asset_type}</span>
               </button>
             ))}
-            {!isFetching && matches.filter(asset => !selectedIds.includes(asset.id)).length === 0 && <p className="p-3 text-sm">Nenhum ativo disponível no catálogo.</p>}
+            {!isFetching && matches.filter(asset => !selectedIds.includes(asset.id)).length === 0 && <p className="p-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>Nenhum ativo disponível no catálogo.</p>}
           </div>
         )}
         {selected.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{selected.map(asset => (
-          <span key={asset.id} className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm" style={{ borderColor: 'var(--color-border)' }}>
-            <strong>{asset.ticker}</strong><span>{asset.name}</span>
+          <span key={asset.id} className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-2)' }}>
+            <strong>{asset.ticker}</strong><span style={{ color: 'var(--color-text-muted)' }}>{asset.name}</span>
             <button type="button" aria-label={`Remover ${asset.ticker}`} onClick={() => setSelected(current => current.filter(item => item.id !== asset.id))}><X size={14} /></button>
           </span>
         ))}</div>}
       </section>
 
-      {selected.length < 2 ? <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione pelo menos dois ativos para iniciar a comparação.</p> : (
+      {selected.length < 2 ? (
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione pelo menos dois ativos para iniciar a comparação.</p>
+      ) : (
         <section className="card overflow-hidden" aria-label="Matriz de comparação">
-          {loadingComparison && <p className="p-4 text-sm">Carregando dados disponíveis…</p>}
+          {loadingComparison && <p className="p-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>Carregando dados disponíveis…</p>}
           {error && <p role="alert" className="p-4 text-sm text-red-500">Não foi possível carregar a comparação. Tente novamente.</p>}
-          {!loadingComparison && <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead><tr><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface-2)' }}>Dado</th>{selected.map(asset => <th key={asset.id} className="min-w-44 p-3 text-left" style={{ background: 'var(--color-surface-2)' }}>{asset.ticker}<span className="block text-xs font-normal">{asset.name}</span></th>)}</tr></thead>
-              <tbody>
-                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Classe / moeda</th>{selected.map(asset => <td key={asset.id} className="p-3">{asset.asset_type} · {asset.currency ?? '—'}</td>)}</tr>
-                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Último preço</th>{selected.map(asset => { const data = comparisonById.get(asset.id); return <td key={asset.id} className="p-3">{data?.last_price == null ? 'Indisponível' : `${formatValue(data.last_price)} ${data.currency}`}<span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>{data?.last_price_updated_at ? new Date(data.last_price_updated_at).toLocaleString('pt-BR') : 'Data indisponível'}</span></td> })}</tr>
-                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Cobertura</th>{selected.map(asset => <td key={asset.id} className="p-3">{formatValue(comparisonById.get(asset.id)?.enrichment.coverage_status)}</td>)}</tr>
-                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Capacidades disponíveis</th>{selected.map(asset => <td key={asset.id} className="p-3">{formatValue(comparisonById.get(asset.id)?.enrichment.capabilities)}</td>)}</tr>
-                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Histórico de proventos em cache</th>{selected.map(asset => {
-                  const history = comparisonById.get(asset.id)?.enrichment.dividend_history
-                  return <td key={asset.id} className="p-3">{Array.isArray(history) && history.length ? <details><summary className="cursor-pointer">{history.length} registros</summary><pre className="mt-2 max-w-xs overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(history, null, 2)}</pre></details> : 'Sem registros disponíveis'}</td>
-                })}</tr>
-              </tbody>
+          {!loadingComparison && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface-2)' }}>Dado</th>
+                    {selected.map(asset => (
+                      <th key={asset.id} className="min-w-44 p-3 text-left" style={{ background: 'var(--color-surface-2)' }}>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="font-bold">{asset.ticker}</span>
+                          <Link
+                            to={`/carteira/ferramentas/analise-ativos?ticker=${encodeURIComponent(asset.ticker)}`}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold underline hover:no-underline"
+                            style={{ color: 'var(--color-primary)' }}
+                            title={`Ver análise completa de ${asset.ticker}`}
+                          >
+                            Análise <ArrowRight size={11} />
+                          </Link>
+                        </div>
+                        <span className="block text-xs font-normal" style={{ color: 'var(--color-text-muted)' }}>{asset.name}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Classe / moeda</th>
+                    {selected.map(asset => <td key={asset.id} className="p-3">{asset.asset_type} · {asset.currency ?? '—'}</td>)}
+                  </tr>
+                  <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Último preço</th>
+                    {selected.map(asset => {
+                      const data = comparisonById.get(asset.id)
+                      return (
+                        <td key={asset.id} className="p-3">
+                          {data?.last_price == null ? 'Indisponível' : `${formatValue(data.last_price)} ${data.currency}`}
+                          <span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {data?.last_price_updated_at ? new Date(data.last_price_updated_at).toLocaleString('pt-BR') : 'Data indisponível'}
+                          </span>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                  <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Cobertura</th>
+                    {selected.map(asset => <td key={asset.id} className="p-3">{formatValue(comparisonById.get(asset.id)?.enrichment.coverage_status)}</td>)}
+                  </tr>
+                  <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Capacidades disponíveis</th>
+                    {selected.map(asset => <td key={asset.id} className="p-3">{formatValue(comparisonById.get(asset.id)?.enrichment.capabilities)}</td>)}
+                  </tr>
+                  <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <th className="sticky left-0 p-3 text-left" style={{ background: 'var(--color-surface)' }}>Histórico de proventos em cache</th>
+                    {selected.map(asset => {
+                      const history = comparisonById.get(asset.id)?.enrichment.dividend_history
+                      return (
+                        <td key={asset.id} className="p-3">
+                          {Array.isArray(history) && history.length ? (
+                            <details>
+                              <summary className="cursor-pointer">{history.length} registros</summary>
+                              <pre className="mt-2 max-w-xs overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(history, null, 2)}</pre>
+                            </details>
+                          ) : 'Sem registros disponíveis'}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                </tbody>
                 {sections.map(section => {
                   const rows = new Set<string>()
                   selected.forEach(asset => {
@@ -137,17 +237,29 @@ export default function AssetComparisonPage() {
                     if (value && typeof value === 'object' && !Array.isArray(value)) Object.keys(value).forEach(key => rows.add(key))
                   })
                   if (!rows.size) return null
-                  return <tbody key={section.key}>
-                    <tr><th colSpan={selected.length + 1} className="p-3 text-left font-semibold" style={{ background: 'var(--color-surface-2)' }}>{section.title}</th></tr>
-                    {[...rows].map(key => <tr key={key} className="border-t" style={{ borderColor: 'var(--color-border)' }}><th className="sticky left-0 p-3 text-left font-medium" style={{ background: 'var(--color-surface)' }}>{labels[key] ?? key}</th>{selected.map(asset => {
-                      const record = comparisonById.get(asset.id)?.enrichment[section.key] as Record<string, unknown> | null | undefined
-                      return <td key={asset.id} className="p-3">{formatValue(record?.[key])}</td>
-                    })}</tr>)}
-                  </tbody>
+                  return (
+                    <tbody key={section.key}>
+                      <tr>
+                        <th colSpan={selected.length + 1} className="p-3 text-left font-semibold" style={{ background: 'var(--color-surface-2)' }}>{section.title}</th>
+                      </tr>
+                      {[...rows].map(key => (
+                        <tr key={key} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                          <th className="sticky left-0 p-3 text-left font-medium" style={{ background: 'var(--color-surface)' }}>{labels[key] ?? key}</th>
+                          {selected.map(asset => {
+                            const record = comparisonById.get(asset.id)?.enrichment[section.key] as Record<string, unknown> | null | undefined
+                            return <td key={asset.id} className="p-3">{formatValue(record?.[key])}</td>
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  )
                 })}
-            </table>
-          </div>}
-          <p className="border-t p-3 text-xs" style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>Campos indisponíveis não possuem valor armazenado no cache. Os indicadores exibidos são informativos e podem ter datas de referência diferentes.</p>
+              </table>
+            </div>
+          )}
+          <p className="border-t p-3 text-xs" style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>
+            Campos indisponíveis não possuem valor armazenado no cache. Os indicadores exibidos são informativos e podem ter datas de referência diferentes.
+          </p>
         </section>
       )}
     </div>

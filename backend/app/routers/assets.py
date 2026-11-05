@@ -387,14 +387,28 @@ async def compare_assets(
     return comparisons
 
 
-@router.get("/analysis/{asset_id}")
+@router.get("/analysis/{identifier}")
 async def get_asset_analysis(
-    asset_id: int,
+    identifier: str,
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    """Read-only asset research view backed by catalog, persisted history and cache."""
-    asset = await db.get(Asset, asset_id)
+    """Read-only asset research view backed by catalog, persisted history and cache.
+
+    Accepts an integer asset_id (e.g. '7') or a ticker symbol (e.g. 'PETR4').
+    """
+    clean_identifier = str(identifier).strip()
+    if clean_identifier.isdigit():
+        asset = await db.get(Asset, int(clean_identifier))
+    else:
+        stmt = (
+            select(Asset)
+            .where(func.upper(Asset.ticker) == clean_identifier.upper())
+            .order_by(Asset.id.asc())
+        )
+        result = await db.execute(stmt)
+        asset = result.scalars().first()
+
     if asset is None:
         raise HTTPException(status_code=404, detail="Ativo não encontrado no catálogo")
 
