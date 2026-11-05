@@ -33,6 +33,12 @@ def test_purge_synthetic_cert_entities_migration_contract() -> None:
     # Verifica preservação absoluta da tabela de auditoria de certificação de dados reais
     assert "real_data_certification_events" not in source, "Nunca deve tocar a tabela de auditoria real_data_certification_events"
 
+    # Verifica isolamento de eventos corporativos (nunca vazam para escopo global como portfolio_id = NULL)
+    assert "UPDATE corporate_events SET portfolio_id = NULL" not in source
+    assert "DELETE FROM corporate_events" in source
+    assert "DELETE FROM corporate_event_reconciliation_evidence" in source
+    assert "DELETE FROM corporate_event_destination_legs" in source
+
     # Verifica que remove as entidades sintéticas por cascade seguro
     assert "portfolio-certification-303@example.com" in source
     assert "PORTFOLIO-TEST-READY synthetic multiclasse" in source
