@@ -30,7 +30,15 @@ def upgrade() -> None:
 
     frac_ids = [row[0] for row in rows]
 
-    # 2. Verificar se algum ativo possui dependências críticas em carteiras, proventos ou eventos corporativos
+    # 2. Normalizar tickers de transações legadas que porventura usem a terminação F
+    bind.execute(sa.text("""
+        UPDATE transactions
+        SET ticker = regexp_replace(ticker, 'F$', '')
+        WHERE ticker ~* '^[A-Z0-9]{4}[0-9]{1,2}[A-Z]?F$'
+          AND asset_type IN ('ACAO', 'Ação', 'ETF_NACIONAL', 'FII', 'BDR')
+    """))
+
+    # 3. Verificar se algum ativo possui dependências críticas em carteiras, proventos ou eventos corporativos
     active_ids_query = sa.text("""
         SELECT DISTINCT asset_id FROM portfolio_positions WHERE asset_id = ANY(:ids)
         UNION
@@ -41,6 +49,8 @@ def upgrade() -> None:
         SELECT DISTINCT asset_id FROM corporate_events WHERE asset_id = ANY(:ids)
         UNION
         SELECT DISTINCT destination_asset_id FROM corporate_events WHERE destination_asset_id = ANY(:ids)
+        UNION
+        SELECT DISTINCT destination_asset_id FROM corporate_event_destination_legs WHERE destination_asset_id = ANY(:ids)
     """)
     active_ids = {r[0] for r in bind.execute(active_ids_query, {"ids": frac_ids}).fetchall()}
 

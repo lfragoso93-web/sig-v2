@@ -89,13 +89,21 @@ async def _current_quantity(
     as_of_date: date | None = None,
     exclude_tx_id: int | None = None,
 ) -> float:
+    normalized_ticker = ticker.strip().upper()
+    equivalent_tickers = {normalized_ticker.lower()}
+    odd_match = re.match(r"^([A-Z0-9]{4}\d{1,2}[A-Z]?)F$", normalized_ticker)
+    if odd_match:
+        equivalent_tickers.add(odd_match.group(1).lower())
+    else:
+        equivalent_tickers.add(f"{normalized_ticker}F".lower())
+
     stmt = select(
         Transaction.operation,
         Transaction.quantity,
         Transaction.date,
     ).where(
         Transaction.portfolio_id == portfolio_id,
-        func.lower(Transaction.ticker) == ticker.lower(),
+        func.lower(Transaction.ticker).in_(list(equivalent_tickers)),
         Transaction.asset_type == asset_type,
     )
     if exclude_tx_id is not None:
