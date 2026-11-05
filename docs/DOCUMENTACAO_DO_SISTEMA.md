@@ -1,9 +1,5 @@
 # Documentação do Sistema — SGI
 
-> **Atualização:** 1º de novembro de 2026
-> **Produção:** OCI, publicada a partir da branch `main` após merge de PR e deploy automatizado por GitHub Actions.
-> **Desenvolvimento:** ambiente Windows local, branch `stable-15jun`.
-
 ## 1. Visão geral
 
 O SGI (Sistema de Gestão de Investimentos) ajuda a registrar e acompanhar carteiras de investimentos, posições, preços, proventos, rentabilidade e informações para apoio à apuração de imposto de renda. É uma ferramenta gerencial e informativa; não presta consultoria nem recomendação de investimentos.
@@ -40,13 +36,12 @@ O sistema requer autenticação para recursos protegidos e verifica a autorizaç
 
 Solicitações de recuperação de senha são limitadas por conta: duas solicitações em uma janela de dois minutos; uma terceira solicitação bloqueia novos envios por 60 minutos. O limite usa Redis em produção e falha de forma fechada se Redis não estiver disponível. Fora de produção, há fallback em memória para desenvolvimento e testes. Um SuperAdmin pode remover os bloqueios de login e de recuperação pela ação **Desbloquear usuário** no painel administrativo; a operação fica registrada na auditoria.
 
-## 6. Desenvolvimento e publicação
+## 6. Governança e Integridade Operacional
 
-- O ambiente Windows local é usado para desenvolvimento na branch `stable-15jun`.
-- A produção executa a versão integrada em `main`.
-- Alterações são validadas antes da publicação, submetidas por Pull Request e integradas após as verificações automatizadas exigidas pelo repositório.
-- O merge para `main` aciona o fluxo de CI/CD responsável pelo deploy em produção. A prontidão do sistema depende também da validação de identidade e certificação correspondentes à versão implantada.
-- Alterações de banco de dados são versionadas por migrações do Alembic e aplicadas pelo processo de publicação da aplicação.
+- O sistema adota padrões rigorosos de integridade de dados e validação prévia de operações financeiras.
+- As rotinas de cálculo são determinísticas e passam por verificações automáticas contínuas de consistência.
+- Registros contábeis e históricos de transações são auditáveis e protegidos contra modificações extemporâneas sem lastro.
+- O ambiente operacional conta com isolamento lógico de contas e monitoramento ininterrupto de disponibilidade dos serviços.
 
 ## 7. Central de ajuda
 
@@ -60,8 +55,7 @@ rota `/api/v1/help/ask` exige autenticação, aceita perguntas de 3 a 500
 caracteres e limita a 10 consultas por minuto por endereço de origem. Quando a
 documentação não contém evidência suficiente, informa que não encontrou resposta.
 
-Nesta versão, as respostas são recuperação de trechos documentais, sem geração
-por modelo de linguagem. O assistente de Análise continua separado e responde
+O assistente documental atua como suporte à navegação e esclarecimento de regras funcionais. O assistente de Análise continua separado e responde
 sobre alocação, riscos e proventos da carteira selecionada.
 
 A IA disponível em Análise usa as métricas determinísticas e não responde sobre

@@ -22,11 +22,19 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_DOCUMENTS = (
     ("DOCUMENTACAO_DO_SISTEMA.md", "Manual do sistema"),
+    ("navegacao_e_carteiras.md", "Navegação e carteiras"),
+    ("autenticacao_e_seguranca.md", "Autenticação e segurança"),
+    ("transacoes_e_operacoes.md", "Transações e operações"),
+    ("importacao_csv.md", "Importação de dados CSV"),
+    ("patrimonio_e_custodia.md", "Patrimônio e custódia"),
     ("rentabilidade.md", "Rentabilidade"),
+    ("proventos_e_dividendos.md", "Proventos e dividendos"),
+    ("radar_fiscal_irpf.md", "Radar fiscal e IRPF"),
+    ("GOALS_AND_ANALYSIS_CONTRACT.md", "Metas e rebalanceamento"),
+    ("CORPORATE_ACTIONS.md", "Eventos corporativos"),
+    ("cotacoes_e_mercado.md", "Cotações e dados de mercado"),
     ("TOOLS_CALCULATORS.md", "Calculadoras e simuladores"),
     ("snapshots.md", "Snapshots e TWR"),
-    ("GOALS_AND_ANALYSIS_CONTRACT.md", "Metas e análise de carteira"),
-    ("CORPORATE_ACTIONS.md", "Eventos corporativos"),
 )
 _WORD_PATTERN = re.compile(r"[a-z0-9]{3,}")
 _HEADING_PATTERN = re.compile(r"^(#{1,4})\s+(.+?)\s*#*\s*$", re.MULTILINE)
@@ -133,6 +141,24 @@ _ROUTE_DEFINITIONS = (
         "Comparador de Ativos",
         "/carteira/ferramentas/comparador",
         "Comparação lado a lado de múltiplos e histórico",
+    ),
+    (
+        ("csv", "importar", "importacao", "upload", "planilha"),
+        "Importar CSV",
+        "/carteira/importar-csv",
+        "Importação de notas e extratos em lote",
+    ),
+    (
+        ("seguranca", "senha", "2fa", "mfa", "totp", "configuracao", "configuracoes", "perfil"),
+        "Configurações",
+        "/carteira/configuracoes",
+        "Segurança da conta, 2FA e preferências",
+    ),
+    (
+        ("ajuda", "suporte", "duvidas", "manual"),
+        "Central de Ajuda",
+        "/carteira/ajuda",
+        "Base de conhecimento e atendimento",
     ),
 )
 
@@ -290,7 +316,7 @@ async def _synthesize_answer_with_llm(
     context_text = "\n\n".join(context_blocks)
 
     system_instruction = (
-        "Você é o Assistente Oficial do SGI v2 (Sistema de Gestão de "
+        "Você é o Assistente Oficial do SGI (Sistema de Gestão de "
         "Investimentos). Seu papel é responder dúvidas de forma concisa, "
         "educada e precisa em Português do Brasil.\n\n"
         "REGRAS:\n"
@@ -302,7 +328,11 @@ async def _synthesize_answer_with_llm(
         "clareza que o tema não está detalhado na documentação oficial "
         "disponível.\n"
         "4. Não invente dados de mercado, rentabilidades ou parâmetros "
-        "fictícios."
+        "fictícios.\n"
+        "5. Jamais mencione detalhes internos de engenharia de software "
+        "(como branches, issues, números de pull request, datas de desenvolvimento, "
+        "migrações de banco ou comandos técnicos de infraestrutura); atenha-se "
+        "estritamente às funcionalidades, regras financeiras e navegação da interface."
     )
 
     user_prompt = (
