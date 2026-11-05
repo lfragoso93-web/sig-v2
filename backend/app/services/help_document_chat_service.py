@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-import math
-import re
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
+import logging
+import math
 from pathlib import Path
+import re
+import unicodedata
 
-from app.schemas.help_chat import HelpChatResponse, HelpChatSource
+import httpx
+
+from app.core.config import settings
+from app.schemas.help_chat import (
+    HelpChatResponse,
+    HelpChatRouteSuggestion,
+    HelpChatSource,
+)
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_DOCUMENTS = (
     ("DOCUMENTACAO_DO_SISTEMA.md", "Manual do sistema"),
@@ -21,11 +31,17 @@ _ALLOWED_DOCUMENTS = (
 _WORD_PATTERN = re.compile(r"[a-z0-9]{3,}")
 _HEADING_PATTERN = re.compile(r"^(#{1,4})\s+(.+?)\s*#*\s*$", re.MULTILINE)
 _STOP_WORDS = frozenset(
-    "a o as os um uma uns umas de da do das dos em no na nos nas por para com sem que como qual quais quando onde porque e ou se ao aos pelo pela pelos pelas sua seu suas seus isso esta este esse essa isto mais menos muito muita sobre entre desde ate ser ter pode podem sistema carteira dados voce usuario usar do da faz fazer sao foi".split()
+    (
+        "a o as os um uma uns umas de da do das dos em no na nos nas por para "
+        "com sem que como qual quais quando onde porque e ou se ao aos pelo "
+        "pela pelos pelas sua seu suas seus isso esta este esse essa isto "
+        "mais menos muito muita sobre entre desde ate ser ter pode podem "
+        "sistema carteira dados voce usuario usar do da faz fazer sao foi"
+    ).split()
 )
 _NO_MATCH_ANSWER = (
     "Não encontrei uma resposta suficiente nos documentos disponíveis. "
-    "Tente reformular a pergunta ou consulte as perguntas frequentes desta página."
+    "Tente reformular a pergunta ou consulte as perguntas frequentes."
 )
 _CORPORATE_ACTION_SECTIONS = frozenset(
     {
@@ -41,6 +57,85 @@ _CORPORATE_ACTION_SECTIONS = frozenset(
     }
 )
 
+_ROUTE_DEFINITIONS = (
+    (
+        ("patrimonio", "posicao", "posicoes", "custo", "saldo", "ativos"),
+        "Patrimônio",
+        "/carteira/patrimonio",
+        "Posições detalhadas, alocação e saldo consolidado",
+    ),
+    (
+        ("rentabilidade", "twr", "retorno", "benchmark", "ibov", "cdi"),
+        "Rentabilidade",
+        "/carteira/rentabilidade",
+        "Rentabilidade histórica ponderada pelo tempo (TWR)",
+    ),
+    (
+        (
+            "transacao",
+            "transacoes",
+            "lancamento",
+            "compra",
+            "venda",
+            "taxa",
+            "custos",
+            "aporte",
+        ),
+        "Transações",
+        "/carteira/transacoes",
+        "Administração e lançamento de operações (Alt+N)",
+    ),
+    (
+        (
+            "provento",
+            "proventos",
+            "dividendo",
+            "dividendos",
+            "jcp",
+            "rendimento",
+        ),
+        "Proventos",
+        "/carteira/proventos",
+        "Acompanhamento de proventos recebidos e provisionados",
+    ),
+    (
+        ("meta", "metas", "alocacao", "objetivo"),
+        "Metas",
+        "/carteira/metas",
+        "Alocação alvo por classe e acompanhamento de metas",
+    ),
+    (
+        ("analise", "rebalanceamento", "concentracao", "score"),
+        "Análise e IA",
+        "/carteira/analise",
+        "Diagnóstico da carteira e sugestões de rebalanceamento",
+    ),
+    (
+        ("irpf", "imposto", "darf", "tributacao", "declaracao"),
+        "IRPF",
+        "/carteira/irpf",
+        "Apuração de resultados e apoio para declaração",
+    ),
+    (
+        ("calculadora", "juros", "rendimentos", "simulacao"),
+        "Calculadora de Rendimentos",
+        "/carteira/ferramentas/rendimentos",
+        "Simulação de juros compostos e aportes regulares",
+    ),
+    (
+        ("renda fixa", "cdb", "lci", "lca", "simulador rf"),
+        "Simulador de Renda Fixa",
+        "/carteira/ferramentas/renda-fixa",
+        "Comparador de taxas e prazos de títulos de renda fixa",
+    ),
+    (
+        ("comparar", "comparador", "multiplos", "indicadores"),
+        "Comparador de Ativos",
+        "/carteira/ferramentas/comparador",
+        "Comparação lado a lado de múltiplos e histórico",
+    ),
+)
+
 
 @dataclass(frozen=True)
 class _DocumentChunk:
@@ -52,12 +147,15 @@ class _DocumentChunk:
 
 def _normalize(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value.casefold())
-    return "".join(char for char in decomposed if not unicodedata.combining(char))
+    return "".join(
+        char for char in decomposed if not unicodedata.combining(char)
+    )
 
 
 def _tokens(value: str) -> tuple[str, ...]:
     return tuple(
-        token for token in _WORD_PATTERN.findall(_normalize(value))
+        token
+        for token in _WORD_PATTERN.findall(_normalize(value))
         if token not in _STOP_WORDS
     )
 
@@ -66,13 +164,17 @@ def _clean_markdown(value: str) -> str:
     cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
     cleaned = re.sub(r"```[^\n]*\n?(.*?)```", r"\1", cleaned, flags=re.DOTALL)
     cleaned = re.sub(r"[`*~]", "", cleaned)
-    cleaned = re.sub(r"^\s*[-|>]+\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(
+        r"^\s*[-|> graphics]+\s*", "", cleaned, flags=re.MULTILINE
+    )
     cleaned = re.sub(r"\|", " · ", cleaned)
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 
 def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    paragraphs = [
+        part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()
+    ]
     chunks: list[str] = []
     current = ""
     for paragraph in paragraphs:
@@ -81,7 +183,7 @@ def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
                 chunks.append(current)
                 current = ""
             chunks.extend(
-                paragraph[index:index + max_chars]
+                paragraph[index: index + max_chars]
                 for index in range(0, len(paragraph), max_chars)
             )
             continue
@@ -98,14 +200,18 @@ def _split_paragraphs(text: str, max_chars: int = 1500) -> list[str]:
 
 def _is_searchable_section(filename: str, section: str) -> bool:
     normalized = _normalize(section)
-    if normalized.startswith(("pendencias", "roadmap", "historico", "diagnostico historico")):
+    if normalized.startswith(
+        ("pendencias", "roadmap", "historico", "diagnostico historico")
+    ):
         return False
     if filename == "CORPORATE_ACTIONS.md":
         return normalized in _CORPORATE_ACTION_SECTIONS
     return True
 
 
-def _relevant_excerpt(text: str, query_tokens: set[str], max_chars: int = 700) -> str:
+def _relevant_excerpt(
+    text: str, query_tokens: set[str], max_chars: int = 700
+) -> str:
     """Keep the strongest matching passage inside the displayed citation."""
     matches = [
         (match.start(), match.end())
@@ -143,6 +249,157 @@ def _relevant_excerpt(text: str, query_tokens: set[str], max_chars: int = 700) -
     return text[start:end].strip()
 
 
+def _suggest_routes(
+    question: str, sources: list[HelpChatSource]
+) -> list[HelpChatRouteSuggestion]:
+    source_text = " ".join(
+        f"{s.document} {s.section} {s.excerpt}" for s in sources
+    )
+    corpus = _normalize(f"{question} {source_text}")
+    suggestions: list[HelpChatRouteSuggestion] = []
+    seen_paths: set[str] = set()
+
+    for keywords, label, path, description in _ROUTE_DEFINITIONS:
+        if any(kw in corpus for kw in keywords):
+            if path not in seen_paths:
+                suggestions.append(
+                    HelpChatRouteSuggestion(
+                        label=label,
+                        path=path,
+                        description=description,
+                    )
+                )
+                seen_paths.add(path)
+                if len(suggestions) >= 3:
+                    break
+    return suggestions
+
+
+async def _synthesize_answer_with_llm(
+    question: str,
+    sources: list[HelpChatSource],
+) -> str | None:
+    if not sources:
+        return None
+
+    context_blocks = []
+    for idx, s in enumerate(sources, start=1):
+        context_blocks.append(
+            f"[{idx}] {s.document} | {s.section}\n{s.excerpt}"
+        )
+    context_text = "\n\n".join(context_blocks)
+
+    system_instruction = (
+        "Você é o Assistente Oficial do SGI v2 (Sistema de Gestão de "
+        "Investimentos). Seu papel é responder dúvidas de forma concisa, "
+        "educada e precisa em Português do Brasil.\n\n"
+        "REGRAS:\n"
+        "1. Baseie sua resposta EXCLUSIVAMENTE nos trechos de documentação "
+        "oficial fornecidos no contexto.\n"
+        "2. Seja direto e objetivo, explicando com clareza o funcionamento ou "
+        "o cálculo questionado.\n"
+        "3. Se a informação não constar nos trechos fornecidos, declare com "
+        "clareza que o tema não está detalhado na documentação oficial "
+        "disponível.\n"
+        "4. Não invente dados de mercado, rentabilidades ou parâmetros "
+        "fictícios."
+    )
+
+    user_prompt = (
+        f"{system_instruction}\n\n"
+        f"--- CONTEXTO DA DOCUMENTAÇÃO OFICIAL ---\n{context_text}\n\n"
+        f"--- PERGUNTA DO USUÁRIO ---\n{question}\n\n"
+        "Resposta:"
+    )
+
+    gemini_key = getattr(settings, "GEMINI_API_KEY", None)
+    if gemini_key:
+        try:
+            model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={gemini_key}"
+            )
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": user_prompt}],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "maxOutputTokens": 800,
+                },
+            }
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get(
+                            "parts", []
+                        )
+                        if parts and "text" in parts[0]:
+                            text = parts[0]["text"].strip()
+                            if text:
+                                return text
+                logger.warning(
+                    "Gemini API returned status %s: %s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
+        except Exception as exc:
+            logger.warning(
+                "Falha ao consultar Gemini API para help chat: %s", exc
+            )
+
+    groq_key = getattr(settings, "GROQ_API_KEY", None)
+    if groq_key:
+        try:
+            model = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {groq_key}"}
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Contexto:\n{context_text}\n\n"
+                            f"Pergunta: {question}"
+                        ),
+                    },
+                ],
+                "temperature": 0.2,
+                "max_tokens": 800,
+            }
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        content = choices[0].get("message", {}).get(
+                            "content", ""
+                        ).strip()
+                        if content:
+                            return content
+                logger.warning(
+                    "Groq API returned status %s: %s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
+        except Exception as exc:
+            logger.warning(
+                "Falha ao consultar Groq API para help chat: %s", exc
+            )
+
+    return None
+
+
 class HelpDocumentChatService:
     """Read-only lexical retrieval over an explicit allowlist of user docs."""
 
@@ -165,33 +422,50 @@ class HelpDocumentChatService:
                 first_heading = headings[0]
                 if content[:first_heading.start()].strip():
                     section_texts.append(
-                        (display_name, display_name, content[:first_heading.start()])
+                        (
+                            display_name,
+                            display_name,
+                            content[:first_heading.start()],
+                        )
                     )
                 heading_path: list[str] = []
                 for index, heading in enumerate(headings):
-                    end = headings[index + 1].start() if index + 1 < len(headings) else len(content)
+                    end = (
+                        headings[index + 1].start()
+                        if index + 1 < len(headings)
+                        else len(content)
+                    )
                     level = len(heading.group(1))
                     title = heading.group(2).strip()
                     heading_path = heading_path[: level - 1]
                     heading_path.append(title)
                     section_texts.append(
-                        (title, " ".join(heading_path), content[heading.end():end])
+                        (
+                            title,
+                            " ".join(heading_path),
+                            content[heading.end():end],
+                        )
                     )
 
             for section, heading_context, section_text in section_texts:
-                # Dated implementation snapshots in this design doc are not current guidance.
                 if not _is_searchable_section(filename, section):
                     continue
                 for text in _split_paragraphs(_clean_markdown(section_text)):
                     tokens = _tokens(f"{heading_context} {section} {text}")
                     if tokens:
-                        chunks.append(_DocumentChunk(display_name, section, text, tokens))
+                        chunks.append(
+                            _DocumentChunk(
+                                display_name, section, text, tokens
+                            )
+                        )
         return tuple(chunks)
 
-    def answer(self, question: str, limit: int = 3) -> HelpChatResponse:
+    def _retrieve_sources(
+        self, question: str, limit: int = 3
+    ) -> tuple[list[HelpChatSource], set[str]]:
         query_tokens = _tokens(question)
         if not query_tokens or not self._chunks:
-            return HelpChatResponse(answer=_NO_MATCH_ANSWER)
+            return [], set()
 
         query = set(query_tokens)
         document_frequency: Counter[str] = Counter()
@@ -206,7 +480,13 @@ class HelpDocumentChatService:
             if coverage < 0.34:
                 continue
             score = sum(
-                (1 + math.log((len(self._chunks) + 1) / (document_frequency[token] + 1)))
+                (
+                    1
+                    + math.log(
+                        (len(self._chunks) + 1)
+                        / (document_frequency[token] + 1)
+                    )
+                )
                 * (1 + math.log(counts[token]))
                 for token in matched
             )
@@ -227,7 +507,7 @@ class HelpDocumentChatService:
                 break
 
         if not selected:
-            return HelpChatResponse(answer=_NO_MATCH_ANSWER)
+            return [], query
 
         sources = [
             HelpChatSource(
@@ -237,11 +517,65 @@ class HelpDocumentChatService:
             )
             for chunk in selected
         ]
+        return sources, query
+
+    def answer(self, question: str, limit: int = 3) -> HelpChatResponse:
+        sources, _ = self._retrieve_sources(question, limit=limit)
+        if not sources:
+            return HelpChatResponse(
+                answer=_NO_MATCH_ANSWER,
+                sources=[],
+                suggested_routes=[],
+                mode="deterministic",
+            )
+
+        routes = _suggest_routes(question, sources)
         answer = (
             "Encontrei estes trechos na documentação do sistema. "
-            "Eles são apresentados como fonte para você conferir o contexto completo."
+            "Eles são apresentados como fonte para você conferir o "
+            "contexto completo."
         )
-        return HelpChatResponse(answer=answer, sources=sources)
+        return HelpChatResponse(
+            answer=answer,
+            sources=sources,
+            suggested_routes=routes,
+            mode="deterministic",
+        )
+
+    async def answer_async(
+        self, question: str, limit: int = 3
+    ) -> HelpChatResponse:
+        sources, _ = self._retrieve_sources(question, limit=limit)
+        if not sources:
+            return HelpChatResponse(
+                answer=_NO_MATCH_ANSWER,
+                sources=[],
+                suggested_routes=[],
+                mode="deterministic",
+            )
+
+        routes = _suggest_routes(question, sources)
+
+        llm_answer = await _synthesize_answer_with_llm(question, sources)
+        if llm_answer:
+            return HelpChatResponse(
+                answer=llm_answer,
+                sources=sources,
+                suggested_routes=routes,
+                mode="llm",
+            )
+
+        answer = (
+            "Encontrei estes trechos na documentação do sistema. "
+            "Eles são apresentados como fonte para você conferir o "
+            "contexto completo."
+        )
+        return HelpChatResponse(
+            answer=answer,
+            sources=sources,
+            suggested_routes=routes,
+            mode="deterministic",
+        )
 
 
 def _default_document_root() -> Path:
