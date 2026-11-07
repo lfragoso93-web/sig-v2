@@ -28,3 +28,9 @@ CVE-2024-26130
 CVE-2026-42055
 CVE-2026-9256
 CVE-2026-49975
+
+# zlib1g (base Debian 12 Bookworm) — correcao disponivel apenas para Debian 13 (deb13u1);
+# sem patch disponivel no canal de seguranca do Debian 12 Bookworm. Nao exploravel
+# diretamente no runtime do SGI v2.
+CVE-2026-76844
+CVE-2026-85091
