@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import Transacoes from './Transacoes'
+import Transacoes, { computeDateRange } from './Transacoes'
 
 const mocks = vi.hoisted(() => ({
   useTransactions: vi.fn(),
@@ -154,6 +154,68 @@ describe('Transacoes page with independent per-class pagination', () => {
         expect.objectContaining({
           asset_type: 'ACAO',
           page: 2,
+        }),
+      )
+    })
+  })
+  it('calcula intervalos de data corretamente na funcao utilitaria computeDateRange', () => {
+    const ref = new Date('2026-06-15T12:00:00Z')
+
+    expect(computeDateRange('all', undefined, undefined, ref)).toEqual({})
+    expect(computeDateRange('custom', '2026-01-01', '2026-03-31', ref)).toEqual({
+      dateFrom: '2026-01-01',
+      dateTo: '2026-03-31',
+    })
+
+    const ytd = computeDateRange('ytd', undefined, undefined, ref)
+    expect(ytd.dateFrom).toBe('2026-01-01')
+    expect(ytd.dateTo).toBe('2026-06-15')
+
+    const d30 = computeDateRange('30d', undefined, undefined, ref)
+    expect(d30.dateTo).toBe('2026-06-15')
+    expect(d30.dateFrom).toBe('2026-05-16')
+  })
+
+  it('aplica filtro temporal predefinido e consulta transacoes com date_from e date_to', async () => {
+    render(<Transacoes />)
+
+    const periodSelect = screen.getByLabelText('Filtro temporal') as HTMLSelectElement
+    expect(periodSelect.value).toBe('all')
+
+    fireEvent.change(periodSelect, { target: { value: '30d' } })
+
+    await waitFor(() => {
+      expect(mocks.useTransactions).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          date_from: expect.any(String),
+          date_to: expect.any(String),
+        }),
+      )
+    })
+  })
+
+  it('exibe campos de data inicial e final ao selecionar Personalizado e envia filtros', async () => {
+    render(<Transacoes />)
+
+    const periodSelect = screen.getByLabelText('Filtro temporal') as HTMLSelectElement
+    fireEvent.change(periodSelect, { target: { value: 'custom' } })
+
+    const dateFromInput = screen.getByLabelText('Data inicial') as HTMLInputElement
+    const dateToInput = screen.getByLabelText('Data final') as HTMLInputElement
+
+    expect(dateFromInput).toBeTruthy()
+    expect(dateToInput).toBeTruthy()
+
+    fireEvent.change(dateFromInput, { target: { value: '2026-01-01' } })
+    fireEvent.change(dateToInput, { target: { value: '2026-06-01' } })
+
+    await waitFor(() => {
+      expect(mocks.useTransactions).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          date_from: '2026-01-01',
+          date_to: '2026-06-01',
         }),
       )
     })

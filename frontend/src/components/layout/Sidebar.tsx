@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark, PieChart,
   Settings, Wallet,
   Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, Target, Calculator,
-  Wrench, Search,
+  Wrench, Search, Sparkles,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -259,6 +259,7 @@ export default function Sidebar() {
               <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" />
               <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" />
               <NavItem to="/carteira/ferramentas/analise-ativos" icon={Search} label="Análise de ativos" />
+              <NavItem to="/carteira/ferramentas/recomendacoes" icon={Sparkles} label="Recomendações IA" />
             </div>
           )}
         </div>
@@ -364,7 +365,8 @@ export default function Sidebar() {
                 <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" compact />
                 <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" compact />
                 <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" compact />
-              <NavItem to="/carteira/ferramentas/analise-ativos" icon={Search} label="Análise de ativos" compact />
+                <NavItem to="/carteira/ferramentas/analise-ativos" icon={Search} label="Análise de ativos" compact />
+                <NavItem to="/carteira/ferramentas/recomendacoes" icon={Sparkles} label="Recomendações IA" compact />
               </div>
             )}
           </div>

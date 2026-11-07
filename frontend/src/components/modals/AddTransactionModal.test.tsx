@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import AddTransactionModal from './AddTransactionModal'
+import AddTransactionModal, { sanitizeDecimalInput, parseNumeric } from './AddTransactionModal'
 import { useAppStore } from '@/store/appStore'
 
 const createTransaction = vi.fn()
@@ -410,5 +410,39 @@ describe('AddTransactionModal', () => {
         notes: 'Indexador: CDI | 110% do CDI',
       }),
     }))
+  })
+  it('preenche 0,00 no valor e limita casas decimais de valor (2) e quantidade (8)', async () => {
+    setup()
+
+    const quantityInput = screen.getByPlaceholderText('0') as HTMLInputElement
+    const priceInput = screen.getAllByPlaceholderText('0,00')[0] as HTMLInputElement
+
+    // Valores iniciais preenchidos
+    expect(quantityInput.value).toBe('0')
+    expect(priceInput.value).toBe('0,00')
+
+    // Teste de limitacao no input de preco (maximo 2 casas decimais)
+    fireEvent.change(priceInput, { target: { value: '123,456' } })
+    expect(priceInput.value).toBe('123,45')
+
+    fireEvent.change(priceInput, { target: { value: '99.999' } })
+    expect(priceInput.value).toBe('99.99')
+
+    // Teste de limitacao no input de quantidade (maximo 8 casas decimais para fracionados)
+    fireEvent.change(quantityInput, { target: { value: '0,123456789' } })
+    expect(quantityInput.value).toBe('0,12345678')
+
+    fireEvent.change(quantityInput, { target: { value: '1.234567891' } })
+    expect(quantityInput.value).toBe('1.23456789')
+  })
+
+  it('funcoes utilitarias de sanitizacao e parse numerico funcionam corretamente com ponto e virgula', () => {
+    expect(sanitizeDecimalInput('10,505', 2)).toBe('10,50')
+    expect(sanitizeDecimalInput('10.505', 2)).toBe('10.50')
+    expect(sanitizeDecimalInput('0,123456789', 8)).toBe('0,12345678')
+    expect(parseNumeric('12,34')).toBe(12.34)
+    expect(parseNumeric('12.34')).toBe(12.34)
+    expect(parseNumeric('0,00')).toBe(0)
+    expect(parseNumeric('')).toBe(0)
   })
 })

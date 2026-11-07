@@ -292,6 +292,31 @@ function extractErrorMessage(err: unknown): string {
   return 'Erro ao salvar lançamento. Tente novamente.'
 }
 
+export function sanitizeDecimalInput(value: string, maxDecimals: number): string {
+  if (!value) return ''
+  const clean = value.replace(/[^\d.,]/g, '')
+  const separatorMatch = clean.match(/[.,]/)
+  if (!separatorMatch) {
+    if (clean.length > 1 && clean.startsWith('0') && clean[1] !== '0') {
+      return clean.replace(/^0+/, '')
+    }
+    return clean
+  }
+  const separator = separatorMatch[0]
+  const sepIndex = separatorMatch.index!
+  const integerPart = clean.slice(0, sepIndex).replace(/[.,]/g, '')
+  const decimalPart = clean.slice(sepIndex + 1).replace(/[.,]/g, '').slice(0, maxDecimals)
+  return `${integerPart}${separator}${decimalPart}`
+}
+
+export function parseNumeric(val: string | number | null | undefined): number {
+  if (val == null) return 0
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  const str = String(val).trim().replace(',', '.')
+  const num = parseFloat(str)
+  return isNaN(num) ? 0 : num
+}
+
 export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId                                 = useAppStore(s => s.selectedPortfolioId)
   const prefill                                             = useAppStore(s => s.transactionModal.prefill)
@@ -317,14 +342,16 @@ export default function AddTransactionModal({ onClose }: Props) {
     ? String(prefill.quantity * prefill.price)
     : prefill?.quantity != null
       ? String(prefill.quantity)
-      : ''
+      : initialTab === 'renda_fixa' ? '0,00' : '0'
+
+  const initialPrice = prefill?.price != null ? String(prefill.price) : '0,00'
 
   const [activeTab,      setActiveTab]      = useState(initialTab)
   const [operation,      setOperation]      = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
   const [ticker,         setTicker]         = useState(prefill?.ticker    ?? '')
   const [assetName,      setAssetName]      = useState(prefill?.assetName ?? '')
   const [quantity,       setQuantity]       = useState(initialQuantity)
-  const [price,          setPrice]          = useState(prefill?.price     != null ? String(prefill.price)     : '')
+  const [price,          setPrice]          = useState(initialPrice)
   const [fees,           setFees]           = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
   const [date,           setDate]           = useState(prefill?.date      ?? TODAY)
   const [notes,          setNotes]          = useState(prefill?.notes     ?? '')
@@ -416,7 +443,11 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   useEffect(() => {
     if (isEditMode || !quote) { setPriceFromBrapi(false); return }
-    if (quote.price !== null && !price) { setPrice(String(quote.price)); setPriceFromBrapi(true) }
+    const isPriceDefault = !price || price === '0,00' || price === '0.00' || price === '0'
+    if (quote.price !== null && (isPriceDefault || !priceEdited)) {
+      setPrice(String(quote.price.toFixed(2)).replace('.', ','))
+      setPriceFromBrapi(true)
+    }
     if (quote.name && !assetName) setAssetName(quote.name)
     if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
@@ -425,14 +456,14 @@ export default function AddTransactionModal({ onClose }: Props) {
   useEffect(() => {
     if (isEditMode) return
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
-      setPrice(''); setPriceFromBrapi(false); setPriceEdited(false)
+      setPrice('0,00'); setPriceFromBrapi(false); setPriceEdited(false)
     }
     prevDate.current = date
   }, [date])
 
   useEffect(() => {
     if (tdPrice !== null && tdPrice !== undefined && isTesouro && !priceEdited) {
-      setPrice(String(tdPrice)); setPriceFromBrapi(true)
+      setPrice(String(tdPrice).replace('.', ',')); setPriceFromBrapi(true)
     }
   }, [tdPrice, isTesouro, priceEdited])
 
@@ -443,7 +474,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [tdRate, isTesouro, rate])
 
   useEffect(() => {
-    if (isTesouro && activeSlug && !priceEdited) { setPrice(''); setPriceFromBrapi(false) }
+    if (isTesouro && activeSlug && !priceEdited) { setPrice('0,00'); setPriceFromBrapi(false) }
   }, [date, isTesouro, activeSlug])
 
   useEffect(() => {
@@ -487,19 +518,21 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (item.indexer) setIndexer(item.indexer)
     if (item.rate != null) setRate(String(item.rate))
     if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
-    setPrice(''); setPriceFromBrapi(false); setPriceEdited(false); setShowTDSugg(false)
+    setPrice('0,00'); setPriceFromBrapi(false); setPriceEdited(false); setShowTDSugg(false)
   }
 
   function applyRVSuggestion(item: TickerSuggestion) {
     setTicker(item.ticker); setAssetName(item.name)
-    setPrice(''); setPriceFromBrapi(false); setPriceEdited(false); setShowRVSugg(false)
+    setPrice('0,00'); setPriceFromBrapi(false); setPriceEdited(false); setShowRVSugg(false)
   }
 
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key); setCurrency(t.currency)
     if (!prefill?.ticker) { setTicker(''); setAssetName('') }
-    setPrice(''); setIndexer(''); setRate(''); setMaturity('')
+    setPrice('0,00')
+    setQuantity(key === 'renda_fixa' ? '0,00' : '0')
+    setIndexer(''); setRate(''); setMaturity('')
     setDailyLiquidity(false)
     setContractChoice(key === 'renda_fixa' ? (isEditMode ? 'legacy' : 'new') : 'legacy')
     setProductType('CDB'); setGracePeriodEnd('')
@@ -516,7 +549,7 @@ export default function AddTransactionModal({ onClose }: Props) {
       return
     }
 
-    const fee = parseFloat(fees || '0')
+    const fee = parseNumeric(fees)
 
     if (!ticker.trim()) { setError('Informe o ticker/código do ativo.'); return }
     if (((isRF && !existingContractSelected && !legacyRFEdit) || isTesouro) && !indexer) {
@@ -534,7 +567,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         prc = prefill.price
       } else {
         // Novos registros legados usam quantity=1 e price=valor investido.
-        const valorInvestido = parseFloat(quantity)
+        const valorInvestido = parseNumeric(quantity)
         if (isNaN(valorInvestido) || valorInvestido <= 0) {
           setError('Informe o valor investido (deve ser maior que zero).')
           return
@@ -543,8 +576,8 @@ export default function AddTransactionModal({ onClose }: Props) {
         prc = valorInvestido
       }
     } else {
-      qty = parseFloat(quantity)
-      prc = parseFloat(price)
+      qty = parseNumeric(quantity)
+      prc = parseNumeric(price)
       if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
       if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
     }
@@ -641,7 +674,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   function handleReset() {
     setSuccess(false)
     setTicker(prefill?.ticker ?? ''); setAssetName(prefill?.assetName ?? '')
-    setQuantity(''); setPrice(''); setFees(''); setDate(TODAY); setNotes('')
+    setQuantity(activeTab === 'renda_fixa' ? '0,00' : '0'); setPrice('0,00'); setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity('')
     setProductType('CDB'); setGracePeriodEnd('')
     setContractChoice(isRF ? 'new' : 'legacy'); hydratedContractRef.current = null
@@ -654,12 +687,14 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   const totalValue = (() => {
     if (isRF) {
-      const val = parseFloat(quantity)
-      if (isNaN(val) || val <= 0) return null
-      return val + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+      const val = parseNumeric(quantity)
+      if (val <= 0) return null
+      return val + (isBuy ? 1 : -1) * parseNumeric(fees)
     }
-    if (!quantity || !price) return null
-    return parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+    const qty = parseNumeric(quantity)
+    const prc = parseNumeric(price)
+    if (qty <= 0 || prc <= 0) return null
+    return qty * prc + (isBuy ? 1 : -1) * parseNumeric(fees)
   })()
 
   const total = totalValue !== null
@@ -1015,21 +1050,33 @@ export default function AddTransactionModal({ onClose }: Props) {
                 {isRF ? (
                   <Field label={`${isEditMode ? 'Valor registrado' : 'Valor Investido'} (${currency})`} style={{ flex: 1 }}>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       aria-label={isEditMode ? 'Valor registrado' : 'Valor investido'}
                       value={quantity}
-                      onChange={e => setQuantity(e.target.value)}
+                      onChange={e => setQuantity(sanitizeDecimalInput(e.target.value, 2))}
+                      onFocus={e => e.target.select()}
                       placeholder="0,00"
-                      min="0"
-                      step="0.01"
                       readOnly={isEditMode}
                     />
                   </Field>
                 ) : (
                   <>
                     <Field label={isTesouro ? 'Quantidade (títulos)' : 'Quantidade'} style={{ flex: 1 }}>
-                      <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
-                        placeholder="0" min="0" step="any" />
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={quantity}
+                        onChange={e => setQuantity(sanitizeDecimalInput(e.target.value, 8))}
+                        onFocus={e => e.target.select()}
+                        placeholder="0"
+                      />
                     </Field>
                     <Field
                       label={`${isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
@@ -1048,9 +1095,19 @@ export default function AddTransactionModal({ onClose }: Props) {
                       )}
                     >
                       <Input
-                        type="number" value={price}
-                        onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
-                        placeholder="0,00" min="0" step="any"
+                        type="text"
+                        inputMode="decimal"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={price}
+                        onChange={e => {
+                          setPrice(sanitizeDecimalInput(e.target.value, 2))
+                          setPriceFromBrapi(false)
+                          setPriceEdited(true)
+                        }}
+                        onFocus={e => e.target.select()}
+                        placeholder="0,00"
                         highlight={priceFromBrapi}
                       />
                     </Field>
@@ -1061,8 +1118,17 @@ export default function AddTransactionModal({ onClose }: Props) {
               {/* Taxas + Data */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <Field label="Taxas / Corretagem" style={{ flex: 1 }}>
-                  <Input type="number" value={fees} onChange={e => setFees(e.target.value)}
-                    placeholder="0,00" min="0" step="any" />
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={fees}
+                    onChange={e => setFees(sanitizeDecimalInput(e.target.value, 2))}
+                    onFocus={e => e.target.select()}
+                    placeholder="0,00"
+                  />
                 </Field>
                 <Field label="Data da operação" style={{ flex: 1 }}>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} />

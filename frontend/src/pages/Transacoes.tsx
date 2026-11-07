@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Trash2, Pencil, ChevronDown, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Trash2, Pencil, ChevronDown, BarChart2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
@@ -153,12 +153,75 @@ function Pagination({ page, pages, onPrev, onNext }: { page: number; pages: numb
   )
 }
 
+export type PeriodOption = 'all' | '30d' | '3m' | 'ytd' | '12m' | 'custom'
+
+export const PERIOD_OPTIONS: { label: string; value: PeriodOption }[] = [
+  { label: 'Todo o período', value: 'all' },
+  { label: 'Últimos 30 dias', value: '30d' },
+  { label: 'Últimos 3 meses', value: '3m' },
+  { label: 'Este ano', value: 'ytd' },
+  { label: 'Últimos 12 meses', value: '12m' },
+  { label: 'Personalizado', value: 'custom' },
+]
+
+export function computeDateRange(
+  period: PeriodOption,
+  customFrom?: string,
+  customTo?: string,
+  referenceDate = new Date(),
+): { dateFrom?: string; dateTo?: string } {
+  if (period === 'all') {
+    return {}
+  }
+  if (period === 'custom') {
+    return {
+      dateFrom: customFrom || undefined,
+      dateTo: customTo || undefined,
+    }
+  }
+
+  const formatDateIso = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const toStr = formatDateIso(referenceDate)
+
+  if (period === '30d') {
+    const from = new Date(referenceDate)
+    from.setDate(from.getDate() - 30)
+    return { dateFrom: formatDateIso(from), dateTo: toStr }
+  }
+
+  if (period === '3m') {
+    const from = new Date(referenceDate)
+    from.setMonth(from.getMonth() - 3)
+    return { dateFrom: formatDateIso(from), dateTo: toStr }
+  }
+
+  if (period === 'ytd') {
+    return { dateFrom: `${referenceDate.getFullYear()}-01-01`, dateTo: toStr }
+  }
+
+  if (period === '12m') {
+    const from = new Date(referenceDate)
+    from.setFullYear(from.getFullYear() - 1)
+    return { dateFrom: formatDateIso(from), dateTo: toStr }
+  }
+
+  return {}
+}
+
 interface ClassSectionProps {
   portfolioId: number
   assetType: string
   label: string
   globalSearch: string
   opFilter: 'todos' | 'buy' | 'sell'
+  dateFrom?: string
+  dateTo?: string
   onEdit: (t: Transaction) => void
   onDelete: (id: number) => void
   onTickerClick?: (ticker: string) => void
@@ -170,6 +233,8 @@ function ClassSection({
   label,
   globalSearch,
   opFilter,
+  dateFrom,
+  dateTo,
   onEdit,
   onDelete,
   onTickerClick,
@@ -180,7 +245,7 @@ function ClassSection({
 
   useEffect(() => {
     setPage(1)
-  }, [globalSearch, opFilter, groupSearch])
+  }, [globalSearch, opFilter, groupSearch, dateFrom, dateTo])
 
   const activeTicker = (groupSearch.trim() || globalSearch.trim()) || undefined
 
@@ -190,6 +255,8 @@ function ClassSection({
     page_size: 15,
     ticker: activeTicker,
     operation: opFilter !== 'todos' ? opFilter : undefined,
+    date_from: dateFrom,
+    date_to: dateTo,
   })
 
   const items = paged?.items ?? []
@@ -304,6 +371,20 @@ export default function Transacoes() {
   const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null)
 
+  const [periodFilter, setPeriodFilter] = useState<PeriodOption>(() => {
+    const p = searchParams.get('period') as PeriodOption
+    if (['all', '30d', '3m', 'ytd', '12m', 'custom'].includes(p)) return p
+    if (searchParams.get('date_from') || searchParams.get('date_to')) return 'custom'
+    return 'all'
+  })
+  const [customDateFrom, setCustomDateFrom] = useState(() => searchParams.get('date_from') ?? '')
+  const [customDateTo, setCustomDateTo] = useState(() => searchParams.get('date_to') ?? '')
+
+  const dateRange = useMemo(
+    () => computeDateRange(periodFilter, customDateFrom, customDateTo),
+    [periodFilter, customDateFrom, customDateTo],
+  )
+
   const { data: classSummaries = [], isLoading: loadingClasses } = useTransactionClasses(selectedPortfolioId)
 
   // Consultar resumo global para o gráfico de evolução e totais
@@ -312,6 +393,8 @@ export default function Transacoes() {
     page_size: 100,
     ticker:    search || undefined,
     operation: opFilter !== 'todos' ? opFilter : undefined,
+    date_from: dateRange.dateFrom,
+    date_to:   dateRange.dateTo,
   })
 
   const globalTransactions = globalPaged?.items ?? []
@@ -386,6 +469,53 @@ export default function Transacoes() {
             </button>
           ))}
         </div>
+
+        {/* Filtro temporal */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
+            <Calendar size={13} style={{ color: 'var(--color-text-muted)' }} />
+            <select
+              aria-label="Filtro temporal"
+              className="text-xs font-medium bg-transparent border-none outline-none cursor-pointer"
+              style={{ color: 'var(--color-text)', minHeight: 28 }}
+              value={periodFilter}
+              onChange={e => setPeriodFilter(e.target.value as PeriodOption)}
+            >
+              {PERIOD_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value} style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {periodFilter === 'custom' && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>De:</span>
+                <input
+                  type="date"
+                  aria-label="Data inicial"
+                  className="input text-xs"
+                  value={customDateFrom}
+                  onChange={e => setCustomDateFrom(e.target.value)}
+                  style={{ height: 32, padding: '2px 8px' }}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Até:</span>
+                <input
+                  type="date"
+                  aria-label="Data final"
+                  className="input text-xs"
+                  value={customDateTo}
+                  onChange={e => setCustomDateTo(e.target.value)}
+                  style={{ height: 32, padding: '2px 8px' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -410,6 +540,8 @@ export default function Transacoes() {
                 label={cls.label || ASSET_TYPE_LABEL[cls.asset_type] || cls.asset_type}
                 globalSearch={search}
                 opFilter={opFilter}
+                dateFrom={dateRange.dateFrom}
+                dateTo={dateRange.dateTo}
                 onEdit={handleEdit}
                 onDelete={id => setConfirmDelete(id)}
                 onTickerClick={setSelectedTicker}
