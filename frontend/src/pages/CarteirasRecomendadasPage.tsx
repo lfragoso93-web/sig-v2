@@ -17,7 +17,6 @@ import {
 import {
   useRecommendedPortfolios,
   useSimulateRecommendedPortfolio,
-  type RecommendedPortfolio,
 } from '@/hooks/useRecommendedPortfolios'
 import { formatBRL, fmtMoney, assetBadgeClass } from '@/utils/format'
 

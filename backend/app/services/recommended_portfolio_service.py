@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
 from app.schemas.recommended_portfolio import (
-    RecommendedAsset,
-    RecommendedClass,
     RecommendedPortfolio,
     RecommendedPortfolioSimulationRequest,
     RecommendedPortfolioSimulationResponse,
