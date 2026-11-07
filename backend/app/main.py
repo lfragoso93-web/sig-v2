@@ -37,6 +37,7 @@ from app.routers import (
     positions,
     prices,
     proventos,
+    recommended_portfolios,
     rentabilidade,
     transactions,
     treasury,
@@ -214,6 +215,7 @@ app.include_router(rentabilidade.router,   prefix=f"{PREFIX}/portfolios",   tags
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags=["goals"])
 app.include_router(help_chat.router,       prefix=f"{PREFIX}/help",          tags=["help"])
+app.include_router(recommended_portfolios.router, prefix=f"{PREFIX}/recommended-portfolios", tags=["recommended-portfolios"])
 
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
