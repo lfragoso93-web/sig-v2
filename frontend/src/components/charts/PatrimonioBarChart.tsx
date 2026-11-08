@@ -20,6 +20,7 @@ export interface PatrimonioEvolutionPoint {
   has_partial_prices?: boolean
   return_is_estimated?: boolean
   history_source?: 'portfolio_snapshot' | 'portfolio_class_snapshot' | string
+  is_realtime?: boolean
 }
 
 interface Props {
@@ -56,6 +57,7 @@ export interface ChartPoint {
   partial: boolean
   estimated: boolean
   source: string
+  is_realtime?: boolean
 }
 
 export function buildPatrimonioChartData(data: PatrimonioEvolutionPoint[]): ChartPoint[] {
@@ -63,8 +65,9 @@ export function buildPatrimonioChartData(data: PatrimonioEvolutionPoint[]): Char
     const patrimonio = Number(point.market_value)
     const aplicado = Number(point.cost_basis)
     const resultado = Number(point.unrealized_pnl)
+    const isRealTime = Boolean(point.is_realtime || point.history_source === 'realtime')
 
-    return {
+    const basePoint: ChartPoint = {
       name: monthLabel(point.period ?? point.date.slice(0, 7)),
       date: point.date,
       patrimonio,
@@ -80,6 +83,12 @@ export function buildPatrimonioChartData(data: PatrimonioEvolutionPoint[]): Char
       estimated: Boolean(point.return_is_estimated),
       source: point.history_source ?? 'unknown',
     }
+
+    if (isRealTime) {
+      basePoint.is_realtime = true
+    }
+
+    return basePoint
   })
 }
 
@@ -100,9 +109,12 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
   const point = payload?.[0]?.payload
   if (!active || !point) return null
 
-  const referenceLabel = point.source === 'portfolio_class_snapshot'
-    ? 'Snapshot mensal da classe'
-    : 'Snapshot consolidado'
+  const isRealTime = point.source === 'realtime' || Boolean(point.is_realtime)
+  const referenceLabel = isRealTime
+    ? 'Posição Atual (Tempo Real)'
+    : point.source === 'portfolio_class_snapshot'
+      ? 'Snapshot mensal da classe'
+      : 'Snapshot consolidado'
 
   return (
     <div
@@ -117,7 +129,24 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
         fontSize: 'var(--text-xs)',
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>{point.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontWeight: 700, marginBottom: 10 }}>
+        <span>{point.name}</span>
+        {isRealTime && (
+          <span
+            style={{
+              fontSize: '0.62rem',
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 'var(--radius-full)',
+              background: 'oklch(from var(--color-primary) l c h / 0.15)',
+              color: 'var(--color-primary)',
+              border: '1px solid oklch(from var(--color-primary) l c h / 0.3)',
+            }}
+          >
+            Tempo Real
+          </span>
+        )}
+      </div>
       <TooltipRow label="Patrimônio" value={formatBRL(point.patrimonio)} marker="var(--color-primary)" />
       <TooltipRow label="Valor aplicado" value={formatBRL(point.aplicado)} marker="var(--color-success)" />
       <TooltipRow
@@ -133,8 +162,8 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
           valueClass={signClass(point.twr)}
         />
       )}
-      <div style={{ marginTop: 9, color: 'var(--color-text-faint)', fontSize: '0.68rem' }}>
-        {referenceLabel} de {fullDate(point.date)}{point.partial ? ' · cobertura parcial' : ''}
+      <div style={{ marginTop: 9, color: isRealTime ? 'var(--color-primary)' : 'var(--color-text-faint)', fontSize: '0.68rem', fontWeight: isRealTime ? 600 : 400 }}>
+        {referenceLabel}{isRealTime ? ` · ${fullDate(point.date)}` : ` de ${fullDate(point.date)}`}{point.partial ? ' · cobertura parcial' : ''}
       </div>
     </div>
   )

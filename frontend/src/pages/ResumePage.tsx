@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import {
   usePortfolioList,
@@ -135,7 +135,7 @@ export default function ResumePage() {
     period,
   )
 
-  const patrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
+  const rawPatrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
   const classHistoryUnavailable = Boolean(
     activeAssetType
     && !loadingClassAvailability
@@ -154,6 +154,73 @@ export default function ResumePage() {
   const loadingKpiCards = loadingPortfolios || loadingSummary
   const summaryContractError = summaryError instanceof Error
     && summaryError.message.startsWith('Contrato summary.v2 inválido:')
+
+  const patrimonioHistory = useMemo(() => {
+    if (!rawPatrimonioHistory) return rawPatrimonioHistory
+
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const currentPeriod = todayStr.slice(0, 7)
+
+    let currentMarketValue: number | null = null
+    let currentCostBasis: number | null = null
+    let currentUnrealizedPnl: number | null = null
+    let currentReturnPct: number | null = null
+
+    if (!activeAssetType && metrics) {
+      currentMarketValue = metrics.patrimonio
+      currentCostBasis = metrics.aportado
+      currentUnrealizedPnl = metrics.variacaoValor
+      currentReturnPct = metrics.rentabilidadePct
+    } else if (activeAssetType && positions) {
+      const group = positions.find(g => g.positions?.[0]?.asset_type === activeAssetType)
+      if (group) {
+        currentMarketValue = group.total_value
+        currentCostBasis = group.total_invested
+        currentUnrealizedPnl = group.capital_result_value ?? (group.total_value - group.total_invested)
+        currentReturnPct = group.total_result_pct ?? group.variation_pct ?? null
+      }
+    }
+
+    if (currentMarketValue === null || currentCostBasis === null) {
+      return rawPatrimonioHistory
+    }
+
+    const historyCopy = [...rawPatrimonioHistory]
+    const lastIndex = historyCopy.length - 1
+
+    if (lastIndex >= 0) {
+      const lastPoint = historyCopy[lastIndex]
+      const lastPeriod = lastPoint.period ?? lastPoint.date.slice(0, 7)
+      if (lastPeriod === currentPeriod) {
+        historyCopy[lastIndex] = {
+          ...lastPoint,
+          date: todayStr,
+          period: currentPeriod,
+          market_value: currentMarketValue,
+          cost_basis: currentCostBasis,
+          unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+          accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : lastPoint.accumulated_return_pct,
+          history_source: 'realtime',
+          is_realtime: true,
+        }
+        return historyCopy
+      }
+    }
+
+    historyCopy.push({
+      date: todayStr,
+      period: currentPeriod,
+      market_value: currentMarketValue,
+      cost_basis: currentCostBasis,
+      unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+      accumulated_return_pct: currentReturnPct ?? undefined,
+      history_source: 'realtime',
+      is_realtime: true,
+    })
+
+    return historyCopy
+  }, [rawPatrimonioHistory, activeAssetType, metrics, positions])
 
   if (loadingPortfolios) {
     return (
