@@ -18,6 +18,7 @@ export interface DailyPoint {
   has_partial_prices: boolean
   return_is_estimated: boolean
   history_source: string
+  is_realtime?: boolean
 }
 
 export interface MonthlyPoint extends DailyPoint {
@@ -43,6 +44,7 @@ export interface ClassEvolutionPoint {
   return_is_estimated: boolean
   valuation_status: string
   history_source: 'portfolio_class_snapshot'
+  is_realtime?: boolean
 }
 
 export interface MonthlyClassEvolutionPoint extends ClassEvolutionPoint {

@@ -20,7 +20,7 @@ import {
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
-import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
+import PatrimonioBarChart, { type PatrimonioEvolutionPoint } from '@/components/charts/PatrimonioBarChart'
 import EvolutionClassSelect from '@/components/charts/EvolutionClassSelect'
 import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
@@ -155,7 +155,7 @@ export default function ResumePage() {
   const summaryContractError = summaryError instanceof Error
     && summaryError.message.startsWith('Contrato summary.v2 inválido:')
 
-  const patrimonioHistory = useMemo(() => {
+  const patrimonioHistory: PatrimonioEvolutionPoint[] | undefined = useMemo(() => {
     if (!rawPatrimonioHistory) return rawPatrimonioHistory
 
     const today = new Date()
@@ -186,7 +186,7 @@ export default function ResumePage() {
       return rawPatrimonioHistory
     }
 
-    const historyCopy = [...rawPatrimonioHistory]
+    const historyCopy: PatrimonioEvolutionPoint[] = [...rawPatrimonioHistory]
     const lastIndex = historyCopy.length - 1
 
     if (lastIndex >= 0) {
@@ -200,7 +200,7 @@ export default function ResumePage() {
           market_value: currentMarketValue,
           cost_basis: currentCostBasis,
           unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
-          accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : lastPoint.accumulated_return_pct,
+          accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : (lastPoint.accumulated_return_pct ?? 0),
           history_source: 'realtime',
           is_realtime: true,
         }
@@ -214,7 +214,7 @@ export default function ResumePage() {
       market_value: currentMarketValue,
       cost_basis: currentCostBasis,
       unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
-      accumulated_return_pct: currentReturnPct ?? undefined,
+      accumulated_return_pct: currentReturnPct ?? 0,
       history_source: 'realtime',
       is_realtime: true,
     })
