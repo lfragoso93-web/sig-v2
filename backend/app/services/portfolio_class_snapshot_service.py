@@ -41,7 +41,10 @@ from app.services.fixed_income_valuation_service import (
     fixed_income_coverage_from_transactions,
     get_fixed_income_totals_from_transactions,
 )
-from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
+from app.services.fx_rate_reader import (
+    load_usd_brl_rate_at_or_before,
+    load_usd_brl_rates_for_dates,
+)
 from app.services.lifecycle_aware_price_service import (
     get_prices_at_date_with_lifecycle,
 )
@@ -314,19 +317,23 @@ async def rebuild_class_snapshots(
         )
 
     today = datetime.now(UTC).date()
+    has_crypto = any(_asset_type(t.asset_type) == AssetType.CRIPTO for t in supported_transactions)
+    first_tx_date = supported_transactions[0].date
+    start = first_tx_date if has_crypto else _next_business_date(first_tx_date)
+
     usd_transactions = [
         transaction
         for transaction in market_transactions
         if _asset_type(transaction.asset_type) in _USD_TYPES
     ]
     fx_rates_by_date: dict[date, Decimal] = {}
+    fx_start = today
     if usd_transactions:
-        first_usd_date = _next_business_date(
-            min(transaction.date for transaction in usd_transactions)
-        )
+        first_tx_usd = min(transaction.date for transaction in usd_transactions)
+        fx_start = min(start, first_tx_usd) - timedelta(days=5)
         fx_rates_by_date = await _load_required_usd_brl_rates(
             db,
-            first_usd_date,
+            fx_start,
             today,
         )
 
@@ -334,23 +341,64 @@ async def rebuild_class_snapshots(
         await load_portfolio_dividend_entitlements(db, portfolio_id),
     )
 
-    has_crypto = any(_asset_type(t.asset_type) == AssetType.CRIPTO for t in supported_transactions)
-    first_tx_date = supported_transactions[0].date
-    start = first_tx_date if has_crypto else _next_business_date(first_tx_date)
     await db.execute(
         delete(PortfolioClassSnapshot).where(
             PortfolioClassSnapshot.portfolio_id == portfolio_id
         )
     )
 
+    effective_market_transactions: list[Transaction] = []
     transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in market_transactions:
         is_crypto = _asset_type(transaction.asset_type) == AssetType.CRIPTO
-        tx_day = transaction.date if is_crypto else _next_business_date(transaction.date)
-        transactions_by_day[tx_day].append(transaction)
+        effective_date = transaction.date if is_crypto else _next_business_date(transaction.date)
+        if effective_date == transaction.date:
+            effective_tx = transaction
+        else:
+            effective_tx = Transaction(
+                id=transaction.id,
+                portfolio_id=transaction.portfolio_id,
+                asset_type=transaction.asset_type,
+                ticker=transaction.ticker,
+                operation=transaction.operation,
+                date=effective_date,
+                quantity=transaction.quantity,
+                price=transaction.price,
+                currency=transaction.currency,
+                exchange_rate=transaction.exchange_rate,
+                fees=transaction.fees,
+                notes=transaction.notes,
+                created_at=transaction.created_at,
+                updated_at=transaction.updated_at,
+            )
+        effective_market_transactions.append(effective_tx)
+        transactions_by_day[effective_date].append(effective_tx)
+
+    effective_treasury_transactions: list[Transaction] = []
     treasury_transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in treasury_transactions:
-        treasury_transactions_by_day[_next_business_date(transaction.date)].append(transaction)
+        effective_date = _next_business_date(transaction.date)
+        if effective_date == transaction.date:
+            effective_tx = transaction
+        else:
+            effective_tx = Transaction(
+                id=transaction.id,
+                portfolio_id=transaction.portfolio_id,
+                asset_type=transaction.asset_type,
+                ticker=transaction.ticker,
+                operation=transaction.operation,
+                date=effective_date,
+                quantity=transaction.quantity,
+                price=transaction.price,
+                currency=transaction.currency,
+                exchange_rate=transaction.exchange_rate,
+                fees=transaction.fees,
+                notes=transaction.notes,
+                created_at=transaction.created_at,
+                updated_at=transaction.updated_at,
+            )
+        effective_treasury_transactions.append(effective_tx)
+        treasury_transactions_by_day[effective_date].append(effective_tx)
 
     actions_by_ticker = await load_global_corporate_actions_by_ticker(
         db,
@@ -375,7 +423,7 @@ async def rebuild_class_snapshots(
                 external_flows[parsed] -= quantity * price_brl - fees_brl
 
         projected_positions = project_class_positions_at(
-            market_transactions,
+            effective_market_transactions,
             actions_by_ticker,
             target_date=cursor,
         )
@@ -407,9 +455,18 @@ async def rebuild_class_snapshots(
                 fx_rate = fx_rates_by_date.get(cursor)
                 if fx_rate is None:
                     prev = cursor - timedelta(days=1)
-                    while prev not in fx_rates_by_date and prev >= first_usd_date:
+                    while prev not in fx_rates_by_date and prev >= fx_start:
                         prev -= timedelta(days=1)
-                    fx_rate = fx_rates_by_date.get(prev, Decimal(1))
+                    fx_rate = fx_rates_by_date.get(prev)
+                    if fx_rate is None:
+                        persisted_fx = await load_usd_brl_rate_at_or_before(db, cursor)
+                        if persisted_fx is not None:
+                            fx_rate = persisted_fx.rate
+                            fx_rates_by_date[cursor] = fx_rate
+                        else:
+                            raise RuntimeError(
+                                f"cobertura USD-BRL persistida indisponível em ou antes de {cursor.isoformat()}"
+                            )
 
             market_value = _ZERO
             cost_basis = _ZERO
@@ -496,7 +553,7 @@ async def rebuild_class_snapshots(
                     treasury_flow -= quantity * price_brl - fees_brl
 
             treasury_positions = project_class_positions_at(
-                treasury_transactions,
+                effective_treasury_transactions,
                 {},
                 target_date=cursor,
             )
@@ -508,10 +565,15 @@ async def rebuild_class_snapshots(
                 treasury_realized_pnl,
             )
             open_positions = treasury_open.get(AssetType.TESOURO_DIRETO, [])
+            price_date = (
+                cursor - timedelta(days=cursor.weekday() - 4)
+                if cursor.weekday() >= 5
+                else cursor
+            )
             treasury_prices = await _load_exact_treasury_prices(
                 db,
                 (position.ticker for position in open_positions),
-                cursor,
+                price_date,
             )
             has_coverage = all(
                 str(position.ticker).upper() in treasury_prices

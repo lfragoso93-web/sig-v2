@@ -411,3 +411,59 @@ async def test_crypto_class_snapshot_persists_weekend_twr(monkeypatch):
     assert date(2026, 9, 6) in persisted
     assert persisted[date(2026, 9, 5)]["daily_return_pct"] == Decimal("10.000000")
     assert persisted[date(2026, 9, 6)]["accumulated_return_pct"] == Decimal("20.000000")
+
+
+@pytest.mark.asyncio
+async def test_treasury_class_snapshot_carries_friday_price_across_weekend(monkeypatch):
+    tx = Transaction(
+        ticker="TESOURO-SELIC-2029",
+        asset_type="TESOURO_DIRETO",
+        operation=OperationType.buy,
+        quantity=Decimal("10"),
+        price=Decimal("100"),
+        fees=Decimal("0"),
+        date=date(2026, 9, 4),  # Friday
+    )
+
+    class _FixedDateTime:
+        @classmethod
+        def now(cls, _timezone):
+            return SimpleNamespace(date=lambda: date(2026, 9, 7))  # Monday
+
+    persisted = {}
+
+    async def capture_snapshot(_db, _portfolio_id, asset_type, snapshot_date, values):
+        persisted[snapshot_date] = dict(values)
+
+    class _TxResult:
+        def scalars(self):
+            return SimpleNamespace(all=lambda: [tx])
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_TxResult())
+    db.commit = AsyncMock()
+
+    async def mock_treasury_prices(_db, _tickers, target_date):
+        # Friday price is available, Monday price is available; no weekend prices
+        if target_date == date(2026, 9, 4):
+            return {"TESOURO-SELIC-2029": Decimal("100.00")}
+        elif target_date == date(2026, 9, 7):
+            return {"TESOURO-SELIC-2029": Decimal("102.00")}
+        return {}
+
+    monkeypatch.setattr(class_snapshot_service, "datetime", _FixedDateTime)
+    monkeypatch.setattr(class_snapshot_service, "load_portfolio_dividend_entitlements", AsyncMock(return_value=[]))
+    monkeypatch.setattr(class_snapshot_service, "load_global_corporate_actions_by_ticker", AsyncMock(return_value={}))
+    monkeypatch.setattr(class_snapshot_service, "_load_exact_treasury_prices", mock_treasury_prices)
+    monkeypatch.setattr(class_snapshot_service, "_upsert_class_snapshot", capture_snapshot)
+
+    count = await class_snapshot_service.rebuild_class_snapshots(db, portfolio_id=1)
+
+    assert count == 4
+    assert date(2026, 9, 4) in persisted  # Friday
+    assert date(2026, 9, 5) in persisted  # Saturday carries Friday
+    assert date(2026, 9, 6) in persisted  # Sunday carries Friday
+    assert date(2026, 9, 7) in persisted  # Monday has new price
+    assert persisted[date(2026, 9, 5)]["market_value"] == Decimal("1000.00")
+    assert persisted[date(2026, 9, 6)]["market_value"] == Decimal("1000.00")
+    assert persisted[date(2026, 9, 7)]["market_value"] == Decimal("1020.00")

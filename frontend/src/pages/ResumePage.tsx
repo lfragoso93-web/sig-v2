@@ -166,19 +166,25 @@ export default function ResumePage() {
     let currentCostBasis: number | null = null
     let currentUnrealizedPnl: number | null = null
     let currentReturnPct: number | null = null
+    let currentHasPartialPrices = false
+    let currentReturnIsEstimated = false
 
     if (!activeAssetType && metrics) {
       currentMarketValue = metrics.patrimonio
       currentCostBasis = metrics.aportado
       currentUnrealizedPnl = metrics.variacaoValor
       currentReturnPct = metrics.rentabilidadePct
+      currentHasPartialPrices = metrics.hasPartialPrices
+      currentReturnIsEstimated = metrics.returnIsEstimated
     } else if (activeAssetType && positions) {
       const group = positions.find(g => g.positions?.[0]?.asset_type === activeAssetType)
       if (group) {
         currentMarketValue = group.total_value
         currentCostBasis = group.total_invested
         currentUnrealizedPnl = group.capital_result_value ?? (group.total_value - group.total_invested)
-        currentReturnPct = group.total_result_pct ?? group.variation_pct ?? null
+        currentReturnPct = null
+        currentHasPartialPrices = false
+        currentReturnIsEstimated = false
       }
     }
 
@@ -201,6 +207,8 @@ export default function ResumePage() {
           cost_basis: currentCostBasis,
           unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
           accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : (lastPoint.accumulated_return_pct ?? 0),
+          has_partial_prices: currentHasPartialPrices,
+          return_is_estimated: currentReturnIsEstimated,
           history_source: 'realtime',
           is_realtime: true,
         }
@@ -214,7 +222,9 @@ export default function ResumePage() {
       market_value: currentMarketValue,
       cost_basis: currentCostBasis,
       unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
-      accumulated_return_pct: currentReturnPct ?? 0,
+      accumulated_return_pct: currentReturnPct ?? (lastIndex >= 0 ? (historyCopy[lastIndex].accumulated_return_pct ?? 0) : 0),
+      has_partial_prices: currentHasPartialPrices,
+      return_is_estimated: currentReturnIsEstimated,
       history_source: 'realtime',
       is_realtime: true,
     })
