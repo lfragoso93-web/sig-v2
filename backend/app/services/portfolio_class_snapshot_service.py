@@ -41,7 +41,10 @@ from app.services.fixed_income_valuation_service import (
     fixed_income_coverage_from_transactions,
     get_fixed_income_totals_from_transactions,
 )
-from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
+from app.services.fx_rate_reader import (
+    load_usd_brl_rate_at_or_before,
+    load_usd_brl_rates_for_dates,
+)
 from app.services.lifecycle_aware_price_service import (
     get_prices_at_date_with_lifecycle,
 )
@@ -314,19 +317,23 @@ async def rebuild_class_snapshots(
         )
 
     today = datetime.now(UTC).date()
+    has_crypto = any(_asset_type(t.asset_type) == AssetType.CRIPTO for t in supported_transactions)
+    first_tx_date = supported_transactions[0].date
+    start = first_tx_date if has_crypto else _next_business_date(first_tx_date)
+
     usd_transactions = [
         transaction
         for transaction in market_transactions
         if _asset_type(transaction.asset_type) in _USD_TYPES
     ]
     fx_rates_by_date: dict[date, Decimal] = {}
+    fx_start = today
     if usd_transactions:
-        first_usd_date = _next_business_date(
-            min(transaction.date for transaction in usd_transactions)
-        )
+        first_tx_usd = min(transaction.date for transaction in usd_transactions)
+        fx_start = min(start, first_tx_usd) - timedelta(days=5)
         fx_rates_by_date = await _load_required_usd_brl_rates(
             db,
-            first_usd_date,
+            fx_start,
             today,
         )
 
@@ -334,19 +341,64 @@ async def rebuild_class_snapshots(
         await load_portfolio_dividend_entitlements(db, portfolio_id),
     )
 
-    start = _next_business_date(supported_transactions[0].date)
     await db.execute(
         delete(PortfolioClassSnapshot).where(
             PortfolioClassSnapshot.portfolio_id == portfolio_id
         )
     )
 
+    effective_market_transactions: list[Transaction] = []
     transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in market_transactions:
-        transactions_by_day[_next_business_date(transaction.date)].append(transaction)
+        is_crypto = _asset_type(transaction.asset_type) == AssetType.CRIPTO
+        effective_date = transaction.date if is_crypto else _next_business_date(transaction.date)
+        if effective_date == transaction.date:
+            effective_tx = transaction
+        else:
+            effective_tx = Transaction(
+                id=transaction.id,
+                portfolio_id=transaction.portfolio_id,
+                asset_type=transaction.asset_type,
+                ticker=transaction.ticker,
+                operation=transaction.operation,
+                date=effective_date,
+                quantity=transaction.quantity,
+                price=transaction.price,
+                currency=transaction.currency,
+                exchange_rate=transaction.exchange_rate,
+                fees=transaction.fees,
+                notes=transaction.notes,
+                created_at=transaction.created_at,
+                updated_at=transaction.updated_at,
+            )
+        effective_market_transactions.append(effective_tx)
+        transactions_by_day[effective_date].append(effective_tx)
+
+    effective_treasury_transactions: list[Transaction] = []
     treasury_transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in treasury_transactions:
-        treasury_transactions_by_day[_next_business_date(transaction.date)].append(transaction)
+        effective_date = _next_business_date(transaction.date)
+        if effective_date == transaction.date:
+            effective_tx = transaction
+        else:
+            effective_tx = Transaction(
+                id=transaction.id,
+                portfolio_id=transaction.portfolio_id,
+                asset_type=transaction.asset_type,
+                ticker=transaction.ticker,
+                operation=transaction.operation,
+                date=effective_date,
+                quantity=transaction.quantity,
+                price=transaction.price,
+                currency=transaction.currency,
+                exchange_rate=transaction.exchange_rate,
+                fees=transaction.fees,
+                notes=transaction.notes,
+                created_at=transaction.created_at,
+                updated_at=transaction.updated_at,
+            )
+        effective_treasury_transactions.append(effective_tx)
+        treasury_transactions_by_day[effective_date].append(effective_tx)
 
     actions_by_ticker = await load_global_corporate_actions_by_ticker(
         db,
@@ -359,268 +411,286 @@ async def rebuild_class_snapshots(
     count = 0
     cursor = start
     while cursor <= today:
-        if cursor.weekday() < 5:
-            external_flows: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
-            for transaction in transactions_by_day.get(cursor, []):
-                parsed = _asset_type(transaction.asset_type)
-                if parsed not in SUPPORTED_CLASS_TWR_TYPES:
-                    continue
-                quantity, price_brl, fees_brl = _operation_brl(transaction)
-                if transaction.operation == OperationType.buy:
-                    external_flows[parsed] += quantity * price_brl + fees_brl
-                elif transaction.operation == OperationType.sell:
-                    external_flows[parsed] -= quantity * price_brl - fees_brl
+        external_flows: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
+        for transaction in transactions_by_day.get(cursor, []):
+            parsed = _asset_type(transaction.asset_type)
+            if parsed not in SUPPORTED_CLASS_TWR_TYPES:
+                continue
+            quantity, price_brl, fees_brl = _operation_brl(transaction)
+            if transaction.operation == OperationType.buy:
+                external_flows[parsed] += quantity * price_brl + fees_brl
+            elif transaction.operation == OperationType.sell:
+                external_flows[parsed] -= quantity * price_brl - fees_brl
 
-            projected_positions = project_class_positions_at(
-                market_transactions,
-                actions_by_ticker,
-                target_date=cursor,
-            )
-            open_by_class, realized_by_class = aggregate_class_positions(
-                projected_positions.values()
-            )
+        projected_positions = project_class_positions_at(
+            effective_market_transactions,
+            actions_by_ticker,
+            target_date=cursor,
+        )
+        open_by_class, realized_by_class = aggregate_class_positions(
+            projected_positions.values()
+        )
 
-            for asset_type in sorted(
-                MARKET_PRICE_CLASS_TWR_TYPES & portfolio_types,
-                key=lambda item: item.value,
-            ):
-                open_positions = open_by_class.get(asset_type, [])
-                requirements = [
-                    (position.ticker, asset_type)
-                    for position in open_positions
-                ]
-                if requirements:
-                    prices, pre_listing, _real_gaps = (
-                        await get_prices_at_date_with_lifecycle(
-                            db,
-                            requirements,
-                            cursor,
-                        )
+        for asset_type in sorted(
+            MARKET_PRICE_CLASS_TWR_TYPES & portfolio_types,
+            key=lambda item: item.value,
+        ):
+            open_positions = open_by_class.get(asset_type, [])
+            requirements = [
+                (position.ticker, asset_type)
+                for position in open_positions
+            ]
+            if requirements:
+                prices, pre_listing, _real_gaps = (
+                    await get_prices_at_date_with_lifecycle(
+                        db,
+                        requirements,
+                        cursor,
+                    )
+                )
+            else:
+                prices, pre_listing = {}, set()
+            fx_rate = Decimal(1)
+            if asset_type in _USD_TYPES and requirements:
+                fx_rate = fx_rates_by_date.get(cursor)
+                if fx_rate is None:
+                    prev = cursor - timedelta(days=1)
+                    while prev not in fx_rates_by_date and prev >= fx_start:
+                        prev -= timedelta(days=1)
+                    fx_rate = fx_rates_by_date.get(prev)
+                    if fx_rate is None:
+                        persisted_fx = await load_usd_brl_rate_at_or_before(db, cursor)
+                        if persisted_fx is not None:
+                            fx_rate = persisted_fx.rate
+                            fx_rates_by_date[cursor] = fx_rate
+                        else:
+                            raise RuntimeError(
+                                f"cobertura USD-BRL persistida indisponível em ou antes de {cursor.isoformat()}"
+                            )
+
+            market_value = _ZERO
+            cost_basis = _ZERO
+            has_pending_fraction = any(
+                position.asset_type == asset_type
+                and position.has_pending_fraction
+                for position in projected_positions.values()
+            )
+            has_partial_prices = has_pending_fraction
+            for position in open_positions:
+                ticker_upper = position.ticker.upper()
+                close = (
+                    None
+                    if ticker_upper in pre_listing
+                    else prices.get(ticker_upper)
+                )
+                if close is None:
+                    if ticker_upper not in pre_listing:
+                        has_partial_prices = True
+                    close_decimal = (
+                        position.cost / position.quantity
+                        if position.quantity > 0
+                        else _ZERO
                     )
                 else:
-                    prices, pre_listing = {}, set()
-                fx_rate = Decimal(1)
-                if asset_type in _USD_TYPES and requirements:
-                    fx_rate = fx_rates_by_date[cursor]
+                    close_decimal = _decimal(close) * fx_rate
+                market_value += position.quantity * close_decimal
+                cost_basis += position.cost
 
-                market_value = _ZERO
-                cost_basis = _ZERO
-                has_pending_fraction = any(
-                    position.asset_type == asset_type
-                    and position.has_pending_fraction
-                    for position in projected_positions.values()
-                )
-                has_partial_prices = has_pending_fraction
-                for position in open_positions:
-                    ticker_upper = position.ticker.upper()
-                    close = (
-                        None
-                        if ticker_upper in pre_listing
-                        else prices.get(ticker_upper)
-                    )
-                    if close is None:
-                        if ticker_upper not in pre_listing:
-                            has_partial_prices = True
-                        close_decimal = (
-                            position.cost / position.quantity
-                            if position.quantity > 0
-                            else _ZERO
+            class_state = return_states[asset_type]
+            dividends_day = dividends_by_class_day.get((asset_type, cursor), _ZERO)
+            class_state.dividends_accumulated += dividends_day
+            daily_return = calculate_daily_twr_pct(
+                class_state.previous_value,
+                market_value,
+                net_external_flow=external_flows[asset_type],
+                dividends_day=dividends_day,
+            )
+            class_state.accumulated_return_pct = append_compounded_return_pct(
+                class_state.accumulated_return_pct,
+                daily_return,
+            )
+            unrealized_pnl = market_value - cost_basis
+
+            await _upsert_class_snapshot(
+                db,
+                portfolio_id,
+                asset_type,
+                cursor,
+                {
+                    "market_value": market_value.quantize(_MONEY),
+                    "cost_basis": cost_basis.quantize(_MONEY),
+                    "realized_pnl": realized_by_class.get(asset_type, _ZERO).quantize(_MONEY),
+                    "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
+                    "net_external_flow": external_flows[asset_type].quantize(_MONEY),
+                    "dividends_day": dividends_day.quantize(_MONEY),
+                    "dividends_accumulated": class_state.dividends_accumulated.quantize(_MONEY),
+                    "daily_return_pct": daily_return,
+                    "accumulated_return_pct": class_state.accumulated_return_pct,
+                    "has_partial_prices": has_partial_prices,
+                    "return_is_estimated": True,
+                    "valuation_status": (
+                        "pending_corporate_action_fraction"
+                        if has_pending_fraction
+                        else (
+                            "partial_prices"
+                            if has_partial_prices
+                            else "complete"
                         )
-                    else:
-                        close_decimal = _decimal(close) * fx_rate
-                    market_value += position.quantity * close_decimal
-                    cost_basis += position.cost
+                    ),
+                },
+            )
+            class_state.previous_value = market_value
+            count += 1
 
-                class_state = return_states[asset_type]
-                dividends_day = dividends_by_class_day.get((asset_type, cursor), _ZERO)
-                class_state.dividends_accumulated += dividends_day
+        if AssetType.TESOURO_DIRETO in portfolio_types:
+            treasury_state = return_states[AssetType.TESOURO_DIRETO]
+            treasury_flow = _ZERO
+            for transaction in treasury_transactions_by_day.get(cursor, []):
+                quantity, price_brl, fees_brl = _operation_brl(transaction)
+                if transaction.operation == OperationType.buy:
+                    treasury_flow += quantity * price_brl + fees_brl
+                elif transaction.operation == OperationType.sell:
+                    treasury_flow -= quantity * price_brl - fees_brl
+
+            treasury_positions = project_class_positions_at(
+                effective_treasury_transactions,
+                {},
+                target_date=cursor,
+            )
+            treasury_open, treasury_realized = aggregate_class_positions(
+                treasury_positions.values()
+            )
+            treasury_realized_pnl = treasury_realized.get(
+                AssetType.TESOURO_DIRETO,
+                treasury_realized_pnl,
+            )
+            open_positions = treasury_open.get(AssetType.TESOURO_DIRETO, [])
+            price_date = (
+                cursor - timedelta(days=cursor.weekday() - 4)
+                if cursor.weekday() >= 5
+                else cursor
+            )
+            treasury_prices = await _load_exact_treasury_prices(
+                db,
+                (position.ticker for position in open_positions),
+                price_date,
+            )
+            has_coverage = all(
+                str(position.ticker).upper() in treasury_prices
+                for position in open_positions
+            )
+            market_value = _ZERO
+            cost_basis = _ZERO
+            for position in open_positions:
+                close = treasury_prices.get(str(position.ticker).upper())
+                if close is not None:
+                    market_value += position.quantity * close
+                cost_basis += position.cost
+
+            treasury_income_day = dividends_by_class_day.get(
+                (AssetType.TESOURO_DIRETO, cursor),
+                _ZERO,
+            )
+            treasury_state.dividends_accumulated += treasury_income_day
+
+            treasury_inputs.append(
+                DailyTwrInput(
+                    reference_date=cursor,
+                    market_value=market_value,
+                    net_external_flow=treasury_flow,
+                    income_day=treasury_income_day,
+                    has_coverage=has_coverage,
+                )
+            )
+            treasury_point = build_daily_twr_chain(treasury_inputs)[-1]
+            if treasury_point.available:
+                unrealized_pnl = market_value - cost_basis
+                await _upsert_class_snapshot(
+                    db,
+                    portfolio_id,
+                    AssetType.TESOURO_DIRETO,
+                    cursor,
+                    {
+                        "market_value": market_value.quantize(_MONEY),
+                        "cost_basis": cost_basis.quantize(_MONEY),
+                        "realized_pnl": treasury_realized_pnl.quantize(_MONEY),
+                        "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
+                        "net_external_flow": treasury_flow.quantize(_MONEY),
+                        "dividends_day": treasury_income_day.quantize(
+                            _MONEY
+                        ),
+                        "dividends_accumulated": treasury_state.dividends_accumulated.quantize(
+                            _MONEY
+                        ),
+                        "daily_return_pct": treasury_point.daily_return_pct,
+                        "accumulated_return_pct": treasury_point.accumulated_return_pct,
+                        "has_partial_prices": False,
+                        "return_is_estimated": False,
+                        "valuation_status": "complete",
+                    },
+                )
+                count += 1
+
+        if AssetType.RENDA_FIXA in portfolio_types:
+            class_state = return_states[AssetType.RENDA_FIXA]
+            coverage = await fixed_income_coverage_from_transactions(
+                db,
+                fixed_income_transactions,
+                cursor,
+            )
+            totals = await get_fixed_income_totals_from_transactions(
+                db,
+                fixed_income_transactions,
+                cursor,
+            )
+            market_value = _decimal(totals["current_value"])
+            cost_basis = _decimal(totals["invested_amount"])
+            external_flow = _net_external_flow_for_day(
+                fixed_income_transactions,
+                cursor,
+            ).quantize(_MONEY)
+            coverage_complete, return_is_estimated, valuation_status = (
+                _fixed_income_snapshot_quality(coverage, class_state)
+            )
+            daily_return = _ZERO
+            if coverage_complete:
                 daily_return = calculate_daily_twr_pct(
                     class_state.previous_value,
                     market_value,
-                    net_external_flow=external_flows[asset_type],
-                    dividends_day=dividends_day,
+                    net_external_flow=external_flow,
+                    dividends_day=_ZERO,
                 )
                 class_state.accumulated_return_pct = append_compounded_return_pct(
                     class_state.accumulated_return_pct,
                     daily_return,
                 )
-                unrealized_pnl = market_value - cost_basis
+            unrealized_pnl = market_value - cost_basis
 
-                await _upsert_class_snapshot(
-                    db,
-                    portfolio_id,
-                    asset_type,
-                    cursor,
-                    {
-                        "market_value": market_value.quantize(_MONEY),
-                        "cost_basis": cost_basis.quantize(_MONEY),
-                        "realized_pnl": realized_by_class.get(asset_type, _ZERO).quantize(_MONEY),
-                        "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
-                        "net_external_flow": external_flows[asset_type].quantize(_MONEY),
-                        "dividends_day": dividends_day.quantize(_MONEY),
-                        "dividends_accumulated": class_state.dividends_accumulated.quantize(_MONEY),
-                        "daily_return_pct": daily_return,
-                        "accumulated_return_pct": class_state.accumulated_return_pct,
-                        "has_partial_prices": has_partial_prices,
-                        "return_is_estimated": True,
-                        "valuation_status": (
-                            "pending_corporate_action_fraction"
-                            if has_pending_fraction
-                            else (
-                                "partial_prices"
-                                if has_partial_prices
-                                else "complete"
-                            )
-                        ),
-                    },
-                )
-                class_state.previous_value = market_value
-                count += 1
+            await _upsert_class_snapshot(
+                db,
+                portfolio_id,
+                AssetType.RENDA_FIXA,
+                cursor,
+                {
+                    "market_value": market_value.quantize(_MONEY),
+                    "cost_basis": cost_basis.quantize(_MONEY),
+                    "realized_pnl": _ZERO.quantize(_MONEY),
+                    "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
+                    "net_external_flow": external_flow,
+                    "dividends_day": _ZERO.quantize(_MONEY),
+                    "dividends_accumulated": _ZERO.quantize(_MONEY),
+                    "daily_return_pct": daily_return,
+                    "accumulated_return_pct": class_state.accumulated_return_pct,
+                    "has_partial_prices": False,
+                    "return_is_estimated": return_is_estimated,
+                    "valuation_status": valuation_status,
+                },
+            )
+            class_state.previous_value = market_value if coverage_complete else None
+            count += 1
 
-            if AssetType.TESOURO_DIRETO in portfolio_types:
-                treasury_state = return_states[AssetType.TESOURO_DIRETO]
-                treasury_flow = _ZERO
-                for transaction in treasury_transactions_by_day.get(cursor, []):
-                    quantity, price_brl, fees_brl = _operation_brl(transaction)
-                    if transaction.operation == OperationType.buy:
-                        treasury_flow += quantity * price_brl + fees_brl
-                    elif transaction.operation == OperationType.sell:
-                        treasury_flow -= quantity * price_brl - fees_brl
-
-                treasury_positions = project_class_positions_at(
-                    treasury_transactions,
-                    {},
-                    target_date=cursor,
-                )
-                treasury_open, treasury_realized = aggregate_class_positions(
-                    treasury_positions.values()
-                )
-                treasury_realized_pnl = treasury_realized.get(
-                    AssetType.TESOURO_DIRETO,
-                    treasury_realized_pnl,
-                )
-                open_positions = treasury_open.get(AssetType.TESOURO_DIRETO, [])
-                treasury_prices = await _load_exact_treasury_prices(
-                    db,
-                    (position.ticker for position in open_positions),
-                    cursor,
-                )
-                has_coverage = all(
-                    str(position.ticker).upper() in treasury_prices
-                    for position in open_positions
-                )
-                market_value = _ZERO
-                cost_basis = _ZERO
-                for position in open_positions:
-                    close = treasury_prices.get(str(position.ticker).upper())
-                    if close is not None:
-                        market_value += position.quantity * close
-                    cost_basis += position.cost
-
-                treasury_income_day = dividends_by_class_day.get(
-                    (AssetType.TESOURO_DIRETO, cursor),
-                    _ZERO,
-                )
-                treasury_state.dividends_accumulated += treasury_income_day
-
-                treasury_inputs.append(
-                    DailyTwrInput(
-                        reference_date=cursor,
-                        market_value=market_value,
-                        net_external_flow=treasury_flow,
-                        income_day=treasury_income_day,
-                        has_coverage=has_coverage,
-                    )
-                )
-                treasury_point = build_daily_twr_chain(treasury_inputs)[-1]
-                if treasury_point.available:
-                    unrealized_pnl = market_value - cost_basis
-                    await _upsert_class_snapshot(
-                        db,
-                        portfolio_id,
-                        AssetType.TESOURO_DIRETO,
-                        cursor,
-                        {
-                            "market_value": market_value.quantize(_MONEY),
-                            "cost_basis": cost_basis.quantize(_MONEY),
-                            "realized_pnl": treasury_realized_pnl.quantize(_MONEY),
-                            "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
-                            "net_external_flow": treasury_flow.quantize(_MONEY),
-                            "dividends_day": treasury_income_day.quantize(
-                                _MONEY
-                            ),
-                            "dividends_accumulated": treasury_state.dividends_accumulated.quantize(
-                                _MONEY
-                            ),
-                            "daily_return_pct": treasury_point.daily_return_pct,
-                            "accumulated_return_pct": treasury_point.accumulated_return_pct,
-                            "has_partial_prices": False,
-                            "return_is_estimated": False,
-                            "valuation_status": "complete",
-                        },
-                    )
-                    count += 1
-
-            if AssetType.RENDA_FIXA in portfolio_types:
-                class_state = return_states[AssetType.RENDA_FIXA]
-                coverage = await fixed_income_coverage_from_transactions(
-                    db,
-                    fixed_income_transactions,
-                    cursor,
-                )
-                totals = await get_fixed_income_totals_from_transactions(
-                    db,
-                    fixed_income_transactions,
-                    cursor,
-                )
-                market_value = _decimal(totals["current_value"])
-                cost_basis = _decimal(totals["invested_amount"])
-                external_flow = _net_external_flow_for_day(
-                    fixed_income_transactions,
-                    cursor,
-                ).quantize(_MONEY)
-                coverage_complete, return_is_estimated, valuation_status = (
-                    _fixed_income_snapshot_quality(coverage, class_state)
-                )
-                daily_return = _ZERO
-                if coverage_complete:
-                    daily_return = calculate_daily_twr_pct(
-                        class_state.previous_value,
-                        market_value,
-                        net_external_flow=external_flow,
-                        dividends_day=_ZERO,
-                    )
-                    class_state.accumulated_return_pct = append_compounded_return_pct(
-                        class_state.accumulated_return_pct,
-                        daily_return,
-                    )
-                unrealized_pnl = market_value - cost_basis
-
-                await _upsert_class_snapshot(
-                    db,
-                    portfolio_id,
-                    AssetType.RENDA_FIXA,
-                    cursor,
-                    {
-                        "market_value": market_value.quantize(_MONEY),
-                        "cost_basis": cost_basis.quantize(_MONEY),
-                        "realized_pnl": _ZERO.quantize(_MONEY),
-                        "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
-                        "net_external_flow": external_flow,
-                        "dividends_day": _ZERO.quantize(_MONEY),
-                        "dividends_accumulated": _ZERO.quantize(_MONEY),
-                        "daily_return_pct": daily_return,
-                        "accumulated_return_pct": class_state.accumulated_return_pct,
-                        "has_partial_prices": False,
-                        "return_is_estimated": return_is_estimated,
-                        "valuation_status": valuation_status,
-                    },
-                )
-                class_state.previous_value = market_value if coverage_complete else None
-                count += 1
-
-            if count and count % 100 == 0:
-                await db.commit()
+        if count and count % 100 == 0:
+            await db.commit()
         cursor += timedelta(days=1)
 
     await db.commit()

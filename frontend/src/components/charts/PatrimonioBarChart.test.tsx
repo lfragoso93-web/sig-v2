@@ -69,6 +69,24 @@ describe('buildPatrimonioChartData', () => {
     expect(point.twr).toBe(0)
     expect(point.source).toBe('db_derived_class_history')
   })
+
+  it('marks point as realtime when history_source is realtime or is_realtime is true', () => {
+    const [point] = buildPatrimonioChartData([
+      {
+        date: '2026-11-08',
+        period: '2026-11',
+        market_value: 52340.50,
+        cost_basis: 48000.00,
+        unrealized_pnl: 4340.50,
+        history_source: 'realtime',
+        is_realtime: true,
+      },
+    ])
+
+    expect(point.is_realtime).toBe(true)
+    expect(point.patrimonio).toBe(52340.50)
+    expect(point.source).toBe('realtime')
+  })
 })
 
 describe('getSymmetricAxisLimit', () => {

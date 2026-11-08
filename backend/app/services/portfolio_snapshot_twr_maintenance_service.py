@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import AssetType
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -162,10 +163,10 @@ async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int
         .group_by(PortfolioClassSnapshot.asset_type)
     )
     latest_by_type = {row.asset_type: row[1] for row in snapshot_result.all()}
-    latest_expected_close = _latest_weekday_close_date()
+    weekday_close = _latest_weekday_close_date()
     if any(
         latest_by_type.get(asset_type) is None
-        or latest_by_type[asset_type] < latest_expected_close
+        or latest_by_type[asset_type] < (date.today() if asset_type == AssetType.CRIPTO.value else weekday_close)
         for asset_type in transaction_types
     ):
         return True

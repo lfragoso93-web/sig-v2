@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import {
   usePortfolioList,
@@ -20,7 +20,7 @@ import {
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
-import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
+import PatrimonioBarChart, { type PatrimonioEvolutionPoint } from '@/components/charts/PatrimonioBarChart'
 import EvolutionClassSelect from '@/components/charts/EvolutionClassSelect'
 import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
@@ -135,7 +135,7 @@ export default function ResumePage() {
     period,
   )
 
-  const patrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
+  const rawPatrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
   const classHistoryUnavailable = Boolean(
     activeAssetType
     && !loadingClassAvailability
@@ -154,6 +154,83 @@ export default function ResumePage() {
   const loadingKpiCards = loadingPortfolios || loadingSummary
   const summaryContractError = summaryError instanceof Error
     && summaryError.message.startsWith('Contrato summary.v2 inválido:')
+
+  const patrimonioHistory: PatrimonioEvolutionPoint[] | undefined = useMemo(() => {
+    if (!rawPatrimonioHistory) return rawPatrimonioHistory
+
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const currentPeriod = todayStr.slice(0, 7)
+
+    let currentMarketValue: number | null = null
+    let currentCostBasis: number | null = null
+    let currentUnrealizedPnl: number | null = null
+    let currentReturnPct: number | null = null
+    let currentHasPartialPrices = false
+    let currentReturnIsEstimated = false
+
+    if (!activeAssetType && metrics) {
+      currentMarketValue = metrics.patrimonio
+      currentCostBasis = metrics.aportado
+      currentUnrealizedPnl = metrics.variacaoValor
+      currentReturnPct = metrics.rentabilidadePct
+      currentHasPartialPrices = metrics.hasPartialPrices
+      currentReturnIsEstimated = metrics.returnIsEstimated
+    } else if (activeAssetType && positions) {
+      const group = positions.find(g => g.positions?.[0]?.asset_type === activeAssetType)
+      if (group) {
+        currentMarketValue = group.total_value
+        currentCostBasis = group.total_invested
+        currentUnrealizedPnl = group.capital_result_value ?? (group.total_value - group.total_invested)
+        currentReturnPct = null
+        currentHasPartialPrices = false
+        currentReturnIsEstimated = false
+      }
+    }
+
+    if (currentMarketValue === null || currentCostBasis === null) {
+      return rawPatrimonioHistory
+    }
+
+    const historyCopy: PatrimonioEvolutionPoint[] = [...rawPatrimonioHistory]
+    const lastIndex = historyCopy.length - 1
+
+    if (lastIndex >= 0) {
+      const lastPoint = historyCopy[lastIndex]
+      const lastPeriod = lastPoint.period ?? lastPoint.date.slice(0, 7)
+      if (lastPeriod === currentPeriod) {
+        historyCopy[lastIndex] = {
+          ...lastPoint,
+          date: todayStr,
+          period: currentPeriod,
+          market_value: currentMarketValue,
+          cost_basis: currentCostBasis,
+          unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+          accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : (lastPoint.accumulated_return_pct ?? 0),
+          has_partial_prices: currentHasPartialPrices,
+          return_is_estimated: currentReturnIsEstimated,
+          history_source: 'realtime',
+          is_realtime: true,
+        }
+        return historyCopy
+      }
+    }
+
+    historyCopy.push({
+      date: todayStr,
+      period: currentPeriod,
+      market_value: currentMarketValue,
+      cost_basis: currentCostBasis,
+      unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+      accumulated_return_pct: currentReturnPct ?? (lastIndex >= 0 ? (historyCopy[lastIndex].accumulated_return_pct ?? 0) : 0),
+      has_partial_prices: currentHasPartialPrices,
+      return_is_estimated: currentReturnIsEstimated,
+      history_source: 'realtime',
+      is_realtime: true,
+    })
+
+    return historyCopy
+  }, [rawPatrimonioHistory, activeAssetType, metrics, positions])
 
   if (loadingPortfolios) {
     return (
