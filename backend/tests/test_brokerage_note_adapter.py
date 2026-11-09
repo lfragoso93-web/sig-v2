@@ -2,9 +2,7 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 from app.services.brokerage_note_adapter_service import (
-    BrokerageNoteAdaptResult,
     adapt_brokerage_note_pdf_to_canonical,
     adapt_brokerage_note_text_to_canonical,
     is_brokerage_note_content,
@@ -111,3 +109,21 @@ def test_adapt_brokerage_note_pdf_delegates_to_text_parser():
     assert result.canonical_rows[0]["price"] == "65.00"
     assert result.canonical_rows[0]["date"] == "2024-04-05"
     assert Decimal(result.canonical_rows[0]["fees"]) == Decimal("1.50")
+
+
+def test_adapt_sinacor_fee_rounding_reconciliation_exact_sum():
+    # 3 operações de mesmo volume com total de custos de 0,01 centavo
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 10/01/2024\n"
+        "XP INVESTIMENTOS\n"
+        "1-BOVESPA C VISTA WEGE3 ON NM 10 10,00 100,00 D\n"
+        "1-BOVESPA C VISTA PETR4 ON NM 10 10,00 100,00 D\n"
+        "1-BOVESPA C VISTA VALE3 ON NM 10 10,00 100,00 D\n"
+        "Total custos / despesas 0,01\n"
+    )
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    assert result.success is True
+    assert len(result.canonical_rows) == 3
+    sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
+    assert sum_fees == Decimal("0.01")

@@ -340,12 +340,18 @@ def adapt_brokerage_note_to_canonical(raw_input: str | bytes) -> BrokerageNoteAd
         except Exception as exc:
             errors.append(f"Operação {idx}: falha ao processar ({exc})")
 
-    # Ratear taxas proporcionalmente ao volume de cada operação
-    for trade in parsed_trades:
+    # Ratear taxas proporcionalmente ao volume de cada operação com reconciliação exata de centavos
+    allocated_fees = Decimal("0.00")
+    for i, trade in enumerate(parsed_trades):
         if total_fees > 0 and total_volume > 0:
-            trade_fee = (total_fees * (trade["total_value"] / total_volume)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            if i == len(parsed_trades) - 1:
+                # O último ativo absorve o resíduo de arredondamento garantindo soma exata
+                trade_fee = max(Decimal("0.00"), total_fees - allocated_fees)
+            else:
+                trade_fee = (total_fees * (trade["total_value"] / total_volume)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                allocated_fees += trade_fee
         else:
             trade_fee = Decimal("0.00")
 
