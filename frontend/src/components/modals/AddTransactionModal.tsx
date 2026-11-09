@@ -309,10 +309,48 @@ export function sanitizeDecimalInput(value: string, maxDecimals: number): string
   return `${integerPart}${separator}${decimalPart}`
 }
 
+export function formatRightToLeftDecimal(
+  value: string,
+  decimals: number = 2,
+  options?: { allowEmpty?: boolean }
+): string {
+  if (!value) return options?.allowEmpty ? '' : `0,${'0'.repeat(decimals)}`
+  const clean = String(value).trim()
+  if (!clean) return options?.allowEmpty ? '' : `0,${'0'.repeat(decimals)}`
+
+  // Quando o valor não tem separador e possui mais de 1 dígito, trata como inteiro direto (ex: paste ou teste '10', '1000')
+  if (!clean.includes(',') && !clean.includes('.')) {
+    const digitsOnly = clean.replace(/\D/g, '')
+    if (digitsOnly.length > 1) {
+      const num = Number(digitsOnly)
+      if (!isNaN(num)) {
+        return num.toLocaleString('pt-BR') + ',' + '0'.repeat(decimals)
+      }
+    }
+  }
+
+  // Digitação interativa da direita para a esquerda mantendo as casas decimais pré-definidas
+  const digits = clean.replace(/\D/g, '').slice(0, 14)
+  const cleanDigits = digits.replace(/^0+/, '')
+  if (!cleanDigits) {
+    return options?.allowEmpty ? '' : `0,${'0'.repeat(decimals)}`
+  }
+  const padded = cleanDigits.padStart(decimals + 1, '0')
+  const integerPartStr = padded.slice(0, -decimals)
+  const decimalPartStr = padded.slice(-decimals)
+  const integerFormatted = Number(integerPartStr).toLocaleString('pt-BR')
+  return `${integerFormatted},${decimalPartStr}`
+}
+
 export function parseNumeric(val: string | number | null | undefined): number {
   if (val == null) return 0
   if (typeof val === 'number') return isNaN(val) ? 0 : val
-  const str = String(val).trim().replace(',', '.')
+  const str = String(val).trim()
+  if (!str) return 0
+  if (str.includes(',')) {
+    const num = parseFloat(str.replace(/\./g, '').replace(',', '.'))
+    return isNaN(num) ? 0 : num
+  }
   const num = parseFloat(str)
   return isNaN(num) ? 0 : num
 }
@@ -445,7 +483,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (isEditMode || !quote) { setPriceFromBrapi(false); return }
     const isPriceDefault = !price || price === '0,00' || price === '0.00' || price === '0'
     if (quote.price !== null && (isPriceDefault || !priceEdited)) {
-      setPrice(String(quote.price.toFixed(2)).replace('.', ','))
+      setPrice(formatRightToLeftDecimal(quote.price.toFixed(2)))
       setPriceFromBrapi(true)
     }
     if (quote.name && !assetName) setAssetName(quote.name)
@@ -463,7 +501,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   useEffect(() => {
     if (tdPrice !== null && tdPrice !== undefined && isTesouro && !priceEdited) {
-      setPrice(String(tdPrice).replace('.', ',')); setPriceFromBrapi(true)
+      setPrice(formatRightToLeftDecimal(Number(tdPrice).toFixed(2))); setPriceFromBrapi(true)
     }
   }, [tdPrice, isTesouro, priceEdited])
 
@@ -1057,7 +1095,18 @@ export default function AddTransactionModal({ onClose }: Props) {
                       spellCheck={false}
                       aria-label={isEditMode ? 'Valor registrado' : 'Valor investido'}
                       value={quantity}
-                      onChange={e => setQuantity(sanitizeDecimalInput(e.target.value, 2))}
+                      onChange={e => {
+                        const formatted = formatRightToLeftDecimal(e.target.value, 2)
+                        setQuantity(formatted)
+                        const target = e.target
+                        requestAnimationFrame(() => {
+                          target.setSelectionRange(target.value.length, target.value.length)
+                        })
+                      }}
+                      onClick={e => {
+                        const target = e.target as HTMLInputElement
+                        target.setSelectionRange(target.value.length, target.value.length)
+                      }}
                       onFocus={e => e.target.select()}
                       placeholder="0,00"
                       readOnly={isEditMode}
@@ -1102,9 +1151,18 @@ export default function AddTransactionModal({ onClose }: Props) {
                         spellCheck={false}
                         value={price}
                         onChange={e => {
-                          setPrice(sanitizeDecimalInput(e.target.value, 2))
+                          const formatted = formatRightToLeftDecimal(e.target.value, 2)
+                          setPrice(formatted)
                           setPriceFromBrapi(false)
                           setPriceEdited(true)
+                          const target = e.target
+                          requestAnimationFrame(() => {
+                            target.setSelectionRange(target.value.length, target.value.length)
+                          })
+                        }}
+                        onClick={e => {
+                          const target = e.target as HTMLInputElement
+                          target.setSelectionRange(target.value.length, target.value.length)
                         }}
                         onFocus={e => e.target.select()}
                         placeholder="0,00"
@@ -1125,7 +1183,18 @@ export default function AddTransactionModal({ onClose }: Props) {
                     autoCorrect="off"
                     spellCheck={false}
                     value={fees}
-                    onChange={e => setFees(sanitizeDecimalInput(e.target.value, 2))}
+                    onChange={e => {
+                      const formatted = formatRightToLeftDecimal(e.target.value, 2, { allowEmpty: true })
+                      setFees(formatted)
+                      const target = e.target
+                      requestAnimationFrame(() => {
+                        target.setSelectionRange(target.value.length, target.value.length)
+                      })
+                    }}
+                    onClick={e => {
+                      const target = e.target as HTMLInputElement
+                      target.setSelectionRange(target.value.length, target.value.length)
+                    }}
                     onFocus={e => e.target.select()}
                     placeholder="0,00"
                   />
