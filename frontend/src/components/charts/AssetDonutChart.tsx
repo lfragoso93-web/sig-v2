@@ -38,11 +38,10 @@ function CustomTooltip({ active, payload }: {
   const d = payload[0].payload
   return (
     <div
-      className="rounded-lg p-3 text-xs"
+      className="chart-glass-tooltip"
       style={{
-        background: 'var(--color-surface-2)',
-        border: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-lg)',
+        padding: '8px 12px',
+        fontSize: 'var(--text-xs)',
       }}
     >
       <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{d.label}</p>
@@ -57,7 +56,7 @@ export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[
   if (!data || data.length === 0) return null
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-5 w-full min-w-0">
+    <div className="flex flex-col sm:flex-row items-center gap-5 w-full min-w-0" style={{ touchAction: 'pan-y' }}>
       {/* Donut */}
       <div style={{ flexShrink: 0, width: 184, height: 184 }}>
         <ResponsiveContainer width={184} height={184}>
@@ -66,9 +65,10 @@ export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={54}
-              outerRadius={80}
-              paddingAngle={2.5}
+              innerRadius={56}
+              outerRadius={82}
+              paddingAngle={3}
+              cornerRadius={4}
               dataKey="value"
               stroke="var(--color-surface)"
               strokeWidth={2}

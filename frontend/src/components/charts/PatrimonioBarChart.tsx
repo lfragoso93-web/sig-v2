@@ -118,29 +118,26 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
 
   return (
     <div
+      className="chart-glass-tooltip"
       style={{
-        minWidth: 172,
-        padding: '0.75rem 0.85rem',
-        borderRadius: 8,
-        border: '1px solid oklch(from var(--color-text) l c h / 0.14)',
-        background: 'var(--color-surface-2)',
-        boxShadow: '0 10px 28px oklch(0 0 0 / 0.2)',
-        color: 'var(--color-text)',
+        minWidth: 180,
+        padding: '0.85rem 1rem',
         fontSize: 'var(--text-xs)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontWeight: 700, marginBottom: 10 }}>
-        <span>{point.name}</span>
+        <span style={{ fontSize: '0.825rem', letterSpacing: '-0.01em' }}>{point.name}</span>
         {isRealTime && (
           <span
             style={{
-              fontSize: '0.62rem',
-              fontWeight: 600,
-              padding: '1px 6px',
+              fontSize: '0.625rem',
+              fontWeight: 650,
+              padding: '2px 7px',
               borderRadius: 'var(--radius-full)',
-              background: 'oklch(from var(--color-primary) l c h / 0.15)',
+              background: 'oklch(from var(--color-primary) l c h / 0.18)',
               color: 'var(--color-primary)',
-              border: '1px solid oklch(from var(--color-primary) l c h / 0.3)',
+              border: '1px solid oklch(from var(--color-primary) l c h / 0.35)',
+              boxShadow: '0 1px 3px oklch(0 0 0 / 0.06)',
             }}
           >
             Tempo Real
@@ -162,7 +159,16 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
           valueClass={signClass(point.twr)}
         />
       )}
-      <div style={{ marginTop: 9, color: isRealTime ? 'var(--color-primary)' : 'var(--color-text-faint)', fontSize: '0.68rem', fontWeight: isRealTime ? 600 : 400 }}>
+      <div
+        style={{
+          marginTop: 10,
+          paddingTop: 8,
+          borderTop: '1px solid var(--glass-border)',
+          color: isRealTime ? 'var(--color-primary)' : 'var(--color-text-faint)',
+          fontSize: '0.68rem',
+          fontWeight: isRealTime ? 600 : 400,
+        }}
+      >
         {referenceLabel}{isRealTime ? ` · ${fullDate(point.date)}` : ` de ${fullDate(point.date)}`}{point.partial ? ' · cobertura parcial' : ''}
       </div>
     </div>
@@ -239,29 +245,43 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
   const axisLimit = getSymmetricAxisLimit(chartData)
 
   return (
-    <div>
+    <div style={{ touchAction: 'pan-y' }}>
       <ChartLegend />
       <ResponsiveContainer width="100%" height={270}>
         <BarChart
           data={chartData}
-          margin={{ top: 0, right: 8, left: 4, bottom: 4 }}
-          barCategoryGap="18%"
+          margin={{ top: 8, right: 8, left: -10, bottom: 4 }}
+          barCategoryGap="20%"
           stackOffset="sign"
         >
+          <defs>
+            <linearGradient id="grad-patrimonio-aplicado" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-success)" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="var(--color-success)" stopOpacity={0.72} />
+            </linearGradient>
+            <linearGradient id="grad-patrimonio-ganho" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="oklch(from var(--color-success) l c h / 0.85)" />
+              <stop offset="100%" stopColor="oklch(from var(--color-success) l c h / 0.45)" />
+            </linearGradient>
+            <linearGradient id="grad-patrimonio-perda" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="oklch(from var(--color-notification) l c h / 0.65)" />
+              <stop offset="100%" stopColor="var(--color-notification)" />
+            </linearGradient>
+          </defs>
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="oklch(from var(--color-text) l c h / 0.08)"
             vertical={false}
           />
-          <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.4)" strokeWidth={1.5} />
+          <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.35)" strokeWidth={1.5} />
           <XAxis
             dataKey="name"
             tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
             axisLine={false}
             tickLine={false}
-            angle={-42}
+            angle={-38}
             textAnchor="end"
-            height={46}
+            height={44}
             interval="preserveStartEnd"
           />
           <YAxis
@@ -270,29 +290,32 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
             tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }}
             axisLine={false}
             tickLine={false}
-            width={70}
+            width={62}
           />
-          <Tooltip content={<EvolutionTooltip />} cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.05)' }} />
+          <Tooltip
+            content={<EvolutionTooltip />}
+            cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.05)', radius: 4 }}
+          />
           <Bar
             dataKey="aplicado"
             stackId="patrimonio"
-            fill="var(--color-success)"
-            radius={[3, 3, 0, 0]}
-            maxBarSize={42}
+            fill="url(#grad-patrimonio-aplicado)"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={40}
           />
           <Bar
             dataKey="ganho"
             stackId="patrimonio"
-            fill="oklch(from var(--color-success) l c h / 0.55)"
-            radius={[3, 3, 0, 0]}
-            maxBarSize={42}
+            fill="url(#grad-patrimonio-ganho)"
+            radius={[5, 5, 0, 0]}
+            maxBarSize={40}
           />
           <Bar
             dataKey="perda"
             stackId="patrimonio"
-            fill="var(--color-notification)"
-            radius={[0, 0, 3, 3]}
-            maxBarSize={42}
+            fill="url(#grad-patrimonio-perda)"
+            radius={[0, 0, 5, 5]}
+            maxBarSize={40}
           />
         </BarChart>
       </ResponsiveContainer>
