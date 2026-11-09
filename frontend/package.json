@@ -42,7 +42,7 @@
     "@vitest/coverage-v8": "^5.0.5",
     "audit-ci": "^7.1.0",
     "autoprefixer": "^10.6.2",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.3",
