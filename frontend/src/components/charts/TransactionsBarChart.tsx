@@ -62,16 +62,16 @@ function CustomTooltip({ active, payload, label }: any) {
 
   return (
     <div
-      className="rounded-lg p-3 text-xs min-w-[180px]"
+      className="chart-glass-tooltip"
       style={{
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-lg)',
+        padding: '10px 14px',
+        fontSize: 'var(--text-xs)',
+        minWidth: 180,
       }}
     >
-      <p className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{label}</p>
+      <p className="font-semibold mb-2" style={{ color: 'var(--color-text)', fontSize: '0.825rem' }}>{label}</p>
 
-      <div className="flex items-center justify-between gap-4 mb-1">
+      <div className="flex items-center justify-between gap-4 mb-1.5">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-success)' }} />
           <span style={{ color: 'var(--color-text-muted)' }}>Compras</span>
@@ -82,7 +82,7 @@ function CustomTooltip({ active, payload, label }: any) {
       </div>
 
       {sell > 0 && (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 pt-1.5 border-t" style={{ borderColor: 'var(--glass-border)' }}>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-notification)' }} />
             <span style={{ color: 'var(--color-text-muted)' }}>Vendas</span>
@@ -103,46 +103,53 @@ export default function TransactionsBarChart({ transactions }: Props) {
   const tickStyle = { fontSize: 10, fill: 'var(--color-text-faint)' }
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      {/*
-        ComposedChart permite duas Bar independentes sem stackId,
-        garantindo que compras (positivas) fiquem acima do zero
-        e vendas (negativas) fiquem abaixo — sem empilhamento indevido.
-      */}
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-        <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
-        <YAxis
-          tick={tickStyle}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v: number) => formatBRL(Math.abs(v), true)}
-          width={60}
-        />
-        <Tooltip
-          content={<CustomTooltip />}
-          cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)' }}
-        />
-        <ReferenceLine y={0} stroke="var(--color-divider)" strokeWidth={1.5} />
+    <div style={{ touchAction: 'pan-y' }}>
+      <ResponsiveContainer width="100%" height={220}>
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: -14, bottom: 0 }} barCategoryGap="30%">
+          <defs>
+            <linearGradient id="grad-tx-buy" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-success)" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="oklch(from var(--color-success) l c h / 0.72)" />
+            </linearGradient>
+            <linearGradient id="grad-tx-sell" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="oklch(from var(--color-notification) l c h / 0.72)" />
+              <stop offset="100%" stopColor="var(--color-notification)" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
+          <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
+          <YAxis
+            tick={tickStyle}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) => formatBRL(Math.abs(v), true)}
+            width={58}
+          />
+          <Tooltip
+            content={<CustomTooltip />}
+            cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)', radius: 4 }}
+          />
+          <ReferenceLine y={0} stroke="var(--color-divider)" strokeWidth={1.5} />
 
-        {/* Compras: valores positivos — barras acima do zero */}
-        <Bar
-          dataKey="buy"
-          name="Compras"
-          fill="var(--color-success)"
-          radius={[4, 4, 0, 0]}
-          maxBarSize={32}
-        />
+          {/* Compras: valores positivos — barras acima do zero com gradiente sutil */}
+          <Bar
+            dataKey="buy"
+            name="Compras"
+            fill="url(#grad-tx-buy)"
+            radius={[5, 5, 0, 0]}
+            maxBarSize={32}
+          />
 
-        {/* Vendas: valores negativos — barras abaixo do zero */}
-        <Bar
-          dataKey="sell"
-          name="Vendas"
-          fill="var(--color-notification)"
-          radius={[0, 0, 4, 4]}
-          maxBarSize={32}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+          {/* Vendas: valores negativos — barras abaixo do zero com gradiente sutil */}
+          <Bar
+            dataKey="sell"
+            name="Vendas"
+            fill="url(#grad-tx-sell)"
+            radius={[0, 0, 5, 5]}
+            maxBarSize={32}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

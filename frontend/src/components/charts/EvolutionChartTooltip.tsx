@@ -76,18 +76,14 @@ export default function EvolutionChartTooltip({
 
   return (
     <div
+      className="chart-glass-tooltip"
       style={{
         minWidth: 240,
-        padding: '0.8rem',
-        borderRadius: 8,
-        border: '1px solid var(--color-border)',
-        background: 'var(--color-surface-2)',
-        boxShadow: 'var(--shadow-lg)',
-        color: 'var(--color-text)',
+        padding: '0.85rem 1rem',
         fontSize: 'var(--text-xs)',
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>{fullDate(point.date)}</div>
+      <div style={{ fontWeight: 700, marginBottom: 8, fontSize: '0.825rem' }}>{fullDate(point.date)}</div>
       <div>Patrimônio: <strong>{formatBRL(point.market_value)}</strong></div>
       <div>Custo das posições: <strong>{formatBRL(point.cost_basis)}</strong></div>
       <MoneyRow label="Resultado não realizado" value={point.unrealized_pnl} />
@@ -98,7 +94,15 @@ export default function EvolutionChartTooltip({
       <div className={signClass(point.accumulated_return_pct)}>
         TWR acumulado: <strong>{point.accumulated_return_pct >= 0 ? '+' : ''}{formatPercent(point.accumulated_return_pct)}</strong>
       </div>
-      <div style={{ marginTop: 8, color: 'var(--color-text-faint)' }}>
+      <div
+        style={{
+          marginTop: 10,
+          paddingTop: 8,
+          borderTop: '1px solid var(--glass-border)',
+          color: 'var(--color-text-faint)',
+          fontSize: '0.68rem',
+        }}
+      >
         {model.sourceLabel} · Cobertura {model.priceCoverageLabel} · Retorno {model.returnQualityLabel}
       </div>
     </div>

@@ -32,17 +32,16 @@ function CustomTooltip({ active, payload }: {
   const d = payload[0].payload
   return (
     <div
-      className="rounded-lg p-3 text-xs"
+      className="chart-glass-tooltip"
       style={{
-        background:  'var(--color-surface)',
-        border:      '1px solid var(--color-border)',
-        boxShadow:   'var(--shadow-lg)',
+        padding: '8px 12px',
+        fontSize: 'var(--text-xs)',
       }}
     >
       <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{d.ticker}</p>
       <p style={{ color: 'var(--color-text-muted)' }}>
         {formatBRL(d.total)}
-        <span className="ml-1" style={{ color: 'var(--color-text)' }}>({d.percentage.toFixed(2)}%)</span>
+        <span className="ml-1 font-semibold" style={{ color: 'var(--color-primary)' }}>({d.percentage.toFixed(2)}%)</span>
       </p>
     </div>
   )
@@ -60,9 +59,12 @@ export default function ProventosDonutChart({ data }: { data: ProventoDistributi
               dataKey="total"
               nameKey="ticker"
               cx="50%" cy="50%"
-              innerRadius={52}
-              outerRadius={80}
-              paddingAngle={2}
+              innerRadius={54}
+              outerRadius={82}
+              paddingAngle={3}
+              cornerRadius={4}
+              stroke="var(--color-surface)"
+              strokeWidth={2}
             >
               {top.map((entry, i) => (
                 <Cell key={entry.ticker} fill={PALETTE[i % PALETTE.length]} />
