@@ -43,7 +43,7 @@
     "audit-ci": "^7.1.0",
     "autoprefixer": "^10.6.2",
     "eslint": "^10.13.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^31.0.0",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
