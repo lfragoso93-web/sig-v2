@@ -13,10 +13,9 @@ import csv
 import io
 import re
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-from app.models.asset import AssetType
 from app.services.b3_investor_area_adapter_service import (
     infer_b3_asset_type,
     normalize_b3_ticker,

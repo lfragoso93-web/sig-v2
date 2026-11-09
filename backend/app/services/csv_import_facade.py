@@ -11,8 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.portfolio import Portfolio
 from app.services.csv_import_service import (
-    CSVImportError,
-    _read_upload_text,
     _safe_float,
     _validate_duplicate_transactions,
     _validate_writer_preflight,
@@ -32,7 +30,6 @@ from app.services.b3_investor_area_adapter_service import (
     adapt_b3_investor_xlsx_to_canonical,
     adapt_b3_investor_pdf_to_canonical,
     is_b3_csv_content,
-    is_b3_pdf_content,
 )
 from app.services.brokerage_note_adapter_service import (
     adapt_brokerage_note_to_canonical,
@@ -191,7 +188,7 @@ async def import_transactions_csv(
         }
 
     raw_filename = getattr(file, "filename", None)
-    filename = raw_filename.lower() if isinstance(raw_filename, str) else "" 
+    filename = raw_filename.lower() if isinstance(raw_filename, str) else ""
     adapter_format = None
     skipped_records = None
     content = ""
