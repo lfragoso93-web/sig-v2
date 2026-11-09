@@ -13,7 +13,7 @@ yfinance==0.2.66
 PyJWT[crypto]==2.15.1
 cryptography==50.0.2
 bcrypt==5.0.0
-python-multipart==0.0.32
+python-multipart==0.0.33
 apscheduler==3.11.3
 email-validator==2.3.0
 redis==8.1.0
