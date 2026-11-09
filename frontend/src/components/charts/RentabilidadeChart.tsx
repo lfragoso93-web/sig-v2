@@ -79,30 +79,35 @@ function CustomTooltip({ active, payload }: any) {
 
   return (
     <div
+      className="chart-glass-tooltip"
       style={{
-        background: 'var(--color-surface-2)',
-        border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-        borderRadius: 'var(--radius-md)',
-        padding: '8px 12px',
+        padding: '10px 14px',
         fontSize: 'var(--text-xs)',
-        boxShadow: '0 4px 12px oklch(0 0 0 / 0.15)',
-        minWidth: 196,
+        minWidth: 200,
       }}
     >
-      <p style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>{point.label}</p>
+      <p style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 8, fontSize: '0.825rem' }}>{point.label}</p>
       {payload.map((entry: any) => (
-        <div key={entry.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: entry.color }}>
+        <div key={entry.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: entry.color, marginTop: 4 }}>
           <span>{entry.name}</span>
-          <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
             {entry.value != null ? pct(Number(entry.value)) : '—'}
           </span>
         </div>
       ))}
-      <p style={{ marginTop: 6, color: 'var(--color-text-faint)', fontSize: 10 }}>
+      <div
+        style={{
+          marginTop: 8,
+          paddingTop: 6,
+          borderTop: '1px solid var(--glass-border)',
+          color: 'var(--color-text-faint)',
+          fontSize: 10,
+        }}
+      >
         Fechamento de {new Date(`${point.snapshotDate}T00:00:00`).toLocaleDateString('pt-BR')}
         {point.estimated ? ' · estimado' : ''}
         {point.partial ? ' · cobertura parcial' : ''}
-      </p>
+      </div>
     </div>
   )
 }
@@ -335,12 +340,18 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
               <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>Sem snapshots para o período selecionado</span>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={280} style={{ touchAction: 'pan-y' }}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="grad-carteira-bar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="oklch(from var(--color-primary) l c h / 0.65)" />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(from var(--color-text) l c h / 0.06)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                 <YAxis tickFormatter={value => `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`} tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} width={54} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)', radius: 4 }} />
                 <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.18)" />
                 {isCumulativeChart ? (
                   <Line
@@ -348,20 +359,32 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
                     dataKey={carteiraKey}
                     name="Carteira (TWR Acum.)"
                     stroke="var(--color-primary)"
-                    strokeWidth={2.5}
-                    dot={{ r: 3 }}
+                    strokeWidth={2.75}
+                    dot={{ r: 3, fill: 'var(--color-primary)', strokeWidth: 0 }}
+                    activeDot={{
+                      r: 6,
+                      stroke: 'var(--color-surface)',
+                      strokeWidth: 2.5,
+                      fill: 'var(--color-primary)',
+                    }}
                   />
                 ) : (
-                  <Bar dataKey={carteiraKey} name="Carteira (TWR)" fill="var(--color-primary)" radius={[3, 3, 0, 0]} maxBarSize={30} />
+                  <Bar
+                    dataKey={carteiraKey}
+                    name="Carteira (TWR)"
+                    fill="url(#grad-carteira-bar)"
+                    radius={[5, 5, 0, 0]}
+                    maxBarSize={32}
+                  />
                 )}
                 {showIbov && availability?.IBOV.available && (
-                  <Line type="monotone" dataKey={ibovKey} name={isCumulativeChart ? 'IBOV Acum.' : 'IBOV'} stroke="#f59e0b" connectNulls dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey={ibovKey} name={isCumulativeChart ? 'IBOV Acum.' : 'IBOV'} stroke="#f59e0b" connectNulls dot={false} strokeWidth={1.8} />
                 )}
                 {showCdi && availability?.CDI.available && (
-                  <Line type="monotone" dataKey={cdiKey} name={isCumulativeChart ? 'CDI Acum.' : 'CDI'} stroke="#10b981" connectNulls dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey={cdiKey} name={isCumulativeChart ? 'CDI Acum.' : 'CDI'} stroke="#10b981" connectNulls dot={false} strokeWidth={1.8} />
                 )}
                 {showIpca && availability?.IPCA.available && (
-                  <Line type="monotone" dataKey={ipcaKey} name={isCumulativeChart ? 'IPCA Acum.' : 'IPCA'} stroke="#a855f7" connectNulls dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey={ipcaKey} name={isCumulativeChart ? 'IPCA Acum.' : 'IPCA'} stroke="#a855f7" connectNulls dot={false} strokeWidth={1.8} />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
