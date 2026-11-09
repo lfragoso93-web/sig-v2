@@ -146,7 +146,7 @@ export default function UserMenu() {
                   setOpen(false)
                   setShowImport(true)
                 }}
-                title={resolvedPortfolioId ? 'Importar transações por CSV' : 'Crie ou selecione uma carteira para importar CSV'}
+                title={resolvedPortfolioId ? 'Importar extratos da B3, notas de corretagem ou planilhas (CSV, XLSX, PDF)' : 'Crie ou selecione uma carteira para importar'}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center',
                   gap: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)',
@@ -159,7 +159,7 @@ export default function UserMenu() {
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 <FileUp size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                Importar CSV
+                Importar Extratos / Notas
               </button>
 
               <div style={{ height: '1px', background: 'var(--color-divider)', margin: 'var(--space-1) 0' }} />

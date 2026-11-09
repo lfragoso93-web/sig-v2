@@ -98,9 +98,9 @@ const articles: HelpArticle[] = [
   },
   {
     category: 'Carteira e dados',
-    question: 'Posso importar operações por CSV?',
+    question: 'Posso importar operações por arquivos (CSV, Excel ou PDF)?',
     answer:
-      'Sim. No menu do usuário, escolha Importar CSV. A importação é associada à carteira selecionada; revise o arquivo e o resultado apresentado antes de continuar. Os dados importados passam a compor o histórico de transações.',
+      'Sim. No menu do usuário, escolha Importar Extratos / Notas. O sistema aceita notas de corretagem (PDF Sinacor de corretoras como Inter, XP, Clear, BTG, Rico, NuInvest), extratos da Área do Investidor B3 (XLSX, PDF ou CSV) e o modelo canônico SGI. Revise os dados na pré-visualização antes de confirmar.',
     keywords: 'arquivo csv importar planilha upload extrato notas importacao csv',
   },
   {

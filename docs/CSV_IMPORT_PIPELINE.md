@@ -58,3 +58,23 @@ Para as demais classes listadas em `PRICE_HISTORY_REQUIRED_TYPES`, o preflight
 ainda exige ativo e precos persistidos. Falhas em linhas desses tipos precisam
 ser diagnosticadas pelo relatorio do dry-run (ticker/tipo/erro), pois nao sao
 explicadas pelo gate especifico de cripto.
+
+## Formatos de Arquivo e Provedores Suportados
+
+O pipeline de importação aceita múltiplos formatos de arquivo via endpoint unificado `/portfolios/{id}/import-csv` e `/portfolios/{id}/import-transactions`:
+
+1. **Modelo Canônico SGI**:
+   - Arquivos `.csv` ou `.xlsx` com as 9 colunas canônicas (`ticker, asset_type, operation, quantity, price, date, fees, currency, notes`) e suporte a colunas opcionais de renda fixa.
+
+2. **Área do Investidor B3**:
+   - Arquivos `.xlsx`, `.pdf` ou `.csv` exportados diretamente da Área do Investidor B3.
+   - Suporte a extratos de **Movimentação** e relatórios de **Negociação**.
+   - Mapeamento automático de tipos de ativos (`ACAO`, `FII`, `BDR`, `TESOURO_DIRETO`, `RENDA_FIXA`).
+   - Mapeamento inteligente de operações: `APLICAÇÃO` e compras como `buy`, `RESGATE`, `RESGATE ANTECIPADO` e vendas como `sell`.
+   - Segregação automática de proventos e eventos corporativos (dividendos, JCP, rendimentos, transferências sem liquidação financeira, frações e grupamentos) evitando trades artificiais.
+
+3. **Notas de Corretagem (Padrão Sinacor)**:
+   - Arquivos `.pdf` e texto estruturado de notas de corretagem padrão Sinacor (Banco Inter, XP Investimentos, Clear, BTG Pactual, Rico, NuInvest, etc.).
+   - Extração do pregão (`Data pregão`), número da nota e instituição corretora.
+   - Detecção de linhas de operação no formato Bovespa à vista e fracionário (`[1-BOVESPA] [C|V] [VISTA|FRACIONARIO] <ESPECIFICAÇÃO> <QUANTIDADE> <PREÇO> <VALOR TOTAL>`).
+   - Rateio proporcional dos custos e taxas operacionais (`Taxa de liquidação`, `Emolumentos`, `Corretagem`, `ISS`, `Total custos / despesas`) ponderados pelo volume de cada ativo executado.

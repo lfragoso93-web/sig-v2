@@ -55,6 +55,27 @@ function rowKind(row: ValidationRow): Exclude<RowFilter, null> {
   return 'warning'
 }
 
+
+function getAdapterLabel(format?: string | null): string {
+  if (!format) return 'Modelo canônico SGI'
+  switch (format) {
+    case 'b3_negociacao_v1':
+      return 'B3 Negociação (CSV)'
+    case 'b3_movimentacao_v1':
+      return 'B3 Movimentação (CSV)'
+    case 'b3_movimentacao_xlsx_v1':
+      return 'B3 Movimentação (Excel .xlsx)'
+    case 'b3_movimentacao_pdf_v1':
+      return 'B3 Extrato de Movimentação (PDF)'
+    case 'sinacor_brokerage_note_v1':
+      return 'Nota de Corretagem (Padrão Sinacor)'
+    case 'sgi_canonical_xlsx_v1':
+      return 'Modelo SGI (Excel .xlsx)'
+    default:
+      return format
+  }
+}
+
 export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Props) {
   const queryClient = useQueryClient()
   const [step, setStep] = useState<'upload' | 'preview' | 'results'>('upload')
@@ -126,12 +147,14 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
   }
 
   const prepareFile = async (selectedFile: File) => {
-    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
-      setError('Por favor, selecione um arquivo CSV.')
+    const lowerName = selectedFile.name.toLowerCase()
+    const isSupported = ['.csv', '.xlsx', '.xls', '.pdf'].some(ext => lowerName.endsWith(ext))
+    if (!isSupported) {
+      setError('Por favor, selecione um arquivo suportado (.csv, .xlsx, .xls, .pdf).')
       return
     }
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('Arquivo muito grande (máximo 5MB).')
+    if (selectedFile.size > 20 * 1024 * 1024) {
+      setError('Arquivo muito grande (máximo 20MB).')
       return
     }
 
@@ -141,13 +164,23 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
     setError('')
 
     try {
-      const text = await selectedFile.text()
-      const rows = text
-        .split('\n')
-        .filter(line => line.trim())
-        .slice(0, 11)
-        .map(line => line.split(',').map(value => value.trim()))
-      setPreview(rows)
+      if (lowerName.endsWith('.csv')) {
+        const text = await selectedFile.text()
+        const rows = text
+          .split('\n')
+          .filter(line => line.trim())
+          .slice(0, 11)
+          .map(line => line.split(',').map(value => value.trim()))
+        setPreview(rows)
+      } else {
+        const fileTypeLabel = lowerName.endsWith('.pdf')
+          ? 'Documento PDF (Nota Sinacor ou Extrato B3)'
+          : 'Planilha Excel (Extrato B3 ou Modelo SGI)'
+        setPreview([
+          ['Arquivo', 'Tamanho', 'Tipo'],
+          [selectedFile.name, `${(selectedFile.size / 1024).toFixed(1)} KB`, fileTypeLabel],
+        ])
+      }
       setStep('preview')
       await validateFile(selectedFile)
     } catch (err) {
@@ -339,8 +372,8 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
               <Upload size={15} style={{ color: 'var(--color-primary)' }} />
             </div>
             <div>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', display: 'block' }}>Importar Transações</span>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Use o modelo CSV para garantir compatibilidade</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', display: 'block' }}>Importar Transações e Extratos</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Aceita Notas de Corretagem (PDF), Extratos B3 (XLSX, PDF, CSV) e Modelo SGI</span>
             </div>
           </div>
           <button onClick={onClose} aria-label="Fechar" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--color-text-muted)', display: 'flex' }}>
@@ -365,12 +398,12 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', border: '2px dashed oklch(from var(--color-text) l c h / 0.2)', borderRadius: 'var(--radius-lg)', background: 'oklch(from var(--color-text) l c h / 0.02)', cursor: 'pointer' }}
               >
                 <Upload size={32} style={{ color: 'var(--color-primary)', marginBottom: '0.5rem' }} />
-                <p style={{ margin: '0.25rem 0 0', fontSize: 'var(--text-sm)', fontWeight: 500 }}>Arraste seu arquivo CSV aqui</p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: 'var(--text-sm)', fontWeight: 500 }}>Arraste seu arquivo aqui (CSV, XLSX, PDF)</p>
                 <p style={{ margin: '0.25rem 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>ou clique para selecionar</p>
               </div>
-              <input id="file-input" type="file" accept=".csv" onChange={handleFileSelect} style={{ display: 'none' }} />
+              <input id="file-input" type="file" accept=".csv,.xlsx,.xls,.pdf" onChange={handleFileSelect} style={{ display: 'none' }} />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                Formatos suportados: <strong>Modelo canônico SGI</strong> ({REQUIRED_COLUMNS.join(', ')}) ou <strong>Área do Investidor B3</strong> (arquivos de Negociação e Movimentação com detecção automática).
+                Formatos suportados: <strong>Notas de corretagem</strong> (PDF Sinacor de XP, Inter, Clear, BTG, Rico, NuInvest, etc.), <strong>Área do Investidor B3</strong> (XLSX, PDF ou CSV de Movimentação e Negociação) e <strong>Modelo canônico SGI</strong> ({REQUIRED_COLUMNS.join(', ')}).
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 Para Renda Fixa, os campos de contrato são opcionais. Repita a mesma <strong>fixed_income_contract_key</strong> nas aplicações vinculadas ao mesmo contrato; arquivos antigos continuam aceitos.
@@ -412,7 +445,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
                   {result.adapter_format && (
                     <div style={{ padding: '0.625rem 0.875rem', borderRadius: 'var(--radius-md)', background: 'oklch(from var(--color-primary) l c h / 0.1)', border: '1px solid oklch(from var(--color-primary) l c h / 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-primary)' }}>
                       <span>
-                        Formato B3 reconhecido: <strong>{result.adapter_format === 'b3_negociacao_v1' ? 'Negociação' : 'Movimentação'}</strong>
+                        Formato reconhecido: <strong>{getAdapterLabel(result.adapter_format)}</strong>
                       </span>
                       {result.skipped_records && result.skipped_records.length > 0 && (
                         <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
