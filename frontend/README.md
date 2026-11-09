@@ -4,6 +4,8 @@ Guia técnico, arquitetural e operacional do frontend do **SGI v2 (Sistema de Ge
 
 > **Documentação Central do Sistema:** Consulte [`docs/DOCUMENTACAO_DO_SISTEMA.md`](../docs/DOCUMENTACAO_DO_SISTEMA.md).
 > **Relatório Oficial de Oportunidades de Melhoria:** Consulte [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](../docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+>
+> ⚠️ **Regra Obrigatória de Documentação Contínua e Viva:** A cada nova instrução, página, componente, hook ou melhoria de UX no frontend, **toda a documentação afetada DEVE ser atualizada obrigatoriamente no mesmo bloco de trabalho** (incluindo `README.md`, `frontend/README.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md` e `docs/ROADMAP.md`).
 
 ---
 
@@ -40,13 +42,19 @@ frontend/
 │   ├── hooks/              # Custom hooks desacoplados (TanStack Query e UI)
 │   ├── pages/              # Páginas e views roteadas da aplicação
 │   │   ├── AnalisePage.tsx               # Análise de carteira com IA e diagnóstico de risco
+│   │   ├── AssetAnalysisPage.tsx         # Análise individual aprofundada de ativos por ticker
+│   │   ├── AssetComparisonPage.tsx       # Comparador simultâneo de múltiplos ativos lado a lado
+│   │   ├── CarteirasRecomendadasPage.tsx # Carteiras recomendadas institucionais com IA e simulação
 │   │   ├── FixedIncomeCalculatorPage.tsx # Simulador e comparador de títulos de Renda Fixa
+│   │   ├── HelpPage.tsx                  # Central de Ajuda com busca e Assistente Documental com IA
 │   │   ├── IncomeCalculatorPage.tsx      # Calculadora de aportes e rendimentos futuros
 │   │   ├── IrpfPage.tsx                  # Módulo e relatório anual de IRPF
+│   │   ├── Landing.tsx                   # Landing Page pública institucional e responsiva
 │   │   ├── PatrimonioPage.tsx            # Alocação patrimonial por classes e produtos
 │   │   ├── ProventosPage.tsx             # Linha do tempo e tabela oficial de dividendos/JCP
 │   │   ├── RentabilidadePage.tsx         # Análise de retorno TWR, MWR e benchmarks
-│   │   └── ResumoPage.tsx                # Visão geral da carteira ativa e KPIs rápidos
+│   │   ├── ResumePage.tsx                # Dashboard com KPIs e evolução patrimonial contínua
+│   │   └── Transacoes.tsx                # Extrato com filtros temporais e máscara monetária R$
 │   ├── router/             # Definição canônica de rotas e redirecionamentos (/carteira/*)
 │   ├── store/              # Stores globais Zustand (sessão, carteira ativa, preferências)
 │   └── utils/              # Formatadores de moeda (BRL/USD), datas (date-fns) e percentuais
@@ -81,6 +89,20 @@ frontend/
 - A navegação unificada é centralizada sob a raiz canônica `/carteira/*` (definida em `src/router/portfolioRoutes.ts`).
 - Rotas históricas (`/metas`, `/irpf`) possuem redirecionamento automático permanente.
 - Acesso condicionado à autenticação prévia com suporte a Google OAuth 2.0 e MFA TOTP (#97).
+
+---
+
+### 3.6 Suite de Ferramentas Avançadas e IA
+- **Comparador de Ativos (`AssetComparisonPage.tsx`):** Permite selecionar e comparar até 5 ativos de diferentes classes simultaneamente (múltiplos, DY, P/L, retorno recente).
+- **Análise Individual de Ativos (`AssetAnalysisPage.tsx`):** Deep dive com gráficos de cotação temporal, dividendos históricos e múltiplos de mercado por ticker.
+- **Carteiras Recomendadas por IA (`CarteirasRecomendadasPage.tsx`):** Três teses estratégicas (Patrimônio, Proventos e Performance) com simulador de aportes para cálculo automático de quantidades a adquirir.
+- **Central de Ajuda e Assistente Documental (`HelpPage.tsx`):** Assistente com RAG funcional local, busca por tópicos e atalhos dinâmicos de navegação no sistema.
+
+### 3.7 Experiência do Livro-Razão e Evolução Patrimonial
+- **Máscara Monetária Decimal Invertida:** Inclusão de valores no padrão bancário brasileiro (preenchimento da direita para a esquerda em R$) no `AddTransactionModal.tsx`.
+- **Suporte a Lançamentos a Custo R$ 0,00:** Suporte contábil a bonificações de ações e doações.
+- **Filtro Temporal no Extrato:** Seleção por período contábil no histórico de transações.
+- **Evolução Patrimonial Contínua:** Ponto intradiário em tempo real combinando o fechamento histórico a cotações ao vivo no `ResumePage.tsx`.
 
 ---
 

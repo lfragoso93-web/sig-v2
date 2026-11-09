@@ -20,6 +20,12 @@ Keep changes narrow and reviewable. Prefer existing services and contracts to a
 parallel abstraction. Update tests and living documentation in the same block
 when behavior or an invariant changes.
 
+Mandatory Continuous Documentation Rule: On every instruction, feature addition,
+refactoring, bug fix, migration, or route creation, update all affected documentation
+files (root README.md, backend/README.md, frontend/README.md, docs/ROADMAP.md,
+docs/DOCUMENTACAO_DO_SISTEMA.md, and domain docs) in the exact same work block.
+Never deliver code changes with outdated or diverged documentation.
+
 For date-sensitive financial logic, inject `app.core.clock.Clock`; production
 uses `SystemClock` and deterministic tests use timezone-aware `FrozenClock`.
 Production configuration must fail before startup when its exact branch, SHA or

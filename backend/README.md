@@ -4,6 +4,8 @@ Guia técnico, arquitetural e operacional do backend do **SGI v2 (Sistema de Ges
 
 > **Documentação Central do Sistema:** Consulte [`docs/DOCUMENTACAO_DO_SISTEMA.md`](../docs/DOCUMENTACAO_DO_SISTEMA.md).
 > **Relatório Oficial de Oportunidades de Melhoria:** Consulte [`docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md`](../docs/DIAGNOSTICO_OPORTUNIDADES_MELHORIA.md).
+>
+> ⚠️ **Regra Obrigatória de Documentação Contínua e Viva:** A cada nova instrução, endpoint, service, migração ou refatoração no backend, **toda a documentação afetada DEVE ser atualizada obrigatoriamente no mesmo bloco de trabalho** (incluindo `README.md`, `backend/README.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md` e `docs/architecture.md`).
 
 ---
 
@@ -16,7 +18,7 @@ O backend do SGI v2 é construído sobre Python 3.12+ utilizando **FastAPI**, **
 ```text
 backend/
 ├── alembic/                # Scripts de migração de banco de dados (Alembic)
-│   └── versions/           # 67 revisões lineares (head: 20261022_auth_oauth_mfa)
+│   └── versions/           # 70 revisões lineares (head: 20261105_purge_cert_entities)
 ├── app/                    # Código-fonte principal da aplicação
 │   ├── cli/                # 64 módulos de linha de comando operacionais e administrativos
 │   ├── core/               # Configurações, segurança, database, redis, clock e scheduler
@@ -74,7 +76,7 @@ O desenvolvimento no backend do SGI v2 é rigidamente condicionado pelos seguint
 - **Engine Assíncrono:** Conexões gerenciadas via SQLAlchemy 2.0 com driver `asyncpg` sobre PostgreSQL 16.
 - **Sessões:** Injetadas via dependência `get_db` no FastAPI utilizando context manager assíncrono `AsyncSessionLocal()`.
 - **Governança Alembic:** Todas as alterações no schema DDL são estritamente unidirecionais e encadeadas de forma linear em `backend/alembic/versions/`.
-- **Cabeça Vigente:** `20261022_auth_oauth_mfa` (67 revisões encadeadas sem ramificações abertas).
+- **Cabeça Vigente:** `20261105_purge_cert_entities` (70 revisões encadeadas sem ramificações abertas, cobrindo unificação de fracionários e purga de entidades sintéticas).
 - **Gate de Drift:** O teste `tests/test_alembic_drift_gate.py` valida periodicamente a paridade perfeita entre os modelos SQLAlchemy `MetaData` e as revisões do Alembic.
 
 ---
@@ -101,15 +103,20 @@ Configurado em `backend/app/core/scheduler.py` via APScheduler no fuso horário 
 | Horário (BRT) | ID do Job | Finalidade | Bloqueio / Lock |
 | :--- | :--- | :--- | :--- |
 | **09h–18h, hora cheia em dias úteis** | `update_quotes_intraday_full_hour` | Atualiza cotações correntes dos ativos de mercado, incluindo cripto | Redis lock (TTL 7200s, liberado ao concluir) |
-| **Fora do pregão e fins de semana, hora cheia** | `update_crypto_quotes_*` | Atualiza apenas cotações de cripto, que negociam continuamente | Redis lock (TTL 7200s, liberado ao concluir) |
+| **Dias úteis fora do pregão (hora cheia)** | `update_crypto_quotes_offhours_weekdays` | Atualiza cotações de cripto fora da janela do pregão | Redis lock (TTL 7200s, liberado ao concluir) |
+| **Fins de semana 24h (hora cheia)** | `update_crypto_quotes_weekends` | Mantém cotações horárias de cripto aos sábados e domingos | Redis lock (TTL 7200s, liberado ao concluir) |
+| **08:00 (segunda a sábado)** | `sync_asset_dividends_morning` | Ingestão matinal global de proventos anunciados (janela -90d a +365d) | Redis lock (TTL 21600s) |
 | **08:30 (dias úteis)** | `notify_daily_dividend_payments` | Dispara resumo matinal por e-mail dos proventos pagos no dia | Redis lock (TTL 3600s) |
-| **20:40 (dias úteis)** | `sync_benchmark_rates_daily` | Sincroniza CDI, Selic, IPCA e IGPM via BCB SGS com anti-WAF | Redis lock (TTL 3600s) |
-| **20:42 (dias úteis)** | `sync_ibov_benchmark_daily` | Sincroniza fechamento e calcula retorno diário do Ibovespa | Redis lock (TTL 3600s) |
-| **20:45 (dias úteis)** | `persist_daily_close_prices` | Grava fechamento oficial diário de todos os ativos sob custódia | Redis lock (TTL 7200s) |
+| **08:40 e 20:40 (dias úteis)** | `sync_benchmark_rates_daily` | Sincroniza CDI, Selic, IPCA e IGPM via BCB SGS e invalida caches de renda fixa | Redis lock (TTL 3600s) |
+| **08:42 e 20:42 (dias úteis)** | `sync_ibov_benchmark_daily` | Sincroniza fechamento e calcula retorno diário do Ibovespa (^BVSP) | Redis lock (TTL 3600s) |
+| **20:45 (dias úteis)** | `persist_daily_close_prices` | Grava fechamento oficial diário de todos os ativos com transações ativas | Redis lock (TTL 7200s) |
 | **20:50 (dias úteis)** | `persist_treasury_daily_close` | Sincroniza fechamento diário de preços e taxas do Tesouro Direto | Redis lock (TTL 7200s) |
-| **21:00 (dias úteis)** | `portfolio_snapshot_auto_maintenance` | Reconstrói o snapshot oficial diário e o TWR após os fechamentos de preços | Redis lock (TTL 7200s) |
-| **21:30 (dias úteis)** | `refresh_asset_fundamentals_daily` | Atualiza indicadores fundamentalistas e consenso de mercado | Redis lock (TTL 7200s) |
-| **Dia 01 às 08:15** | `audit_b3_market_calendar_monthly` | Auditoria read-only da fonte oficial do calendário da B3 | Redis lock (TTL 300s) |
+| **21:00 (diariamente, incluindo fins de semana)** | `portfolio_snapshot_auto_maintenance` | Consolida fechamento patrimonial diário contínuo e encadeamento da série TWR | Redis lock (TTL 7200s) |
+| **21:30 (dias úteis)** | `refresh_asset_fundamentals_daily` | Atualiza múltiplos fundamentalistas (P/L, P/VP, DY, ROE) e consenso | Redis lock (TTL 7200s) |
+| **22:00 (dias úteis)** | `sync_corporate_events_daily` | Sincronização noturna de eventos corporativos (splits, grupamentos) | Redis lock (TTL 21600s) |
+| **Dia 01 às 08:15** | `audit_b3_market_calendar_monthly` | Auditoria read-only da fonte oficial do calendário de feriados da B3 | Redis lock (TTL 300s) |
+
+> **Controle Manual e Histórico:** O painel administrativo do SuperAdmin permite disparar qualquer job manualmente sob demanda (`POST /api/v1/admin/scheduler/{job_id}/run`) e consultar o histórico recente com timestamps, status e tempos de execução (`GET /api/v1/admin/scheduler/{job_id}/history`).
 
 ---
 

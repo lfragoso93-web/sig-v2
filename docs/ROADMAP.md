@@ -1,23 +1,34 @@
 # Roadmap atual do SGI v2
 
-> Revisado em 02/11/2026. Este é o índice vivo de próximas atividades. Inventários antigos permanecem em `history/` e não representam o estado atual das Issues, PRs ou do runtime.
+> Revisado em 09/11/2026. Este é o índice vivo de próximas atividades. Inventários antigos permanecem em `history/` e não representam o estado atual das Issues, PRs ou do runtime.
 
 ## Ambientes e releases
 
 - Desenvolvimento e validação local: Windows, branch `stable-15jun`.
 - Produção: OCI, branch `main`.
 - Alterações passam por validação local e Pull Request para `main`. O merge com CI aprovado dispara o deploy automático, com backup pré-deploy e verificação de identidade, smoke e `/ready`.
-- O SHA implantado mais recentemente confirmado nesta revisão é `18bac9ba49ff660b4d08818fac8e7a39680380c8` (PR #500). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
+- O SHA implantado mais recentemente confirmado nesta revisão é `93f7a2b2` (PR #543). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
 - A branch desta atividade parte de `stable-15jun` e incorpora `origin/main` antes da validação; os ponteiros remotos não são reescritos.
 
 ## Entregas concluídas
 
+- **Release de Produção PR #543 / SHA `93f7a2b2`:** Deploy validado via GitHub Actions na infraestrutura OCI com certificação aprovada.
+- **Regra Obrigatória de Documentação Contínua e Viva:** Estabelecido o invariante de que qualquer instrução, refatoração, funcionalidade ou migração deve atualizar toda a documentação relevante (READMEs, ROADMAP, DOCUMENTACAO_DO_SISTEMA e manuais) no mesmo bloco de trabalho.
+- **Suite Avançada de Ferramentas e IA (PRs #518, #521, #522, #523, #532):**
+  - Comparador de Ativos com visualização simultânea de até 5 ativos lado a lado;
+  - Página dedicada de Análise de Ativos com deep linking por ticker, gráficos de cotação e múltiplos;
+  - Carteiras Recomendadas por IA com estratégias de Patrimônio, Proventos e Performance, acompanhadas de simulador matemático de aportes.
+- **Central de Ajuda e Assistente Documental com IA (PRs #517, #526, #528):** Central de ajuda redesenhada, busca por tópicos, atalhos de navegação e assistente documental treinado exclusivamente no corpus de `backend/help_docs/` com zero exposição de dados de custódia.
+- **Evolução Patrimonial Contínua e Ponto Intradiário (PR #533):** Snapshots diários consolidados aos finais de semana e feriados somados a ponto intradiário em tempo real no gráfico do Dashboard com cotações correntes.
+- **Aprimoramento do Livro-Razão e Transações (PRs #532, #543):** Extrato com filtro por período, máscara decimal monetária da direita para a esquerda (padrão R$) e suporte formal a lançamentos com custo unitário R$ 0,00 (bonificações e doações).
+- **Unificação de Ações Fracionárias B3 (PRs #524, #529):** Normalização contábil unificando códigos fracionários (sufixo `F`) ao lote padrão no backend, catalog e UI.
+- **Governança do Scheduler e Painel SuperAdmin (PRs #501, #520):** Monitoramento dos 12 jobs em tempo real, capacidade de disparo manual sob demanda e histórico detalhado de execuções com logs.
+- **Expansão Rigorosa do `PortfolioAccessContext` (PRs #503-#516):** Autorização por escopo de carteira aplicada a transações, IRPF, proventos, performance, metas e CLIs de certificação.
+- **Purga de Entidades Sintéticas (PRs #525, #531):** Migrações Alembic `20261105_clean_cert_entities` e `20261105_purge_cert_entities` expurgando dados sintéticos de teste do banco de produção.
+- **Branding Institucional SGI e Nova Landing Page (PRs #527, #530):** Alinhamento completo da marca SGI, eliminação de tokens legados e nova Landing Page responsiva.
 - CI/CD de produção por merge em `main`, com backup antes do deploy e verificações pós-deploy.
 - Sincronização recorrente de proventos (segunda a sábado, 08:00) e eventos corporativos (dias úteis, 22:00), além dos benchmarks pela manhã e à noite.
 - Limite de reset de senha por usuário e desbloqueio auditado pelo SuperAdmin.
-- Revisão das dependências compatíveis e correções do workflow OCI nas PRs recentes.
-- Inventário remoto consultado em 02/11/2026: zero Issues abertas, zero PRs abertas e zero alertas Dependabot abertos. PR #498 foi fechada por incompatibilidade do salto para TypeScript 7; a atualização compatível do toolchain permanece em #497.
-- Os eventos corporativos permanecem como fatos globais; reconciliação e efeito sobre carteira continuam fail-closed quando falta evidência.
 
 ## Bloco concluído: automação confiável e documentação
 

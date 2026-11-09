@@ -34,6 +34,10 @@ Resumo / Patrimônio / Rentabilidade / Proventos / IRPF / AnalisePage (IA #361) 
 
 ## Princípios obrigatórios
 
+### Regra Obrigatória de Documentação Contínua e Viva
+
+A cada nova instrução, implementação, correção de bug, refatoração de código, migração ou criação de rota/componente, **toda a documentação afetada deve ser rigorosamente atualizada no mesmo bloco de trabalho** (incluindo `README.md`, `docs/ROADMAP.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md`, `backend/README.md`, `frontend/README.md` e arquivos de domínio). Nenhuma alteração é considerada concluída com documentação defasada.
+
 ### DB-first
 
 - serviços financeiros leem dados persistidos;
