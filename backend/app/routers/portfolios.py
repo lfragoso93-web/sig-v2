@@ -362,6 +362,7 @@ async def get_portfolio_targets_with_current(
     return await get_authorized_class_targets_with_current(db, access)
 
 
+@router.post("/{portfolio_id}/import-transactions", response_model=CSVImportResponse)
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse)
 async def import_portfolio_csv(
     portfolio_id: int,

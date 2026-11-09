@@ -6,7 +6,7 @@ O SGI disponibiliza um importador em lote por arquivo CSV para que você possa m
 
 ## 1. Como Iniciar a Importação
 
-1. No menu do usuário localizado na barra superior, clique na opção **Importar CSV**.
+1. No menu do usuário localizado na barra superior, clique na opção **Importar Extratos / Notas**.
 2. O modal de importação será aberto, associado automaticamente à carteira que você estiver navegando no momento.
 3. Você pode baixar o **Modelo canônico SGI** diretamente pelo link no modal para conferir o formato de colunas esperado.
 

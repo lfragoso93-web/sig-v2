@@ -34,7 +34,15 @@ from app.services.transaction_write_service import (
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 from app.services.b3_investor_area_adapter_service import (
     adapt_b3_investor_csv_to_canonical,
+    adapt_b3_investor_xlsx_to_canonical,
+    adapt_b3_investor_pdf_to_canonical,
     is_b3_csv_content,
+    is_b3_pdf_content,
+)
+from app.services.brokerage_note_adapter_service import (
+    adapt_brokerage_note_to_canonical,
+    is_brokerage_note_content,
+    extract_text_from_pdf,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,36 +185,168 @@ async def import_transactions_csv(
     Na importação efetiva delega para a rotina transacional existente, preservando
     uma única regra de persistência.
     """
-    try:
-        content = await _read_upload_text(file)
-    except CSVImportError as exc:
+    if hasattr(file, "read"):
+        raw_bytes = await file.read()
+    elif isinstance(file, bytes):
+        raw_bytes = file
+    elif isinstance(file, str):
+        raw_bytes = file.encode("utf-8")
+    else:
+        raw_bytes = b""
+
+    if not raw_bytes:
         return {
             "success": False,
             "imported_count": 0,
             "skipped_count": 0,
             "error_count": 1,
             "rows": [],
-            "global_errors": [str(exc)],
+            "global_errors": ["O arquivo CSV está vazio"],
         }
 
+    raw_filename = getattr(file, "filename", None)
+    filename = raw_filename.lower() if isinstance(raw_filename, str) else "" 
     adapter_format = None
     skipped_records = None
-    if source == "b3" or (source == "auto" and is_b3_csv_content(content)):
-        b3_result = adapt_b3_investor_csv_to_canonical(content)
-        if not b3_result.success and b3_result.errors:
+    content = ""
+
+    # A) Arquivo PDF (B3 Extrato ou Nota de Corretagem)
+    if raw_bytes.startswith(b"%PDF") or (bool(filename) and filename.endswith(".pdf")):
+        extracted_text = ""
+        try:
+            extracted_text = extract_text_from_pdf(raw_bytes)
+        except Exception as exc:
             return {
                 "success": False,
                 "imported_count": 0,
                 "skipped_count": 0,
-                "error_count": len(b3_result.errors),
+                "error_count": 1,
                 "rows": [],
-                "global_errors": b3_result.errors,
-                "adapter_format": b3_result.format_detected,
-                "skipped_records": [item.to_dict() for item in b3_result.skipped_items],
+                "global_errors": [f"Falha ao ler arquivo PDF: {exc}"],
             }
-        content = b3_result.canonical_csv
-        adapter_format = b3_result.format_detected
-        skipped_records = [item.to_dict() for item in b3_result.skipped_items]
+
+        if is_brokerage_note_content(extracted_text):
+            note_res = adapt_brokerage_note_to_canonical(extracted_text)
+            if not note_res.success and note_res.errors:
+                return {
+                    "success": False,
+                    "imported_count": 0,
+                    "skipped_count": 0,
+                    "error_count": len(note_res.errors),
+                    "rows": [],
+                    "global_errors": note_res.errors,
+                    "adapter_format": note_res.format_detected,
+                }
+            content = note_res.canonical_csv
+            adapter_format = note_res.format_detected
+            skipped_records = [item.to_dict() for item in note_res.skipped_items]
+        else:
+            b3_pdf_res = adapt_b3_investor_pdf_to_canonical(raw_bytes)
+            if not b3_pdf_res.success and b3_pdf_res.errors:
+                return {
+                    "success": False,
+                    "imported_count": 0,
+                    "skipped_count": 0,
+                    "error_count": len(b3_pdf_res.errors),
+                    "rows": [],
+                    "global_errors": b3_pdf_res.errors,
+                    "adapter_format": b3_pdf_res.format_detected,
+                }
+            content = b3_pdf_res.canonical_csv
+            adapter_format = b3_pdf_res.format_detected
+            skipped_records = [item.to_dict() for item in b3_pdf_res.skipped_items]
+
+    # B) Arquivo Excel (.xlsx / .xls)
+    elif raw_bytes.startswith(b"PK\x03\x04") or (bool(filename) and filename.endswith((".xlsx", ".xls"))):
+        xlsx_res = adapt_b3_investor_xlsx_to_canonical(raw_bytes)
+        if xlsx_res.success and xlsx_res.canonical_csv:
+            content = xlsx_res.canonical_csv
+            adapter_format = xlsx_res.format_detected
+            skipped_records = [item.to_dict() for item in xlsx_res.skipped_items]
+        else:
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
+                ws = wb.active
+                raw_rows = []
+                if ws:
+                    for r in ws.iter_rows(values_only=True):
+                        raw_rows.append([str(c) if c is not None else "" for c in r])
+                if raw_rows and any("ticker" in str(c).lower() for c in raw_rows[0]):
+                    out = io.StringIO()
+                    writer = csv.writer(out)
+                    for r in raw_rows:
+                        writer.writerow(r)
+                    content = out.getvalue()
+                else:
+                    return {
+                        "success": False,
+                        "imported_count": 0,
+                        "skipped_count": 0,
+                        "error_count": len(xlsx_res.errors) or 1,
+                        "rows": [],
+                        "global_errors": xlsx_res.errors or ["Formato de planilha não reconhecido."],
+                        "adapter_format": "unknown_xlsx",
+                    }
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "imported_count": 0,
+                    "skipped_count": 0,
+                    "error_count": 1,
+                    "rows": [],
+                    "global_errors": [f"Erro ao processar planilha: {exc}"],
+                }
+
+    # C) Arquivo de Texto / CSV
+    else:
+        for enc in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                content = raw_bytes.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            return {
+                "success": False,
+                "imported_count": 0,
+                "skipped_count": 0,
+                "error_count": 1,
+                "rows": [],
+                "global_errors": ["Não foi possível identificar a codificação do arquivo."],
+            }
+
+        if source == "b3" or (source == "auto" and is_b3_csv_content(content)):
+            b3_result = adapt_b3_investor_csv_to_canonical(content)
+            if not b3_result.success and b3_result.errors:
+                return {
+                    "success": False,
+                    "imported_count": 0,
+                    "skipped_count": 0,
+                    "error_count": len(b3_result.errors),
+                    "rows": [],
+                    "global_errors": b3_result.errors,
+                    "adapter_format": b3_result.format_detected,
+                    "skipped_records": [item.to_dict() for item in b3_result.skipped_items],
+                }
+            content = b3_result.canonical_csv
+            adapter_format = b3_result.format_detected
+            skipped_records = [item.to_dict() for item in b3_result.skipped_items]
+        elif is_brokerage_note_content(content):
+            note_res = adapt_brokerage_note_to_canonical(content)
+            if not note_res.success and note_res.errors:
+                return {
+                    "success": False,
+                    "imported_count": 0,
+                    "skipped_count": 0,
+                    "error_count": len(note_res.errors),
+                    "rows": [],
+                    "global_errors": note_res.errors,
+                    "adapter_format": note_res.format_detected,
+                }
+            content = note_res.canonical_csv
+            adapter_format = note_res.format_detected
+            skipped_records = [item.to_dict() for item in note_res.skipped_items]
 
     if not dry_run:
         result = await import_csv_transactions(

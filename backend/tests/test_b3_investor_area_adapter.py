@@ -1,12 +1,16 @@
 """Testes para o adapter da Área do Investidor B3 (Issue #358)."""
+import io
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import openpyxl
 import pytest
 from app.models.asset import AssetType
 from app.services.b3_investor_area_adapter_service import (
     adapt_b3_investor_csv_to_canonical,
+    adapt_b3_investor_pdf_to_canonical,
+    adapt_b3_investor_xlsx_to_canonical,
     infer_b3_asset_type,
     is_b3_csv_content,
     normalize_b3_ticker,
@@ -61,7 +65,6 @@ def test_adapt_b3_negociacao_file():
     assert result.format_detected == "b3_negociacao_v1"
     assert len(result.canonical_rows) == 2
 
-    # PETR4F deve ter sido normalizado para PETR4
     petr4_row = result.canonical_rows[0]
     assert petr4_row["ticker"] == "PETR4"
     assert petr4_row["operation"] == "buy"
@@ -145,3 +148,65 @@ async def test_import_transactions_csv_with_b3_file_in_dry_run():
     assert res["rows"][0]["ticker"] == "PETR4"
     assert res["rows"][0]["operation"] == "buy"
     assert res["rows"][0]["quantity"] == 10.0
+
+
+def test_adapt_b3_movimentacao_xlsx():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Entrada/Saída", "Data", "Movimentação", "Produto", "Instituição", "Quantidade", "Preço unitário", "Valor da Operação"])
+    ws.append(["Credito", "10/02/2024", "Transferência - Liquidação", "WEGE3 - WEG S.A.", "XP INVESTIMENTOS", 100, 35.50, 3550.00])
+    ws.append(["Debito", "12/02/2024", "Transferência - Liquidação", "VALE3 - VALE S.A.", "XP INVESTIMENTOS", 50, 70.00, 3500.00])
+    ws.append(["Credito", "15/02/2024", "Dividendo", "WEGE3 - WEG S.A.", "XP INVESTIMENTOS", 100, 0.50, 50.00])
+    buf = io.BytesIO()
+    wb.save(buf)
+    xlsx_bytes = buf.getvalue()
+
+    result = adapt_b3_investor_xlsx_to_canonical(xlsx_bytes)
+
+    assert result.success is True
+    assert result.format_detected == "b3_movimentacao_xlsx_v1"
+    assert len(result.canonical_rows) == 2
+
+    wege_row = result.canonical_rows[0]
+    assert wege_row["ticker"] == "WEGE3"
+    assert wege_row["operation"] == "buy"
+    assert wege_row["quantity"] == "100"
+    assert Decimal(wege_row["price"]) == Decimal("35.50")
+    assert wege_row["date"] == "2024-02-10"
+
+    vale_row = result.canonical_rows[1]
+    assert vale_row["ticker"] == "VALE3"
+    assert vale_row["operation"] == "sell"
+    assert vale_row["quantity"] == "50"
+    assert Decimal(vale_row["price"]) == Decimal("70.00")
+    assert vale_row["date"] == "2024-02-12"
+
+    assert len(result.skipped_items) == 1
+    assert result.skipped_items[0].movement_type == "Dividendo"
+
+
+def test_adapt_b3_movimentacao_pdf():
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = (
+        "Área do Investidor - Extrato de Movimentação\n"
+        "10 de Fevereiro de 2024\n"
+        "Credito Transferência - Liquidação WEGE3 - WEG S.A. XP INVESTIMENTOS 100 35,50 3.550,00\n"
+        "15 de Fevereiro de 2024\n"
+        "Credito Rendimento HGLG11 - CSHG LOGISTICA FII XP INVESTIMENTOS 50 1,10 55,00\n"
+    )
+    mock_reader = MagicMock()
+    mock_reader.pages = [mock_page]
+
+    with patch("pypdf.PdfReader", return_value=mock_reader):
+        result = adapt_b3_investor_pdf_to_canonical(b"%PDF-fake-b3")
+
+    assert result.success is True
+    assert result.format_detected == "b3_movimentacao_pdf_v1"
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+    assert result.canonical_rows[0]["operation"] == "buy"
+    assert result.canonical_rows[0]["quantity"] == "100"
+    assert result.canonical_rows[0]["price"] == "35.50"
+    assert result.canonical_rows[0]["date"] == "2024-02-10"
+    assert len(result.skipped_items) == 1
+    assert result.skipped_items[0].movement_type == "Rendimento"
