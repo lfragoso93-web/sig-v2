@@ -1,11 +1,13 @@
 # SGI — Sistema de Gestão de Investimentos
 
 > **Documentação Completa da Aplicação:** Consulte o manual técnico unificado em [`docs/DOCUMENTACAO_DO_SISTEMA.md`](docs/DOCUMENTACAO_DO_SISTEMA.md).
-> **Roadmap vivo:** [`docs/ROADMAP.md`](docs/ROADMAP.md). O diagnóstico de outubro é um registro histórico, não a lista atual de pendências.
+> **Roadmap vivo:** [`docs/ROADMAP.md`](docs/ROADMAP.md).
 > **Guias Técnicos Dedicados:** Backend em [`backend/README.md`](backend/README.md) | Frontend em [`frontend/README.md`](frontend/README.md).
+>
+> ⚠️ **Regra Obrigatória de Documentação Contínua e Viva:** A cada nova instrução, implementação, correção de bug, refatoração, migração ou criação de recurso/rota no código, **toda a documentação afetada DEVE ser atualizada obrigatoriamente no mesmo bloco de trabalho** (incluindo `README.md`, `docs/ROADMAP.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md`, `backend/README.md`, `frontend/README.md` e arquivos de domínio). Nenhuma entrega de software é considerada completa com documentação divergente ou defasada.
 
 Plataforma corporativa e determinística para acompanhamento, consolidação patrimonial, rentabilidade ponderada pelo tempo (TWR), Proventos, apuração fiscal de IRPF e simulação financeira de carteiras multiclasse.
-- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261022_auth_oauth_mfa`), PostgreSQL 16, Redis 7 e APScheduler.
+- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261105_purge_cert_entities`, 70 revisões), PostgreSQL 16, Redis 7 e APScheduler (12 jobs canônicos).
 - **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`), Vite 8 (`^8.3.4`), Tailwind CSS v4 (`^4.3.3`), TanStack Query v5, Zustand e Vitest.
 
 ## Ambientes de desenvolvimento e producao
@@ -14,9 +16,16 @@ Windows com Docker e o ambiente local de desenvolvimento e validacao na branch `
 
 Alteracoes chegam a `main` por Pull Request. Apos o merge e CI aprovado, GitHub Actions executa deploy automatico no SHA exato, salva backup pre-deploy e valida servicos, smoke, certificacao e `/ready`. Nao atualize a producao manualmente por SSH ou Compose. Consulte `docs/USER_VALIDATION_RUNBOOK.md` para validacao local e `docs/deployment/oci-execution-index.md` para o release.
 
-## Simulações e Calculadoras
+## Suite de Ferramentas e Simuladores
 
-A calculadora de aportes está em `/carteira/ferramentas/rendimentos`; o simulador de Renda Fixa está em `/carteira/ferramentas/renda-fixa`. No simulador, o tratamento de IR é derivado automaticamente da taxonomia do produto. Ambos usam premissas informadas pelo usuário, operam em memória e não modificam a carteira. Fórmulas, fontes e limites estão em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
+A suite de ferramentas operacionais e de simulação reside sob `/carteira/ferramentas/*`:
+- **Calculadora de Aportes/Rendimentos:** `/carteira/ferramentas/rendimentos` (juros compostos e aportes futuros);
+- **Simulador de Renda Fixa:** `/carteira/ferramentas/renda-fixa` (dedução tributária regressiva ou isenção automática por taxonomia do produto);
+- **Comparador de Ativos:** `/carteira/ferramentas/comparador` (análise comparativa simultânea de múltiplos e indicadores de até 5 ativos lado a lado);
+- **Página de Análise de Ativos:** `/carteira/ferramentas/analise-ativos` (mergulho profundo por ticker com gráficos e múltiplos);
+- **Carteiras Recomendadas por IA:** `/carteira/ferramentas/recomendacoes` (alocações institucionais de referência guiadas por IA para Patrimônio, Proventos e Performance, com simulação matemática por capital aportado).
+
+Todas as ferramentas operam em memória e não modificam a custódia da carteira. Fórmulas, fontes e limites estão em [`docs/TOOLS_CALCULATORS.md`](docs/TOOLS_CALCULATORS.md).
 
 No cadastro de Renda Fixa, o nome do título inclui o emissor, o tipo do produto define o tratamento fiscal e a carência é omitida sob liquidez diária. A taxonomia e as regras estão descritas em [`docs/FIXED_INCOME_TAXONOMY_INVENTORY.md`](docs/FIXED_INCOME_TAXONOMY_INVENTORY.md).
 
@@ -32,16 +41,22 @@ Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICA
 
 ## Funcionalidades e baseline de produção
 
-O último deploy confirmado nesta revisão é a PR #500 no SHA `18bac9ba49ff660b4d08818fac8e7a39680380c8`. A branch local `stable-15jun` é a base de desenvolvimento e pode estar alguns commits atrás de `main`; este repositório não presume que os ponteiros das duas branches sejam idênticos. A migration `20261022_auth_oauth_mfa` e os detalhes funcionais abaixo são fotografias documentais e devem ser confirmados nos releases posteriores. Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o estado atual.
+A baseline confirmada em produção nesta revisão é a **PR #543** no SHA `93f7a2b2`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261105_purge_cert_entities` (70 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
 
 ### Funcionalidades Implementadas e Ativas
 
 - **Motor de Análise (#360) e Camada de IA (#361):** Análise determinística de diversificação patrimonial e concentração de ativos combinada com geração de resumos executivos e diagnósticos explicativos em linguagem natural (`frontend/src/pages/AnalisePage.tsx`).
 - **Autenticação Google OAuth 2.0 & MFA TOTP (#97):** Login federado com Google e proteção com segundo fator (TOTP) integrados no fluxo de autenticação e no schema de banco.
 - **Gaveta Consolidada de Detalhe de Ativo (#58 / #351):** `AssetDetailDrawer.tsx` com visualização detalhada em abas dinâmicas: visão geral, múltiplos fundamentalistas adaptados por classe (Ações, FIIs, BDRs, ETFs, Tesouro), histórico de cotações e proventos.
-- **Simuladores Financeiros (#359):** Calculadora de aportes periódicos e simulador comparativo de Renda Fixa com dedução tributária automática conforme a taxonomia canônica (`/carteira/ferramentas/*`).
-- **Catálogo e Cotações Internacionais (`366ae927`):** Suporte nativo a Stocks e ETFs globais no bootstrap de dados e séries históricas.
-- **Tabela Oficial de Proventos (`dea616ee`):** Detalhamento de proventos com tipo de provento, data-com, data de pagamento e valor unitário líquido.
+- **Suite Completa de Ferramentas (#359, #518, #521, #532):** Calculadora de aportes, Simulador de Renda Fixa, Comparador de Ativos, Análise Individual de Ativos e Carteiras Recomendadas por IA com simulador de alocação de capital.
+- **Central de Ajuda e Assistente Documental com IA (#517, #526, #528):** `/carteira/ajuda` com busca rápida, atalhos dinâmicos de navegação no sistema e assistente em IA treinado exclusivamente no corpus funcional de `backend/help_docs/` com zero exposição de dados de custódia.
+- **Evolução Patrimonial Contínua e Ponto em Tempo Real (#533):** Snapshots diários cobrindo fins de semana e feriados somados a ponto intradiário de alinhamento em tempo real no gráfico do Dashboard com cotações do pregão corrente.
+- **Extrato Transacional com Alta Precisão e Usabilidade (#532, #543):** Modal de transações com máscara monetária decimal da direita para a esquerda (padrão Real BRL), suporte a operações a custo zero (R$ 0,00) para bonificações/doações, e filtro temporal dinâmico por período.
+- **Unificação de Ações Fracionárias B3 (#524, #529):** Normalização contábil automática de ativos fracionários da B3 (descontinuação do sufixo `F` e unificação transparente no lote padrão `PETR4F` $\rightarrow$ `PETR4`).
+- **Governança do Scheduler e Painel SuperAdmin (#501, #520):** Painel administrativo com monitoramento em tempo real de 12 tarefas agendadas, capacidade de disparo manual sob demanda e histórico detalhado de execuções com logs de duração e status.
+- **Purga de Entidades Sintéticas (#525, #531):** Migrações para saneamento definitivo de contas e ativos sintéticos de certificação do banco de dados de produção.
+- **Catálogo e Cotações Internacionais (`366ae927`):** Suporte nativo a Stocks e ETFs globais no bootstrap de dados e séries históricas consolidados via PTAX oficial.
+- **Tabela Oficial de Proventos (`dea616ee`):** Detalhamento de proventos com tipo de provento, data-com, data de pagamento e valor unitário líquido, com notificação matinal automática por e-mail no dia do pagamento.
 - **Taxonomia Canônica de Renda Fixa (#355):** Normalização fiscal automática derivada do tipo de produto, títulos com emissores integrados e liquidez diária.
 
 ### Mapeamento de Oportunidades de Melhoria
@@ -119,8 +134,13 @@ Princípios obrigatórios:
 | Metas | superfície básica funcional; desenho definitivo permanece #246 |
 | Detalhe de ativo | implementado via `AssetDetailDrawer.tsx` (#58 / #351) |
 | Analysis Engine | implementado (#360) |
-| IA | implementada com síntese executiva em linguagem natural (`AnalisePage.tsx`) (#361) |
-| Calculadoras & Simulação | implementadas em `/carteira/ferramentas/*` (#359) |
+| IA de Análise | implementada com síntese executiva em linguagem natural (`AnalisePage.tsx`) (#361) |
+| Central de Ajuda & IA Documental | implementada com RAG funcional local e atalhos (`HelpPage.tsx`) (#517, #526, #528) |
+| Suite de Ferramentas | Calculadoras (#359), Comparador (#518), Análise de Ativos (#521) e Carteiras Recomendadas por IA (#532) |
+| Livro-Razão & Transações | Extrato com filtro por período, máscara R$ decimal invertida e suporte a custo 0,00 (#532, #543) |
+| Evolução Patrimonial | Snapshots diários incluindo fins de semana e ponto intradiário em tempo real (#533) |
+| Normalização B3 | Fracionários unificados ao lote padrão no backend e na UI (#524, #529) |
+| Painel Scheduler | Monitoramento de 12 jobs, trigger manual e histórico de execuções (#501, #520) |
 | Ativos Internacionais | catálogo e séries históricas integrados (`366ae927`) |
 
 ## Registro historico de backlog

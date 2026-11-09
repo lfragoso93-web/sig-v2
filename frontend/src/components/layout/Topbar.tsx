@@ -146,13 +146,13 @@ function PortfolioSelector() {
 
         {open && (
           <div
-            className="absolute left-0 z-50"
+            className="absolute left-0 z-50 glass-floating"
             style={{
               top: 'calc(100% + 8px)', minWidth: 270,
-              background: 'var(--color-surface-2)',
-              border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)',
+              background: 'var(--glass-bg)',
+              border: '1px solid var(--glass-border)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow: 'inset 0 1px 0 0 var(--glass-border-highlight), var(--shadow-floating)',
               overflow: 'hidden', padding: 7,
             }}
           >
@@ -304,9 +304,11 @@ export default function Topbar() {
       className="w-full shrink-0"
       style={{
         height: 'var(--topbar-height, 52px)',
-        background: 'var(--color-surface)',
-        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-        boxShadow: '0 1px 4px oklch(0.18 0.01 80 / 0.05)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(var(--glass-blur)) saturate(150%)',
+        WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(150%)',
+        borderBottom: '1px solid var(--glass-border)',
+        boxShadow: 'inset 0 -1px 0 0 var(--glass-border-highlight), 0 1px 6px oklch(0.18 0.01 80 / 0.05)',
         position: 'relative', zIndex: 30,
       }}
     >

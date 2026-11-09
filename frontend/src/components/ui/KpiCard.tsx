@@ -111,6 +111,7 @@ export default function KpiCard({
 
           {ResolvedIcon && (
             <span
+              className="kpi-icon-pill"
               aria-hidden="true"
               style={{
                 width: 24,

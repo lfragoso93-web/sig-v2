@@ -88,13 +88,13 @@ export default function UserMenu() {
         </button>
 
         {open && (
-          <div style={{
+          <div className="glass-floating" style={{
             position: 'absolute', top: 'calc(100% + var(--space-2))', right: 0,
             minWidth: '220px',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)',
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: 'inset 0 1px 0 0 var(--glass-border-highlight), var(--shadow-floating)',
             overflow: 'hidden', zIndex: 100,
           }}>
             <div style={{

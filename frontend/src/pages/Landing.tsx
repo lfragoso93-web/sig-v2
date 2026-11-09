@@ -399,17 +399,24 @@ export default function Landing() {
             padding: '0 clamp(1rem, 4vw, 3rem) 5.5rem',
             display: 'flex',
             justifyContent: 'center',
+            perspective: '1400px',
           }}
         >
           <div
+            className="landing-mockup-spatial"
             style={{
               width: '100%',
               maxWidth: '68rem',
               borderRadius: 'var(--radius-2xl)',
               overflow: 'hidden',
-              border: '1px solid oklch(from var(--color-text) l c h / 0.12)',
-              background: 'var(--color-surface)',
-              boxShadow: '0 24px 60px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(from var(--color-primary) l c h / 0.08)',
+              border: '1px solid var(--glass-border)',
+              background: 'var(--glass-bg)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: 'inset 0 1px 0 0 var(--glass-border-highlight), 0 32px 80px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(from var(--color-primary) l c h / 0.12)',
+              transform: 'rotateX(2.5deg)',
+              transformOrigin: 'top center',
+              transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 500ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
             {/* Barra de controle da janela */}
