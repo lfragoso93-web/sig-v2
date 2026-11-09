@@ -127,6 +127,10 @@ O SGI é regido por leis arquiteturais imutáveis monitoradas pelo **Architectur
   - **Contexto de Usuário (`for_user`):** Comprova a identidade autenticada e a titularidade da carteira no repositório.
   - **Contexto Sistêmico (`for_system`):** Exige a declaração de uma finalidade operacional auditável (ex.: `portfolio_snapshot_auto_maintenance`), proibindo bypasses implícitos em tarefas assíncronas.
 
+### 3.5 Regra Obrigatória de Documentação Contínua e Viva
+- A cada nova instrução, implementação, correção de bug, refatoração de código, migração ou criação de rota/componente, **toda a documentação afetada DEVE ser rigorosamente atualizada no mesmo bloco de trabalho** (incluindo `README.md`, `docs/ROADMAP.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md`, `backend/README.md`, `frontend/README.md` e arquivos de domínio).
+- Nenhuma alteração no código é considerada concluída ou pronta para merge enquanto existir documentação divergente, omitida ou defasada.
+
 ---
 
 ## 4. Cobertura Multiclasse de Ativos
