@@ -26,6 +26,9 @@
   --color-surface-dynamic:  var(--color-surface-dynamic);
   --color-border:           var(--color-border);
   --color-divider:          var(--color-divider);
+  --color-glass-bg:         var(--glass-bg);
+  --color-glass-border:     var(--glass-border);
+
 
   /* Aliases numéricos legados (dark-* / light-* / surface-*) */
   --color-surface-950: var(--color-bg);

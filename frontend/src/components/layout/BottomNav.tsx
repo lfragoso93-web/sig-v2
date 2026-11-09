@@ -30,9 +30,11 @@ export default function BottomNav() {
       className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-around px-1"
       style={{
         height: '62px',
-        background: 'var(--color-surface)',
-        borderTop: '1px solid var(--color-divider)',
-        boxShadow: '0 -2px 12px oklch(0 0 0 / 0.06)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(var(--glass-blur)) saturate(150%)',
+        WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(150%)',
+        borderTop: '1px solid var(--glass-border)',
+        boxShadow: 'inset 0 1px 0 0 var(--glass-border-highlight), 0 -2px 14px oklch(0 0 0 / 0.08)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
       aria-label="Navegação principal"

@@ -45,11 +45,13 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: P
     >
       {/* Overlay */}
       <div
+        className="glass-overlay"
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'oklch(0 0 0 / 0.45)',
-          backdropFilter: 'blur(2px)',
+          background: 'oklch(0 0 0 / 0.50)',
+          backdropFilter: 'blur(var(--glass-blur-sm, 8px))',
+          WebkitBackdropFilter: 'blur(var(--glass-blur-sm, 8px))',
         }}
         onClick={onClose}
       />
@@ -57,15 +59,17 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: P
       {/* Panel */}
       <div
         ref={ref}
+        className="glass-floating"
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: SIZE[size],
-          background: 'var(--color-surface)',
+          background: 'var(--glass-bg)',
           color: 'var(--color-text)',
           borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-border)',
-          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid var(--glass-border)',
+          boxShadow: 'inset 0 1px 0 0 var(--glass-border-highlight), var(--shadow-floating)',
+          animation: 'modalEntrance 200ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         {/* Header */}

@@ -94,6 +94,23 @@
     0 4px 8px   oklch(0.18 0.01 80 / 0.07),
     0 16px 40px oklch(0.18 0.01 80 / 0.12),
     0 40px 80px oklch(0.18 0.01 80 / 0.08);
+  /* ── Antigravity: Glassmorphism & Superfícies Espaciais ──── */
+  --glass-bg:                oklch(from var(--color-surface) l c h / 0.82);
+  --glass-bg-subtle:         oklch(from var(--color-surface) l c h / 0.60);
+  --glass-border:            oklch(from var(--color-border) l c h / 0.70);
+  --glass-border-highlight:  oklch(1 0 0 / 0.65);
+  --glass-blur:              14px;
+  --glass-blur-sm:           8px;
+  --glass-blur-lg:           22px;
+  --shadow-floating:
+    0 1px 2px  oklch(0.18 0.01 80 / 0.04),
+    0 8px 24px oklch(0.18 0.01 80 / 0.08),
+    0 24px 60px oklch(0.18 0.01 80 / 0.06);
+  --shadow-floating-hover:
+    0 2px 4px  oklch(0.18 0.01 80 / 0.05),
+    0 12px 32px oklch(0.18 0.01 80 / 0.11),
+    0 32px 72px oklch(0.18 0.01 80 / 0.08);
+  --ease-spatial:            cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ── Transições ────────────────────────────────────── */
   --transition-fast:        120ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -216,6 +233,22 @@
     --shadow-md:  0 2px 4px oklch(0 0 0 / 0.24), 0 6px 16px oklch(0 0 0 / 0.28);
     --shadow-lg:  0 4px 8px oklch(0 0 0 / 0.28), 0 12px 32px oklch(0 0 0 / 0.36);
     --shadow-xl:  0 8px 16px oklch(0 0 0 / 0.32), 0 24px 56px oklch(0 0 0 / 0.44);
+  --glass-bg:                oklch(from var(--color-surface) l c h / 0.72);
+  --glass-bg-subtle:         oklch(from var(--color-surface) l c h / 0.50);
+  --glass-border:            oklch(1 0 0 / 0.12);
+  --glass-border-highlight:  oklch(1 0 0 / 0.18);
+  --glass-blur:              14px;
+  --glass-blur-sm:           8px;
+  --glass-blur-lg:           22px;
+  --shadow-floating:
+    0 2px 6px  oklch(0 0 0 / 0.28),
+    0 12px 32px oklch(0 0 0 / 0.40),
+    0 32px 64px oklch(0 0 0 / 0.48);
+  --shadow-floating-hover:
+    0 4px 8px  oklch(0 0 0 / 0.32),
+    0 16px 42px oklch(0 0 0 / 0.48),
+    0 40px 80px oklch(0 0 0 / 0.56);
+  --ease-spatial:            cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 
@@ -281,4 +314,20 @@
   --shadow-md:  0 2px 4px oklch(0 0 0 / 0.24), 0 6px 16px oklch(0 0 0 / 0.28);
   --shadow-lg:  0 4px 8px oklch(0 0 0 / 0.28), 0 12px 32px oklch(0 0 0 / 0.36);
   --shadow-xl:  0 8px 16px oklch(0 0 0 / 0.32), 0 24px 56px oklch(0 0 0 / 0.44);
+  --glass-bg:                oklch(from var(--color-surface) l c h / 0.72);
+  --glass-bg-subtle:         oklch(from var(--color-surface) l c h / 0.50);
+  --glass-border:            oklch(1 0 0 / 0.12);
+  --glass-border-highlight:  oklch(1 0 0 / 0.18);
+  --glass-blur:              14px;
+  --glass-blur-sm:           8px;
+  --glass-blur-lg:           22px;
+  --shadow-floating:
+    0 2px 6px  oklch(0 0 0 / 0.28),
+    0 12px 32px oklch(0 0 0 / 0.40),
+    0 32px 64px oklch(0 0 0 / 0.48);
+  --shadow-floating-hover:
+    0 4px 8px  oklch(0 0 0 / 0.32),
+    0 16px 42px oklch(0 0 0 / 0.48),
+    0 40px 80px oklch(0 0 0 / 0.56);
+  --ease-spatial:            cubic-bezier(0.16, 1, 0.3, 1);
 }
