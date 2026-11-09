@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import AddTransactionModal, { sanitizeDecimalInput, parseNumeric } from './AddTransactionModal'
+import AddTransactionModal, { sanitizeDecimalInput, parseNumeric, formatRightToLeftDecimal } from './AddTransactionModal'
 import { useAppStore } from '@/store/appStore'
 
 const createTransaction = vi.fn()
@@ -411,7 +411,7 @@ describe('AddTransactionModal', () => {
       }),
     }))
   })
-  it('preenche 0,00 no valor e limita casas decimais de valor (2) e quantidade (8)', async () => {
+  it('preenche 0,00 no valor com digitacao da direita para a esquerda e limita quantidade em 8 casas', async () => {
     setup()
 
     const quantityInput = screen.getByPlaceholderText('0') as HTMLInputElement
@@ -421,12 +421,26 @@ describe('AddTransactionModal', () => {
     expect(quantityInput.value).toBe('0')
     expect(priceInput.value).toBe('0,00')
 
-    // Teste de limitacao no input de preco (maximo 2 casas decimais)
-    fireEvent.change(priceInput, { target: { value: '123,456' } })
-    expect(priceInput.value).toBe('123,45')
+    // Teste de digitacao da direita para a esquerda no input de preco
+    // Digitou 1 -> 0,01
+    fireEvent.change(priceInput, { target: { value: '1' } })
+    expect(priceInput.value).toBe('0,01')
 
-    fireEvent.change(priceInput, { target: { value: '99.999' } })
-    expect(priceInput.value).toBe('99.99')
+    // Digitou 2 a seguir -> 0,12
+    fireEvent.change(priceInput, { target: { value: '0,012' } })
+    expect(priceInput.value).toBe('0,12')
+
+    // Digitou 3 a seguir -> 1,23
+    fireEvent.change(priceInput, { target: { value: '0,123' } })
+    expect(priceInput.value).toBe('1,23')
+
+    // Digitou 4 a seguir -> 12,34
+    fireEvent.change(priceInput, { target: { value: '1,234' } })
+    expect(priceInput.value).toBe('12,34')
+
+    // Digitou 5 a seguir -> 123,45
+    fireEvent.change(priceInput, { target: { value: '12,345' } })
+    expect(priceInput.value).toBe('123,45')
 
     // Teste de limitacao no input de quantidade (maximo 8 casas decimais para fracionados)
     fireEvent.change(quantityInput, { target: { value: '0,123456789' } })
@@ -436,12 +450,39 @@ describe('AddTransactionModal', () => {
     expect(quantityInput.value).toBe('1.23456789')
   })
 
-  it('funcoes utilitarias de sanitizacao e parse numerico funcionam corretamente com ponto e virgula', () => {
+  it('funcoes utilitarias de mascara da direita para a esquerda e parse numerico funcionam corretamente', () => {
+    // Digitacao interativa da direita para a esquerda
+    expect(formatRightToLeftDecimal('1', 2)).toBe('0,01')
+    expect(formatRightToLeftDecimal('0,012', 2)).toBe('0,12')
+    expect(formatRightToLeftDecimal('0,123', 2)).toBe('1,23')
+    expect(formatRightToLeftDecimal('1,234', 2)).toBe('12,34')
+    expect(formatRightToLeftDecimal('12,345', 2)).toBe('123,45')
+    expect(formatRightToLeftDecimal('123,456', 2)).toBe('1.234,56')
+
+    // Backspace da direita para a esquerda
+    expect(formatRightToLeftDecimal('1.234,5', 2)).toBe('123,45')
+    expect(formatRightToLeftDecimal('123,4', 2)).toBe('12,34')
+    expect(formatRightToLeftDecimal('12,3', 2)).toBe('1,23')
+    expect(formatRightToLeftDecimal('1,2', 2)).toBe('0,12')
+    expect(formatRightToLeftDecimal('0,1', 2)).toBe('0,01')
+    expect(formatRightToLeftDecimal('0,', 2)).toBe('0,00')
+    expect(formatRightToLeftDecimal('', 2)).toBe('0,00')
+
+    // Valores inteiros diretos (paste / testes)
+    expect(formatRightToLeftDecimal('10', 2)).toBe('10,00')
+    expect(formatRightToLeftDecimal('1000', 2)).toBe('1.000,00')
+    expect(formatRightToLeftDecimal('350000', 2)).toBe('350.000,00')
+
+    // Sanitizacao de quantidade
     expect(sanitizeDecimalInput('10,505', 2)).toBe('10,50')
-    expect(sanitizeDecimalInput('10.505', 2)).toBe('10.50')
     expect(sanitizeDecimalInput('0,123456789', 8)).toBe('0,12345678')
+
+    // Parse numerico
+    expect(parseNumeric('1.234,56')).toBe(1234.56)
     expect(parseNumeric('12,34')).toBe(12.34)
     expect(parseNumeric('12.34')).toBe(12.34)
+    expect(parseNumeric('10,00')).toBe(10)
+    expect(parseNumeric('0,01')).toBe(0.01)
     expect(parseNumeric('0,00')).toBe(0)
     expect(parseNumeric('')).toBe(0)
   })
