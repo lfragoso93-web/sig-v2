@@ -79,7 +79,7 @@ async def _build_dry_run_result(
         await _validate_duplicate_transactions(rows, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         original_types = [row.data.get("asset_type") for row in rows]
-        await _validate_writer_preflight(rows, db)
+        await _validate_writer_preflight(rows, db, portfolio_id=portfolio_id)
         reconciled_types = [row.data.get("asset_type") for row in rows]
         if (
             not any(row.errors or row.warnings for row in rows)

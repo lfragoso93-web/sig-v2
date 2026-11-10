@@ -264,29 +264,29 @@ def test_adapt_b3_movimentacao_pdf_multiline_wrapping():
     assert result.success is True
     assert len(result.canonical_rows) == 3
 
-    ggrc_row = result.canonical_rows[0]
-    assert ggrc_row["ticker"] == "GGRC11"
-    assert ggrc_row["asset_type"] == AssetType.FII.value
-    assert ggrc_row["operation"] == "buy"
-    assert ggrc_row["quantity"] == "10"
-    assert ggrc_row["price"] == "8.19"
-    assert ggrc_row["date"] == "2026-11-06"
-
-    divd_row = result.canonical_rows[1]
-    assert divd_row["ticker"] == "DIVD11"
-    assert divd_row["asset_type"] == AssetType.ETF_NACIONAL.value
-    assert divd_row["operation"] == "buy"
-    assert divd_row["quantity"] == "5"
-    assert divd_row["price"] == "52.28"
-    assert divd_row["date"] == "2026-11-06"
-
-    cdb_row = result.canonical_rows[2]
+    # Ordenadas cronologicamente: 2026-11-05 antes de 2026-11-06
+    cdb_row = result.canonical_rows[0]
     assert cdb_row["ticker"] == "CDB - CDBU2626QQS"
     assert cdb_row["asset_type"] == AssetType.RENDA_FIXA.value
     assert cdb_row["operation"] == "buy"
     assert cdb_row["quantity"] == "1167"
     assert cdb_row["price"] == "0.01"
     assert cdb_row["date"] == "2026-11-05"
+
+    by_ticker = {r["ticker"]: r for r in result.canonical_rows[1:]}
+    ggrc_row = by_ticker["GGRC11"]
+    assert ggrc_row["asset_type"] == AssetType.FII.value
+    assert ggrc_row["operation"] == "buy"
+    assert ggrc_row["quantity"] == "10"
+    assert ggrc_row["price"] == "8.19"
+    assert ggrc_row["date"] == "2026-11-06"
+
+    divd_row = by_ticker["DIVD11"]
+    assert divd_row["asset_type"] == AssetType.ETF_NACIONAL.value
+    assert divd_row["operation"] == "buy"
+    assert divd_row["quantity"] == "5"
+    assert divd_row["price"] == "52.28"
+    assert divd_row["date"] == "2026-11-06"
 
 
 @pytest.mark.asyncio
@@ -441,3 +441,30 @@ def test_subscription_rights_segregated_as_corporate_events():
     assert len(result.skipped_items) == 1
     assert "SNAG12" in result.skipped_items[0].raw_ticker
     assert "subscrição" in result.skipped_items[0].reason.lower()
+
+
+def test_b3_movimentacao_segregates_orphan_fixed_income_resgates_and_sorts_chronologically():
+    csv_content = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;06/11/2026;RESGATE ANTECIPADO;CDB - CDB_ORPHAN;BANCO INTER S/A;500;0,01;5,00\n"
+        "Debito;05/11/2026;RESGATE ANTECIPADO;CDB - CDB_WITH_BUY;BANCO INTER S/A;1000;0,01;10,00\n"
+        "Credito;04/11/2026;APLICAÇÃO;CDB - CDB_WITH_BUY;BANCO INTER S/A;1000;0,01;10,00\n"
+        "Credito;03/11/2026;Transferência - Liquidação;PETR4 - PETROLEO BRASILEIRO S.A. PETROBRAS;XP;100;30,00;3000,00\n"
+    )
+    result = adapt_b3_investor_csv_to_canonical(csv_content)
+    assert result.success is True
+    # CDB_ORPHAN sem aplicação deve ter sido segregado para skipped_items
+    assert len(result.skipped_items) == 1
+    assert "CDB_ORPHAN" in result.skipped_items[0].raw_ticker
+    assert "Resgate de Renda Fixa sem aplicação" in result.skipped_items[0].reason
+
+    # Linhas canônicas devem ter 3 itens ordenados cronologicamente
+    assert len(result.canonical_rows) == 3
+    dates = [r["date"] for r in result.canonical_rows]
+    assert dates == ["2026-11-03", "2026-11-04", "2026-11-05"]
+    assert result.canonical_rows[0]["ticker"] == "PETR4"
+    assert result.canonical_rows[1]["ticker"] == "CDB - CDB_WITH_BUY"
+    assert result.canonical_rows[1]["operation"] == "buy"
+    assert result.canonical_rows[2]["ticker"] == "CDB - CDB_WITH_BUY"
+    assert result.canonical_rows[2]["operation"] == "sell"
+
