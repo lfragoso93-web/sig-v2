@@ -60,16 +60,6 @@ _CORPORATE_OR_INCOME_KEYWORDS = {
     "JSCP",
     "JCP",
     "RENDIMENTO",
-    "BONIFICACAO",
-    "BONIFICAÇÃO",
-    "BONIFICAÇÃO EM ATIVOS",
-    "BONIFICACAO EM ATIVOS",
-    "FRACAO",
-    "FRAÇÃO",
-    "FRAÇÃO EM ATIVOS",
-    "FRACAO EM ATIVOS",
-    "ATUALIZACAO",
-    "ATUALIZAÇÃO",
     "DIREITO DE SUBSCRICAO",
     "DIREITO DE SUBSCRIÇÃO",
     "DIREITOS DE SUBSCRICAO",
@@ -91,10 +81,21 @@ _CORPORATE_OR_INCOME_KEYWORDS = {
     "CESSÃO DE DIREITOS",
     "SUB-ROGACAO",
     "SUB-ROGAÇÃO",
-    "DESDOBRO",
-    "GRUPAMENTO",
     "DIVIDENDO - CANCELADO",
     "RESGATE DE COTAS",
+}
+
+# Eventos corporativos de custódia que alteram quantidade de cotas/ações (desdobro, bonificação, atualização)
+_CUSTODY_EVENT_KEYWORDS = {
+    "DESDOBRO",
+    "BONIFICACAO",
+    "BONIFICAÇÃO",
+    "BONIFICACAO EM ATIVOS",
+    "BONIFICAÇÃO EM ATIVOS",
+    "ATUALIZACAO",
+    "ATUALIZAÇÃO",
+    "FRACAO EM ATIVOS",
+    "FRAÇÃO EM ATIVOS",
 }
 
 # Tickers conhecidos de ETFs nacionais terminados em 11
@@ -145,8 +146,12 @@ def normalize_b3_ticker(raw_ticker: str) -> str:
     if not cleaned:
         return ""
 
-    if cleaned.startswith("TESOURO"):
-        # Normalizar títulos do Tesouro Direto: "TESOURO SELIC 2029 - NTN-B" -> "TESOURO SELIC 2029"
+    if cleaned.startswith("TESOURO") or "TESOURO " in cleaned:
+        # Normalizar títulos do Tesouro Direto:
+        # "TESOURO SELIC 2029 - NTN-B" ou "TESOURO PREFIXADO 2027 INTER DISTRIBUIDORA DE TITULOS..." -> "TESOURO PREFIXADO 2027"
+        match = re.search(r"^(TESOURO\s+.*?\b20\d{2}\b)", cleaned)
+        if match:
+            return match.group(1).strip()
         return cleaned.split("-")[0].strip()
 
     # Renda Fixa: manter código identificador limpo
@@ -464,24 +469,31 @@ def adapt_b3_rows_to_canonical(
                 continue
 
             # Transferência pura sem liquidação de mercado (preço "-" ou sem valor)
-            if (raw_movement.strip().upper() == "TRANSFERÊNCIA" or raw_movement.strip().upper() == "TRANSFERENCIA") and (
-                raw_price.strip() == "-" or raw_total.strip() == "-" or not raw_price.strip()
-            ):
-                skipped_items.append(
-                    B3SkippedItem(
-                        line_number=line_idx,
-                        raw_ticker=raw_ticker_cell,
-                        movement_type="Transferência",
-                        reason="Transferência interna de custódia sem liquidação financeira de mercado.",
+            mov_upper = raw_movement.strip().upper()
+            if ("TRANSFERÊNCIA" in mov_upper or "TRANSFERENCIA" in mov_upper) and "LIQUIDA" not in mov_upper:
+                if raw_price.strip() == "-" or raw_total.strip() == "-" or not raw_price.strip():
+                    skipped_items.append(
+                        B3SkippedItem(
+                            line_number=line_idx,
+                            raw_ticker=raw_ticker_cell,
+                            movement_type="Transferência",
+                            reason="Transferência interna de custódia sem liquidação financeira de mercado.",
+                        )
                     )
-                )
-                continue
+                    continue
+
+            # Eventos corporativos de custódia (desdobro, bonificação, atualização de custódia, fração em ativos)
+            is_custody_event = any(kw in combined_op_text for kw in _CUSTODY_EVENT_KEYWORDS)
 
             # 2. Mapeamento da operação (buy / sell)
             entry_upper = raw_entry_exit.strip().upper()
-            mov_upper = raw_movement.strip().upper()
 
-            if "APLICAÇÃO" in mov_upper or "APLICACAO" in mov_upper:
+            if is_custody_event:
+                if any(w in combined_op_text for w in ("DEBITO", "DÉBITO", "SAIDA", "SAÍDA", "SELL")):
+                    operation = "sell"
+                else:
+                    operation = "buy"
+            elif "APLICAÇÃO" in mov_upper or "APLICACAO" in mov_upper:
                 operation = "buy"
             elif "RESGATE" in mov_upper:
                 operation = "sell"
@@ -537,7 +549,10 @@ def adapt_b3_rows_to_canonical(
                 continue
             seen_signatures.add(signature)
 
-            notes = f"B3 Área do Investidor ({raw_inst})" if raw_inst else "B3 Área do Investidor"
+            if is_custody_event:
+                notes = f"B3 Evento Corporativo: {raw_movement}"
+            else:
+                notes = f"B3 Área do Investidor ({raw_inst})" if raw_inst else "B3 Área do Investidor"
 
             canonical_rows.append({
                 "ticker": ticker,

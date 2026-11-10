@@ -301,7 +301,7 @@ async def add_transaction_record(
             asset_type,
             as_of_date=payload.date,
         )
-        if payload.quantity > current_qty:
+        if payload.quantity > current_qty + 1e-6:
             raise TransactionWriteError(
                 f"Quantidade insuficiente para venda de {ticker}. "
                 f"Posicao atual: {current_qty:.4f} | Tentativa: {payload.quantity:.4f}"

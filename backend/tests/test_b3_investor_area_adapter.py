@@ -468,3 +468,67 @@ def test_b3_movimentacao_segregates_orphan_fixed_income_resgates_and_sorts_chron
     assert result.canonical_rows[2]["ticker"] == "CDB - CDB_WITH_BUY"
     assert result.canonical_rows[2]["operation"] == "sell"
 
+
+
+def test_b3_movimentacao_incorporates_custody_events_desdobro_and_atualizacao():
+    csv_content = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;28/04/2025;Desdobro;ALZC11 - ALIANZA CREDITO IMOBILIARIO;INTER DTVM;36;0;0\n"
+        "Credito;26/11/2025;Atualização;RBRX11 - RBR PLUS MULTIESTRATÉGIA;INTER DTVM;102,52;0;0\n"
+        "Debito;27/11/2025;Fração em Ativos;RBRX11 - RBR PLUS MULTIESTRATÉGIA;INTER DTVM;0,52;0;0\n"
+        "Credito;19/12/2025;Bonificação em Ativos;KLBN11 - KLABIN S/A;XP;10;0;0\n"
+    )
+    result = adapt_b3_investor_csv_to_canonical(csv_content)
+    assert result.success is True
+    assert len(result.canonical_rows) == 4
+    
+    # Desdobro ALZC11
+    alzc = result.canonical_rows[0]
+    assert alzc["ticker"] == "ALZC11"
+    assert alzc["operation"] == "buy"
+    assert alzc["quantity"] == "36"
+    assert alzc["price"] == "0.01"
+    assert "Evento Corporativo: Desdobro" in alzc["notes"]
+    
+    # Atualização RBRX11 (Credito)
+    rbrx_cred = result.canonical_rows[1]
+    assert rbrx_cred["ticker"] == "RBRX11"
+    assert rbrx_cred["operation"] == "buy"
+    assert rbrx_cred["quantity"] == "102.52"
+    assert rbrx_cred["price"] == "0.01"
+    assert "Evento Corporativo: Atualização" in rbrx_cred["notes"]
+
+    # Fração em Ativos RBRX11 (Debito)
+    rbrx_deb = result.canonical_rows[2]
+    assert rbrx_deb["ticker"] == "RBRX11"
+    assert rbrx_deb["operation"] == "sell"
+    assert rbrx_deb["quantity"] == "0.52"
+    assert rbrx_deb["price"] == "0.01"
+
+    # Bonificação KLBN11
+    klbn = result.canonical_rows[3]
+    assert klbn["ticker"] == "KLBN11"
+    assert klbn["operation"] == "buy"
+    assert klbn["quantity"] == "10"
+    assert klbn["price"] == "0.01"
+
+
+def test_normalize_b3_ticker_tesouro_with_broker_string():
+    from app.services.b3_investor_area_adapter_service import normalize_b3_ticker
+
+    assert (
+        normalize_b3_ticker("TESOURO EDUCA+ 2026 INTER DISTRIBUIDORA DE TITULOS E VALORES MOBILIARIOS LTDA")
+        == "TESOURO EDUCA+ 2026"
+    )
+    assert (
+        normalize_b3_ticker("TESOURO PREFIXADO 2027 INTER DISTRIBUIDORA DE TITULOS E VALORES MOBILIARIOS LTDA")
+        == "TESOURO PREFIXADO 2027"
+    )
+    assert (
+        normalize_b3_ticker("TESOURO RENDA+ APOSENTADORIA EXTRA 2065 INTER DISTRIBUIDORA DE TITULOS E VALORES MOBILIARIOS LTDA")
+        == "TESOURO RENDA+ APOSENTADORIA EXTRA 2065"
+    )
+    assert (
+        normalize_b3_ticker("TESOURO SELIC 2029 - NTN-B")
+        == "TESOURO SELIC 2029"
+    )

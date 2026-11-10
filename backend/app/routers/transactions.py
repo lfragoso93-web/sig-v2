@@ -144,7 +144,7 @@ async def _validate_sell(
         exclude_tx_id=exclude_tx_id,
         as_of_date=as_of_date,
     )
-    if quantity > current_qty:
+    if quantity > current_qty + 1e-6:
         raise HTTPException(
             status_code=400,
             detail=(
