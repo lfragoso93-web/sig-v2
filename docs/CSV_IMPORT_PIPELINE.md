@@ -72,7 +72,7 @@ O pipeline de importação aceita múltiplos formatos de arquivo via endpoint un
    - Mapeamento automático de tipos de ativos (`ACAO`, `FII`, `BDR`, `TESOURO_DIRETO`, `RENDA_FIXA`).
    - Normalização de títulos do Tesouro Direto com descarte de sufixos de corretoras nos relatórios PDF.
    - Mapeamento inteligente de operações: `APLICAÇÃO` e compras como `buy`, `RESGATE`, `RESGATE ANTECIPADO` e vendas como `sell`.
-   - Incorporação de eventos corporativos de custódia que alteram quantidade de cotas (Desdobro, Bonificação em Ativos, Atualização e Fração em Ativos) para consistência no inventário de vendas.
+   - Incorporação de eventos corporativos de custódia que alteram quantidade de cotas (Desdobro, Bonificação em Ativos, Atualização e Fração em Ativos) para consistência no inventário de vendas, com segregação de débitos de frações órfãs sem saldo prévio em carteira.
    - Segregação automática de proventos e eventos em dinheiro (dividendos, JCP, rendimentos) e transferências sem liquidação de mercado.
    - Validação de saldo de vendas no pré-vôo e no `transaction_write_service` com tolerância de ponto flutuante (`math.isclose` 1e-7) para liquidação exata de parcelas fracionárias.
 
