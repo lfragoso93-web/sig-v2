@@ -70,8 +70,11 @@ O pipeline de importação aceita múltiplos formatos de arquivo via endpoint un
    - Arquivos `.xlsx`, `.pdf` ou `.csv` exportados diretamente da Área do Investidor B3.
    - Suporte a extratos de **Movimentação** e relatórios de **Negociação**.
    - Mapeamento automático de tipos de ativos (`ACAO`, `FII`, `BDR`, `TESOURO_DIRETO`, `RENDA_FIXA`).
+   - Normalização de títulos do Tesouro Direto com descarte de sufixos de corretoras nos relatórios PDF.
    - Mapeamento inteligente de operações: `APLICAÇÃO` e compras como `buy`, `RESGATE`, `RESGATE ANTECIPADO` e vendas como `sell`.
-   - Segregação automática de proventos e eventos corporativos (dividendos, JCP, rendimentos, transferências sem liquidação financeira, frações e grupamentos) evitando trades artificiais.
+   - Incorporação de eventos corporativos de custódia que alteram quantidade de cotas (Desdobro, Bonificação em Ativos, Atualização e Fração em Ativos) para consistência no inventário de vendas.
+   - Segregação automática de proventos e eventos em dinheiro (dividendos, JCP, rendimentos) e transferências sem liquidação de mercado.
+   - Validação de saldo de vendas no pré-vôo e no `transaction_write_service` com tolerância de ponto flutuante (`math.isclose` 1e-7) para liquidação exata de parcelas fracionárias.
 
 3. **Notas de Corretagem (Padrão Sinacor)**:
    - Arquivos `.pdf` e texto estruturado de notas de corretagem padrão Sinacor (Banco Inter, XP Investimentos, Clear, BTG Pactual, Rico, NuInvest, etc.).

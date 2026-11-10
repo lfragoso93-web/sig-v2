@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import math
 import re
 
 from sqlalchemy import func, select
@@ -302,10 +303,13 @@ async def add_transaction_record(
             as_of_date=payload.date,
         )
         if payload.quantity > current_qty:
-            raise TransactionWriteError(
-                f"Quantidade insuficiente para venda de {ticker}. "
-                f"Posicao atual: {current_qty:.4f} | Tentativa: {payload.quantity:.4f}"
-            )
+            if math.isclose(payload.quantity, current_qty, rel_tol=1e-7, abs_tol=1e-7):
+                payload = payload.model_copy(update={"quantity": current_qty})
+            else:
+                raise TransactionWriteError(
+                    f"Quantidade insuficiente para venda de {ticker}. "
+                    f"Posicao atual: {current_qty:.4f} | Tentativa: {payload.quantity:.4f}"
+                )
 
     if payload.fixed_income_contract is not None:
         fixed_income_contract_id = await resolve_fixed_income_contract_for_write(

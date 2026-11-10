@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import date, date as DateType
 from typing import Optional
 
@@ -144,7 +145,7 @@ async def _validate_sell(
         exclude_tx_id=exclude_tx_id,
         as_of_date=as_of_date,
     )
-    if quantity > current_qty:
+    if quantity > current_qty and not math.isclose(quantity, current_qty, rel_tol=1e-7, abs_tol=1e-7):
         raise HTTPException(
             status_code=400,
             detail=(
