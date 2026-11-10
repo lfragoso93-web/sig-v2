@@ -77,8 +77,15 @@ async def _build_dry_run_result(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_duplicate_transactions(rows, portfolio_id, db)
-    if not global_errors:
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        original_types = [row.data.get("asset_type") for row in rows]
         await _validate_writer_preflight(rows, db)
+        reconciled_types = [row.data.get("asset_type") for row in rows]
+        if (
+            not any(row.errors or row.warnings for row in rows)
+            and reconciled_types != original_types
+        ):
+            await _validate_duplicate_transactions(rows, portfolio_id, db)
     response_rows: list[dict[str, Any]] = []
     error_count = len(global_errors)
     skipped_count = 0

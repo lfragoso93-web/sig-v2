@@ -210,3 +210,203 @@ def test_adapt_b3_movimentacao_pdf():
     assert result.canonical_rows[0]["date"] == "2024-02-10"
     assert len(result.skipped_items) == 1
     assert result.skipped_items[0].movement_type == "Rendimento"
+
+
+def test_infer_b3_asset_type_smart_etf_and_units():
+    # ETFs terminados em 11
+    assert infer_b3_asset_type("DIVD11", "DIVD11 - IT NOW IDIV RENDA DIV FDO DE ÍNDICE – RESP LIMIT") == AssetType.ETF_NACIONAL.value
+    assert infer_b3_asset_type("AURO11", "AURO11 - BUENA VISTA NEOS GOLD HIGH INCOME INDEX FUNDO DE ÍNDICE") == AssetType.ETF_NACIONAL.value
+    assert infer_b3_asset_type("COIN11", "COIN11 - BUENA VISTA N. BITCOIN H. I. INDEX FDO DE INDICE") == AssetType.ETF_NACIONAL.value
+    assert infer_b3_asset_type("BOVA11") == AssetType.ETF_NACIONAL.value
+    assert infer_b3_asset_type("SMAL11") == AssetType.ETF_NACIONAL.value
+
+    # Units de Ações terminadas em 11
+    assert infer_b3_asset_type("TAEE11", "TAEE11 - TRANSMISSORA ALIANCA DE ENERGIA ELETRICA S/A") == AssetType.ACAO.value
+    assert infer_b3_asset_type("SANB11", "SANB11 - BANCO SANTANDER (BRASIL) S.A.") == AssetType.ACAO.value
+    assert infer_b3_asset_type("KLBN11", "KLBN11 - KLABIN S/A") == AssetType.ACAO.value
+    assert infer_b3_asset_type("ALUP11", "ALUP11 - ALUPAR INVESTIMENTO S/A") == AssetType.ACAO.value
+
+    # FIIs e FIAGROs terminados em 11
+    assert infer_b3_asset_type("HGLG11", "HGLG11 - CSHG LOGISTICA FDO INV IMOB - FII") == AssetType.FII.value
+    assert infer_b3_asset_type("MXRF11", "MXRF11 - MAXI RENDA FDO INV IMOB - FII") == AssetType.FII.value
+    assert infer_b3_asset_type("VGIA11", "VGIA11 - VALORA CRA FDO INV NAS CAD PROD AGRO FIAGRO - IMOB") == AssetType.FII.value
+    assert infer_b3_asset_type("VCRA11", "VCRA11 - VECTIS DATAGRO CR AGR - FDO INV CAD PROD AG - IMOB") == AssetType.FII.value
+
+
+def test_adapt_b3_movimentacao_pdf_multiline_wrapping():
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = (
+        "LEONARDO | CPF/CNPJ: 12345678900\n"
+        "Filtros aplicados\n"
+        "Data Inicial: 01/10/2024 | Data Final: 06/11/2026\n"
+        "06 de novembro de 2026\n"
+        "Movimentação Produto Instituição Quantidade Preço Unitário Valor da Operação\n"
+        "Transferência -\n"
+        "Liquidação\n"
+        "GGRC11 - GGR COVEPI RENDA FDO\n"
+        "INV IMOB RESPONSAB LTDA\n"
+        "INTER DISTRIBUIDORA DE TITULOS\n"
+        "E VALORES MOBILIARIOS LTDA 10 R$ 8,19 R$ 81,90\n"
+        "Transferência -\n"
+        "Liquidação\n"
+        "DIVD11 - IT NOW IDIV RENDA DIV FDO DE ÍNDICE\n"
+        "INTER DISTRIBUIDORA DE TITULOS\n"
+        "E VALORES MOBILIARIOS LTDA 5 R$ 52,28 R$ 261,40\n"
+        "05 de novembro de 2026\n"
+        "APLICAÇÃO CDB - CDBU2626QQS BANCO INTER S/A 1167 R$ 0,01 R$ 11,67\n"
+    )
+    mock_reader = MagicMock()
+    mock_reader.pages = [mock_page]
+
+    with patch("pypdf.PdfReader", return_value=mock_reader):
+        result = adapt_b3_investor_pdf_to_canonical(b"%PDF-fake-b3-multiline")
+
+    assert result.success is True
+    assert len(result.canonical_rows) == 3
+
+    ggrc_row = result.canonical_rows[0]
+    assert ggrc_row["ticker"] == "GGRC11"
+    assert ggrc_row["asset_type"] == AssetType.FII.value
+    assert ggrc_row["operation"] == "buy"
+    assert ggrc_row["quantity"] == "10"
+    assert ggrc_row["price"] == "8.19"
+    assert ggrc_row["date"] == "2026-11-06"
+
+    divd_row = result.canonical_rows[1]
+    assert divd_row["ticker"] == "DIVD11"
+    assert divd_row["asset_type"] == AssetType.ETF_NACIONAL.value
+    assert divd_row["operation"] == "buy"
+    assert divd_row["quantity"] == "5"
+    assert divd_row["price"] == "52.28"
+    assert divd_row["date"] == "2026-11-06"
+
+    cdb_row = result.canonical_rows[2]
+    assert cdb_row["ticker"] == "CDB - CDBU2626QQS"
+    assert cdb_row["asset_type"] == AssetType.RENDA_FIXA.value
+    assert cdb_row["operation"] == "buy"
+    assert cdb_row["quantity"] == "1167"
+    assert cdb_row["price"] == "0.01"
+    assert cdb_row["date"] == "2026-11-05"
+
+
+@pytest.mark.asyncio
+async def test_catalog_reconciliation_in_dry_run():
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
+    duplicate_result = MagicMock()
+    duplicate_result.scalar_one_or_none.return_value = None
+
+    coverage_result = MagicMock()
+    coverage_result.all.return_value = [
+        SimpleNamespace(
+            ticker="DIVD11",
+            asset_type=AssetType.ETF_NACIONAL.value,
+            last_price=69.89,
+            price_rows=120,
+        )
+    ]
+    duplicate_recheck_result = MagicMock()
+    duplicate_recheck_result.scalar_one_or_none.return_value = None
+
+    # portfolio check -> duplicate initial -> coverage preflight (reconciles FII->ETF_NACIONAL) -> duplicate recheck
+    db.execute.side_effect = [
+        portfolio_result,
+        duplicate_result,
+        coverage_result,
+        duplicate_recheck_result,
+    ]
+
+    # Entrada informando FII erroneamente para DIVD11
+    csv_bytes = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
+        "DIVD11,FII,buy,10,50.00,2026-05-10,0,BRL,teste\n"
+    ).encode("utf-8")
+
+    res = await import_transactions_csv(
+        db=db,
+        portfolio_id=1,
+        user_id=7,
+        file=FakeUpload(csv_bytes),
+        dry_run=True,
+        source="canonical",
+    )
+
+    assert res["success"] is True
+    assert len(res["rows"]) == 1
+    # Auto-reconciliado para ETF_NACIONAL
+    assert res["rows"][0]["ticker"] == "DIVD11"
+    assert res["rows"][0]["status"] == "valid"
+
+
+def test_adapt_b3_movimentacao_pdf_wrapped_header():
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = (
+        "06 de novembro de 2026\n"
+        "Movimentação Produto\n"
+        "Instituição Quantidade Preço Unitário Valor da Operação\n"
+        "Venda VALE3 - VALE S.A. INTER DISTRIBUIDORA DE TITULOS 50 R$ 70,00 R$ 3.500,00\n"
+    )
+    mock_reader = MagicMock()
+    mock_reader.pages = [mock_page]
+
+    with patch("pypdf.PdfReader", return_value=mock_reader):
+        result = adapt_b3_investor_pdf_to_canonical(b"%PDF-fake-b3-wrapped-header")
+
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "VALE3"
+    assert result.canonical_rows[0]["operation"] == "sell"
+    assert result.canonical_rows[0]["quantity"] == "50"
+    assert result.canonical_rows[0]["price"] == "70.00"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_detection_after_reconciliation():
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
+    duplicate_initial_result = MagicMock()
+    duplicate_initial_result.scalar_one_or_none.return_value = None
+
+    # Cobertura do catálogo tem DIVD11 como ETF_NACIONAL
+    coverage_result = MagicMock()
+    coverage_result.all.return_value = [
+        SimpleNamespace(
+            ticker="DIVD11",
+            asset_type=AssetType.ETF_NACIONAL.value,
+            last_price=69.89,
+            price_rows=120,
+        )
+    ]
+
+    # Já existe uma transação no banco com ETF_NACIONAL
+    duplicate_recheck_result = MagicMock()
+    duplicate_recheck_result.scalar_one_or_none.return_value = SimpleNamespace(id=99)
+
+    # Execuções: portfolio_result -> duplicate initial (passa com FII) -> coverage_result (reconcilia FII->ETF_NACIONAL) -> duplicate recheck (bloqueia como duplicata com ETF_NACIONAL)
+    db.execute.side_effect = [
+        portfolio_result,
+        duplicate_initial_result,
+        coverage_result,
+        duplicate_recheck_result,
+    ]
+
+    csv_bytes = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
+        "DIVD11,FII,buy,10,50.00,2026-05-10,0,BRL,teste\n"
+    ).encode("utf-8")
+
+    res = await import_transactions_csv(
+        db=db,
+        portfolio_id=1,
+        user_id=7,
+        file=FakeUpload(csv_bytes),
+        dry_run=True,
+        source="canonical",
+    )
+
+    # Reconciliado para ETF_NACIONAL e então detectado como duplicata existente
+    assert res["success"] is False
+    assert len(res["rows"]) == 1
+    assert "duplicate transaction already exists" in res["rows"][0]["errors"]

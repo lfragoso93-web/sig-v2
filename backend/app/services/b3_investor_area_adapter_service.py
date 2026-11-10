@@ -62,12 +62,20 @@ _CORPORATE_OR_INCOME_KEYWORDS = {
     "RENDIMENTO",
     "BONIFICACAO",
     "BONIFICAÇÃO",
+    "BONIFICAÇÃO EM ATIVOS",
+    "BONIFICACAO EM ATIVOS",
     "FRACAO",
     "FRAÇÃO",
+    "FRAÇÃO EM ATIVOS",
+    "FRACAO EM ATIVOS",
     "ATUALIZACAO",
     "ATUALIZAÇÃO",
     "DIREITO DE SUBSCRICAO",
     "DIREITO DE SUBSCRIÇÃO",
+    "DIREITOS DE SUBSCRICAO",
+    "DIREITOS DE SUBSCRIÇÃO",
+    "DIREITOS DE SUBSCRIÇÃO - NÃO EXERCIDO",
+    "DIREITOS DE SUBSCRICAO - NAO EXERCIDO",
     "RECIBO DE SUBSCRICAO",
     "RECIBO DE SUBSCRIÇÃO",
     "AMORTIZACAO",
@@ -85,6 +93,23 @@ _CORPORATE_OR_INCOME_KEYWORDS = {
     "SUB-ROGAÇÃO",
     "DESDOBRO",
     "GRUPAMENTO",
+    "DIVIDENDO - CANCELADO",
+    "RESGATE DE COTAS",
+}
+
+# Tickers conhecidos de ETFs nacionais terminados em 11
+_KNOWN_ETF_11 = {
+    "BOVA11", "SMAL11", "IVVB11", "HASH11", "DIVD11", "B5P211", "IMAB11",
+    "IBOB11", "SPXI11", "NASD11", "XINA11", "DIVO11", "BRAX11", "ECOO11",
+    "SMAC11", "MATB11", "FIND11", "ISUS11", "GENB11", "GOLD11", "AURO11",
+    "COIN11", "QQQI11", "NDIV11", "NSDV11", "BBOV11", "XBOV11", "PIBB11",
+    "BOVB11", "SMAB11", "SHOT11", "SPXB11", "TECB11", "UTEC11", "DNAI11",
+}
+
+# Tickers conhecidos de Units de Ações terminadas em 11
+_KNOWN_STOCK_11 = {
+    "SANB11", "TAEE11", "KLBN11", "ALUP11", "BPAC11", "ENGI11", "SAPR11",
+    "CPLE11", "SULA11", "TIET11", "RNDP11", "MODL11", "BRBI11", "PPLA11",
 }
 
 
@@ -127,10 +152,11 @@ def normalize_b3_ticker(raw_ticker: str) -> str:
     # Renda Fixa: manter código identificador limpo
     for rf_prefix in ("CDB", "LCI", "LCA", "CRI", "CRA", "DEB", "LIG", "LC", "RDB"):
         if cleaned.startswith(rf_prefix):
-            # Ex: "CDB - CDBU2626QQS" ou "CDB - CDB926713G8 - BANCO INTER S/A" -> "CDB - CDB926713G8"
+            # Ex: "CDB - CDBU2626QQS" ou "CDB - CDB926713G8 - BANCO INTER S/A" ou "CDB - CDBU2626QQS BANCO INTER S/A"
             parts = cleaned.split(" - ")
             if len(parts) >= 2:
-                return f"{parts[0].strip()} - {parts[1].strip()}"
+                rf_code = parts[1].strip().split()[0].strip()
+                return f"{parts[0].strip()} - {rf_code}"
             return parts[0].strip()
 
     # Procurar primeiro código padrão B3 (ex: PETR4, PETR4F, HGLG11)
@@ -151,23 +177,64 @@ def normalize_b3_ticker(raw_ticker: str) -> str:
 
 
 def infer_b3_asset_type(ticker: str, product_name: str = "") -> str:
-    """Infere o tipo de ativo inicial com base no padrão do ticker e nome do produto."""
+    """Infere o tipo de ativo com base no padrão do ticker e descrição do produto."""
     combined = f"{ticker} {product_name}".strip().upper()
+    t = ticker.upper()
+
     if combined.startswith("TESOURO") or "TESOURO" in combined:
         return AssetType.TESOURO_DIRETO.value
 
-    # Renda Fixa privada / debêntures
-    for rf_type in ("CDB", "LCI", "LCA", "CRI", "CRA", "DEBENTURE", "DEB", "LIG", "RDB", "LC "):
-        if combined.startswith(rf_type) or f" {rf_type}" in combined:
-            return AssetType.RENDA_FIXA.value
+    # Ticker padrão B3 de 4 letras + 11 (ex: VGIA11, VCRA11, DIVD11, TAEE11) não é título direto de Renda Fixa privada
+    is_standard_equity_11 = bool(re.match(r"^[A-Z]{4}1[1-3]$", t))
+    if not is_standard_equity_11:
+        for rf_type in ("CDB", "LCI", "LCA", "CRI", "CRA", "DEBENTURE", "DEB", "LIG", "RDB", "LC "):
+            if combined.startswith(rf_type) or f" {rf_type}" in combined:
+                return AssetType.RENDA_FIXA.value
 
-    t = ticker.upper()
-    if t.endswith(("34", "35")):
+    # BDRs
+    if t.endswith(("31", "32", "33", "34", "35", "39")) or " BDR" in combined or "- BDR" in combined:
         return AssetType.BDR.value
-    if t.endswith(("11", "12", "13")):
-        return AssetType.FII.value
-    if any(t.endswith(s) for s in ("3", "4", "5", "6")):
+
+    # ETFs / Fundos de Índice
+    etf_keywords = (
+        "FDO DE INDICE", "FDO DE ÍNDICE", "FDO DE NDICE",
+        "FUNDO DE INDICE", "FUNDO DE ÍNDICE", "FUNDO DE NDICE",
+        "INDEX FUND", " ETF", "ETF ", "- ETF", "/ETF", "INDEX"
+    )
+    if any(k in combined for k in etf_keywords) or t in _KNOWN_ETF_11:
+        return AssetType.ETF_NACIONAL.value
+
+    # Units de Ações (ex: SANB11, TAEE11, KLBN11, ALUP11)
+    # Empresas S.A. que não são fundos imobiliários/fiagros
+    stock_keywords = (
+        " S.A.", " S/A", " SA ", "COMPANHIA", "CIA ",
+        "PARTICIPACOES", "PARTICIPAÇÕES", "INVESTIMENTO S/A",
+        "UNIT", "UNT "
+    )
+    fii_negation_keywords = (
+        "FDO INV IMOB", "FII", "FIAGRO", "IMOB", "IMOBILIARIO",
+        "IMOBILIÁRIO", "REAL ESTATE", "HEDGE FUND"
+    )
+    if (
+        (any(k in combined for k in stock_keywords) and not any(k in combined for k in fii_negation_keywords))
+        or t in _KNOWN_STOCK_11
+    ):
         return AssetType.ACAO.value
+
+    # FIIs e FIAGROs
+    fii_keywords = (
+        "FDO INV IMOB", "FUNDO DE INVESTIMENTO IMOBILIARIO",
+        "FUNDO DE INVESTIMENTO IMOBILIÁRIO", "FII", "FIAGRO",
+        "IMOB", "IMOBILIARIO", "IMOBILIÁRIO", "REAL ESTATE",
+        "HEDGE FUND", "RECEBIVEIS", "RECEBÍVEIS", "AGRO"
+    )
+    if any(k in combined for k in fii_keywords) or t.endswith(("11", "12", "13")):
+        return AssetType.FII.value
+
+    # Ações regulares (terminadas em 3, 4, 5, 6, 7, 8)
+    if any(t.endswith(s) for s in ("3", "4", "5", "6", "7", "8")):
+        return AssetType.ACAO.value
+
     return AssetType.OUTRO.value
 
 
@@ -543,7 +610,11 @@ def adapt_b3_investor_xlsx_to_canonical(xlsx_bytes: bytes) -> B3AdaptResult:
 
 
 def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
-    """Converte arquivo PDF da Área do Investidor B3 (Extrato de Movimentação ou Negociação) em transações canônicas."""
+    """Converte arquivo PDF da Área do Investidor B3 em transações canônicas.
+
+    Lida de forma resiliente com entradas de movimentação quebradas em múltiplas linhas
+    de texto (razão social e instituição longas).
+    """
     if not pypdf:
         return B3AdaptResult(
             success=False,
@@ -574,8 +645,6 @@ def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
             errors=["PDF da B3 sem texto legível."],
         )
 
-    # Converter texto extraído em linhas tabulares virtuais
-    # No extrato da B3, as seções são iniciadas por datas como "06 de novembro de 2026"
     lines = full_text.splitlines()
     current_date = ""
 
@@ -585,9 +654,58 @@ def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
         re.IGNORECASE,
     )
 
+    known_moves = [
+        ("APLICAÇÃO", "Credito", "APLICAÇÃO"),
+        ("APLICACAO", "Credito", "APLICAÇÃO"),
+        ("RESGATE ANTECIPADO/", "Debito", "RESGATE ANTECIPADO/"),
+        ("RESGATE ANTECIPADO", "Debito", "RESGATE ANTECIPADO"),
+        ("RESGATE", "Debito", "RESGATE"),
+        ("COMPRA / VENDA", "Credito", "COMPRA / VENDA"),
+        ("Compra", "Credito", "Compra"),
+        ("Venda", "Debito", "Venda"),
+        ("Dividendo", "Credito", "Dividendo"),
+        ("Juros Sobre Capital Próprio", "Credito", "Juros Sobre Capital Próprio"),
+        ("Juros Sobre Capital Proprio", "Credito", "Juros Sobre Capital Próprio"),
+        ("Rendimento", "Credito", "Rendimento"),
+        ("Reembolso", "Credito", "Reembolso"),
+        ("Empréstimo", "Credito", "Empréstimo"),
+        ("Emprestimo", "Credito", "Empréstimo"),
+        ("Transferência - Liquidação", "Credito", "Transferência - Liquidação"),
+        ("Transferencia - Liquidacao", "Credito", "Transferência - Liquidação"),
+        ("Transferência", "Credito", "Transferência"),
+        ("Transferencia", "Credito", "Transferência"),
+        ("Fração em Ativos", "Debito", "Fração em Ativos"),
+        ("Fracao em Ativos", "Debito", "Fração em Ativos"),
+        ("Grupamento", "Credito", "Grupamento"),
+        ("Leilão de Fração", "Credito", "Leilão de Fração"),
+        ("Leilao de Fracao", "Credito", "Leilão de Fração"),
+        ("Direitos de Subscrição - Não Exercido", "Debito", "Direitos de Subscrição - Não Exercido"),
+        ("Direitos de Subscrição", "Credito", "Direitos de Subscrição"),
+        ("Direito de Subscrição", "Credito", "Direito de Subscrição"),
+        ("Cessão de Direitos - Solicitada", "Debito", "Cessão de Direitos - Solicitada"),
+        ("Cessão de Direitos", "Credito", "Cessão de Direitos"),
+        ("Atualização", "Credito", "Atualização"),
+        ("Desdobro", "Credito", "Desdobro"),
+        ("Bonificação em Ativos", "Credito", "Bonificação em Ativos"),
+        ("Resgate de Cotas", "Debito", "Resgate de Cotas"),
+    ]
+    known_moves.sort(key=lambda x: len(x[0]), reverse=True)
+
     tabular_rows: list[list[str]] = [
         ["Entrada/Saída", "Data", "Movimentação", "Produto", "Instituição", "Quantidade", "Preço unitário", "Valor da Operação"]
     ]
+
+    buffer_lines: list[str] = []
+    noise_tokens = (
+        "acesse investidor",
+        "extrato de movimenta",
+        "filtros aplicados",
+        "data inicial",
+        "tipo de invest",
+        "tipo de movimenta",
+        "institui",
+        "cpf/cnpj",
+    )
 
     for line in lines:
         line_clean = line.strip()
@@ -600,62 +718,46 @@ def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
             day, month_str, year = date_match.groups()
             m_num = MONTHS_PT.get(month_str.lower(), 1)
             current_date = f"{year}-{m_num:02d}-{int(day):02d}"
+            buffer_lines = []
             continue
 
-        if "Movimentação" in line_clean and "Produto" in line_clean:
-            continue
-        if "acesse investidor" in line_clean.lower() or "filtros aplicados" in line_clean.lower():
+        lower_line = line_clean.lower()
+        # Excluir cabeçalhos de tabela B3 (inteiros ou quebrados em linhas consecutivas)
+        if (
+            ("movimenta" in lower_line and "produto" in lower_line)
+            or ("preço unit" in lower_line or "preco unit" in lower_line)
+            or ("valor da opera" in lower_line)
+            or any(token in lower_line for token in noise_tokens)
+        ):
             continue
 
-        # Tentar casar fim da linha numérica
-        tail_match = row_tail_pattern.search(line_clean)
-        if tail_match and current_date:
-            qty_str, price_str, val_str = tail_match.groups()
-            head_str = line_clean[:tail_match.start()].strip()
+        buffer_lines.append(line_clean)
+        if row_tail_pattern.search(line_clean) and current_date:
+            combined_text = " ".join(buffer_lines)
+            comb_tail_match = row_tail_pattern.search(combined_text)
+            if not comb_tail_match:
+                buffer_lines = []
+                continue
 
-            # Extrair movimentação conhecida do início de head_str
+            qty_str, price_str, val_str = comb_tail_match.groups()
+            head_str = combined_text[:comb_tail_match.start()].strip()
+            buffer_lines = []
+
             entry_exit = "Credito"
             mov = "Transferência - Liquidação"
+            prod_and_inst = head_str
 
-            known_moves = [
-                ("APLICAÇÃO", "Credito", "APLICAÇÃO"),
-                ("APLICACAO", "Credito", "APLICAÇÃO"),
-                ("RESGATE ANTECIPADO/", "Debito", "RESGATE ANTECIPADO/"),
-                ("RESGATE ANTECIPADO", "Debito", "RESGATE ANTECIPADO"),
-                ("RESGATE", "Debito", "RESGATE"),
-                ("COMPRA / VENDA", "Credito", "COMPRA / VENDA"),
-                ("Compra", "Credito", "Compra"),
-                ("Venda", "Debito", "Venda"),
-                ("Dividendo", "Credito", "Dividendo"),
-                ("Juros Sobre Capital Próprio", "Credito", "Juros Sobre Capital Próprio"),
-                ("Juros Sobre Capital Proprio", "Credito", "Juros Sobre Capital Próprio"),
-                ("Rendimento", "Credito", "Rendimento"),
-                ("Reembolso", "Credito", "Reembolso"),
-                ("Empréstimo", "Credito", "Empréstimo"),
-                ("Emprestimo", "Credito", "Empréstimo"),
-                ("Transferência - Liquidação", "Credito", "Transferência - Liquidação"),
-                ("Transferencia - Liquidacao", "Credito", "Transferência - Liquidação"),
-                ("Transferência", "Credito", "Transferência"),
-                ("Transferencia", "Credito", "Transferência"),
-                ("Fração em Ativos", "Debito", "Fração em Ativos"),
-                ("Fracao em Ativos", "Debito", "Fração em Ativos"),
-                ("Grupamento", "Credito", "Grupamento"),
-                ("Leilão de Fração", "Credito", "Leilão de Fração"),
-                ("Leilao de Fracao", "Credito", "Leilão de Fração"),
-                ("Direito de Subscrição", "Credito", "Direito de Subscrição"),
-                ("Cessão de Direitos", "Credito", "Cessão de Direitos"),
-                ("Cessão de Direitos - Solicitada", "Debito", "Cessão de Direitos - Solicitada"),
-                ("Atualização", "Credito", "Atualização"),
-            ]
-
-            # Se a linha contiver prefixo Credito/Debito explícito, extrair antes de casar o tipo de movimento
-            for cd_prefix, cd_val in [("CREDITO ", "Credito"), ("CRÉDITO ", "Credito"), ("DEBITO ", "Debito"), ("DÉBITO ", "Debito")]:
+            for cd_prefix, cd_val in [
+                ("CREDITO ", "Credito"),
+                ("CRÉDITO ", "Credito"),
+                ("DEBITO ", "Debito"),
+                ("DÉBITO ", "Debito"),
+            ]:
                 if head_str.upper().startswith(cd_prefix):
                     entry_exit = cd_val
                     head_str = head_str[len(cd_prefix):].strip()
                     break
 
-            prod_and_inst = head_str
             for prefix, default_ee, norm_mov in known_moves:
                 if head_str.upper().startswith(prefix.upper()):
                     entry_exit = default_ee
@@ -668,7 +770,7 @@ def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
                 current_date,
                 mov,
                 prod_and_inst,
-                "",  # Instituição
+                "",
                 qty_str,
                 price_str,
                 val_str,
