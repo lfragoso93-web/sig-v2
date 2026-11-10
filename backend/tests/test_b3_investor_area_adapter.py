@@ -126,7 +126,7 @@ async def test_import_transactions_csv_with_b3_file_in_dry_run():
             price_rows=1,
         )
     ]
-    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
+    db.execute.side_effect = [portfolio_result, duplicate_result, coverage_result]
 
     b3_bytes = (
         "Data do Negócio;Tipo de Movimentação;Mercado;Prazo/Vencimento;Instituição;Código de Negociação;Quantidade;Preço;Valor\n"
@@ -297,7 +297,6 @@ async def test_catalog_reconciliation_in_dry_run():
     duplicate_result = MagicMock()
     duplicate_result.scalar_one_or_none.return_value = None
 
-    # O catálogo tem DIVD11 como ETF_NACIONAL
     coverage_result = MagicMock()
     coverage_result.all.return_value = [
         SimpleNamespace(
@@ -307,7 +306,16 @@ async def test_catalog_reconciliation_in_dry_run():
             price_rows=120,
         )
     ]
-    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
+    duplicate_recheck_result = MagicMock()
+    duplicate_recheck_result.scalar_one_or_none.return_value = None
+
+    # portfolio check -> duplicate initial -> coverage preflight (reconciles FII->ETF_NACIONAL) -> duplicate recheck
+    db.execute.side_effect = [
+        portfolio_result,
+        duplicate_result,
+        coverage_result,
+        duplicate_recheck_result,
+    ]
 
     # Entrada informando FII erroneamente para DIVD11
     csv_bytes = (
@@ -358,6 +366,8 @@ async def test_duplicate_detection_after_reconciliation():
     db = AsyncMock(spec=AsyncSession)
     portfolio_result = MagicMock()
     portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
+    duplicate_initial_result = MagicMock()
+    duplicate_initial_result.scalar_one_or_none.return_value = None
 
     # Cobertura do catálogo tem DIVD11 como ETF_NACIONAL
     coverage_result = MagicMock()
@@ -371,11 +381,16 @@ async def test_duplicate_detection_after_reconciliation():
     ]
 
     # Já existe uma transação no banco com ETF_NACIONAL
-    duplicate_result = MagicMock()
-    duplicate_result.scalar_one_or_none.return_value = SimpleNamespace(id=99)
+    duplicate_recheck_result = MagicMock()
+    duplicate_recheck_result.scalar_one_or_none.return_value = SimpleNamespace(id=99)
 
-    # Execuções: portfolio_result, coverage_result (preflight primeiro), duplicate_result (depois com tipo reconciliado)
-    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
+    # Execuções: portfolio_result -> duplicate initial (passa com FII) -> coverage_result (reconcilia FII->ETF_NACIONAL) -> duplicate recheck (bloqueia como duplicata com ETF_NACIONAL)
+    db.execute.side_effect = [
+        portfolio_result,
+        duplicate_initial_result,
+        coverage_result,
+        duplicate_recheck_result,
+    ]
 
     csv_bytes = (
         "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
