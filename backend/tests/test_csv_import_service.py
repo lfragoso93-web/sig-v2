@@ -917,3 +917,46 @@ PETR4,ACAO,buy,100,25.50,{future_date},10.00,BRL,"""
         assert result["success"] is False
         assert result["imported_count"] == 0
         assert result["skipped_count"] == 1
+
+    async def test_dry_run_blocks_sell_with_insufficient_inventory(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,sell,100,30.00,2024-05-10,0.00,BRL,Venda a descoberto sem compra"""
+
+        db = AsyncMock(spec=AsyncSession)
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none.return_value = portfolio
+        empty_result = MagicMock()
+        empty_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[portfolio_result] + [empty_result] * 10)
+
+        with patch("app.services.csv_import_service._validate_persisted_price_history_preflight", new_callable=AsyncMock), \
+             patch("app.services.transaction_write_service._current_quantity", new_callable=AsyncMock, return_value=0.0):
+            result = await csv_import_service.import_transactions_csv(db, 1, 1, content.encode("utf-8"), dry_run=True)
+
+        assert result["success"] is False
+        assert result["error_count"] == 1
+        assert "Quantidade insuficiente para venda de PETR4" in result["rows"][0]["errors"][0]
+
+    async def test_dry_run_allows_sell_preceded_by_buy_even_if_descending_in_file(self):
+        # Arquivo em ordem decrescente (venda antes da compra no arquivo)
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,sell,50,32.00,2024-05-15,0.00,BRL,Venda posterior
+PETR4,ACAO,buy,100,30.00,2024-05-10,0.00,BRL,Compra anterior"""
+
+        db = AsyncMock(spec=AsyncSession)
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none.return_value = portfolio
+        empty_result = MagicMock()
+        empty_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[portfolio_result] + [empty_result] * 10)
+
+        with patch("app.services.csv_import_service._validate_persisted_price_history_preflight", new_callable=AsyncMock), \
+             patch("app.services.transaction_write_service._current_quantity", new_callable=AsyncMock, return_value=0.0):
+            result = await csv_import_service.import_transactions_csv(db, 1, 1, content.encode("utf-8"), dry_run=True)
+
+        assert result["success"] is True
+        assert result["error_count"] == 0

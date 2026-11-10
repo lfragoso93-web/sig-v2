@@ -508,6 +508,7 @@ async def _validate_duplicate_transactions(
 async def _validate_writer_preflight(
     rows: list[CSVRow],
     db: AsyncSession,
+    portfolio_id: int | None = None,
 ) -> None:
     """Antecipa blockers do writer canonico no dry-run, sem escrever no banco."""
     for row in rows:
@@ -525,6 +526,73 @@ async def _validate_writer_preflight(
             row.add_error(str(exc))
 
     await _validate_persisted_price_history_preflight(rows, db)
+    if portfolio_id is not None:
+        await _validate_sell_inventory_preflight(rows, db, portfolio_id)
+
+
+async def _validate_sell_inventory_preflight(
+    rows: list[CSVRow],
+    db: AsyncSession,
+    portfolio_id: int,
+) -> None:
+    """Simula o estoque cronológico de vendas para antecipar TransactionWriteError no dry-run."""
+    active_rows = [r for r in rows if not r.errors]
+    if not any((r.data.get("operation") or "").strip().lower() == "sell" for r in active_rows):
+        return
+
+    from app.services.transaction_write_service import _current_quantity
+
+    sell_requirements: dict[str, str] = {}
+    for r in active_rows:
+        if (r.data.get("operation") or "").strip().lower() == "sell":
+            ticker = (r.data.get("ticker") or "").strip().upper()
+            asset_type = (r.data.get("asset_type") or "").strip().upper()
+            if ticker and asset_type:
+                sell_requirements[ticker] = asset_type
+
+    if not sell_requirements:
+        return
+
+    initial_balances: dict[str, float] = {}
+    for ticker, asset_type in sell_requirements.items():
+        try:
+            initial_balances[ticker] = await _current_quantity(
+                db,
+                portfolio_id=portfolio_id,
+                ticker=ticker,
+                asset_type=asset_type,
+            )
+        except Exception:
+            initial_balances[ticker] = 0.0
+
+    running_balances = dict(initial_balances)
+
+    sorted_rows = sorted(
+        active_rows,
+        key=lambda r: (
+            _parse_date(r.data.get("date", "1970-01-01")),
+            0 if (r.data.get("operation") or "").strip().lower() == "buy" else 1,
+        ),
+    )
+
+    for row in sorted_rows:
+        ticker = (row.data.get("ticker") or "").strip().upper()
+        if ticker not in sell_requirements:
+            continue
+        op = (row.data.get("operation") or "").strip().lower()
+        qty = _safe_float(row.data.get("quantity")) or 0.0
+
+        if op == "buy":
+            running_balances[ticker] = running_balances.get(ticker, 0.0) + qty
+        elif op == "sell":
+            avail = running_balances.get(ticker, 0.0)
+            if qty > avail + 1e-6:
+                row.add_error(
+                    f"Quantidade insuficiente para venda de {ticker}. "
+                    f"Posicao atual: {avail:.4f} | Tentativa: {qty:.4f}"
+                )
+            else:
+                running_balances[ticker] = avail - qty
 
 
 async def _validate_persisted_price_history_preflight(

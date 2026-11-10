@@ -553,6 +553,44 @@ def adapt_b3_rows_to_canonical(
         except Exception as exc:
             errors.append(f"Linha {line_idx}: falha ao processar ({exc})")
 
+    # Segregar resgates de Renda Fixa (CDB, LCI, LCA, etc.) que não possuem aplicação no extrato
+    # (contratos originados antes do período selecionado pelo investidor na Área do Investidor B3)
+    rf_buys = {
+        row["ticker"]
+        for row in canonical_rows
+        if row.get("asset_type") == AssetType.RENDA_FIXA.value and row.get("operation") == "buy"
+    }
+
+    filtered_canonical_rows: list[dict[str, Any]] = []
+    for item in canonical_rows:
+        if (
+            item.get("asset_type") == AssetType.RENDA_FIXA.value
+            and item.get("operation") == "sell"
+            and item.get("ticker") not in rf_buys
+        ):
+            skipped_items.append(
+                B3SkippedItem(
+                    line_number=0,
+                    raw_ticker=item.get("ticker", ""),
+                    movement_type="Resgate de Renda Fixa",
+                    reason="Resgate de Renda Fixa sem aplicação correspondente no período do extrato (contrato originado antes do período selecionado).",
+                )
+            )
+        else:
+            filtered_canonical_rows.append(item)
+
+    canonical_rows = filtered_canonical_rows
+
+    # Ordenar transações em ordem cronológica (data ASC, compras antes de vendas na mesma data)
+    # Extratos da B3 vêm em ordem decrescente (mais recente para o mais antigo);
+    # ordenar cronologicamente garante que o histórico de compras preceda as vendas.
+    canonical_rows.sort(
+        key=lambda r: (
+            r.get("date", ""),
+            0 if r.get("operation") == "buy" else 1,
+        )
+    )
+
     # Gerar CSV canônico
     output = io.StringIO(newline="")
     writer = csv.DictWriter(
