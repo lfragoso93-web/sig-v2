@@ -410,3 +410,34 @@ async def test_duplicate_detection_after_reconciliation():
     assert res["success"] is False
     assert len(res["rows"]) == 1
     assert "duplicate transaction already exists" in res["rows"][0]["errors"]
+
+
+
+def test_subscription_rights_segregated_as_corporate_events():
+    from app.services.b3_investor_area_adapter_service import (
+        adapt_b3_investor_csv_to_canonical,
+        is_subscription_right_ticker,
+    )
+
+    assert is_subscription_right_ticker("SNAG12") is True
+    assert is_subscription_right_ticker("MXRF12") is True
+    assert is_subscription_right_ticker("XPML13") is True
+    assert is_subscription_right_ticker("ITSA2") is True
+    assert is_subscription_right_ticker("VULC1") is True
+    assert is_subscription_right_ticker("PETR4") is False
+    assert is_subscription_right_ticker("HGLG11") is False
+
+    # Testa segregação no fluxo tabular B3
+    csv_bytes = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;18/03/2026;Transferência - Liquidação;SNAG12 - SUNO AGRO - FIAGRO-IMOBILIARIO;INTER DTVM;80;0,05;4,00\n"
+        "Credito;19/03/2026;Transferência - Liquidação;SNAG11 - SUNO AGRO - FIAGRO-IMOBILIARIO;INTER DTVM;10;10,00;100,00\n"
+    ).encode("utf-8")
+
+    result = adapt_b3_investor_csv_to_canonical(csv_bytes)
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "SNAG11"
+    assert len(result.skipped_items) == 1
+    assert "SNAG12" in result.skipped_items[0].raw_ticker
+    assert "subscrição" in result.skipped_items[0].reason.lower()
