@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Briefcase, X } from 'lucide-react'
 import { Portfolio, useUpdatePortfolio } from '@/hooks/usePortfolios'
 
@@ -33,13 +34,14 @@ export default function EditPortfolioModal({ portfolio, onClose }: Props) {
     }
   }
 
-  return (
+  const modalNode = (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 60,
+        position: 'fixed', inset: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '1rem', background: 'oklch(0.12 0.01 240 / 0.7)',
+        padding: '1.25rem 1rem', background: 'oklch(0.12 0.01 240 / 0.75)',
         backdropFilter: 'blur(4px)',
+        overflowY: 'auto',
       }}
       onClick={event => { if (event.target === event.currentTarget) onClose() }}
     >
@@ -47,12 +49,17 @@ export default function EditPortfolioModal({ portfolio, onClose }: Props) {
         width: '100%', maxWidth: 420,
         background: 'var(--color-surface)',
         border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
-        borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
+        borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)',
+        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: 'min(90vh, 520px)',
+        margin: 'auto',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '1.125rem 1.5rem',
           borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+          flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{
@@ -80,7 +87,7 @@ export default function EditPortfolioModal({ portfolio, onClose }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', fontSize: 'var(--text-xs)', color: 'var(--color-text)' }}>
             Nome
             <input
@@ -147,4 +154,6 @@ export default function EditPortfolioModal({ portfolio, onClose }: Props) {
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode
 }
