@@ -449,3 +449,54 @@ async def test_create_transaction_normalizes_fractional_ticker_to_standard_lot()
         access=_system_access(portfolio_id=303),
     )
     assert created_b3.ticker == "B3SA3"
+
+
+@pytest.mark.asyncio
+async def test_create_transaction_record_allows_sell_with_floating_point_imprecision() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    rows = MagicMock()
+    current_imprecise_qty = 0.25 + 0.11 + 0.1
+    rows.all.return_value = [("buy", current_imprecise_qty)]
+    db.execute = AsyncMock(return_value=rows)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    payload = TransactionCreate(
+        ticker="TESOURO RENDA+ 2030",
+        asset_type="TESOURO_DIRETO",
+        operation="sell",
+        quantity=0.46,
+        price=1000,
+        fees=0,
+        date="2026-01-03",
+        currency="BRL",
+    )
+
+    result = await sut.create_transaction_record(
+        db, portfolio_id=303, access=_system_access(), payload=payload
+    )
+    assert result.quantity == current_imprecise_qty
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_transaction_record_rejects_sell_when_balance_zero_small_fraction() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    rows = MagicMock()
+    rows.all.return_value = [("buy", 0.0)]
+    db.execute = AsyncMock(return_value=rows)
+    payload = TransactionCreate(
+        ticker="PETR4",
+        asset_type="ACAO",
+        operation="sell",
+        quantity=0.000001,
+        price=30.0,
+        fees=0,
+        date="2026-01-03",
+        currency="BRL",
+    )
+
+    with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente"):
+        await sut.create_transaction_record(
+            db, portfolio_id=303, access=_system_access(), payload=payload
+        )

@@ -1,4 +1,5 @@
 import csv
+import math
 import re
 import io
 import logging
@@ -586,13 +587,13 @@ async def _validate_sell_inventory_preflight(
             running_balances[ticker] = running_balances.get(ticker, 0.0) + qty
         elif op == "sell":
             avail = running_balances.get(ticker, 0.0)
-            if qty > avail + 1e-6:
+            if qty > avail and not math.isclose(qty, avail, rel_tol=1e-7, abs_tol=1e-7):
                 row.add_error(
                     f"Quantidade insuficiente para venda de {ticker}. "
                     f"Posicao atual: {avail:.4f} | Tentativa: {qty:.4f}"
                 )
             else:
-                running_balances[ticker] = avail - qty
+                running_balances[ticker] = max(0.0, avail - qty)
 
 
 async def _validate_persisted_price_history_preflight(
