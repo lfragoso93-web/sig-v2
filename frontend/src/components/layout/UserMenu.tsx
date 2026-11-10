@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom"
 import { useState, useRef, useEffect } from 'react'
 import { BookOpen, ChevronDown, FileUp, LogOut, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -184,11 +185,12 @@ export default function UserMenu() {
         )}
       </div>
 
-      {showImport && resolvedPortfolioId && (
+      {showImport && resolvedPortfolioId && typeof document !== 'undefined' && createPortal(
         <ImportCSVModal
           portfolioId={resolvedPortfolioId}
           onClose={() => setShowImport(false)}
-        />
+        />,
+        document.body
       )}
     </>
   )

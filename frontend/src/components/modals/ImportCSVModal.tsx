@@ -360,13 +360,13 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'oklch(0.12 0.01 240 / 0.7)', backdropFilter: 'blur(4px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem 1rem', background: 'oklch(0.12 0.01 240 / 0.75)', backdropFilter: 'blur(4px)', overflowY: 'auto' }}
       onClick={event => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div style={{ width: '100%', maxWidth: step === 'results' ? 900 : 520, background: 'var(--color-surface)', border: '1px solid oklch(from var(--color-text) l c h / 0.08)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.125rem 1.5rem', borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)' }}>
+      <div style={{ width: '100%', maxWidth: step === 'results' ? 900 : 540, background: 'var(--color-surface)', border: '1px solid oklch(from var(--color-text) l c h / 0.1)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 'min(90vh, 760px)', margin: 'auto' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-lg)', background: 'oklch(from var(--color-primary) l c h / 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Upload size={15} style={{ color: 'var(--color-primary)' }} />
@@ -381,7 +381,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
           </button>
         </header>
 
-        <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+        <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1.25rem' }}>
           {error && (
             <div style={{ display: 'flex', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', background: 'oklch(from var(--color-error) l c h / 0.1)', border: '1px solid oklch(from var(--color-error) l c h / 0.3)', marginBottom: '1rem' }}>
               <AlertCircle size={16} style={{ color: 'var(--color-error)', flexShrink: 0 }} />
@@ -390,14 +390,14 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
           )}
 
           {step === 'upload' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div
                 onClick={() => document.getElementById('file-input')?.click()}
                 onDragOver={event => event.preventDefault()}
                 onDrop={handleDrop}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', border: '2px dashed oklch(from var(--color-text) l c h / 0.2)', borderRadius: 'var(--radius-lg)', background: 'oklch(from var(--color-text) l c h / 0.02)', cursor: 'pointer' }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem', border: '2px dashed oklch(from var(--color-text) l c h / 0.25)', borderRadius: 'var(--radius-lg)', background: 'oklch(from var(--color-text) l c h / 0.02)', cursor: 'pointer' }}
               >
-                <Upload size={32} style={{ color: 'var(--color-primary)', marginBottom: '0.5rem' }} />
+                <Upload size={28} style={{ color: 'var(--color-primary)', marginBottom: '0.375rem' }} />
                 <p style={{ margin: '0.25rem 0 0', fontSize: 'var(--text-sm)', fontWeight: 500 }}>Arraste seu arquivo aqui (CSV, XLSX, PDF)</p>
                 <p style={{ margin: '0.25rem 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>ou clique para selecionar</p>
               </div>
@@ -499,7 +499,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
           )}
         </main>
 
-        <footer style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', padding: '1rem 1.5rem', borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)' }}>
+        <footer style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', padding: '0.875rem 1.25rem', borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)', flexShrink: 0 }}>
           {step !== 'results' && <button onClick={onClose} style={{ ...buttonStyle, border: '1px solid oklch(from var(--color-text) l c h / 0.12)', background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer' }}>Cancelar</button>}
           {step === 'upload' && <button disabled={!file || isLoading} onClick={() => setStep('preview')} style={{ ...buttonStyle, border: 'none', background: 'var(--color-primary)', color: 'var(--color-text-inverse)', fontWeight: 600, cursor: !file || isLoading ? 'not-allowed' : 'pointer', opacity: !file || isLoading ? 0.6 : 1 }}>Próximo</button>}
           {step === 'preview' && (
