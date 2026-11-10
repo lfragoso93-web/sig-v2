@@ -176,6 +176,19 @@ def normalize_b3_ticker(raw_ticker: str) -> str:
     return token
 
 
+def is_subscription_right_ticker(ticker: str, product_desc: str = "") -> bool:
+    """Identifica se um ticker é um direito ou recibo temporário de subscrição na B3."""
+    t = ticker.strip().upper()
+    if re.match(r"^[A-Z]{4}(?:12|13|14)$", t):
+        return True
+    if re.match(r"^[A-Z]{4}(?:1|2|9|10)$", t):
+        return True
+    desc = product_desc.upper()
+    if any(term in desc for term in ("SUBSCRICAO", "SUBSCRIÇÃO", "DIREITO DE SUBS", "RECIBO DE SUBS", "DIREITOS DE SUBS")):
+        return True
+    return False
+
+
 def infer_b3_asset_type(ticker: str, product_name: str = "") -> str:
     """Infere o tipo de ativo com base no padrão do ticker e descrição do produto."""
     combined = f"{ticker} {product_name}".strip().upper()
@@ -228,7 +241,7 @@ def infer_b3_asset_type(ticker: str, product_name: str = "") -> str:
         "IMOB", "IMOBILIARIO", "IMOBILIÁRIO", "REAL ESTATE",
         "HEDGE FUND", "RECEBIVEIS", "RECEBÍVEIS", "AGRO"
     )
-    if any(k in combined for k in fii_keywords) or t.endswith(("11", "12", "13")):
+    if any(k in combined for k in fii_keywords) or t.endswith("11"):
         return AssetType.FII.value
 
     # Ações regulares (terminadas em 3, 4, 5, 6, 7, 8)
@@ -437,6 +450,19 @@ def adapt_b3_rows_to_canonical(
                 )
                 continue
 
+            # 2. Segregação de direitos e recibos de subscrição (ex: SNAG12, MXRF12, ITSA2, etc.)
+            ticker_clean = normalize_b3_ticker(raw_ticker_cell)
+            if is_subscription_right_ticker(ticker_clean, raw_ticker_cell or combined_op_text):
+                skipped_items.append(
+                    B3SkippedItem(
+                        line_number=line_idx,
+                        raw_ticker=raw_ticker_cell,
+                        movement_type=raw_movement or raw_entry_exit or "Subscrição",
+                        reason="Direito ou recibo de subscrição segregado como evento corporativo.",
+                    )
+                )
+                continue
+
             # Transferência pura sem liquidação de mercado (preço "-" ou sem valor)
             if (raw_movement.strip().upper() == "TRANSFERÊNCIA" or raw_movement.strip().upper() == "TRANSFERENCIA") and (
                 raw_price.strip() == "-" or raw_total.strip() == "-" or not raw_price.strip()
@@ -547,8 +573,14 @@ def adapt_b3_rows_to_canonical(
     )
 
 
-def adapt_b3_investor_csv_to_canonical(raw_content: str) -> B3AdaptResult:
+def adapt_b3_investor_csv_to_canonical(raw_content: str | bytes) -> B3AdaptResult:
     """Converte o conteúdo CSV da Área do Investidor B3 no DTO canônico de importação."""
+    if isinstance(raw_content, bytes):
+        try:
+            raw_content = raw_content.decode('utf-8')
+        except UnicodeDecodeError:
+            raw_content = raw_content.decode('latin-1', errors='replace')
+
     if not raw_content or not raw_content.strip():
         return B3AdaptResult(
             success=False,
