@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -605,6 +606,48 @@ def adapt_b3_rows_to_canonical(
             0 if r.get("operation") == "buy" else 1,
         )
     )
+
+    # Segregar ou calibrar débitos de eventos corporativos de custódia (ex: Fração em Ativos)
+    # Se o investidor não possui saldo em custódia desse ativo no período do extrato (ex: frações
+    # oriundas de desmembramento ou bonificação de Units posteriormente leiloadas como KLBN3),
+    # o débito é segregado como informativo para não gerar vendas descobertas artificiais.
+    running_balances: dict[str, float] = {}
+    adjusted_canonical_rows: list[dict[str, Any]] = []
+
+    for item in canonical_rows:
+        ticker = item.get("ticker", "")
+        op = item.get("operation", "")
+        qty = float(item.get("quantity") or 0.0)
+        is_custody = "Evento Corporativo" in item.get("notes", "")
+
+        if op == "buy":
+            running_balances[ticker] = running_balances.get(ticker, 0.0) + qty
+            adjusted_canonical_rows.append(item)
+        elif op == "sell":
+            avail = running_balances.get(ticker, 0.0)
+            if is_custody:
+                if avail <= 1e-7:
+                    skipped_items.append(
+                        B3SkippedItem(
+                            line_number=0,
+                            raw_ticker=ticker,
+                            movement_type="Fração em Ativos",
+                            reason="Fração ou ajuste de custódia sem saldo disponível no período do extrato segregado.",
+                        )
+                    )
+                    continue
+                elif qty > avail and not math.isclose(qty, avail, rel_tol=1e-7, abs_tol=1e-7):
+                    item["quantity"] = str(round(avail, 4))
+                    running_balances[ticker] = 0.0
+                    adjusted_canonical_rows.append(item)
+                else:
+                    running_balances[ticker] = max(0.0, avail - qty)
+                    adjusted_canonical_rows.append(item)
+            else:
+                running_balances[ticker] = max(0.0, avail - qty)
+                adjusted_canonical_rows.append(item)
+
+    canonical_rows = adjusted_canonical_rows
 
     # Gerar CSV canônico
     output = io.StringIO(newline="")

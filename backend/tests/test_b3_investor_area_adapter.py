@@ -412,7 +412,6 @@ async def test_duplicate_detection_after_reconciliation():
     assert "duplicate transaction already exists" in res["rows"][0]["errors"]
 
 
-
 def test_subscription_rights_segregated_as_corporate_events():
     from app.services.b3_investor_area_adapter_service import (
         adapt_b3_investor_csv_to_canonical,
@@ -469,7 +468,6 @@ def test_b3_movimentacao_segregates_orphan_fixed_income_resgates_and_sorts_chron
     assert result.canonical_rows[2]["operation"] == "sell"
 
 
-
 def test_b3_movimentacao_incorporates_custody_events_desdobro_and_atualizacao():
     csv_content = (
         "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
@@ -481,7 +479,7 @@ def test_b3_movimentacao_incorporates_custody_events_desdobro_and_atualizacao():
     result = adapt_b3_investor_csv_to_canonical(csv_content)
     assert result.success is True
     assert len(result.canonical_rows) == 4
-    
+
     # Desdobro ALZC11
     alzc = result.canonical_rows[0]
     assert alzc["ticker"] == "ALZC11"
@@ -489,7 +487,7 @@ def test_b3_movimentacao_incorporates_custody_events_desdobro_and_atualizacao():
     assert alzc["quantity"] == "36"
     assert alzc["price"] == "0.01"
     assert "Evento Corporativo: Desdobro" in alzc["notes"]
-    
+
     # Atualização RBRX11 (Credito)
     rbrx_cred = result.canonical_rows[1]
     assert rbrx_cred["ticker"] == "RBRX11"
@@ -532,3 +530,22 @@ def test_normalize_b3_ticker_tesouro_with_broker_string():
         normalize_b3_ticker("TESOURO SELIC 2029 - NTN-B")
         == "TESOURO SELIC 2029"
     )
+
+
+def test_b3_movimentacao_segregates_orphan_custody_fractions_without_balance():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    csv_content = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;10/01/2026;Transferência - Liquidação;PETR4 - PETROLEO BRASILEIRO;INTER DTVM;100;30;3000\n"
+        "Debito;22/01/2026;Fração em Ativos;KLBN3 - KLABIN S/A;INTER DTVM;0,1;0;0\n"
+        "Debito;22/01/2026;Fração em Ativos;KLBN4 - KLABIN S/A;INTER DTVM;0,4;0;0\n"
+    )
+    result = adapt_b3_investor_csv_to_canonical(csv_content)
+    assert result.success is True
+    # PETR4 é mantido e as frações de KLBN3 e KLBN4 sem saldo prévio são segregadas como skipped_items
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "PETR4"
+    assert len(result.skipped_items) == 2
+    assert any("KLBN3" in s.raw_ticker for s in result.skipped_items)
+    assert any("KLBN4" in s.raw_ticker for s in result.skipped_items)
