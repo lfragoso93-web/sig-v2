@@ -548,17 +548,21 @@ async def _validate_persisted_price_history_preflight(
         .outerjoin(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(
             func.upper(Asset.ticker).in_([ticker for ticker, _ in requirements]),
-            Asset.asset_type.in_([asset_type for _, asset_type in requirements]),
         )
         .group_by(Asset.id, Asset.ticker, Asset.asset_type, Asset.last_price)
     )
-    coverage = {
-        (str(row.ticker).strip().upper(), str(row.asset_type).strip().upper()): {
+    all_coverage: dict[tuple[str, str], dict[str, Any]] = {}
+    ticker_coverage: dict[str, list[dict[str, Any]]] = {}
+    for row in assets_result.all():
+        t = str(row.ticker).strip().upper()
+        at = str(row.asset_type).strip().upper()
+        info = {
+            "asset_type": at,
             "last_price": row.last_price,
             "price_rows": int(row.price_rows or 0),
         }
-        for row in assets_result.all()
-    }
+        all_coverage[(t, at)] = info
+        ticker_coverage.setdefault(t, []).append(info)
 
     for row in rows:
         if row.errors or row.warnings:
@@ -567,7 +571,15 @@ async def _validate_persisted_price_history_preflight(
         asset_type = row.data.get("asset_type", "").strip().upper()
         if asset_type not in PRICE_HISTORY_REQUIRED_TYPES:
             continue
-        item = coverage.get((ticker, asset_type))
+        item = all_coverage.get((ticker, asset_type))
+        if item is None:
+            # Reconciliação com o catálogo: se o ticker existe unicamente no catálogo sob outro tipo
+            candidates = ticker_coverage.get(ticker, [])
+            if len(candidates) == 1:
+                item = candidates[0]
+                row.data["asset_type"] = item["asset_type"]
+                asset_type = item["asset_type"]
+
         if item is None:
             row.add_error(
                 f"{ticker} {asset_type} nao elegivel para importacao: ativo nao esta no catalogo persistido"
