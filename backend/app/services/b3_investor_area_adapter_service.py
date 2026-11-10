@@ -722,7 +722,13 @@ def adapt_b3_investor_pdf_to_canonical(pdf_bytes: bytes) -> B3AdaptResult:
             continue
 
         lower_line = line_clean.lower()
-        if any(token in lower_line for token in noise_tokens):
+        # Excluir cabeçalhos de tabela B3 (inteiros ou quebrados em linhas consecutivas)
+        if (
+            ("movimenta" in lower_line and "produto" in lower_line)
+            or ("preço unit" in lower_line or "preco unit" in lower_line)
+            or ("valor da opera" in lower_line)
+            or any(token in lower_line for token in noise_tokens)
+        ):
             continue
 
         buffer_lines.append(line_clean)

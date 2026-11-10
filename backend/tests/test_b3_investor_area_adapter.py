@@ -126,7 +126,7 @@ async def test_import_transactions_csv_with_b3_file_in_dry_run():
             price_rows=1,
         )
     ]
-    db.execute.side_effect = [portfolio_result, duplicate_result, coverage_result]
+    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
 
     b3_bytes = (
         "Data do Negócio;Tipo de Movimentação;Mercado;Prazo/Vencimento;Instituição;Código de Negociação;Quantidade;Preço;Valor\n"
@@ -307,7 +307,7 @@ async def test_catalog_reconciliation_in_dry_run():
             price_rows=120,
         )
     ]
-    db.execute.side_effect = [portfolio_result, duplicate_result, coverage_result]
+    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
 
     # Entrada informando FII erroneamente para DIVD11
     csv_bytes = (
@@ -329,3 +329,69 @@ async def test_catalog_reconciliation_in_dry_run():
     # Auto-reconciliado para ETF_NACIONAL
     assert res["rows"][0]["ticker"] == "DIVD11"
     assert res["rows"][0]["status"] == "valid"
+
+
+def test_adapt_b3_movimentacao_pdf_wrapped_header():
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = (
+        "06 de novembro de 2026\n"
+        "Movimentação Produto\n"
+        "Instituição Quantidade Preço Unitário Valor da Operação\n"
+        "Venda VALE3 - VALE S.A. INTER DISTRIBUIDORA DE TITULOS 50 R$ 70,00 R$ 3.500,00\n"
+    )
+    mock_reader = MagicMock()
+    mock_reader.pages = [mock_page]
+
+    with patch("pypdf.PdfReader", return_value=mock_reader):
+        result = adapt_b3_investor_pdf_to_canonical(b"%PDF-fake-b3-wrapped-header")
+
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "VALE3"
+    assert result.canonical_rows[0]["operation"] == "sell"
+    assert result.canonical_rows[0]["quantity"] == "50"
+    assert result.canonical_rows[0]["price"] == "70.00"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_detection_after_reconciliation():
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
+
+    # Cobertura do catálogo tem DIVD11 como ETF_NACIONAL
+    coverage_result = MagicMock()
+    coverage_result.all.return_value = [
+        SimpleNamespace(
+            ticker="DIVD11",
+            asset_type=AssetType.ETF_NACIONAL.value,
+            last_price=69.89,
+            price_rows=120,
+        )
+    ]
+
+    # Já existe uma transação no banco com ETF_NACIONAL
+    duplicate_result = MagicMock()
+    duplicate_result.scalar_one_or_none.return_value = SimpleNamespace(id=99)
+
+    # Execuções: portfolio_result, coverage_result (preflight primeiro), duplicate_result (depois com tipo reconciliado)
+    db.execute.side_effect = [portfolio_result, coverage_result, duplicate_result]
+
+    csv_bytes = (
+        "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
+        "DIVD11,FII,buy,10,50.00,2026-05-10,0,BRL,teste\n"
+    ).encode("utf-8")
+
+    res = await import_transactions_csv(
+        db=db,
+        portfolio_id=1,
+        user_id=7,
+        file=FakeUpload(csv_bytes),
+        dry_run=True,
+        source="canonical",
+    )
+
+    # Reconciliado para ETF_NACIONAL e então detectado como duplicata existente
+    assert res["success"] is False
+    assert len(res["rows"]) == 1
+    assert "duplicate transaction already exists" in res["rows"][0]["errors"]
