@@ -152,10 +152,12 @@ def normalize_b3_ticker(raw_ticker: str) -> str:
     if cleaned.startswith("TESOURO") or "TESOURO " in cleaned:
         # Normalizar títulos do Tesouro Direto:
         # "TESOURO SELIC 2029 - NTN-B" ou "TESOURO PREFIXADO 2027 INTER DISTRIBUIDORA DE TITULOS..." -> "TESOURO PREFIXADO 2027"
-        match = re.search(r"^(TESOURO\s+.*?\b20\d{2}\b)", cleaned)
-        if match:
-            return match.group(1).strip()
-        return cleaned.split("-")[0].strip()
+        normalized = " ".join(cleaned.split())
+        if normalized.startswith("TESOURO "):
+            year_match = re.search(r"\b20\d{2}\b", normalized)
+            if year_match:
+                return normalized[: year_match.end()].strip()
+        return normalized.split("-")[0].strip()
 
     # Renda Fixa: manter código identificador limpo
     for rf_prefix in ("CDB", "LCI", "LCA", "CRI", "CRA", "DEB", "LIG", "LC", "RDB"):
