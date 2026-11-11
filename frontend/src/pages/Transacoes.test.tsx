@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   useTransactions: vi.fn(),
   useTransactionClasses: vi.fn(),
   useDeleteTransaction: vi.fn(),
+  useBulkDeleteTransactions: vi.fn(),
   usePortfolios: vi.fn(),
   useAppStore: vi.fn(),
 }))
@@ -26,6 +27,7 @@ vi.mock('@/hooks/useTransactions', () => ({
   useTransactions: (portfolioId: number | null, filters?: any) => mocks.useTransactions(portfolioId, filters),
   useTransactionClasses: (portfolioId: number | null) => mocks.useTransactionClasses(portfolioId),
   useDeleteTransaction: () => mocks.useDeleteTransaction(),
+  useBulkDeleteTransactions: () => mocks.useBulkDeleteTransactions(),
 }))
 
 vi.mock('@/components/charts/TransactionsBarChart', () => ({
@@ -47,6 +49,11 @@ describe('Transacoes page with independent per-class pagination', () => {
 
     mocks.useDeleteTransaction.mockReturnValue({
       mutateAsync: vi.fn(),
+      isPending: false,
+    })
+
+    mocks.useBulkDeleteTransactions.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({ deleted_count: 1, earliest_date: '2024-01-15' }),
       isPending: false,
     })
 
@@ -218,6 +225,53 @@ describe('Transacoes page with independent per-class pagination', () => {
           date_to: '2026-06-01',
         }),
       )
+    })
+  })
+it('permite selecionar transacoes e excluir em lote via endpoint bulk-delete', async () => {
+    const bulkMutate = vi.fn().mockResolvedValue({ deleted_count: 1, earliest_date: '2024-01-15' })
+    mocks.useBulkDeleteTransactions.mockReturnValue({
+      mutateAsync: bulkMutate,
+      isPending: false,
+    })
+
+    render(<Transacoes />)
+
+    const checkboxes = screen.getAllByLabelText('Selecionar transação PETR4')
+    fireEvent.click(checkboxes[0])
+
+    expect(screen.getByText('1 transação(ões) selecionada(s)')).toBeTruthy()
+    fireEvent.click(screen.getByText('Excluir selecionadas'))
+    expect(screen.getByText('Excluir 1 transação(ões)?')).toBeTruthy()
+    fireEvent.click(screen.getByText('Excluir em lote'))
+
+    await waitFor(() => {
+      expect(bulkMutate).toHaveBeenCalledWith({
+        portfolioId: 1,
+        data: { transaction_ids: [101] },
+      })
+    })
+  })
+
+  it('permite excluir todas as transacoes filtradas de uma classe em um clique', async () => {
+    const bulkMutate = vi.fn().mockResolvedValue({ deleted_count: 30, earliest_date: '2024-01-15' })
+    mocks.useBulkDeleteTransactions.mockReturnValue({
+      mutateAsync: bulkMutate,
+      isPending: false,
+    })
+
+    render(<Transacoes />)
+
+    fireEvent.click(screen.getByTestId('delete-group-ACAO'))
+    expect(screen.getByText('Excluir 30 transação(ões) de Ações?')).toBeTruthy()
+    fireEvent.click(screen.getByText('Excluir em lote'))
+
+    await waitFor(() => {
+      expect(bulkMutate).toHaveBeenCalledWith({
+        portfolioId: 1,
+        data: expect.objectContaining({
+          asset_type: 'ACAO',
+        }),
+      })
     })
   })
 })

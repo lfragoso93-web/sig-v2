@@ -102,6 +102,7 @@ frontend/
 - **Máscara Monetária Decimal Invertida:** Inclusão de valores no padrão bancário brasileiro (preenchimento da direita para a esquerda em R$) no `AddTransactionModal.tsx`.
 - **Suporte a Lançamentos a Custo R$ 0,00:** Suporte contábil a bonificações de ações e doações.
 - **Filtro Temporal no Extrato:** Seleção por período contábil no histórico de transações.
+- **Seleção Múltipla e Exclusão em Lote:** Checkboxes individuais/por página e ação direta "Excluir grupo" em `Transacoes.tsx` para limpeza instantânea de uma classe ou seleção de transações em uma única requisição.
 - **Evolução Patrimonial Contínua:** Ponto intradiário em tempo real combinando o fechamento histórico a cotações ao vivo no `ResumePage.tsx`.
 
 ### 3.8 Painel de Eventos Corporativos e Leilão de Frações (`PendingCorporateFractionsPanel.tsx`)

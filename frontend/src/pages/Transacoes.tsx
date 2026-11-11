@@ -6,6 +6,8 @@ import {
   useTransactions,
   useTransactionClasses,
   useDeleteTransaction,
+  useBulkDeleteTransactions,
+  type BulkDeleteTransactionsPayload,
   type Transaction,
 } from '@/hooks/useTransactions'
 import { formatBRL, fmtMoney, formatDate, assetBadgeClass } from '@/utils/format'
@@ -48,8 +50,15 @@ function txCurrency(t: Transaction): string {
 }
 
 function TransactionCard({
-  t, onDelete, onEdit, onTickerClick,
-}: { t: Transaction; onDelete: () => void; onEdit: () => void; onTickerClick?: (ticker: string) => void }) {
+  t, selected, onToggleSelect, onDelete, onEdit, onTickerClick,
+}: {
+  t: Transaction
+  selected: boolean
+  onToggleSelect: () => void
+  onDelete: () => void
+  onEdit: () => void
+  onTickerClick?: (ticker: string) => void
+}) {
   const isBuy   = t.operation === 'buy'
   const fees    = t.fees ?? 0
   const total   = t.quantity * t.price + (isBuy ? fees : -fees)
@@ -61,6 +70,13 @@ function TransactionCard({
     <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Selecionar transação ${t.ticker}`}
+            className="rounded cursor-pointer"
+          />
           <button
             type="button"
             onClick={() => onTickerClick?.(t.ticker)}
@@ -90,14 +106,30 @@ function TransactionCard({
 }
 
 function TransactionRow({
-  t, onDelete, onEdit, onTickerClick,
-}: { t: Transaction; onDelete: () => void; onEdit: () => void; onTickerClick?: (ticker: string) => void }) {
+  t, selected, onToggleSelect, onDelete, onEdit, onTickerClick,
+}: {
+  t: Transaction
+  selected: boolean
+  onToggleSelect: () => void
+  onDelete: () => void
+  onEdit: () => void
+  onTickerClick?: (ticker: string) => void
+}) {
   const isBuy    = t.operation === 'buy'
   const fees     = t.fees ?? 0
   const total    = t.quantity * t.price + (isBuy ? fees : -fees)
   const currency = txCurrency(t)
   return (
     <tr>
+      <td className="w-8">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label={`Selecionar transação ${t.ticker}`}
+          className="rounded cursor-pointer"
+        />
+      </td>
       <td className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatDate(t.date)}</td>
       <td>
         <button
@@ -136,6 +168,33 @@ function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => 
         <div className="flex justify-end gap-2">
           <button className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
           <button className="btn" style={{ background: 'var(--color-notification)', color: '#fff' }} onClick={onConfirm} disabled={loading}>{loading ? 'Excluindo...' : 'Excluir'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmBulkDeleteModal({
+  title,
+  description,
+  onCancel,
+  onConfirm,
+  loading,
+}: {
+  title: string
+  description: string
+  onCancel: () => void
+  onConfirm: () => void
+  loading: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'oklch(0 0 0 / 0.45)' }}>
+      <div className="w-full max-w-sm rounded-xl border p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-lg)' }}>
+        <h2 className="text-base font-semibold mb-2">{title}</h2>
+        <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>{description}</p>
+        <div className="flex justify-end gap-2">
+          <button className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
+          <button className="btn" style={{ background: 'var(--color-notification)', color: '#fff' }} onClick={onConfirm} disabled={loading}>{loading ? 'Excluindo...' : 'Excluir em lote'}</button>
         </div>
       </div>
     </div>
@@ -222,6 +281,10 @@ interface ClassSectionProps {
   opFilter: 'todos' | 'buy' | 'sell'
   dateFrom?: string
   dateTo?: string
+  selectedIds: Set<number>
+  onToggleId: (id: number) => void
+  onTogglePageIds: (ids: number[], checkAll: boolean) => void
+  onDeleteGroup: (payload: BulkDeleteTransactionsPayload, descriptionLabel: string, count: number) => void
   onEdit: (t: Transaction) => void
   onDelete: (id: number) => void
   onTickerClick?: (ticker: string) => void
@@ -235,6 +298,10 @@ function ClassSection({
   opFilter,
   dateFrom,
   dateTo,
+  selectedIds,
+  onToggleId,
+  onTogglePageIds,
+  onDeleteGroup,
   onEdit,
   onDelete,
   onTickerClick,
@@ -262,6 +329,8 @@ function ClassSection({
   const items = paged?.items ?? []
   const total = paged?.total ?? 0
   const pages = paged?.pages ?? 1
+  const pageIds = items.map(item => item.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
 
   return (
     <div
@@ -269,7 +338,7 @@ function ClassSection({
       data-testid={`class-section-${assetType}`}
       style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
     >
-      <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-divider)' }}>
+      <div className="px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap" style={{ borderBottom: '1px solid var(--color-divider)' }}>
         <button
           type="button"
           className="flex items-center gap-2 text-left"
@@ -284,12 +353,37 @@ function ClassSection({
           <span className="text-xs font-semibold">{label}</span>
           <span className="text-xs text-muted">· {total} registro{total !== 1 ? 's' : ''}</span>
         </button>
-        <input
-          className="input input-xs w-32"
-          placeholder="Buscar no grupo…"
-          value={groupSearch}
-          onChange={e => setGroupSearch(e.target.value)}
-        />
+        <div className="flex items-center gap-2">
+          {total > 0 && (
+            <button
+              type="button"
+              data-testid={`delete-group-${assetType}`}
+              onClick={() => onDeleteGroup(
+                {
+                  asset_type: assetType,
+                  ticker: activeTicker,
+                  operation: opFilter !== 'todos' ? opFilter : undefined,
+                  date_from: dateFrom,
+                  date_to: dateTo,
+                },
+                label,
+                total,
+              )}
+              className="btn btn-ghost text-[11px] px-2 py-1 rounded flex items-center gap-1"
+              style={{ color: 'var(--color-notification)' }}
+              title={`Excluir todos os ${total} registro(s) filtrados de ${label}`}
+            >
+              <Trash2 size={12} />
+              <span>Excluir grupo</span>
+            </button>
+          )}
+          <input
+            className="input input-xs w-32"
+            placeholder="Buscar no grupo…"
+            value={groupSearch}
+            onChange={e => setGroupSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {open && (
@@ -312,6 +406,8 @@ function ClassSection({
                   <TransactionCard
                     key={t.id}
                     t={t}
+                    selected={selectedIds.has(t.id)}
+                    onToggleSelect={() => onToggleId(t.id)}
                     onDelete={() => onDelete(t.id)}
                     onEdit={() => onEdit(t)}
                     onTickerClick={onTickerClick}
@@ -324,6 +420,15 @@ function ClassSection({
                 <table className="positions-table">
                   <thead>
                     <tr>
+                      <th className="w-8">
+                        <input
+                          type="checkbox"
+                          checked={allPageSelected}
+                          onChange={e => onTogglePageIds(pageIds, e.target.checked)}
+                          aria-label={`Selecionar página de ${label}`}
+                          className="rounded cursor-pointer"
+                        />
+                      </th>
                       <th>Data</th>
                       <th>Ativo</th>
                       <th>Tipo</th>
@@ -340,6 +445,8 @@ function ClassSection({
                       <TransactionRow
                         key={t.id}
                         t={t}
+                        selected={selectedIds.has(t.id)}
+                        onToggleSelect={() => onToggleId(t.id)}
                         onDelete={() => onDelete(t.id)}
                         onEdit={() => onEdit(t)}
                         onTickerClick={onTickerClick}
@@ -400,7 +507,18 @@ export default function Transacoes() {
   const globalTransactions = globalPaged?.items ?? []
   const totalRecords = globalPaged?.total ?? 0
   const deleteTransaction = useDeleteTransaction()
+  const bulkDeleteTransactions = useBulkDeleteTransactions()
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    payload: BulkDeleteTransactionsPayload
+    title: string
+    description: string
+  } | null>(null)
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [selectedPortfolioId])
 
   useEffect(() => {
     const ticker = searchParams.get('ticker')
@@ -434,7 +552,46 @@ export default function Transacoes() {
   async function handleDelete(id: number) {
     if (!selectedPortfolioId) return
     await deleteTransaction.mutateAsync({ id, portfolioId: selectedPortfolioId })
+    setSelectedIds(prev => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
     setConfirmDelete(null)
+  }
+
+  function handleToggleId(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function handleTogglePageIds(ids: number[], checkAll: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (checkAll) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }
+
+  async function handleBulkDeleteConfirm() {
+    if (!selectedPortfolioId || !bulkConfirm) return
+    await bulkDeleteTransactions.mutateAsync({
+      portfolioId: selectedPortfolioId,
+      data: bulkConfirm.payload,
+    })
+    setSelectedIds(new Set())
+    setBulkConfirm(null)
   }
 
   if (!selectedPortfolioId) {
@@ -518,6 +675,38 @@ export default function Transacoes() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div
+          className="rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap"
+          style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
+        >
+          <span className="text-xs font-medium">
+            {selectedIds.size} transação(ões) selecionada(s)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary text-xs"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Limpar seleção
+            </button>
+            <button
+              type="button"
+              className="btn text-xs"
+              style={{ background: 'var(--color-notification)', color: '#fff' }}
+              onClick={() => setBulkConfirm({
+                payload: { transaction_ids: Array.from(selectedIds) },
+                title: `Excluir ${selectedIds.size} transação(ões)?`,
+                description: 'Todas as transações selecionadas serão removidas em lote com recálculo único do histórico.',
+              })}
+            >
+              Excluir selecionadas
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         {loadingClasses || loadingGlobal ? (
           <div className="card p-4 flex flex-col gap-3">
@@ -542,6 +731,14 @@ export default function Transacoes() {
                 opFilter={opFilter}
                 dateFrom={dateRange.dateFrom}
                 dateTo={dateRange.dateTo}
+                selectedIds={selectedIds}
+                onToggleId={handleToggleId}
+                onTogglePageIds={handleTogglePageIds}
+                onDeleteGroup={(payload, groupLabel, count) => setBulkConfirm({
+                  payload,
+                  title: `Excluir ${count} transação(ões) de ${groupLabel}?`,
+                  description: 'Todos os registros filtrados desse grupo serão excluídos em lote com recálculo único do histórico.',
+                })}
                 onEdit={handleEdit}
                 onDelete={id => setConfirmDelete(id)}
                 onTickerClick={setSelectedTicker}
@@ -565,6 +762,16 @@ export default function Transacoes() {
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => handleDelete(confirmDelete)}
           loading={deleteTransaction.isPending}
+        />
+      )}
+
+      {bulkConfirm !== null && (
+        <ConfirmBulkDeleteModal
+          title={bulkConfirm.title}
+          description={bulkConfirm.description}
+          onCancel={() => setBulkConfirm(null)}
+          onConfirm={handleBulkDeleteConfirm}
+          loading={bulkDeleteTransactions.isPending}
         />
       )}
 

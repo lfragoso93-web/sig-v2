@@ -1,10 +1,11 @@
+import asyncio
 import logging
 import math
 from datetime import date, date as DateType
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
@@ -13,7 +14,10 @@ from app.core.deps import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
-from app.repositories.portfolio_access_repository import get_accessible_transaction
+from app.repositories.portfolio_access_repository import (
+    get_accessible_portfolio,
+    get_accessible_transaction,
+)
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.schemas.transaction import (
     CorporateLifecycleEventOut,
@@ -24,6 +28,8 @@ from app.schemas.transaction import (
     TransactionUpdate,
     UpcomingCorporateEventOut,
     PortfolioCorporateRightOut,
+    TransactionBulkDeleteRequest,
+    TransactionBulkDeleteResponse,
 )
 from app.services.portfolio_asset_corporate_lifecycle_service import (
     READ_PORTFOLIO_CORPORATE_LIFECYCLE,
@@ -39,6 +45,13 @@ from app.services.crypto_transaction_eligibility_service import (
     require_catalog_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
+from app.services.portfolio_snapshot_rebuild_queue import (
+    get_coalesce_delay_seconds,
+    get_portfolio_snapshot_lock,
+    pop_next_snapshot_rebuild_date,
+    register_snapshot_rebuild_request,
+    release_snapshot_rebuild_worker,
+)
 from app.services.transaction_service import (
     list_portfolio_transaction_classes,
     list_transactions_paginated,
@@ -531,57 +544,161 @@ async def delete_transaction(
     )
 
 
+@router.post(
+    "/{portfolio_id}/transactions/bulk-delete",
+    response_model=TransactionBulkDeleteResponse,
+)
+async def bulk_delete_transactions(
+    portfolio_id: int,
+    payload: TransactionBulkDeleteRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = _transaction_write_access(portfolio_id, current_user)
+    try:
+        await get_accessible_portfolio(
+            db,
+            access,
+            required_permission=WRITE_PORTFOLIO_TRANSACTIONS,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.") from exc
+
+    has_ids = bool(payload.transaction_ids)
+    has_filters = any(
+        val is not None and (not isinstance(val, str) or bool(val.strip()))
+        for val in (
+            payload.asset_type,
+            payload.ticker,
+            payload.operation,
+            payload.date_from,
+            payload.date_to,
+        )
+    )
+    if not has_ids and not has_filters:
+        raise HTTPException(
+            status_code=422,
+            detail="Informe transaction_ids ou ao menos um filtro para exclusao em lote.",
+        )
+
+    stmt = select(Transaction.id, Transaction.date).where(Transaction.portfolio_id == portfolio_id)
+    if payload.transaction_ids:
+        stmt = stmt.where(Transaction.id.in_(payload.transaction_ids))
+    if payload.asset_type:
+        stmt = stmt.where(func.upper(Transaction.asset_type) == payload.asset_type.strip().upper())
+    if payload.ticker and payload.ticker.strip():
+        t = payload.ticker.strip().upper()
+        base_t = normalize_b3_equity_ticker(t)
+        if base_t != t:
+            stmt = stmt.where(Transaction.ticker.in_([t, base_t]))
+        else:
+            stmt = stmt.where(Transaction.ticker == t)
+    if payload.operation:
+        stmt = stmt.where(Transaction.operation == _to_operation(payload.operation))
+    if payload.date_from:
+        stmt = stmt.where(Transaction.date >= payload.date_from)
+    if payload.date_to:
+        stmt = stmt.where(Transaction.date <= payload.date_to)
+
+    rows = (await db.execute(stmt)).all()
+    if not rows:
+        return TransactionBulkDeleteResponse(deleted_count=0, earliest_date=None)
+
+    tx_ids = [row[0] for row in rows]
+    earliest_date = min(row[1] for row in rows)
+
+    await db.execute(
+        delete(Transaction).where(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.id.in_(tx_ids),
+        )
+    )
+    await db.commit()
+
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=earliest_date,
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
+
+    return TransactionBulkDeleteResponse(
+        deleted_count=len(tx_ids),
+        earliest_date=earliest_date,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Background tasks locais
 # ---------------------------------------------------------------------------
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
-    try:
-        from app.services.portfolio_class_snapshot_service import (
-            rebuild_class_snapshots,
+    if not register_snapshot_rebuild_request(portfolio_id, tx_date):
+        log.info(
+            "[snapshot_backfill] portfolio=%s coalescido com worker ativo (tx_date=%s)",
+            portfolio_id,
+            tx_date,
         )
-        from app.services.portfolio_snapshot_canonical_twr_service import (
-            backfill_canonical_snapshots_with_returns,
-        )
-        from app.services.portfolio_snapshot_service import invalidate_snapshots_from
-        from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
+        return
 
-        async with AsyncSessionLocal() as db:
-            deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date, commit=True)
-            log.info(
-                (
-                    "[snapshot_backfill] portfolio=%s invalida a partir de %s "
-                    "(%s removidos)"
-                ),
-                portfolio_id,
-                tx_date,
-                deleted,
+    try:
+        lock = get_portfolio_snapshot_lock(portfolio_id)
+        async with lock:
+            delay = get_coalesce_delay_seconds()
+            if delay > 0:
+                await asyncio.sleep(delay)
+
+            from app.services.portfolio_class_snapshot_service import (
+                rebuild_class_snapshots,
             )
-            count = await backfill_canonical_snapshots_with_returns(
-                db=db,
-                portfolio_id=portfolio_id,
+            from app.services.portfolio_snapshot_canonical_twr_service import (
+                backfill_canonical_snapshots_with_returns,
             )
-            class_count = await rebuild_class_snapshots(
-                db=db,
-                portfolio_id=portfolio_id,
-            )
-            remaining_tx_res = await db.execute(
-                select(Transaction.id).where(Transaction.portfolio_id == portfolio_id).limit(1)
-            )
-            if remaining_tx_res.scalar_one_or_none() is None:
-                from sqlalchemy import delete
-                from app.models.portfolio_snapshot import PortfolioSnapshot
-                from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
-                await db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id))
-                await db.execute(delete(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == portfolio_id))
-            await db.commit()
-            await invalidate_rentabilidade_cache(portfolio_id)
-            log.info(
-                "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",
-                portfolio_id,
-                count,
-                class_count,
-            )
+            from app.services.portfolio_snapshot_service import invalidate_snapshots_from
+            from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
+
+            while (next_date := pop_next_snapshot_rebuild_date(portfolio_id)) is not None:
+                async with AsyncSessionLocal() as db:
+                    deleted = await invalidate_snapshots_from(db, portfolio_id, next_date, commit=True)
+                    log.info(
+                        (
+                            "[snapshot_backfill] portfolio=%s invalida a partir de %s "
+                            "(%s removidos)"
+                        ),
+                        portfolio_id,
+                        next_date,
+                        deleted,
+                    )
+                    count = await backfill_canonical_snapshots_with_returns(
+                        db=db,
+                        portfolio_id=portfolio_id,
+                    )
+                    class_count = await rebuild_class_snapshots(
+                        db=db,
+                        portfolio_id=portfolio_id,
+                    )
+                    remaining_tx_res = await db.execute(
+                        select(Transaction.id).where(Transaction.portfolio_id == portfolio_id).limit(1)
+                    )
+                    if remaining_tx_res.scalar_one_or_none() is None:
+                        from app.models.portfolio_snapshot import PortfolioSnapshot
+                        from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
+                        await db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id))
+                        await db.execute(delete(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == portfolio_id))
+                    await db.commit()
+                    await invalidate_rentabilidade_cache(portfolio_id)
+                    log.info(
+                        "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",
+                        portfolio_id,
+                        count,
+                        class_count,
+                    )
     except Exception as exc:
         log.error("[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc)
+    finally:
+        release_snapshot_rebuild_worker(portfolio_id)

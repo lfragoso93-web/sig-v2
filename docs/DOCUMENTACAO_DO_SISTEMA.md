@@ -200,6 +200,7 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
   - Suporte formal a lançamentos com custo R$ 0,00 (bonificações de ações, doações, transferências de custódia).
   - Suporte a alta precisão decimal para ativos fracionados e criptomoedas.
   - Normalização automática de ativos da B3 (reconhecimento e agrupamento de códigos com final `F`).
+- Seleção múltipla por checkboxes e exclusão em lote de lançamentos ou por classe/grupo filtrada (`POST /api/v1/portfolios/{id}/transactions/bulk-delete`), com reconstrução de snapshots serializada e coalescida em segundo plano.
 
 #### Rentabilidade Avançada (`RentabilidadePage.tsx`)
 - Implementação rigorosa do método **Time-Weighted Return (TWR)**, recomendação internacional do CFA Institute (GIPS).

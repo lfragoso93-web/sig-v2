@@ -179,3 +179,37 @@ export function useDeleteTransaction() {
     onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }
+
+export interface BulkDeleteTransactionsPayload {
+  transaction_ids?: number[]
+  asset_type?: string
+  ticker?: string
+  operation?: 'buy' | 'sell'
+  date_from?: string
+  date_to?: string
+}
+
+export interface BulkDeleteTransactionsResponse {
+  deleted_count: number
+  earliest_date: string | null
+}
+
+export function useBulkDeleteTransactions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      portfolioId,
+      data,
+    }: {
+      portfolioId: number
+      data: BulkDeleteTransactionsPayload
+    }) =>
+      api
+        .post<BulkDeleteTransactionsResponse>(
+          `/portfolios/${portfolioId}/transactions/bulk-delete`,
+          data,
+        )
+        .then(r => r.data),
+    onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
+  })
+}
