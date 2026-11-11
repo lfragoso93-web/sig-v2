@@ -470,9 +470,9 @@ def adapt_b3_rows_to_canonical(
                 dt = parse_b3_date(r_dt)
                 qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
                 ee_u = r_ee.strip().upper()
-                if "CRED" in ee_u or "ENTRADA" in ee_u or "BUY" in ee_u:
+                if any(w in ee_u for w in ("CRED", "CRÉD", "ENTRADA", "BUY")):
                     pure_transfers_by_key[(dt, tk)]["CRED"].append((l_idx, qt))
-                elif "DEB" in ee_u or "SAIDA" in ee_u or "SAÍDA" in ee_u or "SELL" in ee_u:
+                elif any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")):
                     pure_transfers_by_key[(dt, tk)]["DEB"].append((l_idx, qt))
         except Exception:
             pass

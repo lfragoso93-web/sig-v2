@@ -622,8 +622,8 @@ def test_b3_movimentacao_unpaired_transfers_and_unit_fraction_dismantling():
         "Debito;08/01/2026;Transferência - Liquidação;KLBN11 - KLABIN S/A;INTER DTVM;10;18,70;187,00\n"
         "Debito;22/01/2026;Fração em Ativos;KLBN3 - KLABIN S/A;INTER DTVM;0,1;-;-\n"
         "Debito;22/01/2026;Fração em Ativos;KLBN4 - KLABIN S/A;INTER DTVM;0,4;-;-\n"
-        "Debito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
-        "Credito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
+        "Débito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
+        "Crédito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
     )
     res = adapt_b3_investor_csv_to_canonical(csv_content)
     assert res.success is True, res.errors
