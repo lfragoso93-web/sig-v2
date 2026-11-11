@@ -1,9 +1,9 @@
 -r requirements.txt
 pytest==9.2.0
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1.post1
 aiosqlite==0.22.1
 httpx==0.28.1
 flake8==7.5.0
 mypy==2.4.1
 types-passlib==1.7.7.20260211
-sqlalchemy[asyncio,mypy]==2.1.6
+sqlalchemy[asyncio,mypy]==2.1.8

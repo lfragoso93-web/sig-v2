@@ -8,7 +8,7 @@
 
 Plataforma corporativa e determinística para acompanhamento, consolidação patrimonial, rentabilidade ponderada pelo tempo (TWR), Proventos, apuração fiscal de IRPF e simulação financeira de carteiras multiclasse.
 - **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261105_purge_cert_entities`, 70 revisões), PostgreSQL 16, Redis 7 e APScheduler (12 jobs canônicos).
-- **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`), Vite 8 (`^8.3.4`), Tailwind CSS v4 (`^4.3.3`), TanStack Query v5, Zustand e Vitest.
+- **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`, major 7 bloqueado até compatibilidade do `typescript-eslint`), Vite 8 (`^8.3.6`), Tailwind CSS v4 (`^4.3.4`), TanStack Query v5 (`^5.106.1`), Zustand e Vitest.
 
 ## Ambientes de desenvolvimento e producao
 
@@ -41,7 +41,7 @@ Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICA
 
 ## Funcionalidades e baseline de produção
 
-A baseline confirmada em produção nesta revisão é a **PR #543** no SHA `93f7a2b2`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261105_purge_cert_entities` (70 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
+A baseline confirmada em produção nesta revisão é a **PR #558** no SHA `92a3c2f2`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261105_purge_cert_entities` (70 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
 
 ### Funcionalidades Implementadas e Ativas
 

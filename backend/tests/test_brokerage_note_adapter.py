@@ -127,3 +127,22 @@ def test_adapt_sinacor_fee_rounding_reconciliation_exact_sum():
     assert len(result.canonical_rows) == 3
     sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
     assert sum_fees == Decimal("0.01")
+
+
+def test_adapt_sinacor_handles_pathological_whitespace_linearly():
+    import time
+
+    tab_flood = "C" + ("\t" * 5000) + "WEGE3" + ("\t,\t," * 1000)
+    note_text = (
+        "NOTA DE NEGOCIA??O\n"
+        "Data preg?o: 10/01/2024\n"
+        f"{tab_flood}\n"
+        "C WEGE3 ON 10 35,00\n"
+    )
+    started = time.monotonic()
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.0
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"

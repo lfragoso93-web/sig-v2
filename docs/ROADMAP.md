@@ -1,18 +1,19 @@
 # Roadmap atual do SGI v2
 
-> Revisado em 09/11/2026. Este é o índice vivo de próximas atividades. Inventários antigos permanecem em `history/` e não representam o estado atual das Issues, PRs ou do runtime.
+> Revisado em 11/11/2026. Este é o índice vivo de próximas atividades. Inventários antigos permanecem em `history/` e não representam o estado atual das Issues, PRs ou do runtime.
 
 ## Ambientes e releases
 
 - Desenvolvimento e validação local: Windows, branch `stable-15jun`.
 - Produção: OCI, branch `main`.
 - Alterações passam por validação local e Pull Request para `main`. O merge com CI aprovado dispara o deploy automático, com backup pré-deploy e verificação de identidade, smoke e `/ready`.
-- O SHA implantado mais recentemente confirmado nesta revisão é `93f7a2b2` (PR #543). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
+- O SHA implantado mais recentemente confirmado nesta revisão é `92a3c2f2` (PR #558). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
 - A branch desta atividade parte de `stable-15jun` e incorpora `origin/main` antes da validação; os ponteiros remotos não são reescritos.
 
 ## Entregas concluídas
 
-- **Release de Produção PR #543 / SHA `93f7a2b2`:** Deploy validado via GitHub Actions na infraestrutura OCI com certificação aprovada.
+- **Atualização de Dependências e Segurança Estática (Dependabot + CodeQL):** Consolidação das atualizações compatíveis de backend (`sqlalchemy 2.1.8`, `pydantic 2.14.3`, `python-multipart 0.0.33`, `pytest-asyncio 1.4.1.post1`) e frontend (`@tanstack/react-query ^5.106.1`, `react-hook-form ^7.91.0`, `eslint ^10.14.0`, `jsdom ^31.0.0`, `vite ^8.3.6`, `@vitejs/plugin-react ^6.2.1`, `tailwindcss ^4.3.4`), retenção de TypeScript `^6.0.3` no `dependabot.yml` até suporte ao v7 pelo `typescript-eslint`, e eliminação de backtracking polinomial (ReDoS) no parser Sinacor (`brokerage_note_adapter_service.py`).
+- **Release de Produção PR #558 / SHA `92a3c2f2`:** Deploy validado via GitHub Actions na infraestrutura OCI com certificação aprovada (precedido por PRs #543-#557).
 - **Regra Obrigatória de Documentação Contínua e Viva:** Estabelecido o invariante de que qualquer instrução, refatoração, funcionalidade ou migração deve atualizar toda a documentação relevante (READMEs, ROADMAP, DOCUMENTACAO_DO_SISTEMA e manuais) no mesmo bloco de trabalho.
 - **Suite Avançada de Ferramentas e IA (PRs #518, #521, #522, #523, #532):**
   - Comparador de Ativos com visualização simultânea de até 5 ativos lado a lado;

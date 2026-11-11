@@ -32,18 +32,90 @@ except ImportError:
 _ODD_LOT_PATTERN = re.compile(r"^([A-Z]{4}\d{1,2})F$")
 _TICKER_EXTRACT_PATTERN = re.compile(r"\b([A-Z]{4}\d{1,2}[A-Z]?)\b")
 
-# Padrão da linha de negócio Sinacor:
-# [1-BOVESPA|BOVESPA] [C|V] [VISTA|FRACIONARIO|OPCAO|TERMO] <ESPECIFICAÇÃO> <QUANTIDADE> <PREÇO> <VALOR TOTAL> [D|C]
-_SINACOR_TRADE_LINE_PATTERN = re.compile(
-    r"^\s*(?:1-BOVESPA|BOVESPA|2-BOLSA|BOLSA)?\s*([CV])\s+"
-    r"(?:VISTA|FRACIONARIO|FRACIONÁRIO|OPCAO|OPÇÃO|TERMO|EXERC\s+OPCAO)?\s*"
-    r"(.*?)\s+"
-    r"([\d.,]+)\s+"
-    r"([\d.,]+)\s+"
-    r"([\d.,]+)\s*"
-    r"([DC])?\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
+_B3_NUMBER_TOKEN_PATTERN = re.compile(r"^[0-9][0-9.,]*$")
+_EXCHANGE_TOKENS = frozenset({"1-BOVESPA", "BOVESPA", "2-BOLSA", "BOLSA"})
+_MARKET_TOKENS = frozenset({"VISTA", "FRACIONARIO", "FRACION?RIO", "OPCAO", "OP??O", "TERMO"})
+
+
+def _is_b3_number_token(token: str) -> bool:
+    return bool(_B3_NUMBER_TOKEN_PATTERN.fullmatch(token))
+
+
+def _parse_sinacor_trade_line(
+    line: str,
+    *,
+    require_total: bool,
+) -> tuple[str, str, str, str, str] | None:
+    """Extrai opera??o Sinacor de uma linha em tempo linear sem backtracking polinomial."""
+    tokens = line.split()
+    if not tokens:
+        return None
+
+    idx = 0
+    if require_total and tokens[idx].upper() in _EXCHANGE_TOKENS:
+        idx += 1
+
+    if idx >= len(tokens):
+        return None
+
+    cv = tokens[idx].upper()
+    if cv not in {"C", "V"}:
+        return None
+    idx += 1
+
+    if idx < len(tokens):
+        upper_tok = tokens[idx].upper()
+        if upper_tok in _MARKET_TOKENS:
+            idx += 1
+        elif (
+            require_total
+            and upper_tok == "EXERC"
+            and idx + 1 < len(tokens)
+            and tokens[idx + 1].upper() in {"OPCAO", "OP??O"}
+        ):
+            idx += 2
+
+    remaining = tokens[idx:]
+    if not remaining:
+        return None
+
+    if require_total:
+        if remaining[-1].upper() in {"D", "C"}:
+            remaining = remaining[:-1]
+        if len(remaining) < 4:
+            return None
+        qty_str, price_str, total_str = remaining[-3], remaining[-2], remaining[-1]
+        if not (
+            _is_b3_number_token(qty_str)
+            and _is_b3_number_token(price_str)
+            and _is_b3_number_token(total_str)
+        ):
+            return None
+        spec = " ".join(remaining[:-3]).strip()
+        if not spec:
+            return None
+        return cv, spec, qty_str, price_str, total_str
+
+    num_start: int | None = None
+    for pos in range(1, len(remaining) - 1):
+        if _is_b3_number_token(remaining[pos]) and _is_b3_number_token(remaining[pos + 1]):
+            num_start = pos
+            break
+    if num_start is None:
+        return None
+
+    spec = " ".join(remaining[:num_start]).strip()
+    if not spec:
+        return None
+    qty_str = remaining[num_start]
+    price_str = remaining[num_start + 1]
+    total_str = (
+        remaining[num_start + 2]
+        if num_start + 2 < len(remaining) and _is_b3_number_token(remaining[num_start + 2])
+        else ""
+    )
+    return cv, spec, qty_str, price_str, total_str
+
 
 # Identificação de cabeçalho de Nota de Corretagem
 _NOTE_HEADER_KEYWORDS = (
@@ -261,43 +333,34 @@ def adapt_brokerage_note_to_canonical(raw_input: str | bytes) -> BrokerageNoteAd
     skipped_items: list[BrokerageSkippedItem] = []
     errors: list[str] = []
 
-    # Localizar linhas de negociação Sinacor
-    matches = list(_SINACOR_TRADE_LINE_PATTERN.finditer(text))
+    # Localizar linhas de negocia??o Sinacor (an?lise linear por tokens sem backtracking)
+    parsed_matches: list[tuple[str, str, str, str, str]] = [
+        parsed
+        for line in text.splitlines()
+        if (parsed := _parse_sinacor_trade_line(line, require_total=True)) is not None
+    ]
 
-    if not matches:
-        # Tentar parsing linha a linha alternativo se regex tabular estrito falhar
-        for idx, line in enumerate(text.splitlines(), start=1):
-            line_str = line.strip()
-            if not line_str:
-                continue
-            # Linhas que parecem negócio: "C" ou "V", ticker de 4-6 chars, quantidade e preço
-            alt_m = re.match(
-                r"^([CV])\s+(?:VISTA|FRACION[AÁ]RIO)?\s*(.*?)\s+([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?",
-                line_str,
-                re.IGNORECASE,
-            )
-            if alt_m:
-                matches.append(alt_m)
+    if not parsed_matches:
+        # Fallback alternativo para linhas com 2 ou 3 colunas num?ricas
+        parsed_matches = [
+            parsed
+            for line in text.splitlines()
+            if (parsed := _parse_sinacor_trade_line(line, require_total=False)) is not None
+        ]
 
-    if not matches:
+    if not parsed_matches:
         return BrokerageNoteAdaptResult(
             success=False,
             format_detected="brokerage_note_unknown",
-            errors=["Nenhuma operação de compra/venda identificada na nota de corretagem."],
+            errors=["Nenhuma opera??o de compra/venda identificada na nota de corretagem."],
         )
 
-    # Coletar dados preliminares das operações para rateio proporcional de taxas
+    # Coletar dados preliminares das opera??es para rateio proporcional de taxas
     parsed_trades: list[dict[str, Any]] = []
     total_volume = Decimal("0")
 
-    for idx, m in enumerate(matches, start=1):
+    for idx, (cv, spec, qty_str, price_str, total_str) in enumerate(parsed_matches, start=1):
         try:
-            cv = m.group(1).upper()
-            spec = m.group(2).strip()
-            qty_str = m.group(3).strip()
-            price_str = m.group(4).strip()
-            total_str = m.group(5).strip() if len(m.groups()) >= 5 and m.group(5) else ""
-
             # Extrair ticker da especificação
             ticker_match = _TICKER_EXTRACT_PATTERN.search(spec)
             if ticker_match:
