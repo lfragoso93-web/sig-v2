@@ -74,6 +74,7 @@ async def build_positions_at(
         transactions=transactions,
         actions_by_ticker=actions_by_ticker,
         target_date=target_date,
+        include_corporate_action_cash_flows=True,
     )
 
     states: dict[str, TickerState] = {}

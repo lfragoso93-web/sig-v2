@@ -92,7 +92,7 @@ async def apply_portfolio_corporate_fraction_settlements(
         next_actions: list[NormalizedCorporateAction] = []
         for action in actions:
             settlement = settlements.get(action.source_event_id)
-            if settlement is None or action.component_bonus is not None:
+            if settlement is None:
                 next_actions.append(action)
                 continue
             prior = action.fractional_resolution
@@ -100,6 +100,7 @@ async def apply_portfolio_corporate_fraction_settlements(
                 policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
                 fractional_quantity=(prior.fractional_quantity if prior is not None else None),
                 settlement_gross_amount_brl=Decimal(str(settlement.gross_amount_brl)),
+                settlement_date=settlement.settlement_date,
                 cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
                 ledger_basis=(prior.ledger_basis if prior is not None else None),
                 fraction_is_post_event_quantity=bool(

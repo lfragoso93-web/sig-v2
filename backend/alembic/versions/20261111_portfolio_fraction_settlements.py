@@ -60,7 +60,12 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_portfolio_corp_fraction_settlements_portfolio_id",
+        "ix_portfolio_corporate_fraction_settlements_id",
+        "portfolio_corporate_fraction_settlements",
+        ["id"],
+    )
+    op.create_index(
+        "ix_portfolio_corporate_fraction_settlements_portfolio_id",
         "portfolio_corporate_fraction_settlements",
         ["portfolio_id"],
     )
@@ -68,7 +73,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_portfolio_corp_fraction_settlements_portfolio_id",
+        "ix_portfolio_corporate_fraction_settlements_portfolio_id",
+        table_name="portfolio_corporate_fraction_settlements",
+    )
+    op.drop_index(
+        "ix_portfolio_corporate_fraction_settlements_id",
         table_name="portfolio_corporate_fraction_settlements",
     )
     op.drop_table("portfolio_corporate_fraction_settlements")

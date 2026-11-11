@@ -11,7 +11,11 @@ from decimal import Decimal
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_engine import NormalizedCorporateAction
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolutionPolicy,
+)
 from app.services.position_timeline_projection import (
+    CanonicalCorporateActionCashFlow,
     PositionMovement,
     PositionMovementKind,
     PositionTimelineProjection,
@@ -107,9 +111,56 @@ def project_transaction_timelines(
             through_date=target_date,
         )
         if ticker in bonus_cash_rights:
+            ticker_rights = list(bonus_cash_rights[ticker])
+            confirmed_flows: list[CanonicalCorporateActionCashFlow] = []
+            extra_realized = Decimal(0)
+            for comp_action in actions_by_ticker.get(ticker, ()):
+                res = comp_action.fractional_resolution
+                if (
+                    comp_action.component_bonus is None
+                    or res is None
+                    or res.policy != FractionalResolutionPolicy.CASH_SETTLEMENT
+                    or res.settlement_gross_amount_brl is None
+                ):
+                    continue
+                matching = [
+                    r for r in ticker_rights if r.source_event_id == comp_action.source_event_id
+                ]
+                frac_qty = sum((r.quantity for r in matching), Decimal(0))
+                if frac_qty <= 0:
+                    continue
+                effective_cash_date = (
+                    res.settlement_date or matching[0].settlement_date or comp_action.event_date
+                )
+                if effective_cash_date > target_date:
+                    continue
+                frac_cost = sum((r.attributed_cost_brl for r in matching), Decimal(0))
+                gross = Decimal(str(res.settlement_gross_amount_brl))
+                realized = gross - frac_cost
+                extra_realized += realized
+                confirmed_flows.append(
+                    CanonicalCorporateActionCashFlow(
+                        source_event_id=comp_action.source_event_id,
+                        event_date=effective_cash_date,
+                        fractional_quantity=frac_qty,
+                        unit_settlement_price_brl=gross / frac_qty,
+                        gross_amount_brl=gross,
+                        cash_treatment=str(res.cash_treatment or "PORTFOLIO_USER_CONFIRMED_AUCTION"),
+                        cost_basis_brl=frac_cost,
+                        realized_pnl_brl=realized,
+                    )
+                )
+                ticker_rights = [
+                    replace(r, status="CONFIRMED")
+                    if r.source_event_id == comp_action.source_event_id
+                    else r
+                    for r in ticker_rights
+                ]
             result = replace(
                 result,
-                component_bonus_cash_rights=bonus_cash_rights[ticker],
+                realized_pnl=result.realized_pnl + extra_realized,
+                corporate_action_cash_flows=result.corporate_action_cash_flows + tuple(confirmed_flows),
+                component_bonus_cash_rights=tuple(ticker_rights),
             )
         asset_type, is_usd = metadata[ticker]
         projected[ticker] = (result, asset_type, is_usd)
@@ -123,8 +174,9 @@ def project_snapshot_positions(
     actions_by_ticker: Mapping[str, Sequence[NormalizedCorporateAction]],
     target_date: date,
     include_pending_fractions: bool = False,
+    include_corporate_action_cash_flows: bool = False,
 ) -> dict[str, tuple[PositionTimelineProjection, str, bool]]:
-    """Projeta posições abertas e, opcionalmente, pendências fracionárias."""
+    """Projeta posições abertas e, opcionalmente, pendências ou fluxos liquidados."""
 
     projected = project_transaction_timelines(
         transactions=transactions,
@@ -138,5 +190,12 @@ def project_snapshot_positions(
         or (
             include_pending_fractions
             and item[0].pending_corporate_action_fractions
+        )
+        or (
+            include_corporate_action_cash_flows
+            and (
+                item[0].corporate_action_cash_flows
+                or item[0].realized_pnl != 0
+            )
         )
     }

@@ -161,7 +161,7 @@ async def _base_totals_without_dedicated_lookup(
     for ticker, state in positions.items():
         current_type = persisted_types.get(ticker) or _asset_type(state.asset_type)
         effective_types[ticker] = current_type
-        if current_type not in _NON_MARKET_TYPES:
+        if state.qty > 0 and current_type not in _NON_MARKET_TYPES:
             requirements.append((ticker, current_type))
 
     if requirements:
@@ -195,7 +195,9 @@ async def _base_totals_without_dedicated_lookup(
     for ticker, state in positions.items():
         current_type = effective_types[ticker]
         average_price = _average_price_from_state(state)
-        if current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
+        if state.qty <= 0:
+            close = _ZERO
+        elif current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
             close = average_price
         else:
             close = Decimal(str(prices[ticker.upper()]))

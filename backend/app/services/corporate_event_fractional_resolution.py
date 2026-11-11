@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
@@ -23,3 +24,4 @@ class FractionalResolution:
     ledger_basis: str | None = None
     fraction_is_post_event_quantity: bool = False
     settlement_gross_amount_brl: Decimal | None = None
+    settlement_date: date | None = None

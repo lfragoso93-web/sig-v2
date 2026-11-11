@@ -301,7 +301,8 @@ def project_position_timeline(
                         raise ValueError(
                             "CASH_SETTLEMENT possui fractional_quantity invalida"
                         )
-                    whole_quantity = quantity - fractional_quantity
+                    # Ledger already reflects the post-event adjustment; preserve whole units.
+                    whole_quantity = quantity
                     projected_fraction = Decimal(0)
                 else:
                     whole_quantity = projected_quantity.to_integral_value(
@@ -361,20 +362,35 @@ def project_position_timeline(
 
                 total_cost -= fractional_cost_basis
                 total_cost_original_currency -= fractional_cost_basis_original
-                realized_pnl += fractional_realized_pnl
-
-                corporate_action_cash_flows.append(
-                    CanonicalCorporateActionCashFlow(
-                        source_event_id=action.source_event_id,
-                        event_date=action.event_date,
-                        fractional_quantity=fractional_quantity,
-                        unit_settlement_price_brl=settlement_price,
-                        gross_amount_brl=gross_amount,
-                        cash_treatment=cash_treatment,
-                        cost_basis_brl=fractional_cost_basis,
-                        realized_pnl_brl=fractional_realized_pnl,
-                    )
+                effective_cash_date = resolution.settlement_date or action.event_date
+                settled_by_cutoff = (
+                    through_date is None or effective_cash_date <= through_date
                 )
+
+                if settled_by_cutoff:
+                    realized_pnl += fractional_realized_pnl
+                    corporate_action_cash_flows.append(
+                        CanonicalCorporateActionCashFlow(
+                            source_event_id=action.source_event_id,
+                            event_date=effective_cash_date,
+                            fractional_quantity=fractional_quantity,
+                            unit_settlement_price_brl=settlement_price,
+                            gross_amount_brl=gross_amount,
+                            cash_treatment=cash_treatment,
+                            cost_basis_brl=fractional_cost_basis,
+                            realized_pnl_brl=fractional_realized_pnl,
+                        )
+                    )
+                else:
+                    pending_corporate_action_fractions.append(
+                        PendingCorporateActionFraction(
+                            source_event_id=action.source_event_id,
+                            event_date=action.event_date,
+                            fractional_quantity=fractional_quantity,
+                            cost_basis_brl=fractional_cost_basis,
+                            cost_basis_original_currency=fractional_cost_basis_original,
+                        )
+                    )
 
                 projected_quantity = quantity_after_settlement
 

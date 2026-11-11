@@ -280,3 +280,200 @@ async def test_fraction_settlement_router_triggers_snapshot_and_cache_invalidati
 
     assert response == expected
     assert len(background_tasks.tasks) == 2
+
+
+def test_position_timeline_preserves_adjusted_post_event_units_when_settled() -> None:
+    action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:reverse-split-adjusted-settled",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("1"),
+            settlement_gross_amount_brl=Decimal("25.00"),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+            ledger_basis="ADJUSTED_POST_EVENT",
+            fraction_is_post_event_quantity=True,
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[
+            PositionMovement(
+                movement_date=date(2026, 10, 1),
+                kind=PositionMovementKind.BUY,
+                quantity=Decimal("1"),
+                unit_price=Decimal("100"),
+            )
+        ],
+        actions=[action],
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("100")
+    assert result.realized_pnl == Decimal("25.00")
+    assert result.pending_corporate_action_fractions == ()
+    assert len(result.corporate_action_cash_flows) == 1
+    assert result.corporate_action_cash_flows[0].gross_amount_brl == Decimal("25.00")
+
+
+def test_position_timeline_defers_cash_settlement_to_settlement_date() -> None:
+    action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:nike34-dated",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=None,
+            settlement_gross_amount_brl=Decimal("25.40"),
+            settlement_date=date(2026, 10, 21),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+    )
+    buy = PositionMovement(
+        movement_date=date(2026, 1, 10),
+        kind=PositionMovementKind.BUY,
+        quantity=Decimal("6"),
+        unit_price=Decimal("30.00"),
+    )
+
+    before_credit = project_position_timeline(
+        movements=[buy],
+        actions=[action],
+        through_date=date(2026, 10, 15),
+    )
+    assert before_credit.quantity == Decimal("1")
+    assert before_credit.realized_pnl == Decimal("0")
+    assert before_credit.corporate_action_cash_flows == ()
+    assert len(before_credit.pending_corporate_action_fractions) == 1
+
+    on_credit = project_position_timeline(
+        movements=[buy],
+        actions=[action],
+        through_date=date(2026, 10, 21),
+    )
+    assert on_credit.quantity == Decimal("1")
+    assert on_credit.realized_pnl.quantize(Decimal("0.01")) == Decimal("-4.60")
+    assert on_credit.pending_corporate_action_fractions == ()
+    assert len(on_credit.corporate_action_cash_flows) == 1
+    assert on_credit.corporate_action_cash_flows[0].event_date == date(2026, 10, 21)
+    assert on_credit.corporate_action_cash_flows[0].gross_amount_brl == Decimal("25.40")
+
+
+def test_project_snapshot_positions_retains_zero_qty_cash_flow_and_confirmed_component_bonus() -> None:
+    from app.services.snapshot_position_projection import project_snapshot_positions
+
+    tx_nike = SimpleNamespace(
+        id=1,
+        ticker="NIKE34",
+        asset_type="BDR",
+        operation=OperationType.buy,
+        quantity=Decimal("1"),
+        price=Decimal("30.00"),
+        fees=Decimal("0"),
+        date=date(2026, 1, 10),
+        currency="BRL",
+        fx_rate=None,
+    )
+    tx_klbn = SimpleNamespace(
+        id=2,
+        ticker="KLBN11",
+        asset_type="ACAO",
+        operation=OperationType.buy,
+        quantity=Decimal("10"),
+        price=Decimal("20.00"),
+        fees=Decimal("0"),
+        date=date(2025, 12, 1),
+        currency="BRL",
+        fx_rate=None,
+    )
+    nike_action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:nike34-full-frac",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=None,
+            settlement_gross_amount_brl=Decimal("25.40"),
+            settlement_date=date(2026, 10, 20),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+    )
+    klbn_action = NormalizedCorporateAction(
+        source="brapi",
+        source_event_id="brapi:klbn-bonus-2025",
+        ticker="KLBN11",
+        event_date=date(2025, 12, 18),
+        kind=CorporateActionKind.STOCK_BONUS,
+        quantity_factor=Decimal("1.01"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            settlement_gross_amount_brl=Decimal("2.50"),
+            settlement_date=date(2026, 2, 24),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+        component_bonus={
+            "model": "COMPONENT_BONUS_FRACTIONS_V1",
+            "evidence_reference": "issuer:klbn:bonus-and-auction:2025",
+            "record_date": "2025-12-17",
+            "credit_date": "2025-12-22",
+            "settlement_date": "2026-02-24",
+            "bonus_factor": "0.01",
+            "bonus_cost_per_share_brl": "12.94564988922",
+            "cash_treatment": "PRO_RATA_AUCTION_RIGHT",
+            "unit_ticker": "KLBN11",
+            "unit_asset_type": "ACAO",
+            "unit_isin_code": "BRKLBNCDAM18",
+            "unit_composition": {"ON": "1", "PN": "4"},
+            "components": [
+                {
+                    "component": "ON",
+                    "ticker": "KLBN3",
+                    "asset_type": "ACAO",
+                    "isin_code": "BRKLBNACNOR2",
+                    "units_per_position": "1",
+                    "settlement_price_brl": "3.942352337",
+                },
+                {
+                    "component": "PN",
+                    "ticker": "KLBN4",
+                    "asset_type": "ACAO",
+                    "isin_code": "BRKLBNACNPR9",
+                    "units_per_position": "4",
+                    "settlement_price_brl": "3.942611212",
+                },
+            ],
+        },
+    )
+
+    projected = project_snapshot_positions(
+        transactions=[tx_nike, tx_klbn],
+        actions_by_ticker={"NIKE34": (nike_action,), "KLBN11": (klbn_action,)},
+        target_date=date(2026, 11, 11),
+        include_corporate_action_cash_flows=True,
+    )
+
+    assert "NIKE34" in projected
+    nike_proj = projected["NIKE34"][0]
+    assert nike_proj.quantity == Decimal("0")
+    assert nike_proj.corporate_action_cash_flows[0].gross_amount_brl == Decimal("25.40")
+    assert nike_proj.realized_pnl == Decimal("-4.60")
+
+    assert "KLBN11" in projected
+    klbn_proj = projected["KLBN11"][0]
+    assert len(klbn_proj.corporate_action_cash_flows) == 1
+    assert klbn_proj.corporate_action_cash_flows[0].gross_amount_brl == Decimal("2.50")
+    assert all(r.status == "CONFIRMED" for r in klbn_proj.component_bonus_cash_rights)

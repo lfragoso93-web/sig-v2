@@ -43,6 +43,7 @@ def project_class_positions_at(
         },
         target_date=target_date,
         include_pending_fractions=True,
+        include_corporate_action_cash_flows=True,
     )
 
     positions: dict[str, ClassProjectedPosition] = {}
