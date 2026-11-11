@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
+from app.core.clock import Clock, SystemClock
 from app.core.log_safety import sanitize_log_value
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
@@ -40,6 +41,13 @@ _FRACTIONAL_TYPES = {
     AssetType.BDR,
 }
 _INITIAL_RANGE_REASONS = {"missing_start", "missing_all"}
+_START_EXHAUSTED_STATUSES = frozenset({
+    "HISTORY_START_EXHAUSTED",
+    "HISTORY_START_TRUNCATED",
+    "HISTORY_START_SHALLOW",
+    "HISTORY_START_COMPLEMENT_UNAVAILABLE",
+    "HISTORY_START_COMPLEMENT_GAPPED",
+})
 _CRYPTO_SYMBOLS = {
     "BITCOIN": "BTC-BRL",
     "BTC": "BTC-BRL",
@@ -83,6 +91,7 @@ def build_missing_edge_ranges(coverage: AssetPriceCoverage) -> tuple[MissingPric
             first_price_date=coverage.first_price_date,
             last_price_date=coverage.last_price_date,
             provider_status=coverage.provider_status,
+            provider_last_sync_at=coverage.provider_last_sync_at,
         )
     return tuple(
         MissingPriceRange(item.date_from, item.date_to, item.reason)
@@ -370,6 +379,7 @@ async def _persist_result(
     provider_symbol: str,
     terminal_status: str | None,
     error: str | None = None,
+    clock: Clock | None = None,
 ) -> int:
     async with AsyncSessionLocal() as db:
         inserted = 0
@@ -389,11 +399,12 @@ async def _persist_result(
             if persisted.scalar_one_or_none() is not None:
                 inserted += 1
 
+        sync_now = (clock or SystemClock()).now().astimezone(timezone.utc)
         update_values = {
             "provider": provider,
             "provider_symbol": provider_symbol,
             "provider_status": terminal_status or "ACTIVE",
-            "provider_last_sync_at": datetime.now(timezone.utc),
+            "provider_last_sync_at": sync_now,
             "provider_last_error": error,
             "provider_attempts": func.coalesce(Asset.provider_attempts, 0) + 1,
         }
@@ -434,6 +445,9 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         asset_type == AssetType.CRIPTO
         and str(coverage.provider_status or "").upper() == "HISTORY_START_TRUNCATED"
     )
+    current_provider_status = (
+        str(coverage.provider_status or "").strip().upper() or None
+    )
     lock = await _lock_for(coverage.asset_id)
     async with lock:
         total_received = 0
@@ -458,6 +472,31 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                     effective_range,
                     crypto_start_truncated=crypto_start_truncated,
                 )
+                if (
+                    missing_range.reason == "missing_start"
+                    and asset_type != AssetType.CRIPTO
+                    and terminal_status is None
+                    and coverage.first_price_date is not None
+                ):
+                    earliest_received = min(
+                        (timestamp.date() for timestamp, _ in rows),
+                        default=None,
+                    )
+                    if (
+                        earliest_received is None
+                        or earliest_received >= coverage.first_price_date
+                    ):
+                        terminal_status = "HISTORY_START_EXHAUSTED"
+
+                effective_terminal_status = terminal_status
+                if (
+                    missing_range.reason == "stale_end"
+                    and current_provider_status in _START_EXHAUSTED_STATUSES
+                    and effective_terminal_status in {None, "HISTORY_END_UNAVAILABLE"}
+                ):
+                    # Preserva o marco de esgotamento inicial para nao repetir 1900-01-01 em boots futuros.
+                    effective_terminal_status = current_provider_status
+
                 persisted_provider_symbol = (
                     _yahoo_crypto_usd_symbol(provider_symbol)
                     if asset_type == AssetType.CRIPTO
@@ -472,8 +511,9 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                     source=source,
                     provider=provider,
                     provider_symbol=persisted_provider_symbol,
-                    terminal_status=terminal_status,
+                    terminal_status=effective_terminal_status,
                 )
+                current_provider_status = effective_terminal_status or "ACTIVE"
             except Exception as exc:
                 logger.exception(
                     "[price_gap_sync] falha ticker=%s intervalo=%s..%s",

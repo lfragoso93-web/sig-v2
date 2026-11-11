@@ -166,7 +166,8 @@ O ticker original da transação deve ser preservado.
 | `PENDING` | Ainda não sincronizado ou aguardando nova tentativa |
 | `OK` | Última sincronização útil terminou sem erro |
 | `FAILED` | Última tentativa falhou |
-| `HISTORY_START_EXHAUSTED` | Provedor já entregou o máximo anterior disponível |
+| `HISTORY_START_EXHAUSTED` | Provedor já entregou o máximo anterior disponível (preservado após syncs de cauda) |
+| `HISTORY_END_UNAVAILABLE` | Sem novo fechamento disponível na data consultada; expirado automaticamente no dia operacional seguinte |
 
 ---
 

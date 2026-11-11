@@ -61,9 +61,12 @@ def test_daily_close_does_not_trigger_broad_historical_backfill() -> None:
     assert 'job_name="persist_daily_close_prices"' in source
     assert 'period="daily"' in source
     assert "ttl_seconds=7200" in source
-    assert "today = date.today()" in source
+    assert "today = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).date()" in source
     assert "required_to=today" in source
     assert "history_start=today" in source
+    assert "full_history=False" in source
+    assert "end_grace_days=0" in source
+    assert "include_start_gaps=False" in source
 
 
 def test_legacy_duplicate_scheduler_does_not_exist() -> None:

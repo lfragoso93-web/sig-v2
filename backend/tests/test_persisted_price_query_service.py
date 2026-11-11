@@ -54,3 +54,41 @@ async def test_get_persisted_price_history_matches_ticker_case_insensitively() -
     history = await get_persisted_price_history(db, "TESOURO-RENDA-MAIS-2065")
 
     assert history == [{"date": "2026-09-08", "price": 183.24}]
+
+
+@pytest.mark.asyncio
+async def test_get_persisted_prices_at_date_batch_prefers_matching_asset_type() -> None:
+    asset_rows = SimpleNamespace(
+        all=lambda: [
+            SimpleNamespace(id=1, ticker="BTC", asset_type="ACAO"),
+            SimpleNamespace(id=2, ticker="BTC", asset_type="CRIPTO"),
+        ]
+    )
+    captured_asset_ids: list[int] = []
+
+    async def fake_execute(stmt):
+        if len(captured_asset_ids) == 0:
+            captured_asset_ids.append(1)
+            return asset_rows
+        compiled = stmt.compile()
+        params = compiled.params
+        assert any(
+            list(value) == [2] if isinstance(value, (list, set, tuple)) else value == [2]
+            for value in params.values()
+        )
+        return SimpleNamespace(
+            scalars=lambda: SimpleNamespace(
+                all=lambda: [SimpleNamespace(asset_id=2, close=512345.67)]
+            )
+        )
+
+    db = AsyncMock()
+    db.execute.side_effect = fake_execute
+
+    prices = await get_persisted_prices_at_date_batch(
+        db,
+        [("BTC", AssetType.CRIPTO)],
+        "2026-11-10",
+    )
+
+    assert prices == {"BTC": 512345.67}

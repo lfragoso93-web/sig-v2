@@ -261,7 +261,7 @@ As tarefas em lote e rotinas de manutenção periódica são gerenciadas pelo **
 | `update_quotes_intraday_full_hour` | Seg–Sex, 09h às 18h (hora cheia) | Atualização de cotações de mercado aberto (Ações, FIIs, BDRs, ETFs, Tesouro). Invalida caches dependentes. |
 | `update_crypto_quotes_offhours_weekdays` | Seg–Sex, 00h–08h e 19h–23h (hora cheia) | Manutenção horária de cotações de criptoativos fora da janela do pregão da bolsa. |
 | `update_crypto_quotes_weekends` | Sáb e Dom, 24 horas (hora cheia) | Manutenção contínua de cotações cripto durante os finais de semana. |
-| `persist_daily_close_prices` | Seg–Sex, às 20h45 | Persistência definitiva dos preços de fechamento diário de todos os ativos com transações registradas. |
+| `persist_daily_close_prices` | Diariamente, às 20h45 | Persistência definitiva dos preços de fechamento diário (Seg–Sex para todos os ativos com transações; Sáb–Dom escopado em Cripto), operando sem janela de carência (`end_grace_days=0`) para eliminar lacunas D-1 em `asset_prices`. |
 | `sync_benchmark_rates_daily` | Seg–Sex, às 08h40 e 20h40 | Sincronização dos índices macroeconômicos oficiais junto ao Banco Central (SGS): CDI, SELIC, IPCA e IGPM. |
 | `sync_ibov_benchmark_daily` | Seg–Sex, às 08h42 e 20h42 | Sincronização da cotação oficial de fechamento do índice Ibovespa (^BVSP). |
 | `persist_treasury_daily_close` | Seg–Sex, às 20h50 | Persistência dos preços unitários e taxas de fechamento de todos os títulos do Tesouro Direto. |

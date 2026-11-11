@@ -76,3 +76,36 @@ def test_history_unavailable_suppresses_both_edges():
     )
 
     assert ranges == ()
+
+
+def test_end_unavailable_same_day_suppresses_stale_range() -> None:
+    ranges = build_missing_ranges(
+        status=CoverageStatus.STALE,
+        required_from=date(2020, 1, 1),
+        required_to=date(2026, 11, 11),
+        first_price_date=date(2020, 1, 1),
+        last_price_date=date(2026, 10, 26),
+        provider_status="HISTORY_END_UNAVAILABLE",
+        provider_last_sync_at=datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert ranges == ()
+
+
+def test_end_unavailable_prior_day_re_enables_stale_end_sync() -> None:
+    ranges = build_missing_ranges(
+        status=CoverageStatus.STALE,
+        required_from=date(2026, 11, 11),
+        required_to=date(2026, 11, 11),
+        first_price_date=date(2025, 10, 27),
+        last_price_date=date(2026, 10, 26),
+        provider_status="HISTORY_END_UNAVAILABLE",
+        provider_last_sync_at=datetime(2026, 11, 2, 23, 45, tzinfo=timezone.utc),
+        end_grace_days=0,
+        include_start_gaps=False,
+    )
+
+    assert len(ranges) == 1
+    assert ranges[0].reason == "stale_end"
+    assert ranges[0].date_from == date(2026, 10, 25)
+    assert ranges[0].date_to == date(2026, 11, 11)
