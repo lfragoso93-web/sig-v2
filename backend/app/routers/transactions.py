@@ -663,42 +663,45 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
             from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
             while (next_date := pop_next_snapshot_rebuild_date(portfolio_id)) is not None:
-                async with AsyncSessionLocal() as db:
-                    deleted = await invalidate_snapshots_from(db, portfolio_id, next_date, commit=True)
-                    log.info(
-                        (
-                            "[snapshot_backfill] portfolio=%s invalida a partir de %s "
-                            "(%s removidos)"
-                        ),
-                        portfolio_id,
-                        next_date,
-                        deleted,
-                    )
-                    count = await backfill_canonical_snapshots_with_returns(
-                        db=db,
-                        portfolio_id=portfolio_id,
-                    )
-                    class_count = await rebuild_class_snapshots(
-                        db=db,
-                        portfolio_id=portfolio_id,
-                    )
-                    remaining_tx_res = await db.execute(
-                        select(Transaction.id).where(Transaction.portfolio_id == portfolio_id).limit(1)
-                    )
-                    if remaining_tx_res.scalar_one_or_none() is None:
-                        from app.models.portfolio_snapshot import PortfolioSnapshot
-                        from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
-                        await db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id))
-                        await db.execute(delete(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == portfolio_id))
-                    await db.commit()
-                    await invalidate_rentabilidade_cache(portfolio_id)
-                    log.info(
-                        "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",
-                        portfolio_id,
-                        count,
-                        class_count,
-                    )
+                try:
+                    async with AsyncSessionLocal() as db:
+                        deleted = await invalidate_snapshots_from(db, portfolio_id, next_date, commit=True)
+                        log.info(
+                            (
+                                "[snapshot_backfill] portfolio=%s invalida a partir de %s "
+                                "(%s removidos)"
+                            ),
+                            portfolio_id,
+                            next_date,
+                            deleted,
+                        )
+                        count = await backfill_canonical_snapshots_with_returns(
+                            db=db,
+                            portfolio_id=portfolio_id,
+                        )
+                        class_count = await rebuild_class_snapshots(
+                            db=db,
+                            portfolio_id=portfolio_id,
+                        )
+                        remaining_tx_res = await db.execute(
+                            select(Transaction.id).where(Transaction.portfolio_id == portfolio_id).limit(1)
+                        )
+                        if remaining_tx_res.scalar_one_or_none() is None:
+                            from app.models.portfolio_snapshot import PortfolioSnapshot
+                            from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
+                            await db.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id))
+                            await db.execute(delete(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == portfolio_id))
+                        await db.commit()
+                        await invalidate_rentabilidade_cache(portfolio_id)
+                        log.info(
+                            "[snapshot_backfill] portfolio=%s — %s snapshots e %s snapshots de classe recalculados",
+                            portfolio_id,
+                            count,
+                            class_count,
+                        )
+                except Exception as exc:
+                    log.error("[snapshot_backfill] erro para portfolio %s (from=%s): %s", portfolio_id, next_date, exc)
     except Exception as exc:
-        log.error("[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc)
+        log.error("[snapshot_backfill] erro inesperado no coordenador para portfolio %s: %s", portfolio_id, exc)
     finally:
         release_snapshot_rebuild_worker(portfolio_id)

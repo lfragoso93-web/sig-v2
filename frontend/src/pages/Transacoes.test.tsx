@@ -274,4 +274,43 @@ it('permite selecionar transacoes e excluir em lote via endpoint bulk-delete', a
       })
     })
   })
+it('desabilita Excluir grupo enquanto os resultados ainda sao placeholder ou estao recarregando', () => {
+    mocks.useTransactions.mockImplementation((_portfolioId, filters) => {
+      if (filters?.asset_type === 'ACAO') {
+        return {
+          data: {
+            items: [{
+              id: 101,
+              ticker: 'PETR4',
+              asset_type: 'ACAO',
+              operation: 'buy',
+              quantity: 100,
+              price: 35.0,
+              fees: 0,
+              date: '2024-01-15',
+              currency: 'BRL',
+            }],
+            total: 30,
+            page: 1,
+            page_size: 15,
+            pages: 2,
+          },
+          isLoading: false,
+          isFetching: true,
+          isPlaceholderData: true,
+        }
+      }
+      return {
+        data: { items: [], total: 30, page: 1, page_size: 100, pages: 1 },
+        isLoading: false,
+        isFetching: false,
+        isPlaceholderData: false,
+      }
+    })
+
+    render(<Transacoes />)
+
+    const deleteGroupBtn = screen.getByTestId('delete-group-ACAO') as HTMLButtonElement
+    expect(deleteGroupBtn.disabled).toBe(true)
+  })
 })

@@ -316,7 +316,7 @@ function ClassSection({
 
   const activeTicker = (groupSearch.trim() || globalSearch.trim()) || undefined
 
-  const { data: paged, isLoading } = useTransactions(portfolioId, {
+  const { data: paged, isLoading, isFetching, isPlaceholderData } = useTransactions(portfolioId, {
     asset_type: assetType,
     page,
     page_size: 15,
@@ -358,6 +358,7 @@ function ClassSection({
             <button
               type="button"
               data-testid={`delete-group-${assetType}`}
+              disabled={isLoading || isFetching || isPlaceholderData}
               onClick={() => onDeleteGroup(
                 {
                   asset_type: assetType,

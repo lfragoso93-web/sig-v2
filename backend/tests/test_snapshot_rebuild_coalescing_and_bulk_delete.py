@@ -194,3 +194,70 @@ async def test_bulk_delete_transactions_deletes_matching_and_schedules_single_ba
     assert bg.tasks[0].kwargs == {"portfolio_id": 65, "tx_date": date(2025, 4, 4)}
     assert bg.tasks[1].func is tx_router.invalidate_portfolio_cache
     assert bg.tasks[1].kwargs == {"portfolio_id": 65}
+
+@pytest.mark.asyncio
+async def test_snapshot_backfill_continues_draining_pending_requests_after_iteration_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[date] = []
+    attempt = 0
+
+    async def fake_invalidate(db, portfolio_id: int, from_date: date, commit: bool = True) -> int:
+        nonlocal attempt
+        attempt += 1
+        calls.append(from_date)
+        if attempt == 1:
+            await asyncio.sleep(0.05)
+            raise RuntimeError("transient error on first pass")
+        return 1
+
+    async def fake_backfill(db, portfolio_id: int) -> int:
+        return 5
+
+    async def fake_rebuild_classes(db, portfolio_id: int) -> int:
+        return 1
+
+    async def fake_invalidate_cache(portfolio_id: int) -> None:
+        return None
+
+    class _FakeExecResult:
+        def scalar_one_or_none(self):
+            return 1
+
+    class _FakeDb:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def execute(self, *args, **kwargs):
+            return _FakeExecResult()
+
+        async def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr(tx_router, "AsyncSessionLocal", lambda: _FakeDb())
+    monkeypatch.setattr(
+        "app.services.portfolio_snapshot_service.invalidate_snapshots_from",
+        fake_invalidate,
+    )
+    monkeypatch.setattr(
+        "app.services.portfolio_snapshot_canonical_twr_service.backfill_canonical_snapshots_with_returns",
+        fake_backfill,
+    )
+    monkeypatch.setattr(
+        "app.services.portfolio_class_snapshot_service.rebuild_class_snapshots",
+        fake_rebuild_classes,
+    )
+    monkeypatch.setattr(
+        "app.services.rentabilidade_cache_service.invalidate_rentabilidade_cache",
+        fake_invalidate_cache,
+    )
+
+    t1 = asyncio.create_task(tx_router._run_snapshot_backfill(65, date(2026, 6, 1)))
+    await asyncio.sleep(0.01)
+    t2 = asyncio.create_task(tx_router._run_snapshot_backfill(65, date(2025, 1, 1)))
+    await asyncio.gather(t1, t2)
+
+    assert calls == [date(2026, 6, 1), date(2025, 1, 1)]
