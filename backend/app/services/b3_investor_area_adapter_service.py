@@ -502,9 +502,10 @@ def adapt_b3_rows_to_canonical(
                     paired_transfer_line_indices.add(c_l_idx)
                     break
 
-    # Identificar retornos de empréstimo (BTC) com base em Credito Empréstimo sem débito simultâneo
+    # Identificar retornos de empréstimo (BTC) com base em Credito Empréstimo sem débito simultâneo,
+    # bem como aberturas de empréstimo explicitamente pareadas com "Credito Empréstimo".
     btc_returns_by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    tickers_with_explicit_loan_events: set[str] = set()
+    explicit_emp_openings_by_ticker_date: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
     for l_idx, r in data_rows:
         try:
             r_dt = str(r[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(r) else ""
@@ -516,8 +517,6 @@ def adapt_b3_rows_to_canonical(
             mv_u = r_mv.strip().upper()
             if "EMPR" in mv_u:
                 tk = normalize_b3_ticker(r_tk)
-                if tk:
-                    tickers_with_explicit_loan_events.add(tk)
                 if any(w in ee_u for w in ("CRED", "CRÉD", "ENTRADA", "BUY")):
                     dt = parse_b3_date(r_dt)
                     qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
@@ -526,6 +525,7 @@ def adapt_b3_rows_to_canonical(
                         if open_qty > 0:
                             matched_open = min(qt, open_qty)
                             loan_openings_by_ticker_date[(tk, dt)] -= matched_open
+                            explicit_emp_openings_by_ticker_date[(tk, dt)] += matched_open
                             qt -= matched_open
                         if qt > 0:
                             btc_returns_by_ticker[tk].append({
@@ -535,7 +535,7 @@ def adapt_b3_rows_to_canonical(
         except Exception:
             pass
 
-    # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker (fallback para extratos sem linhas de Empréstimo)
+    # Rastrear saldo alugado (BTC) apenas para empréstimos sem linha explícita de Empréstimo na abertura
     lent_tracker: dict[str, float] = {}
 
     for line_idx, row in data_rows:
@@ -640,7 +640,14 @@ def adapt_b3_rows_to_canonical(
 
             if "LIQUIDA" in mov_upper:
                 if is_dash_price and any(w in entry_upper for w in ("DEBITO", "DÉBITO", "SAIDA", "SAÍDA", "SELL")):
-                    lent_tracker[ticker_clean] = lent_tracker.get(ticker_clean, 0.0) + qty_float
+                    row_dt_str = parse_b3_date(raw_date)
+                    exp_open = explicit_emp_openings_by_ticker_date.get((ticker_clean, row_dt_str), Decimal("0"))
+                    backed = min(quantity_pre, exp_open) if exp_open > 0 else Decimal("0")
+                    if backed > 0:
+                        explicit_emp_openings_by_ticker_date[(ticker_clean, row_dt_str)] -= backed
+                    unbacked = quantity_pre - backed
+                    if unbacked > 0:
+                        lent_tracker[ticker_clean] = lent_tracker.get(ticker_clean, 0.0) + float(unbacked)
                     skipped_items.append(
                         B3SkippedItem(
                             line_number=line_idx,
@@ -651,8 +658,9 @@ def adapt_b3_rows_to_canonical(
                     )
                     continue
                 elif any(w in entry_upper for w in ("CREDITO", "CRÉDITO", "ENTRADA", "BUY")):
-                    if ticker_clean in tickers_with_explicit_loan_events:
-                        row_dt = datetime.strptime(parse_b3_date(raw_date), "%Y-%m-%d").date()
+                    row_dt_str = parse_b3_date(raw_date)
+                    if row_dt_str:
+                        row_dt = datetime.strptime(row_dt_str, "%Y-%m-%d").date()
                         available_returns = btc_returns_by_ticker.get(ticker_clean, [])
                         matched_return_qty = Decimal("0")
                         for item in available_returns:
@@ -678,26 +686,27 @@ def adapt_b3_rows_to_canonical(
                                 continue
                             else:
                                 quantity_pre -= matched_return_qty
+                                qty_float = float(quantity_pre)
                                 raw_qty = str(quantity_pre)
-                    else:
-                        cur_lent = lent_tracker.get(ticker_clean, 0.0)
-                        if cur_lent > 0:
-                            returned = min(qty_float, cur_lent)
-                            lent_tracker[ticker_clean] -= returned
-                            skipped_items.append(
-                                B3SkippedItem(
-                                    line_number=line_idx,
-                                    raw_ticker=raw_ticker_cell,
-                                    movement_type="Retorno de Aluguel (BTC)",
-                                    reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
-                                )
+
+                    cur_lent = lent_tracker.get(ticker_clean, 0.0)
+                    if cur_lent > 0 and qty_float > 0:
+                        returned = min(qty_float, cur_lent)
+                        lent_tracker[ticker_clean] -= returned
+                        skipped_items.append(
+                            B3SkippedItem(
+                                line_number=line_idx,
+                                raw_ticker=raw_ticker_cell,
+                                movement_type="Retorno de Aluguel (BTC)",
+                                reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
                             )
-                            if math.isclose(qty_float, returned, rel_tol=1e-7, abs_tol=1e-7):
-                                continue
-                            else:
-                                qty_float -= returned
-                                quantity_pre = Decimal(str(round(qty_float, 4)))
-                                raw_qty = str(quantity_pre)
+                        )
+                        if math.isclose(qty_float, returned, rel_tol=1e-7, abs_tol=1e-7):
+                            continue
+                        else:
+                            qty_float -= returned
+                            quantity_pre = Decimal(str(round(qty_float, 4)))
+                            raw_qty = str(quantity_pre)
 
             # Segregação de movimentação interna com traço que não seja evento de custódia
             if is_dash_price and not is_custody_event:

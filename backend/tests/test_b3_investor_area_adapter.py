@@ -763,3 +763,32 @@ def test_b3_movimentacao_only_segregates_fraction_debit_after_grupamento():
     # E somente a fração pós-grupamento (16/10) é segregada como Fração em Ativos (Grupamento)
     grup_skips = [s for s in res.skipped_items if s.movement_type == "Fração em Ativos (Grupamento)"]
     assert len(grup_skips) == 1
+
+def test_b3_movimentacao_mixed_explicit_and_fallback_btc_loans():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Empréstimo legado sem linhas Empréstimo (20 ações) + Empréstimo explícito posterior COM linhas Empréstimo (10 ações)
+    # Ambos os retornos devem ser segregados sem engolir compra genuína intermediária!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;20/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;10;30,00;300,00\n"
+        "Credito;19/06/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Credito;10/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;01/06/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Debito;01/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Apenas as 2 compras genuínas devem existir: 20 em 05/02 e 5 em 10/06
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0
+
+    # Ambos os retornos (20 em 20/02 e 10 em 20/06) devem ser segregados como Retorno de Aluguel
+    returns = [s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]
+    assert len(returns) == 2
