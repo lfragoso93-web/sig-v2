@@ -549,3 +549,59 @@ def test_b3_movimentacao_segregates_orphan_custody_fractions_without_balance():
     assert len(result.skipped_items) == 2
     assert any("KLBN3" in s.raw_ticker for s in result.skipped_items)
     assert any("KLBN4" in s.raw_ticker for s in result.skipped_items)
+
+
+def test_b3_movimentacao_segregates_btc_lending_and_returns():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Compra 20 SANB11 -> Aluguel BTC 20 (saída traço) -> Retorno BTC 20 (retorno cotação) -> Venda real 20
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;05/08/2026;Transferência - Liquidação;SANB11 - BANCO SANTANDER;INTER DTVM;20;28,50;570,00\n"
+        "Credito;06/05/2026;Transferência - Liquidação;SANB11 - BANCO SANTANDER;INTER DTVM;20;28,77;575,40\n"
+        "Debito;23/04/2026;Transferência - Liquidação;SANB11 - BANCO SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;17/04/2026;Transferência - Liquidação;SANB11 - BANCO SANTANDER;INTER DTVM;20;31,93;638,60\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+    # Deve conter apenas 2 transações canônicas: Compra 20 em 17/04 e Venda 20 em 05/08
+    assert len(res.canonical_rows) == 2
+    assert res.canonical_rows[0]["operation"] == "buy"
+    assert res.canonical_rows[0]["date"] == "2026-04-17"
+    assert float(res.canonical_rows[0]["price"]) == 31.93
+    assert res.canonical_rows[1]["operation"] == "sell"
+    assert res.canonical_rows[1]["date"] == "2026-08-05"
+    assert float(res.canonical_rows[1]["price"]) == 28.50
+
+    # Saída de aluguel e retorno devem ser segregados em skipped_items
+    btc_skips = [s for s in res.skipped_items if "BTC" in s.movement_type or "Aluguel" in s.movement_type]
+    assert len(btc_skips) == 2
+
+
+def test_b3_movimentacao_atualizacao_custody_idempotency():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Caso 1: RBRF11 já possui 120 cotas compradas -> Atualização de 120 é idempotente (não duplica) -> Resgate 120 zera
+    # Caso 2: RBRX11 possui 0 cotas -> Atualização de 102.52 incorpora delta de 102.52 -> Venda de 100 deixa saldo 2.52
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;10/09/2026;Transferência - Liquidação;RBRX11 - RBR PLUS;INTER DTVM;100;7,21;721,00\n"
+        "Credito;26/11/2025;Atualização;RBRX11 - RBR PLUS;INTER DTVM;102,52;-;-\n"
+        "Debito;01/12/2025;Resgate;RBRF11 - RBR ALPHA;INTER DTVM;120;0,33;39,60\n"
+        "Credito;26/11/2025;Atualização;RBRF11 - RBR ALPHA;INTER DTVM;120;-;-\n"
+        "Credito;01/09/2025;Transferência - Liquidação;RBRF11 - RBR ALPHA;INTER DTVM;120;6,54;784,80\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # RBRF11: compra 120, resgate 120 (Atualização segregada por idempotência)
+    rbrf_rows = [r for r in res.canonical_rows if r["ticker"] == "RBRF11"]
+    assert len(rbrf_rows) == 2
+    assert rbrf_rows[0]["operation"] == "buy" and rbrf_rows[0]["quantity"] == "120"
+    assert rbrf_rows[1]["operation"] == "sell" and rbrf_rows[1]["quantity"] == "120"
+
+    # RBRX11: Atualização adiciona delta 102.52, depois venda de 100
+    rbrx_rows = [r for r in res.canonical_rows if r["ticker"] == "RBRX11"]
+    assert len(rbrx_rows) == 2
+    assert rbrx_rows[0]["operation"] == "buy" and rbrx_rows[0]["quantity"] == "102.52"
+    assert rbrx_rows[1]["operation"] == "sell" and rbrx_rows[1]["quantity"] == "100"
