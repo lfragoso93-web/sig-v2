@@ -89,7 +89,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-      day: 1
       time: "06:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
