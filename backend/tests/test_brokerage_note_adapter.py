@@ -153,7 +153,7 @@ def test_adapt_sinacor_attached_dc_and_wrapped_multiline_columns():
         "NOTA DE NEGOCIAÇÃO\n"
         "Data pregão: 18/03/2024\n"
         "XP INVESTIMENTOS\n"
-        "1-BOVESPA C VISTA WEGE3 ON NM 100 35,00 3.500,00D\n"
+        "1-BOVESPAC VISTA WEGE3 ON NM 100 35,00 3.500,00D\n"
         "1-BOVESPA V VISTA PETR4 ON NM\n"
         "50 40,00 2.000,00 C\n"
         "Total custos / despesas 0,55\n"

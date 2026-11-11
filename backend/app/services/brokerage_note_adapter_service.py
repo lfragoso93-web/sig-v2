@@ -47,8 +47,20 @@ def _strip_attached_dc(token: str) -> str:
     return token
 
 
-def _starts_sinacor_trade_candidate(line: str) -> bool:
+def _tokenize_sinacor_line(line: str) -> list[str]:
     tokens = line.split()
+    if not tokens:
+        return []
+    first_upper = tokens[0].upper()
+    if first_upper not in _EXCHANGE_TOKENS:
+        for exchange in _EXCHANGE_TOKENS:
+            if len(first_upper) == len(exchange) + 1 and first_upper.startswith(exchange) and first_upper[-1] in {"C", "V"}:
+                return [tokens[0][:-1], tokens[0][-1], *tokens[1:]]
+    return tokens
+
+
+def _starts_sinacor_trade_candidate(line: str) -> bool:
+    tokens = _tokenize_sinacor_line(line)
     if not tokens:
         return False
     idx = 1 if tokens[0].upper() in _EXCHANGE_TOKENS else 0
@@ -61,7 +73,7 @@ def _parse_sinacor_trade_line(
     require_total: bool,
 ) -> tuple[str, str, str, str, str] | None:
     """Extrai operação Sinacor de uma linha em tempo linear sem backtracking polinomial."""
-    tokens = line.split()
+    tokens = _tokenize_sinacor_line(line)
     if not tokens:
         return None
 
