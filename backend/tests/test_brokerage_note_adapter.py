@@ -134,8 +134,8 @@ def test_adapt_sinacor_handles_pathological_whitespace_linearly():
 
     tab_flood = "C" + ("\t" * 5000) + "WEGE3" + ("\t,\t," * 1000)
     note_text = (
-        "NOTA DE NEGOCIA??O\n"
-        "Data preg?o: 10/01/2024\n"
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 10/01/2024\n"
         f"{tab_flood}\n"
         "C WEGE3 ON 10 35,00\n"
     )
@@ -146,3 +146,31 @@ def test_adapt_sinacor_handles_pathological_whitespace_linearly():
     assert result.success is True
     assert len(result.canonical_rows) == 1
     assert result.canonical_rows[0]["ticker"] == "WEGE3"
+
+
+def test_adapt_sinacor_attached_dc_and_wrapped_multiline_columns():
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 18/03/2024\n"
+        "XP INVESTIMENTOS\n"
+        "1-BOVESPA C VISTA WEGE3 ON NM 100 35,00 3.500,00D\n"
+        "1-BOVESPA V VISTA PETR4 ON NM\n"
+        "50 40,00 2.000,00 C\n"
+        "Total custos / despesas 0,55\n"
+    )
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    assert result.success is True
+    assert len(result.canonical_rows) == 2
+
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+    assert result.canonical_rows[0]["operation"] == "buy"
+    assert result.canonical_rows[0]["quantity"] == "100"
+    assert result.canonical_rows[0]["price"] == "35.00"
+
+    assert result.canonical_rows[1]["ticker"] == "PETR4"
+    assert result.canonical_rows[1]["operation"] == "sell"
+    assert result.canonical_rows[1]["quantity"] == "50"
+    assert result.canonical_rows[1]["price"] == "40.00"
+
+    sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
+    assert sum_fees == Decimal("0.55")
