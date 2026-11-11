@@ -661,3 +661,197 @@ def test_b3_movimentacao_unpaired_transfers_and_unit_fraction_dismantling():
         for r in klbn4_rows
     )
     assert round(klbn4_net, 4) == 0.0
+
+def test_b3_movimentacao_segregates_grupamento_fraction_to_prevent_double_deduction():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Compra 6 NIKE34 -> Grupamento 1.2 (5:1) -> Fração em Ativos 0.2 (saída para leilão)
+    # A Fração em Ativos DEVE ser segregada porque o motor corporativo já reduz para 1.0 e isola 0.2 como direito
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;16/10/2026;Fração em Ativos;NIKE34 - NIKE INC;INTER DTVM;0,2;-;-\n"
+        "Credito;14/10/2026;Grupamento;NIKE34 - NIKE INC;INTER DTVM;1,2;-;-\n"
+        "Credito;05/05/2026;Transferência - Liquidação;NIKE34 - NIKE INC;INTER DTVM;3;22,15;66,45\n"
+        "Credito;07/05/2025;Transferência - Liquidação;NIKE34 - NIKE INC;INTER DTVM;2;32,75;65,50\n"
+        "Credito;05/02/2025;Transferência - Liquidação;NIKE34 - NIKE INC;INTER DTVM;1;44,50;44,50\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Apenas as 3 compras genuínas devem ser geradas (1 + 2 + 3 = 6 ações)
+    nike_rows = [r for r in res.canonical_rows if r["ticker"] == "NIKE34"]
+    assert len(nike_rows) == 3
+    assert all(r["operation"] == "buy" for r in nike_rows)
+    assert sum(float(r["quantity"]) for r in nike_rows) == 6.0
+
+    # Grupamento e Fração em Ativos devem constar como segregados
+    assert any("Fração em Ativos (Grupamento)" in s.movement_type for s in res.skipped_items)
+
+
+def test_b3_movimentacao_preserves_genuine_buys_during_active_btc_loan():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Compra 14 ALOS3 -> Aluguel 14 (Debito Transf + Credito Empréstimo)
+    # Compra genuína 6 ALOS3 (não deve ser engolida como retorno de aluguel!)
+    # Retorno real 14 ALOS3 (Credito Empréstimo sem débito -> Credito Transf Liquidação)
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;26/05/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;28,79;403,06\n"
+        "Credito;25/05/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Credito;06/04/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;6;31,05;186,30\n"
+        "Credito;30/03/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Debito;30/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;-;-\n"
+        "Credito;26/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;29,56;413,84\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Devem existir 2 compras canônicas: 14 em 26/03 e 6 em 06/04 (total 20 ações)
+    alos_buys = [r for r in res.canonical_rows if r["ticker"] == "ALOS3" and r["operation"] == "buy"]
+    assert len(alos_buys) == 2
+    assert alos_buys[0]["date"] == "2026-03-26" and float(alos_buys[0]["quantity"]) == 14.0
+    assert alos_buys[1]["date"] == "2026-04-06" and float(alos_buys[1]["quantity"]) == 6.0
+
+    # Retorno de 14 em 26/05 deve ser segregado como Retorno de Aluguel
+    returns = [s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]
+    assert len(returns) == 1
+
+def test_b3_movimentacao_loan_closure_on_same_day_as_market_sale():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Empréstimo aberto em 10/03 -> Empréstimo encerrado em 25/05 NO MESMO DIA de uma venda a mercado com preço!
+    # A venda a mercado não deve anular a evidência do encerramento do BTC em 25/05.
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;26/05/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;28,79;403,06\n"
+        "Debito;25/05/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;10;29,00;290,00\n"
+        "Credito;25/05/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Credito;10/03/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Debito;10/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;-;-\n"
+        "Credito;05/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;24;30,00;720,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Apenas 1 compra (24 em 05/03) e 1 venda (10 em 25/05); retorno de 14 em 26/05 deve ser segregado!
+    alos_buys = [r for r in res.canonical_rows if r["ticker"] == "ALOS3" and r["operation"] == "buy"]
+    alos_sells = [r for r in res.canonical_rows if r["ticker"] == "ALOS3" and r["operation"] == "sell"]
+    assert len(alos_buys) == 1 and float(alos_buys[0]["quantity"]) == 24.0
+    assert len(alos_sells) == 1 and float(alos_sells[0]["quantity"]) == 10.0
+    assert len([s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]) == 1
+
+
+def test_b3_movimentacao_only_segregates_fraction_debit_after_grupamento():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Fração em Ativos ANTERIOR (01/03) de evento prévio não deve ser suprimida pelo Grupamento futuro (14/10).
+    # Já a Fração em Ativos posterior (16/10) pertence ao Grupamento e deve ser segregada.
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;16/10/2026;Fração em Ativos;NIKE34 - NIKE INC;INTER DTVM;0,2;-;-\n"
+        "Credito;14/10/2026;Grupamento;NIKE34 - NIKE INC;INTER DTVM;1,2;-;-\n"
+        "Debito;01/03/2026;Fração em Ativos;NIKE34 - NIKE INC;INTER DTVM;0,5;-;-\n"
+        "Credito;01/02/2026;Transferência - Liquidação;NIKE34 - NIKE INC;INTER DTVM;6,5;30,00;195,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # A dedução de 0.5 em 01/03 deve gerar venda técnica (para encerrar a fração prévia), resultando em 6 ações líquidas pré-grupamento
+    sells = [r for r in res.canonical_rows if r["ticker"] == "NIKE34" and r["operation"] == "sell"]
+    assert len(sells) == 1 and float(sells[0]["quantity"]) == 0.5
+
+    # E somente a fração pós-grupamento (16/10) é segregada como Fração em Ativos (Grupamento)
+    grup_skips = [s for s in res.skipped_items if s.movement_type == "Fração em Ativos (Grupamento)"]
+    assert len(grup_skips) == 1
+
+def test_b3_movimentacao_mixed_explicit_and_fallback_btc_loans():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Empréstimo legado sem linhas Empréstimo (20 ações) + Empréstimo explícito posterior COM linhas Empréstimo (10 ações)
+    # Ambos os retornos devem ser segregados sem engolir compra genuína intermediária!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;20/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;10;30,00;300,00\n"
+        "Credito;19/06/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Credito;10/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;01/06/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Debito;01/06/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;10;-;-\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Apenas as 2 compras genuínas devem existir: 20 em 05/02 e 5 em 10/06
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0
+
+    # Ambos os retornos (20 em 20/02 e 10 em 20/06) devem ser segregados como Retorno de Aluguel
+    returns = [s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]
+    assert len(returns) == 2
+
+def test_b3_movimentacao_unbacked_opening_with_explicit_closure_clears_tracker():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Abertura sem linha Empréstimo (20 ações em 10/02) + encerramento explícito COM linha Empréstimo (20 em 20/02)
+    # seguida de compra genuína posterior (5 ações em 01/03). A compra genuína NÃO pode ser consumida pelo lent_tracker!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;01/03/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0
+
+def test_b3_movimentacao_paired_opening_without_closure_falls_back_to_lent_tracker():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Compra de 20 SANB11 -> Abertura pareada COM Credito Empréstimo (20) -> Retorno de 20 SEM Empréstimo de fechamento
+    # Quando não há nenhum evento Empréstimo de fechamento para o ticker, o retorno de custódia deve ser segregado pelo lent_tracker!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Credito;10/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 1 and float(sanb_buys[0]["quantity"]) == 20.0
+    assert len([s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]) == 1
+
+def test_b3_movimentacao_duplicate_closure_rows_do_not_consume_later_buy():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Duas linhas idênticas de Credito Empréstimo (fechamento duplicado de 20 ações)
+    # Após o retorno de 20 ações (saldo alugado zera), uma compra posterior de 5 ações NÃO pode ser descartada pela sobra duplicada!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;25/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;10/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0

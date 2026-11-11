@@ -19,6 +19,10 @@
   - Página dedicada de Análise de Ativos com deep linking por ticker, gráficos de cotação e múltiplos;
   - Carteiras Recomendadas por IA com estratégias de Patrimônio, Proventos e Performance, acompanhadas de simulador matemático de aportes.
 - **Central de Ajuda e Assistente Documental com IA (PRs #517, #526, #528):** Central de ajuda redesenhada, busca por tópicos, atalhos de navegação e assistente documental treinado exclusivamente no corpus de `backend/help_docs/` com zero exposição de dados de custódia.
+- **Aprimoramento Contábil de Eventos Corporativos e Importações B3:**
+  - Segregação de débitos de frações em grupamento (reverso) no adaptador B3, eliminando dupla dedução de quantidade.
+  - Desambiguação de devoluções de aluguel de ações (BTC) vs compras a mercado com preservação de preço médio (PM).
+  - Painel de Eventos Corporativos e Leilão de Frações no frontend com discriminação clara entre frações pendentes aguardando leilão e valores liquidados em conta.
 - **Evolução Patrimonial Contínua e Ponto Intradiário (PR #533):** Snapshots diários consolidados aos finais de semana e feriados somados a ponto intradiário em tempo real no gráfico do Dashboard com cotações correntes.
 - **Aprimoramento do Livro-Razão e Transações (PRs #532, #543):** Extrato com filtro por período, máscara decimal monetária da direita para a esquerda (padrão R$) e suporte formal a lançamentos com custo unitário R$ 0,00 (bonificações e doações).
 - **Unificação de Ações Fracionárias B3 (PRs #524, #529):** Normalização contábil unificando códigos fracionários (sufixo `F`) ao lote padrão no backend, catalog e UI.

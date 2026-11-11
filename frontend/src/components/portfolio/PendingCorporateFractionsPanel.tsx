@@ -36,9 +36,7 @@ export default function PendingCorporateFractionsPanel({
         ) : (
           <>
             <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>
-              A fração é calculada pela quantidade da sua carteira na data efetiva do
-              evento. Ela aparece aqui enquanto a liquidação não for confirmada; sem
-              evidência do crédito, não recebe valor estimado.
+              Histórico de eventos corporativos aplicados aos ativos da carteira e frações — a fração é calculada pela quantidade da sua carteira na data efetiva. Quando liquidada em leilão, exibe o valor creditado; sem evidência do crédito, permanece sem valor estimado.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -47,14 +45,14 @@ export default function PendingCorporateFractionsPanel({
                     <th className="py-2 pr-4 font-medium">Ativo</th>
                     <th className="py-2 pr-4 font-medium">Evento</th>
                     <th className="py-2 pr-4 font-medium">Data</th>
-                    <th className="py-2 text-right font-medium">Quantidade</th>
-                    <th className="py-2 pl-4 text-right font-medium">Valor</th>
+                    <th className="py-2 text-right font-medium">Quantidade / Fator</th>
+                    <th className="py-2 pl-4 text-right font-medium">Valor / Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fractions.map(fraction => (
                     <tr
-                      key={fraction.source_event_id}
+                      key={`${fraction.source_event_id}-${fraction.ticker}`}
                       className="border-t"
                       style={{ borderColor: 'var(--color-divider)' }}
                     >
@@ -64,10 +62,23 @@ export default function PendingCorporateFractionsPanel({
                         {fraction.event_date.split('-').reverse().join('/')}
                       </td>
                       <td className="py-3 text-right tabular-nums">
-                        {Number(fraction.fractional_quantity).toLocaleString('pt-BR')}
+                        {fraction.fractional_quantity != null
+                          ? Number(fraction.fractional_quantity).toLocaleString('pt-BR')
+                          : `Fator ${Number(fraction.quantity_factor).toLocaleString('pt-BR')}`}
                       </td>
                       <td className="py-3 pl-4 text-right" style={{ color: 'var(--color-text-muted)' }}>
-                        A confirmar
+                        {fraction.settlement_status === 'SETTLED' && fraction.gross_amount_brl != null ? (
+                          <span className="font-medium" style={{ color: 'var(--color-success, #16a34a)' }}>
+                            R$ {Number(fraction.gross_amount_brl).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Leilão liquidado)
+                          </span>
+                        ) : fraction.settlement_status === 'PENDING_VALUE' ? (
+                          <div>
+                            <span>A confirmar</span>
+                            <span className="block text-xs" style={{ color: 'var(--color-text-faint)' }}>Aguardando leilão</span>
+                          </div>
+                        ) : (
+                          <span>Aplicado</span>
+                        )}
                       </td>
                     </tr>
                   ))}

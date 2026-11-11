@@ -183,6 +183,11 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
 
 ### 5.1 Destaques Funcionais das Principais Telas
 
+#### Patrimônio e Eventos Corporativos (`PatrimonioPage.tsx` e `PendingCorporateFractionsPanel.tsx`)
+- Visão detalhada de custódia consolidada dividida por classes de ativos (Ações, FIIs, BDRs, Renda Fixa, Cripto e Tesouro).
+- **Painel de Eventos Corporativos e Leilão de Frações:** Exibe o histórico de eventos aplicados na carteira (grupamentos, desdobramentos, bonificações) e o ciclo de liquidação de resíduos fracionários decorrentes de eventos em bolsa, diferenciando com transparência valores já liquidados em leilão (`R$ X,XX (Leilão liquidado)`) de frações pendentes aguardando leilão (`A confirmar (Aguardando leilão)`).
+- **Importação Resiliente de Extratos B3:** Motor adaptativo que segrega débitos de `Fração em Ativos` de ativos que sofreram grupamento (evitando dupla dedução em relação ao motor canônico) e desambigua devoluções de empréstimo de ações (BTC) através de encerramentos contratuais de empréstimo, assegurando a integridade contábil do preço médio mesmo durante períodos com contratos de aluguel ativos.
+
 #### Dashboard e Resumo (`ResumePage.tsx`)
 - Indicadores em tempo real de Patrimônio Total, Lucro/Prejuízo Total, Variação do Dia e Proventos acumulados.
 - Gráfico de Evolução Patrimonial histórico contínuo com suporte a finais de semana e ponto intradiário em tempo real (alinhamento imediato com as cotações do pregão corrente).

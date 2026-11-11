@@ -159,8 +159,9 @@ async def load_portfolio_pending_corporate_fractions(
     *,
     access: PortfolioAccessContext,
     clock: Clock = SYSTEM_CLOCK,
+    pending_only: bool = False,
 ) -> list[dict[str, Any]]:
-    """Lista frações pendentes da carteira sem estimar seus valores."""
+    """Lista eventos corporativos e frações da carteira."""
     await get_accessible_portfolio(
         db,
         access,
@@ -182,17 +183,17 @@ async def load_portfolio_pending_corporate_fractions(
         actions_by_ticker=actions_by_ticker,
         target_date=clock.today(),
     )
-    pending = [
+    events = [
         item
         for ticker, actions in actions_by_ticker.items()
         for item in _lifecycle_items(
             ticker=ticker,
             actions=actions,
             projection=timelines[ticker][0],
-            pending_only=True,
+            pending_only=pending_only,
         )
     ]
-    return sorted(pending, key=lambda item: (item["event_date"], item["ticker"]))
+    return sorted(events, key=lambda item: (item["event_date"], item["ticker"]), reverse=True)
 
 
 async def load_upcoming_portfolio_corporate_events(
