@@ -174,3 +174,19 @@ def test_adapt_sinacor_attached_dc_and_wrapped_multiline_columns():
 
     sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
     assert sum_fees == Decimal("0.55")
+
+
+def test_adapt_sinacor_does_not_merge_summary_section_into_two_column_trade():
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 18/03/2024\n"
+        "C WEGE3 ON 10 35,00\n"
+        "Resumo financeiro\n"
+        "100 20,00 2.000,00\n"
+    )
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+    assert result.canonical_rows[0]["quantity"] == "10"
+    assert result.canonical_rows[0]["price"] == "35.00"

@@ -142,6 +142,26 @@ def _parse_sinacor_trade_line(
     return cv, spec, qty_str, price_str, total_str
 
 
+_SUMMARY_STOP_PREFIXES = (
+    "RESUMO",
+    "TOTAL",
+    "TAXA",
+    "EMOLUMENTOS",
+    "ISS",
+    "IRRF",
+    "CLEARING",
+    "LÍQUIDO",
+    "LIQUIDO",
+    "OBSERVA",
+    "CORRETAGEM",
+)
+
+
+def _is_summary_or_footer_line(line: str) -> bool:
+    upper_line = line.strip().upper()
+    return any(upper_line.startswith(prefix) for prefix in _SUMMARY_STOP_PREFIXES)
+
+
 def _extract_sinacor_trades(text: str, *, require_total: bool) -> list[tuple[str, str, str, str, str]]:
     """Extrai operações Sinacor aceitando quebra de linha controlada em extratos PDF."""
     raw_lines = text.splitlines()
@@ -155,7 +175,11 @@ def _extract_sinacor_trades(text: str, *, require_total: bool) -> list[tuple[str
             i += 1
             continue
 
-        if _starts_sinacor_trade_candidate(raw_lines[i]):
+        # Só tenta juntar continuação se a linha inicia uma operação e ainda não possui colunas numéricas.
+        if (
+            _starts_sinacor_trade_candidate(raw_lines[i])
+            and _parse_sinacor_trade_line(raw_lines[i], require_total=False) is None
+        ):
             matched_wrapped = False
             combined = raw_lines[i]
             for extra in (1, 2):
@@ -163,7 +187,11 @@ def _extract_sinacor_trades(text: str, *, require_total: bool) -> list[tuple[str
                 if nxt_idx >= total_lines:
                     break
                 nxt_line = raw_lines[nxt_idx].strip()
-                if not nxt_line or _starts_sinacor_trade_candidate(nxt_line):
+                if (
+                    not nxt_line
+                    or _starts_sinacor_trade_candidate(nxt_line)
+                    or _is_summary_or_footer_line(nxt_line)
+                ):
                     break
                 combined = f"{combined} {nxt_line}"
                 wrapped = _parse_sinacor_trade_line(combined, require_total=require_total)
