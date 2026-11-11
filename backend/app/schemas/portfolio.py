@@ -76,6 +76,7 @@ class CSVImportResponse(BaseModel):
     global_errors: list[str] = []
     adapter_format: Optional[str] = None
     skipped_records: Optional[list[dict]] = None
+    advisories: list[str] = []
 
 
 class ClassTargetRead(BaseModel):

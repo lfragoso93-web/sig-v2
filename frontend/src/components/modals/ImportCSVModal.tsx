@@ -39,6 +39,7 @@ interface ImportResult {
   global_errors: string[]
   adapter_format?: string | null
   skipped_records?: SkippedRecord[] | null
+  advisories?: string[] | null
 }
 
 const REQUIRED_COLUMNS = ['ticker', 'asset_type', 'operation', 'quantity', 'price', 'date', 'fees', 'currency', 'notes']
@@ -323,6 +324,21 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
     )
   }
 
+  const renderAdvisories = (advisories?: string[] | null) => {
+    if (!advisories || advisories.length === 0) return null
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1rem', background: 'oklch(from var(--color-warning) l c h / 0.1)', border: '1px solid oklch(from var(--color-warning) l c h / 0.25)', borderRadius: 'var(--radius-md)' }}>
+        <AlertTriangle size={14} style={{ color: 'var(--color-warning)', flexShrink: 0, marginTop: 2 }} />
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)' }}>
+          <strong>Revisão recomendada de custo:</strong>
+          <ul style={{ margin: '0.25rem 0 0 1.25rem', paddingLeft: 0 }}>
+            {advisories.map((message, index) => <li key={index}>{message}</li>)}
+          </ul>
+        </div>
+      </div>
+    )
+  }
+
   const renderRows = (rows: ValidationRow[]) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: step === 'results' ? 300 : 220, overflowY: 'auto' }}>
       {rows.length === 0 && (
@@ -454,6 +470,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
                       )}
                     </div>
                   )}
+                  {renderAdvisories(result.advisories)}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.75rem' }}>
                     {renderFilterCard('valid', 'Válidas', counts.valid, 'var(--color-success)')}
                     {renderFilterCard('warning', 'Avisos', counts.warning, 'var(--color-warning)')}
@@ -489,6 +506,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
 
           {step === 'results' && result && (
             <section onClick={() => setRowFilter(null)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {renderAdvisories(result.advisories)}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.75rem' }}>
                 {renderFilterCard('valid', 'Importadas', counts.valid, 'var(--color-success)')}
                 {renderFilterCard('warning', 'Avisos', counts.warning, 'var(--color-warning)')}

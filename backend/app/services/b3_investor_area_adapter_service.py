@@ -103,7 +103,7 @@ _CUSTODY_EVENT_KEYWORDS = {
 
 # Tickers conhecidos de ETFs nacionais terminados em 11
 _KNOWN_ETF_11 = {
-    "BOVA11", "SMAL11", "IVVB11", "HASH11", "DIVD11", "B5P211", "IMAB11",
+    "BOVA11", "SMAL11", "IVVB11", "HASH11", "DIVD11", "B5P211", "IMAB11", "AREA11",
     "IBOB11", "SPXI11", "NASD11", "XINA11", "DIVO11", "BRAX11", "ECOO11",
     "SMAC11", "MATB11", "FIND11", "ISUS11", "GENB11", "GOLD11", "AURO11",
     "COIN11", "QQQI11", "NDIV11", "NSDV11", "BBOV11", "XBOV11", "PIBB11",
@@ -141,6 +141,7 @@ class B3AdaptResult:
     canonical_csv: str = ""
     skipped_items: list[B3SkippedItem] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    advisories: list[str] = field(default_factory=list)
 
 
 def normalize_b3_ticker(raw_ticker: str) -> str:
@@ -226,6 +227,10 @@ def infer_b3_asset_type(ticker: str, product_name: str = "") -> str:
     )
     if any(k in combined for k in etf_keywords) or t in _KNOWN_ETF_11:
         return AssetType.ETF_NACIONAL.value
+
+    # Ações regulares (terminadas em 3-8, ex: MELK3, JHSF3) nunca são FIIs mesmo se citarem "IMOBILIÁRIO"
+    if re.match(r"^[A-Z]{4}[345678]$", t):
+        return AssetType.ACAO.value
 
     # Units de Ações (ex: SANB11, TAEE11, KLBN11, ALUP11)
     # Empresas S.A. que não são fundos imobiliários/fiagros
@@ -427,6 +432,7 @@ def adapt_b3_rows_to_canonical(
     canonical_rows: list[dict[str, Any]] = []
     skipped_items: list[B3SkippedItem] = []
     errors: list[str] = []
+    advisories: list[str] = []
     seen_signatures: set[str] = set()
 
     # Identificar e ordenar linhas de dados cronologicamente
@@ -891,6 +897,12 @@ def adapt_b3_rows_to_canonical(
                 delta = qty - avail
                 item["quantity"] = str(round(delta, 4))
                 running_balances[ticker] = avail + delta
+                if float(item.get("price") or 0.0) <= 0.01 + 1e-9:
+                    advisories.append(
+                        f"{ticker} ({item.get('date', '')}, qtd {item['quantity']}): evento 'Atualização' "
+                        "incorporado com custo simbólico de R$ 0,01 (extrato B3 sem preço unitário). "
+                        "Revise o custo na aba Transações se desejar ajustar o preço médio."
+                    )
                 adjusted_canonical_rows.append(item)
         elif op == "buy":
             running_balances[ticker] = running_balances.get(ticker, 0.0) + qty
@@ -938,6 +950,7 @@ def adapt_b3_rows_to_canonical(
         canonical_csv=output.getvalue(),
         skipped_items=skipped_items,
         errors=errors,
+        advisories=advisories,
     )
 
 

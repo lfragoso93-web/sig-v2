@@ -208,6 +208,7 @@ async def import_transactions_csv(
     filename = raw_filename.lower() if isinstance(raw_filename, str) else ""
     adapter_format = None
     skipped_records = None
+    advisories: list[str] = []
     content = ""
 
     # A) Arquivo PDF (B3 Extrato ou Nota de Corretagem)
@@ -255,6 +256,7 @@ async def import_transactions_csv(
             content = b3_pdf_res.canonical_csv
             adapter_format = b3_pdf_res.format_detected
             skipped_records = [item.to_dict() for item in b3_pdf_res.skipped_items]
+            advisories = list(b3_pdf_res.advisories)
 
     # B) Arquivo Excel (.xlsx / .xls)
     elif raw_bytes.startswith(b"PK\x03\x04") or (bool(filename) and filename.endswith((".xlsx", ".xls"))):
@@ -263,6 +265,7 @@ async def import_transactions_csv(
             content = xlsx_res.canonical_csv
             adapter_format = xlsx_res.format_detected
             skipped_records = [item.to_dict() for item in xlsx_res.skipped_items]
+            advisories = list(xlsx_res.advisories)
         else:
             try:
                 import openpyxl
@@ -332,6 +335,7 @@ async def import_transactions_csv(
             content = b3_result.canonical_csv
             adapter_format = b3_result.format_detected
             skipped_records = [item.to_dict() for item in b3_result.skipped_items]
+            advisories = list(b3_result.advisories)
         elif is_brokerage_note_content(content):
             note_res = adapt_brokerage_note_to_canonical(content)
             if not note_res.success and note_res.errors:
@@ -359,6 +363,7 @@ async def import_transactions_csv(
             result["adapter_format"] = adapter_format
         if skipped_records is not None:
             result["skipped_records"] = skipped_records
+        result["advisories"] = advisories
         return result
 
     portfolio_result = await db.execute(
@@ -422,6 +427,7 @@ async def import_transactions_csv(
         "global_errors": global_errors,
         "adapter_format": adapter_format,
         "skipped_records": skipped_records,
+        "advisories": advisories,
     }
 
 
