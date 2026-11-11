@@ -26,6 +26,9 @@ from app.services.class_target_service import get_targets_map
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
+)
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
     IncompleteBenchmarkCoverageError,
@@ -202,6 +205,11 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         for tx in transactions
     })
     actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
 
     movements_by_ticker: dict[str, list[PositionMovement]] = {}
     metadata_by_ticker: dict[str, dict] = {}

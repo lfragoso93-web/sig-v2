@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
+import { invalidatePortfolioKeys } from '@/hooks/useTransactions'
 
 export interface PositionItem {
   id: number
@@ -89,12 +90,20 @@ export interface PortfolioCorporateRight {
   }>
   gross_amount_brl: number
   calculated_gross_amount_brl: number
+  confirmed_gross_amount_brl?: number | null
   bonus_cost_per_share_brl: number
   attributed_bonus_cost_brl: number
   fractional_cost_basis_brl: number
   estimated_fractional_result_brl: number
-  cash_status: 'CALCULATED_NOT_CONFIRMED'
+  cash_status: 'CALCULATED_NOT_CONFIRMED' | 'CONFIRMED'
   cash_treatment: string
+}
+
+export interface UpsertCorporateFractionSettlementInput {
+  source_event_id: string
+  gross_amount_brl: number
+  settlement_date?: string | null
+  notes?: string | null
 }
 
 export function usePortfolioCorporateRights(portfolioId: number) {
@@ -118,6 +127,28 @@ export function usePendingCorporateFractions(portfolioId: number) {
     enabled: portfolioId > 0,
     retry: false,
     staleTime: 60 * 1000,
+  })
+}
+
+export function useUpsertCorporateFractionSettlement(portfolioId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: UpsertCorporateFractionSettlementInput) =>
+      api
+        .put(`/portfolios/${portfolioId}/corporate-events/fraction-settlements`, payload)
+        .then(response => response.data),
+    onSuccess: () => invalidatePortfolioKeys(qc, portfolioId),
+  })
+}
+
+export function useDeleteCorporateFractionSettlement(portfolioId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (sourceEventId: string) =>
+      api.delete(`/portfolios/${portfolioId}/corporate-events/fraction-settlements`, {
+        params: { source_event_id: sourceEventId },
+      }),
+    onSuccess: () => invalidatePortfolioKeys(qc, portfolioId),
   })
 }
 

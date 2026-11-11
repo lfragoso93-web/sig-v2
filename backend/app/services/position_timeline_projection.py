@@ -288,49 +288,75 @@ def project_position_timeline(
                         total_cost_original_currency -= fractional_cost_original
                 projected_quantity = whole_quantity
             elif resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
-                fractional_quantity = resolution.fractional_quantity
                 settlement_price = resolution.settlement_price
                 cash_treatment = str(resolution.cash_treatment or "").strip()
 
-                if fractional_quantity is None or fractional_quantity <= 0:
-                    raise ValueError(
-                        "CASH_SETTLEMENT exige fractional_quantity positiva"
+                if resolution.fraction_is_post_event_quantity:
+                    fractional_quantity = resolution.fractional_quantity
+                    if fractional_quantity is None or fractional_quantity <= 0:
+                        raise ValueError(
+                            "CASH_SETTLEMENT exige fractional_quantity positiva"
+                        )
+                    if fractional_quantity > quantity:
+                        raise ValueError(
+                            "CASH_SETTLEMENT possui fractional_quantity invalida"
+                        )
+                    whole_quantity = quantity - fractional_quantity
+                    projected_fraction = Decimal(0)
+                else:
+                    whole_quantity = projected_quantity.to_integral_value(
+                        rounding="ROUND_FLOOR"
                     )
-
-                if settlement_price is None or settlement_price < 0:
-                    raise ValueError(
-                        "CASH_SETTLEMENT exige settlement_price nao negativo"
+                    projected_fraction = projected_quantity - whole_quantity
+                    fractional_quantity = (
+                        resolution.fractional_quantity
+                        if resolution.fractional_quantity is not None
+                        else projected_fraction
                     )
+                    if fractional_quantity is None or fractional_quantity <= 0:
+                        raise ValueError(
+                            "CASH_SETTLEMENT exige fractional_quantity positiva"
+                        )
+                    if fractional_quantity > projected_quantity:
+                        raise ValueError(
+                            "CASH_SETTLEMENT possui fractional_quantity invalida"
+                        )
+                    if fractional_quantity != projected_fraction:
+                        raise ValueError(
+                            "CASH_SETTLEMENT fractional_quantity diverge da fracao projetada"
+                        )
 
                 if not cash_treatment:
                     raise ValueError(
                         "CASH_SETTLEMENT exige cash_treatment"
                     )
 
-                if fractional_quantity >= projected_quantity:
-                    raise ValueError(
-                        "CASH_SETTLEMENT possui fractional_quantity invalida"
-                    )
-
-                whole_quantity = projected_quantity.to_integral_value(
-                    rounding="ROUND_FLOOR"
-                )
-                projected_fraction = projected_quantity - whole_quantity
-
-                if fractional_quantity != projected_fraction:
-                    raise ValueError(
-                        "CASH_SETTLEMENT fractional_quantity diverge da fracao projetada"
-                    )
+                if resolution.settlement_gross_amount_brl is not None:
+                    gross_amount = Decimal(str(resolution.settlement_gross_amount_brl))
+                    if gross_amount < 0:
+                        raise ValueError(
+                            "CASH_SETTLEMENT exige settlement_price nao negativo"
+                        )
+                    settlement_price = gross_amount / fractional_quantity
+                else:
+                    if settlement_price is None or settlement_price < 0:
+                        raise ValueError(
+                            "CASH_SETTLEMENT exige settlement_price nao negativo"
+                        )
+                    gross_amount = fractional_quantity * settlement_price
 
                 quantity_after_settlement = whole_quantity
-                fractional_cost_ratio = (
-                    fractional_quantity / projected_quantity
-                )
-                fractional_cost_basis = total_cost * fractional_cost_ratio
-                fractional_cost_basis_original = (
-                    total_cost_original_currency * fractional_cost_ratio
-                )
-                gross_amount = fractional_quantity * settlement_price
+                if resolution.fraction_is_post_event_quantity:
+                    fractional_cost_basis = Decimal(0)
+                    fractional_cost_basis_original = Decimal(0)
+                else:
+                    fractional_cost_ratio = (
+                        fractional_quantity / projected_quantity
+                    )
+                    fractional_cost_basis = total_cost * fractional_cost_ratio
+                    fractional_cost_basis_original = (
+                        total_cost_original_currency * fractional_cost_ratio
+                    )
                 fractional_realized_pnl = gross_amount - fractional_cost_basis
 
                 total_cost -= fractional_cost_basis

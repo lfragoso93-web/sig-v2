@@ -94,7 +94,7 @@ flowchart TD
 | **Backend Framework** | FastAPI, Starlette, Pydantic v2 | API REST assíncrona, documentação OpenAPI sanitizada e serialização estrita. |
 | **Backend Runtime** | Python 3.12 Slim (Linux Alpine/Debian) | Ambiente de execução determinístico de alto rendimento. |
 | **ORM / Banco** | SQLAlchemy 2.0 (AsyncIO), `asyncpg`, PostgreSQL 16 | Banco relacional robusto com integridade referencial e transacional. |
-| **Migrações de Schema** | Alembic (70 migrações lineares) | Evolução controlada, auditada e sem downtime de tabelas e índices. |
+| **Migrações de Schema** | Alembic (71 migrações lineares) | Evolução controlada, auditada e sem downtime de tabelas e índices. |
 | **Cache & Locks** | Redis 7 Alpine | Rate limiting, sessões voláteis e locks distribuídos com TTL contra contenção. |
 | **Agendador** | APScheduler (AsyncIOScheduler) | Execução de rotinas de fechamento, coletas horárias e manutenções locais. |
 | **Borda e Rede** | Cloudflare Tunnel (`cloudflared`), Nginx | Exposição HTTPS segura sem portas públicas abertas na infraestrutura OCI. |
@@ -185,7 +185,7 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
 
 #### Patrimônio e Eventos Corporativos (`PatrimonioPage.tsx` e `PendingCorporateFractionsPanel.tsx`)
 - Visão detalhada de custódia consolidada dividida por classes de ativos (Ações, FIIs, BDRs, Renda Fixa, Cripto e Tesouro).
-- **Painel de Eventos Corporativos e Leilão de Frações:** Exibe o histórico de eventos aplicados na carteira (grupamentos, desdobramentos, bonificações) e o ciclo de liquidação de resíduos fracionários decorrentes de eventos em bolsa, diferenciando com transparência valores já liquidados em leilão (`R$ X,XX (Leilão liquidado)`) de frações pendentes aguardando leilão (`A confirmar (Aguardando leilão)`).
+- **Painel de Eventos Corporativos e Leilão de Frações:** Exibe o histórico completo de eventos aplicados na carteira (grupamentos, desdobramentos, bonificações) e o ciclo de liquidação de resíduos fracionários decorrentes de eventos em bolsa, permitindo ao investidor informar, editar ou limpar manualmente o valor liquidado em leilão (`PUT`/`DELETE /corporate-events/fraction-settlements`, ex.: `NIKE34` e `KLBN11`), com recalibração imediata de custo base, resultado realizado e snapshots.
 - **Importação Resiliente de Extratos B3:** Motor adaptativo que segrega débitos de `Fração em Ativos` de ativos que sofreram grupamento (evitando dupla dedução em relação ao motor canônico) e desambigua devoluções de empréstimo de ações (BTC) através de encerramentos contratuais de empréstimo, assegurando a integridade contábil do preço médio mesmo durante períodos com contratos de aluguel ativos.
 
 #### Dashboard e Resumo (`ResumePage.tsx`)

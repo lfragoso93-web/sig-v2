@@ -23,6 +23,9 @@ from app.services.corporate_action_fractional_entitlement import (
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    load_portfolio_fraction_settlement_map,
+)
 from app.services.snapshot_position_projection import project_transaction_timelines
 
 
@@ -121,6 +124,10 @@ async def load_portfolio_corporate_rights(
         return []
 
     actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
+    settlement_map = await load_portfolio_fraction_settlement_map(
+        db,
+        portfolio_id=access.portfolio_id,
+    )
     output: list[dict[str, Any]] = []
     for event, settlement in configured_events:
         assert settlement is not None
@@ -223,14 +230,31 @@ async def load_portfolio_corporate_rights(
                     else "PENDING"
                 ),
                 "components": component_payloads,
-                "gross_amount_brl": gross_amount,
+                "gross_amount_brl": (
+                    Decimal(str(settlement_map[event_source_id].gross_amount_brl))
+                    if event_source_id in settlement_map
+                    else gross_amount
+                ),
                 "calculated_gross_amount_brl": gross_amount,
+                "confirmed_gross_amount_brl": (
+                    Decimal(str(settlement_map[event_source_id].gross_amount_brl))
+                    if event_source_id in settlement_map
+                    else None
+                ),
                 "bonus_cost_per_share_brl": bonus_cost_per_share,
                 "attributed_bonus_cost_brl": attributed_bonus_cost,
                 "fractional_cost_basis_brl": fractional_cost_basis,
-                "estimated_fractional_result_brl": gross_amount
+                "estimated_fractional_result_brl": (
+                    Decimal(str(settlement_map[event_source_id].gross_amount_brl))
+                    if event_source_id in settlement_map
+                    else gross_amount
+                )
                 - fractional_cost_basis,
-                "cash_status": "CALCULATED_NOT_CONFIRMED",
+                "cash_status": (
+                    "CONFIRMED"
+                    if event_source_id in settlement_map
+                    else "CALCULATED_NOT_CONFIRMED"
+                ),
                 "cash_treatment": str(settlement.get("cash_treatment", "")),
                 "evidence_reference": str(settlement["evidence_reference"]),
             }

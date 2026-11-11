@@ -20,6 +20,8 @@ from app.repositories.portfolio_access_repository import (
 )
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.schemas.transaction import (
+    CorporateFractionSettlementOut,
+    CorporateFractionSettlementUpsert,
     CorporateLifecycleEventOut,
     PagedTransactions,
     TransactionClassSummary,
@@ -36,6 +38,11 @@ from app.services.portfolio_asset_corporate_lifecycle_service import (
     load_portfolio_asset_corporate_lifecycle,
     load_portfolio_pending_corporate_fractions,
     load_upcoming_portfolio_corporate_events,
+)
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    WRITE_PORTFOLIO_CORPORATE_FRACTIONS,
+    delete_portfolio_corporate_fraction_settlement,
+    upsert_portfolio_corporate_fraction_settlement,
 )
 from app.services.portfolio_corporate_rights_service import (
     load_portfolio_corporate_rights,
@@ -293,6 +300,88 @@ async def list_portfolio_corporate_rights(
         return await load_portfolio_corporate_rights(db, access=access)
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.put(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    response_model=CorporateFractionSettlementOut,
+)
+async def upsert_portfolio_fraction_settlement_route(
+    portfolio_id: int,
+    payload: CorporateFractionSettlementUpsert,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+    )
+    try:
+        settlement = await upsert_portfolio_corporate_fraction_settlement(
+            db,
+            access=access,
+            source_event_id=payload.source_event_id,
+            gross_amount_brl=payload.gross_amount_brl,
+            settlement_date=payload.settlement_date,
+            notes=payload.notes,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=settlement["event_date"],
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
+    return settlement
+
+
+@router.delete(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_portfolio_fraction_settlement_route(
+    portfolio_id: int,
+    background_tasks: BackgroundTasks,
+    source_event_id: str = Query(..., min_length=1, max_length=160),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+    )
+    try:
+        rebuild_from = await delete_portfolio_corporate_fraction_settlement(
+            db,
+            access=access,
+            source_event_id=source_event_id,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=rebuild_from,
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
 
 
 @router.get(

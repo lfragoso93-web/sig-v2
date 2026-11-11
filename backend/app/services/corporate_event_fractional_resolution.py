@@ -22,3 +22,4 @@ class FractionalResolution:
     cash_treatment: str | None = None
     ledger_basis: str | None = None
     fraction_is_post_event_quantity: bool = False
+    settlement_gross_amount_brl: Decimal | None = None

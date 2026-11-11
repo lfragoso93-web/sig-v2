@@ -74,7 +74,7 @@ export interface TransactionFilters {
 const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
   ['transactions', pid, filters ?? {}]
 
-function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
+export function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
   qc.invalidateQueries({ queryKey: ['transactions',         portfolioId] })
   qc.invalidateQueries({ queryKey: ['transaction-classes',  portfolioId] })
   qc.invalidateQueries({ queryKey: ['fixed-income-contracts', portfolioId] })
@@ -99,6 +99,9 @@ function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfoli
   // IRPF e proventos
   qc.invalidateQueries({ queryKey: ['irpf-anos',            portfolioId] })
   qc.invalidateQueries({ queryKey: ['proventos-summary',    portfolioId] })
+  // Eventos corporativos e frações
+  qc.invalidateQueries({ queryKey: ['portfolio-pending-corporate-fractions', portfolioId] })
+  qc.invalidateQueries({ queryKey: ['portfolio-corporate-rights', portfolioId] })
 }
 
 export function useTransactions(
