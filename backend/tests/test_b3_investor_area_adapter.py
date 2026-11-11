@@ -715,3 +715,51 @@ def test_b3_movimentacao_preserves_genuine_buys_during_active_btc_loan():
     # Retorno de 14 em 26/05 deve ser segregado como Retorno de Aluguel
     returns = [s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]
     assert len(returns) == 1
+
+def test_b3_movimentacao_loan_closure_on_same_day_as_market_sale():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Empréstimo aberto em 10/03 -> Empréstimo encerrado em 25/05 NO MESMO DIA de uma venda a mercado com preço!
+    # A venda a mercado não deve anular a evidência do encerramento do BTC em 25/05.
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;26/05/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;28,79;403,06\n"
+        "Debito;25/05/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;10;29,00;290,00\n"
+        "Credito;25/05/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Credito;10/03/2026;Empréstimo;ALOS3 - ALLOS S.A;INTER DTVM;14;-;-\n"
+        "Debito;10/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;14;-;-\n"
+        "Credito;05/03/2026;Transferência - Liquidação;ALOS3 - ALLOS S.A.;INTER DTVM;24;30,00;720,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # Apenas 1 compra (24 em 05/03) e 1 venda (10 em 25/05); retorno de 14 em 26/05 deve ser segregado!
+    alos_buys = [r for r in res.canonical_rows if r["ticker"] == "ALOS3" and r["operation"] == "buy"]
+    alos_sells = [r for r in res.canonical_rows if r["ticker"] == "ALOS3" and r["operation"] == "sell"]
+    assert len(alos_buys) == 1 and float(alos_buys[0]["quantity"]) == 24.0
+    assert len(alos_sells) == 1 and float(alos_sells[0]["quantity"]) == 10.0
+    assert len([s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]) == 1
+
+
+def test_b3_movimentacao_only_segregates_fraction_debit_after_grupamento():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Fração em Ativos ANTERIOR (01/03) de evento prévio não deve ser suprimida pelo Grupamento futuro (14/10).
+    # Já a Fração em Ativos posterior (16/10) pertence ao Grupamento e deve ser segregada.
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Debito;16/10/2026;Fração em Ativos;NIKE34 - NIKE INC;INTER DTVM;0,2;-;-\n"
+        "Credito;14/10/2026;Grupamento;NIKE34 - NIKE INC;INTER DTVM;1,2;-;-\n"
+        "Debito;01/03/2026;Fração em Ativos;NIKE34 - NIKE INC;INTER DTVM;0,5;-;-\n"
+        "Credito;01/02/2026;Transferência - Liquidação;NIKE34 - NIKE INC;INTER DTVM;6,5;30,00;195,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    # A dedução de 0.5 em 01/03 deve gerar venda técnica (para encerrar a fração prévia), resultando em 6 ações líquidas pré-grupamento
+    sells = [r for r in res.canonical_rows if r["ticker"] == "NIKE34" and r["operation"] == "sell"]
+    assert len(sells) == 1 and float(sells[0]["quantity"]) == 0.5
+
+    # E somente a fração pós-grupamento (16/10) é segregada como Fração em Ativos (Grupamento)
+    grup_skips = [s for s in res.skipped_items if s.movement_type == "Fração em Ativos (Grupamento)"]
+    assert len(grup_skips) == 1

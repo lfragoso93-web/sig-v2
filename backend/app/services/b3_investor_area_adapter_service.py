@@ -14,7 +14,7 @@ import io
 import math
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
@@ -454,8 +454,8 @@ def adapt_b3_rows_to_canonical(
     pure_transfers_by_key: dict[tuple[str, str], dict[str, list[tuple[int, Decimal]]]] = defaultdict(
         lambda: {"CRED": [], "DEB": []}
     )
-    grupamento_tickers: set[str] = set()
-    debits_by_ticker_date: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
+    grupamento_dates_by_ticker: dict[str, list[date]] = defaultdict(list)
+    loan_openings_by_ticker_date: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
     for l_idx, r in data_rows:
         try:
             r_dt = str(r[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(r) else ""
@@ -471,8 +471,9 @@ def adapt_b3_rows_to_canonical(
             dash = (r_pr.strip() in ("-", "", "None")) and (r_tt.strip() in ("-", "", "None"))
             tk = normalize_b3_ticker(r_tk)
             if "GRUPAMENTO" in mv_u or "REVERSE" in mv_u:
-                if tk:
-                    grupamento_tickers.add(tk)
+                dt = parse_b3_date(r_dt)
+                if tk and dt:
+                    grupamento_dates_by_ticker[tk].append(datetime.strptime(dt, "%Y-%m-%d").date())
             if ("TRANSFERÊNCIA" in mv_u or "TRANSFERENCIA" in mv_u) and "LIQUIDA" not in mv_u and dash:
                 dt = parse_b3_date(r_dt)
                 qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
@@ -480,11 +481,11 @@ def adapt_b3_rows_to_canonical(
                     pure_transfers_by_key[(dt, tk)]["CRED"].append((l_idx, qt))
                 elif any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")):
                     pure_transfers_by_key[(dt, tk)]["DEB"].append((l_idx, qt))
-            if any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")) and "TRANSFER" in mv_u:
+            if dash and any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")) and "TRANSFER" in mv_u:
                 dt = parse_b3_date(r_dt)
                 qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
                 if tk and dt and qt > 0:
-                    debits_by_ticker_date[(tk, dt)] += qt
+                    loan_openings_by_ticker_date[(tk, dt)] += qt
         except Exception:
             pass
 
@@ -521,7 +522,12 @@ def adapt_b3_rows_to_canonical(
                     dt = parse_b3_date(r_dt)
                     qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
                     if tk and dt and qt > 0:
-                        if debits_by_ticker_date.get((tk, dt), Decimal("0")) == 0:
+                        open_qty = loan_openings_by_ticker_date.get((tk, dt), Decimal("0"))
+                        if open_qty > 0:
+                            matched_open = min(qt, open_qty)
+                            loan_openings_by_ticker_date[(tk, dt)] -= matched_open
+                            qt -= matched_open
+                        if qt > 0:
                             btc_returns_by_ticker[tk].append({
                                 "date": datetime.strptime(dt, "%Y-%m-%d").date(),
                                 "qty": qt,
@@ -579,16 +585,27 @@ def adapt_b3_rows_to_canonical(
             # Quando ocorre grupamento (reverse split), a B3 credita a quantidade agrupada e debita a fração.
             # O motor canônico do SGI já aplica o grupamento e isola o resíduo fracionário como direito pendente.
             # Importar o débito da fração geraria dupla dedução na posição de custódia.
-            if ("FRACAO EM ATIVOS" in mov_upper or "FRAÇÃO EM ATIVOS" in mov_upper) and ticker_clean in grupamento_tickers:
-                skipped_items.append(
-                    B3SkippedItem(
-                        line_number=line_idx,
-                        raw_ticker=raw_ticker_cell,
-                        movement_type="Fração em Ativos (Grupamento)",
-                        reason="Fração em Ativos decorrente de Grupamento segregada para o motor de eventos corporativos.",
-                    )
-                )
-                continue
+            if (
+                ("FRACAO EM ATIVOS" in mov_upper or "FRAÇÃO EM ATIVOS" in mov_upper)
+                and any(w in entry_upper for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL"))
+                and ticker_clean in grupamento_dates_by_ticker
+            ):
+                parsed_frac_dt = parse_b3_date(raw_date)
+                if parsed_frac_dt:
+                    row_frac_dt = datetime.strptime(parsed_frac_dt, "%Y-%m-%d").date()
+                    if any(
+                        timedelta(0) <= (row_frac_dt - g_dt) <= timedelta(days=30)
+                        for g_dt in grupamento_dates_by_ticker[ticker_clean]
+                    ):
+                        skipped_items.append(
+                            B3SkippedItem(
+                                line_number=line_idx,
+                                raw_ticker=raw_ticker_cell,
+                                movement_type="Fração em Ativos (Grupamento)",
+                                reason="Fração em Ativos decorrente de Grupamento segregada para o motor de eventos corporativos.",
+                            )
+                        )
+                        continue
 
             # Eventos corporativos de custódia (desdobro, bonificação, atualização de custódia, fração em ativos)
             is_custody_event = any(kw in combined_op_text for kw in _CUSTODY_EVENT_KEYWORDS)
