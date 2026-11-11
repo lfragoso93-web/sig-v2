@@ -62,6 +62,8 @@ O desenvolvimento no backend do SGI v2 é rigidamente condicionado pelos seguint
 - O adaptador da Área do Investidor B3 segrega débitos de `Fração em Ativos` decorrentes de grupamentos de ações, permitindo que a fração seja tratada canonicamente pelo motor de eventos corporativos até sua liquidação em leilão sem provocar dupla redução na custódia.
 - Devoluções de empréstimo de ações (BTC) são desambiguadas de compras a mercado através do rastreamento de encerramentos contratuais de empréstimo, preservando a integridade das compras e o cálculo do Preço Médio (PM).
 - A API de eventos corporativos da carteira (`/corporate-events/pending-fractions`) suporta listagem completa e retroativa dos eventos aplicados e liquidações de leilão.
+- Reconstruções de snapshots disparadas por transações e importações passam pelo coordenador *single-flight* (`portfolio_snapshot_rebuild_queue`), serializando por `portfolio_id` e coalescendo múltiplos pedidos concorrentes pela menor data afetada.
+- Endpoint `POST /portfolios/{id}/transactions/bulk-delete` permite exclusão em lote por IDs ou filtros autorizada via `PortfolioAccessContext` com apenas um recálculo de snapshots.
 
 ### 2.4 Ponto Único Canônico de Escrita (Single Writer Policy)
 - **Transações:** Apenas o `TransactionWriteService` possui autoridade para persistir lançamentos contábeis na tabela `transactions`. A tabela `transactions` é o livro-razão canônico de todas as classes (ações, FIIs, renda fixa, tesouro, cripto).

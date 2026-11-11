@@ -186,3 +186,43 @@ class PortfolioCorporateRightOut(BaseModel):
     cash_status: Literal["CALCULATED_NOT_CONFIRMED"]
     cash_treatment: str
     evidence_reference: str
+
+
+class TransactionBulkDeleteRequest(BaseModel):
+    transaction_ids: Optional[List[int]] = None
+    asset_type: Optional[str] = None
+    ticker: Optional[str] = None
+    operation: Optional[str] = None
+    date_from: Optional[DateType] = None
+    date_to: Optional[DateType] = None
+
+    @field_validator("asset_type", mode="before")
+    @classmethod
+    def validate_asset_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        val = str(v).strip().upper()
+        if not val:
+            return None
+        if val not in VALID_ASSET_TYPES:
+            raise ValueError(
+                f"asset_type invalido: '{v}'. Valores aceitos: {sorted(VALID_ASSET_TYPES)}"
+            )
+        return val
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def validate_operation(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        val = str(v).strip().lower()
+        if not val:
+            return None
+        if val not in ("buy", "sell"):
+            raise ValueError("operation invalida: use 'buy' ou 'sell'.")
+        return val
+
+
+class TransactionBulkDeleteResponse(BaseModel):
+    deleted_count: int
+    earliest_date: Optional[DateType] = None

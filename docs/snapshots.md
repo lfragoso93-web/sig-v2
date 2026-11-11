@@ -161,3 +161,5 @@ python -m app.cli.full_market_rebuild
 Ou pela manutenção específica do scheduler, que chama o mesmo writer.
 
 Após mudanças em proventos, preços ou transações retroativas, os snapshots devem ser reconstruídos a partir da primeira data afetada.
+
+Em operações assíncronas disparadas por mutações no livro-razão (criação, edição, exclusão unitária/em lote e importação), o coordenador `portfolio_snapshot_rebuild_queue` garante execução *single-flight* serializada por carteira e coalescência pela menor data afetada, evitando contenção de locks no PostgreSQL e exaustão do pool de conexões em rajadas de requisições.
