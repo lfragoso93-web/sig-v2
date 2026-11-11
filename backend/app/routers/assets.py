@@ -324,6 +324,7 @@ async def get_asset_detail(
         db,
         asset.ticker,
         days=days,
+        asset_type=asset_type,
     )
     return AssetDetailResponse(
         id=asset.id,

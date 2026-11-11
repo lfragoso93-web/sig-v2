@@ -109,3 +109,18 @@ def test_small_calendar_gap_is_complete() -> None:
     )
 
     assert status == CoverageStatus.COMPLETE
+
+
+def test_daily_close_mode_detects_d1_lag_without_start_gaps() -> None:
+    status = classify_coverage(
+        asset_type=AssetType.ETF_INTERNACIONAL,
+        asset_exists=True,
+        required_from=date(2026, 11, 11),
+        required_to=date(2026, 11, 11),
+        first_price_date=date(2014, 2, 4),
+        last_price_date=date(2026, 11, 10),
+        end_grace_days=0,
+        include_start_gaps=False,
+    )
+
+    assert status == CoverageStatus.STALE

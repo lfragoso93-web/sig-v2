@@ -5,6 +5,7 @@ import asyncio
 import logging
 from datetime import date
 
+from app.core.clock import Clock
 from app.core.database import AsyncSessionLocal
 from app.models.asset import AssetType
 from app.services.asset_price_coverage_service import AssetPriceCoverage, audit_asset_price_coverage
@@ -43,6 +44,10 @@ async def run_global_asset_price_backfill(
     *,
     required_to: date | None = None,
     history_start: date = MAX_HISTORY_START,
+    full_history: bool = True,
+    end_grace_days: int | None = None,
+    include_start_gaps: bool = True,
+    clock: Clock | None = None,
     concurrency: int = _GLOBAL_SYNC_CONCURRENCY,
     asset_types: set[str] | None = None,
     tickers: set[str] | None = None,
@@ -76,8 +81,11 @@ async def run_global_asset_price_backfill(
             coverage = await audit_asset_price_coverage(
                 db,
                 required_to=required_to,
-                full_history=True,
+                full_history=full_history,
                 history_start=history_start,
+                end_grace_days=end_grace_days,
+                include_start_gaps=include_start_gaps,
+                clock=clock,
             )
 
         scoped_coverage = [

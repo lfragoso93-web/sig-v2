@@ -372,3 +372,83 @@ async def test_asset_fundamentals_daily_skips_work_when_distributed_lock_is_refu
         refresh_mock.assert_not_awaited()
     finally:
         scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_daily_close_runs_daily_and_uses_zero_end_grace(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler.remove_all_jobs()
+
+    @asynccontextmanager
+    async def acquired_lock(**kwargs):
+        yield True
+
+    class _FakeScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return SimpleNamespace(all=lambda: self._rows)
+
+    class _FakeSessionCtx:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def execute(self, stmt):
+            sql = str(stmt)
+            if "asset_type =" in sql:
+                return _FakeScalarResult(["BTC"])
+            return _FakeScalarResult(["NVDA", "BTC", "AREA11"])
+
+    class _FrozenDatetime:
+        current = datetime(2026, 11, 11, 20, 45)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current.replace(tzinfo=tz)
+
+    backfill_calls = []
+
+    async def fake_backfill(**kwargs):
+        backfill_calls.append(kwargs)
+        return {"audited": 3, "inserted": 3, "errors": 0}
+
+    monkeypatch.setattr(scheduler_module, "distributed_job_lock", acquired_lock)
+    monkeypatch.setattr(scheduler_module, "datetime", _FrozenDatetime)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", _FakeSessionCtx)
+    monkeypatch.setattr(
+        "app.services.asset_price_global_backfill_service.run_global_asset_price_backfill",
+        fake_backfill,
+    )
+    start_scheduler()
+
+    try:
+        job = scheduler.get_job("persist_daily_close_prices")
+        assert job is not None
+        saturday_after_close = datetime(2026, 7, 11, 20, 46, tzinfo=scheduler.timezone)
+        next_run = job.trigger.get_next_fire_time(None, saturday_after_close)
+        assert next_run.weekday() == 6
+
+        await job.func()
+        assert len(backfill_calls) == 1
+        weekday_call = backfill_calls[0]
+        assert weekday_call["full_history"] is False
+        assert weekday_call["end_grace_days"] == 0
+        assert weekday_call["include_start_gaps"] is False
+        assert weekday_call["asset_types"] is None
+        assert weekday_call["tickers"] == {"NVDA", "BTC", "AREA11"}
+
+        _FrozenDatetime.current = datetime(2026, 11, 14, 20, 45)
+        await job.func()
+        assert len(backfill_calls) == 2
+        weekend_call = backfill_calls[1]
+        assert weekend_call["asset_types"] == {"CRIPTO"}
+        assert weekend_call["tickers"] == {"BTC"}
+    finally:
+        scheduler.shutdown(wait=False)

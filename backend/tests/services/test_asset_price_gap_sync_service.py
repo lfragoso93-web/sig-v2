@@ -114,3 +114,59 @@ def test_missing_history_without_required_start_is_skipped() -> None:
     )
 
     assert ranges == ()
+
+
+def test_sync_marks_missing_start_exhausted_on_overlap_only_and_preserves_across_stale_end() -> None:
+    import asyncio
+    from datetime import datetime, timezone
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.asset_price_coverage_service import CoverageRange
+    from app.services.asset_price_gap_sync_service import sync_asset_price_gaps
+
+    coverage = AssetPriceCoverage(
+        ticker="NVDA",
+        asset_type=AssetType.STOCK.value,
+        asset_id=42,
+        required_from=date(1900, 1, 1),
+        required_to=date(2026, 11, 11),
+        first_price_date=date(1999, 1, 22),
+        last_price_date=date(2026, 10, 30),
+        price_count=6900,
+        status=CoverageStatus.PARTIAL_BOTH,
+        needs_sync=True,
+        missing_ranges=(
+            CoverageRange(date(1900, 1, 1), date(1999, 1, 27), "missing_start"),
+            CoverageRange(date(2026, 10, 25), date(2026, 11, 11), "stale_end"),
+        ),
+        provider_status="ACTIVE",
+    )
+
+    fetch_mock = AsyncMock(
+        side_effect=[
+            (
+                [(datetime(1999, 1, 22, 5, 0, tzinfo=timezone.utc), 0.04)],
+                "tiingo",
+                None,
+                "tiingo",
+            ),
+            (
+                [(datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc), 148.5)],
+                "tiingo",
+                None,
+                "tiingo",
+            ),
+        ]
+    )
+    persist_mock = AsyncMock(side_effect=[0, 1])
+
+    with (
+        patch("app.services.asset_price_gap_sync_service._fetch_range", fetch_mock),
+        patch("app.services.asset_price_gap_sync_service._persist_result", persist_mock),
+    ):
+        result = asyncio.run(sync_asset_price_gaps(coverage))
+
+    assert result.rows_inserted == 1
+    assert persist_mock.await_count == 2
+    assert persist_mock.await_args_list[0].kwargs["terminal_status"] == "HISTORY_START_EXHAUSTED"
+    assert persist_mock.await_args_list[1].kwargs["terminal_status"] == "HISTORY_START_EXHAUSTED"

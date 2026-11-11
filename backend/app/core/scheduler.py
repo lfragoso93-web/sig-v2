@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -145,16 +145,17 @@ def start_scheduler() -> None:
                     raise
 
     @scheduler.scheduled_job(
-        _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
+        _cron_trigger(hour=20, minute=45),
         id="persist_daily_close_prices",
         name="Persistir fechamento diário de preços",
         max_instances=1,
         coalesce=True,
     )
     async def persist_daily_close_prices():
-        """Persiste somente a cobertura de preço da data corrente."""
+        """Persiste diariamente o fechamento dos ativos movimentados em carteira."""
         from sqlalchemy import func, select
         from app.core.database import AsyncSessionLocal
+        from app.models.asset import AssetType
         from app.models.transaction import Transaction
         from app.services.asset_price_global_backfill_service import (
             run_global_asset_price_backfill,
@@ -168,19 +169,32 @@ def start_scheduler() -> None:
             if not acquired:
                 return
 
-            today = date.today()
+            today = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).date()
+            is_weekend = today.weekday() >= 5
             try:
                 async with AsyncSessionLocal() as db:
-                    tx_tickers = set(
-                        (
-                            await db.execute(
-                                select(func.upper(func.trim(Transaction.ticker))).distinct()
-                            )
-                        ).scalars().all()
+                    ticker_query = select(func.upper(func.trim(Transaction.ticker))).distinct()
+                    if is_weekend:
+                        ticker_query = ticker_query.where(
+                            Transaction.asset_type == AssetType.CRIPTO.value
+                        )
+                    tx_tickers = {
+                        ticker
+                        for ticker in (await db.execute(ticker_query)).scalars().all()
+                        if ticker
+                    }
+                if is_weekend and not tx_tickers:
+                    logger.info(
+                        "[scheduler] Fim de semana sem cripto em carteira — fechamento diário ignorado."
                     )
+                    return
                 result = await run_global_asset_price_backfill(
                     required_to=today,
                     history_start=today,
+                    full_history=False,
+                    end_grace_days=0,
+                    include_start_gaps=False,
+                    asset_types={AssetType.CRIPTO.value} if is_weekend else None,
                     tickers=tx_tickers if tx_tickers else None,
                 )
                 logger.info(

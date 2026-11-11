@@ -41,7 +41,7 @@ Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICA
 
 ## Funcionalidades e baseline de produção
 
-A baseline confirmada em produção nesta revisão é a **PR #565** no SHA `e93805ef`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261105_purge_cert_entities` (70 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
+A baseline confirmada em produção nesta revisão é a **PR #566** (Fase 1) no SHA `af8d8c9f`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261105_purge_cert_entities` (70 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
 
 ### Funcionalidades Implementadas e Ativas
 

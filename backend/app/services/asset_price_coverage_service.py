@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
+from app.core.clock import Clock, SystemClock
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
@@ -97,6 +98,8 @@ def classify_coverage(
     first_price_date: date | None,
     last_price_date: date | None,
     grace_days: int = 5,
+    end_grace_days: int | None = None,
+    include_start_gaps: bool = True,
 ) -> CoverageStatus:
     if asset_type in NO_QUOTE_TYPES:
         return CoverageStatus.NO_MARKET_QUOTE
@@ -107,8 +110,13 @@ def classify_coverage(
     if first_price_date is None or last_price_date is None:
         return CoverageStatus.MISSING
 
-    missing_start = required_from is not None and first_price_date > required_from + timedelta(days=grace_days)
-    stale = last_price_date < required_to - timedelta(days=grace_days)
+    effective_end_grace = grace_days if end_grace_days is None else max(0, end_grace_days)
+    missing_start = (
+        include_start_gaps
+        and required_from is not None
+        and first_price_date > required_from + timedelta(days=grace_days)
+    )
+    stale = last_price_date < required_to - timedelta(days=effective_end_grace)
     if missing_start and stale:
         return CoverageStatus.PARTIAL_BOTH
     if missing_start:
@@ -126,7 +134,10 @@ def build_missing_ranges(
     first_price_date: date | None,
     last_price_date: date | None,
     provider_status: str | None = None,
+    provider_last_sync_at: datetime | None = None,
     grace_days: int = 5,
+    end_grace_days: int | None = None,
+    include_start_gaps: bool = True,
 ) -> tuple[CoverageRange, ...]:
     if status in {
         CoverageStatus.COMPLETE,
@@ -148,7 +159,12 @@ def build_missing_ranges(
         "HISTORY_START_COMPLEMENT_GAPPED",
         "HISTORY_START_SHALLOW",
     }
-    end_unavailable = history_unavailable or normalized_provider_status == "HISTORY_END_UNAVAILABLE"
+    # HISTORY_END_UNAVAILABLE suprime novas tentativas apenas no mesmo dia;
+    # em dias seguintes reabilita stale_end para recuperar apos feriados ou atraso de feed.
+    end_unavailable_same_day = normalized_provider_status == "HISTORY_END_UNAVAILABLE" and (
+        provider_last_sync_at is None or provider_last_sync_at.date() >= required_to
+    )
+    end_unavailable = history_unavailable or end_unavailable_same_day
 
     if history_unavailable:
         return ()
@@ -159,7 +175,11 @@ def build_missing_ranges(
             ranges.append(CoverageRange(required_from, required_to, "missing_all"))
         return tuple(ranges)
 
-    if status in {CoverageStatus.PARTIAL_START, CoverageStatus.PARTIAL_BOTH} and not start_exhausted:
+    if (
+        include_start_gaps
+        and status in {CoverageStatus.PARTIAL_START, CoverageStatus.PARTIAL_BOTH}
+        and not start_exhausted
+    ):
         if required_from is not None and first_price_date is not None:
             end = min(required_to, first_price_date + timedelta(days=grace_days))
             if required_from <= end:
@@ -167,7 +187,12 @@ def build_missing_ranges(
 
     if status in {CoverageStatus.STALE, CoverageStatus.PARTIAL_BOTH} and not end_unavailable:
         if last_price_date is not None:
-            start = max(required_from or last_price_date, last_price_date - timedelta(days=grace_days))
+            overlap_days = grace_days if end_grace_days is None else max(1, end_grace_days)
+            raw_start = max(date(1900, 1, 1), last_price_date - timedelta(days=overlap_days))
+            if include_start_gaps and required_from is not None and required_from <= last_price_date:
+                start = max(required_from, raw_start)
+            else:
+                start = raw_start
             if start <= required_to:
                 ranges.append(CoverageRange(start, required_to, "stale_end"))
     return tuple(ranges)
@@ -179,8 +204,12 @@ async def audit_asset_price_coverage(
     required_to: date | None = None,
     full_history: bool = False,
     history_start: date | None = None,
+    end_grace_days: int | None = None,
+    include_start_gaps: bool = True,
+    clock: Clock | None = None,
 ) -> list[AssetPriceCoverage]:
-    target = required_to or datetime.now(timezone.utc).date()
+    active_clock = clock or SystemClock()
+    target = required_to or active_clock.now().astimezone(timezone.utc).date()
     global_start = history_start or date(1900, 1, 1)
 
     assets_result = await db.execute(select(Asset))
@@ -226,6 +255,11 @@ async def audit_asset_price_coverage(
         generic_full_history = asset_type not in NO_QUOTE_TYPES and asset_type not in DEDICATED_PRICE_TYPES
         required_from = global_start if full_history and generic_full_history else tx_requirements.get((ticker, asset_type_raw))
         provider_status = getattr(pricing_asset, "provider_status", None) if pricing_asset is not None else None
+        provider_last_sync_at = (
+            getattr(pricing_asset, "provider_last_sync_at", None)
+            if pricing_asset is not None
+            else None
+        )
 
         if canonical_asset is not None and asset is not None and canonical_asset.id != asset.id:
             status = CoverageStatus.CANONICAL_ALIAS
@@ -238,6 +272,8 @@ async def audit_asset_price_coverage(
                 required_to=target,
                 first_price_date=first_date,
                 last_price_date=last_date,
+                end_grace_days=end_grace_days,
+                include_start_gaps=include_start_gaps,
             )
             ranges = build_missing_ranges(
                 status=status,
@@ -246,6 +282,9 @@ async def audit_asset_price_coverage(
                 first_price_date=first_date,
                 last_price_date=last_date,
                 provider_status=provider_status,
+                provider_last_sync_at=provider_last_sync_at,
+                end_grace_days=end_grace_days,
+                include_start_gaps=include_start_gaps,
             )
 
         report.append(
