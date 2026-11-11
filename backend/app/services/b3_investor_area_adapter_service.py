@@ -663,19 +663,23 @@ def adapt_b3_rows_to_canonical(
                     continue
                 elif any(w in entry_upper for w in ("CREDITO", "CRÉDITO", "ENTRADA", "BUY")):
                     row_dt_str = parse_b3_date(raw_date)
-                    if row_dt_str:
+                    total_open_loans = explicit_open_bal.get(ticker_clean, 0.0) + lent_tracker.get(ticker_clean, 0.0)
+                    if row_dt_str and total_open_loans > 0:
                         row_dt = datetime.strptime(row_dt_str, "%Y-%m-%d").date()
                         available_returns = btc_returns_by_ticker.get(ticker_clean, [])
+                        max_returnable = min(quantity_pre, Decimal(str(round(total_open_loans, 6))))
                         matched_return_qty = Decimal("0")
                         for item in available_returns:
                             ret_dt = item["date"]
                             ret_qty = item["qty"]
                             if timedelta(0) <= (row_dt - ret_dt) <= timedelta(days=5) and ret_qty > 0:
-                                needed = quantity_pre - matched_return_qty
+                                needed = max_returnable - matched_return_qty
+                                if needed <= 0:
+                                    break
                                 take = min(needed, ret_qty)
                                 item["qty"] -= take
                                 matched_return_qty += take
-                                if matched_return_qty >= quantity_pre:
+                                if matched_return_qty >= max_returnable:
                                     break
                         if matched_return_qty > 0:
                             # Reconciliar contra saldo explícito aberto; se exceder, abater também de lent_tracker

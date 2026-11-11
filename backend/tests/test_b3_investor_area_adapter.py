@@ -832,3 +832,26 @@ def test_b3_movimentacao_paired_opening_without_closure_falls_back_to_lent_track
     sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
     assert len(sanb_buys) == 1 and float(sanb_buys[0]["quantity"]) == 20.0
     assert len([s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]) == 1
+
+def test_b3_movimentacao_duplicate_closure_rows_do_not_consume_later_buy():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Duas linhas idênticas de Credito Empréstimo (fechamento duplicado de 20 ações)
+    # Após o retorno de 20 ações (saldo alugado zera), uma compra posterior de 5 ações NÃO pode ser descartada pela sobra duplicada!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;25/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;10/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0
