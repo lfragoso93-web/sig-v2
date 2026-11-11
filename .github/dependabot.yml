@@ -78,6 +78,10 @@ updates:
           - "eslint*"
           - "@eslint/*"
           - "typescript-eslint"
+    ignore:
+      # typescript-eslint@8.x exige peer typescript < 6.1.0; bloquear major 7.x até suporte oficial.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # ── GitHub Actions ──────────────────────────────────────────────────────────
   # interval: monthly — actions mudam pouco; weekly gerava PRs desnecessárias.
@@ -85,7 +89,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-      day: 1
       time: "06:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5

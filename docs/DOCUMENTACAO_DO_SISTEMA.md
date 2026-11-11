@@ -87,8 +87,8 @@ flowchart TD
 | Camada | Tecnologia / Versão | Papel na Plataforma |
 | :--- | :--- | :--- |
 | **Frontend Framework** | React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`) | Renderização de alta performance, tipagem estrita e reatividade. |
-| **Frontend Bundler** | Vite 8 (`^8.3.4`) | Compilação ultraveloz, code splitting por rota e HMR instantâneo. |
-| **Frontend Design** | Tailwind CSS v4 (`^4.3.3`), Lucide React | Design System consistente, tokenizado, com suporte nativo Dark/Light. |
+| **Frontend Bundler** | Vite 8 (`^8.3.6`) | Compilação ultraveloz, code splitting por rota e HMR instantâneo. |
+| **Frontend Design** | Tailwind CSS v4 (`^4.3.4`), Lucide React | Design System consistente, tokenizado, com suporte nativo Dark/Light. |
 | **Frontend State** | TanStack Query v5, Zustand 5 | Cache assíncrono de servidor e gerenciamento leve de estado global. |
 | **Frontend Charts** | Recharts 3 (`^3.10.1`) | Visualizações gráficas interativas de patrimônio, alocação e retornos. |
 | **Backend Framework** | FastAPI, Starlette, Pydantic v2 | API REST assíncrona, documentação OpenAPI sanitizada e serialização estrita. |

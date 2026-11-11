@@ -127,3 +127,66 @@ def test_adapt_sinacor_fee_rounding_reconciliation_exact_sum():
     assert len(result.canonical_rows) == 3
     sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
     assert sum_fees == Decimal("0.01")
+
+
+def test_adapt_sinacor_handles_pathological_whitespace_linearly():
+    import time
+
+    tab_flood = "C" + ("\t" * 5000) + "WEGE3" + ("\t,\t," * 1000)
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 10/01/2024\n"
+        f"{tab_flood}\n"
+        "C WEGE3 ON 10 35,00\n"
+    )
+    started = time.monotonic()
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.0
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+
+
+def test_adapt_sinacor_attached_dc_and_wrapped_multiline_columns():
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 18/03/2024\n"
+        "XP INVESTIMENTOS\n"
+        "1-BOVESPAC VISTA WEGE3 ON NM 100 35,00 3.500,00D\n"
+        "1-BOVESPA V VISTA PETR4 ON NM\n"
+        "50 40,00 2.000,00 C\n"
+        "Total custos / despesas 0,55\n"
+    )
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    assert result.success is True
+    assert len(result.canonical_rows) == 2
+
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+    assert result.canonical_rows[0]["operation"] == "buy"
+    assert result.canonical_rows[0]["quantity"] == "100"
+    assert result.canonical_rows[0]["price"] == "35.00"
+
+    assert result.canonical_rows[1]["ticker"] == "PETR4"
+    assert result.canonical_rows[1]["operation"] == "sell"
+    assert result.canonical_rows[1]["quantity"] == "50"
+    assert result.canonical_rows[1]["price"] == "40.00"
+
+    sum_fees = sum(Decimal(r["fees"]) for r in result.canonical_rows)
+    assert sum_fees == Decimal("0.55")
+
+
+def test_adapt_sinacor_does_not_merge_summary_section_into_two_column_trade():
+    note_text = (
+        "NOTA DE NEGOCIAÇÃO\n"
+        "Data pregão: 18/03/2024\n"
+        "C WEGE3 ON 10 35,00\n"
+        "Resumo financeiro\n"
+        "100 20,00 2.000,00\n"
+    )
+    result = adapt_brokerage_note_text_to_canonical(note_text)
+    assert result.success is True
+    assert len(result.canonical_rows) == 1
+    assert result.canonical_rows[0]["ticker"] == "WEGE3"
+    assert result.canonical_rows[0]["quantity"] == "10"
+    assert result.canonical_rows[0]["price"] == "35.00"

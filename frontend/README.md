@@ -14,15 +14,15 @@ Guia técnico, arquitetural e operacional do frontend do **SGI v2 (Sistema de Ge
 O frontend do SGI v2 é uma aplicação Single Page Application (SPA) moderna, determinística e altamente responsiva construída com a stack contemporânea:
 - **Framework & Runtime:** **React 19** (`^19.3.1`) com **React DOM 19**
 - **Tipagem Estrita:** **TypeScript 6** (`^6.0.3`)
-- **Build Tool & Bundler:** **Vite 8** (`^8.3.4`)
-- **Design System & Estilização:** **Tailwind CSS v4** (`^4.3.3`) com suporte unificado a Dark/Light mode
-- **Gerenciamento de Estado de Servidor:** **TanStack Query v5** (`^5.104.4`)
+- **Build Tool & Bundler:** **Vite 8** (`^8.3.6`)
+- **Design System & Estilização:** **Tailwind CSS v4** (`^4.3.4`) com suporte unificado a Dark/Light mode
+- **Gerenciamento de Estado de Servidor:** **TanStack Query v5** (`^5.106.1`)
 - **Gerenciamento de Estado Global:** **Zustand 5** (`^5.0.15`)
 - **Roteamento:** **React Router 7** (`^7.18.4`)
-- **Formulários & Schemas:** **React Hook Form 7** (`^7.90.0`) e validação estrita com **Zod 4** (`^4.5.4`)
+- **Formulários & Schemas:** **React Hook Form 7** (`^7.91.0`) e validação estrita com **Zod 4** (`^4.5.4`)
 - **Gráficos e Visualizações:** **Recharts 3** (`^3.10.1`)
 - **Ícones:** **Lucide React** (`^1.59.0`)
-- **Suíte de Testes:** **Vitest 5** (`^5.0.5`) com Testing Library e JSDOM 29
+- **Suíte de Testes:** **Vitest 5** (`^5.0.5`) com Testing Library e JSDOM 31 (`^31.0.0`)
 
 ---
 
