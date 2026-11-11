@@ -223,4 +223,41 @@ describe('ImportCSVModal behavior', () => {
       queryKey: ['rentabilidade-kpis', 5],
     })
   })
+
+  it('shows non-blocking advisories while keeping confirm enabled', async () => {
+    mocks.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        imported_count: 0,
+        skipped_count: 0,
+        error_count: 0,
+        global_errors: [],
+        adapter_format: 'b3_movimentacao_xlsx_v1',
+        advisories: [
+          "AREA11 (2026-01-21, qtd 4): evento 'Atualização' incorporado com custo simbólico de R$ 0,01.",
+        ],
+        rows: [
+          {
+            row_num: 2,
+            errors: [],
+            warnings: [],
+            status: 'valid',
+            ticker: 'AREA11',
+            operation: 'buy',
+          },
+        ],
+      },
+    })
+
+    const { container } = render(
+      <ImportCSVModal portfolioId={5} onClose={vi.fn()} />,
+    )
+
+    selectCsv(container)
+
+    expect(await screen.findByText(/Revisão recomendada de custo:/i)).toBeTruthy()
+    expect(screen.getByText(/AREA11 \(2026-01-21, qtd 4\)/i)).toBeTruthy()
+    const confirm = screen.getByRole('button', { name: 'Confirmar importação' }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(false)
+  })
 })

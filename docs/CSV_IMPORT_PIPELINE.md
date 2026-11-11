@@ -67,7 +67,7 @@ O pipeline de importação aceita múltiplos formatos de arquivo via endpoint un
    - Arquivos `.csv` ou `.xlsx` com as 9 colunas canônicas (`ticker, asset_type, operation, quantity, price, date, fees, currency, notes`) e suporte a colunas opcionais de renda fixa.
 
 2. **Área do Investidor B3**:
-   - Arquivos `.xlsx`, `.pdf` ou `.csv` exportados diretamente da Área do Investidor B3.
+   - Arquivos `.xlsx`, `.pdf` ou `.csv` exportados diretamente da Área do Investidor B3 (incluindo classificação precisa de incorporadoras `^[A-Z]{4}[345678]$` como `ACAO`, `AREA11` como `ETF_NACIONAL` e `advisories` não bloqueantes para `"Atualização"` a `R$ 0,01`).
    - Suporte a extratos de **Movimentação** e relatórios de **Negociação**.
    - Mapeamento automático de tipos de ativos (`ACAO`, `FII`, `BDR`, `TESOURO_DIRETO`, `RENDA_FIXA`).
    - Normalização de títulos do Tesouro Direto com descarte de sufixos de corretoras nos relatórios PDF.

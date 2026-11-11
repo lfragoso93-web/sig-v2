@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -13,8 +14,21 @@ def test_sqlalchemy_21_installs_asyncio_runtime_dependency() -> None:
         encoding="utf-8"
     )
 
-    assert "sqlalchemy[asyncio]==2.1.8" in runtime_requirements.splitlines()
-    assert "sqlalchemy[asyncio,mypy]==2.1.8" in test_requirements.splitlines()
+    runtime_match = re.search(
+        r"^sqlalchemy\[asyncio\]==(2\.1\.\d+)$",
+        runtime_requirements,
+        re.MULTILINE,
+    )
+    test_match = re.search(
+        r"^sqlalchemy\[asyncio,mypy\]==(2\.1\.\d+)$",
+        test_requirements,
+        re.MULTILINE,
+    )
+
+    assert runtime_match is not None
+    assert test_match is not None
+    assert runtime_match.group(1) == test_match.group(1)
+    assert tuple(int(part) for part in runtime_match.group(1).split(".")) >= (2, 1, 8)
 
 
 def test_sync_postgresql_urls_select_installed_psycopg2_driver() -> None:

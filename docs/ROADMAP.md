@@ -7,11 +7,12 @@
 - Desenvolvimento e validação local: Windows, branch `stable-15jun`.
 - Produção: OCI, branch `main`.
 - Alterações passam por validação local e Pull Request para `main`. O merge com CI aprovado dispara o deploy automático, com backup pré-deploy e verificação de identidade, smoke e `/ready`.
-- O SHA implantado mais recentemente confirmado nesta revisão é `92a3c2f2` (PR #558). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
+- O SHA implantado mais recentemente confirmado nesta revisão é `e93805ef` (PR #565). Cada novo SHA exige a certificação correspondente; `/ready` permanece fail-closed.
 - A branch desta atividade parte de `stable-15jun` e incorpora `origin/main` antes da validação; os ponteiros remotos não são reescritos.
 
 ## Entregas concluídas
 
+- **Fase 1 — Classificação B3 (`AREA11`, `MELK3`), Avisos Não Bloqueantes de Custo Simbólico e Paridade SQLAlchemy:** Classificação exata de ações imobiliárias (`^[A-Z]{4}[345678]$`) e `AREA11` (`ETF_NACIONAL`) em `b3_investor_area_adapter_service.py`, retorno de `advisories` não bloqueantes no `CSVImportResponse` e `ImportCSVModal.tsx` quando eventos `"Atualização"` usam `R$ 0,01`, e teste flexível de paridade `2.1.x` em `test_sqlalchemy_21_runtime_contract.py`.
 - **Atualização de Dependências e Segurança Estática (Dependabot PRs #534-#542, #560-#564 + CodeQL #233-#235):** Consolidação das atualizações compatíveis de backend (`fastapi >= 0.162.2`, `pypdf >= 7.0.0`, `sqlalchemy 2.1.8`, `pydantic 2.14.3`, `python-multipart 0.0.33`, `pytest-asyncio 1.4.1.post1`) e frontend (`axios ^1.21.0`, `@hookform/resolvers ^7.0.3`, `@tailwindcss/postcss ^4.3.5`, `@tanstack/react-query ^5.106.1`, `react-hook-form ^7.91.0`, `eslint ^10.14.0`, `jsdom ^31.0.0`, `vite ^8.3.6`, `@vitejs/plugin-react ^6.2.1`, `tailwindcss ^4.3.4`), retenção de TypeScript `^6.0.3` no `dependabot.yml` até suporte ao v7 pelo `typescript-eslint`, e eliminação de backtracking polinomial (ReDoS) nos adaptadores Sinacor e Tesouro (`brokerage_note_adapter_service.py` e `b3_investor_area_adapter_service.py`).
 - **Release de Produção PR #558 / SHA `92a3c2f2`:** Deploy validado via GitHub Actions na infraestrutura OCI com certificação aprovada (precedido por PRs #543-#557).
 - **Regra Obrigatória de Documentação Contínua e Viva:** Estabelecido o invariante de que qualquer instrução, refatoração, funcionalidade ou migração deve atualizar toda a documentação relevante (READMEs, ROADMAP, DOCUMENTACAO_DO_SISTEMA e manuais) no mesmo bloco de trabalho.

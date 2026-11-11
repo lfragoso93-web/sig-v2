@@ -869,3 +869,24 @@ def test_normalize_b3_ticker_tesouro_handles_tab_flood_linearly():
     started = time.monotonic()
     assert normalize_b3_ticker(tab_flood) == "TESOURO PREFIXADO"
     assert (time.monotonic() - started) < 1.0
+
+
+def test_infer_b3_asset_type_classifies_area11_and_real_estate_equities():
+    assert infer_b3_asset_type("AREA11") == AssetType.ETF_NACIONAL.value
+    assert infer_b3_asset_type("MELK3", "MELK3 - MELNICK DESENVOLVIMENTO IMOBILIÁRIO S.A.") == AssetType.ACAO.value
+    assert infer_b3_asset_type("JHSF3", "JHSF PARTICIPACOES IMOBILIARIAS S.A.") == AssetType.ACAO.value
+
+
+def test_adapt_b3_emits_non_blocking_advisory_for_symbolic_atualizacao():
+    csv_text = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;21/01/2026;Atualização;AREA11;INTER DTVM;4;-;-\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_text)
+    assert res.success is True
+    assert len(res.canonical_rows) == 1
+    assert res.canonical_rows[0]["asset_type"] == AssetType.ETF_NACIONAL.value
+    assert res.canonical_rows[0]["price"] == "0.01"
+    assert len(res.advisories) == 1
+    assert "AREA11" in res.advisories[0]
+    assert "0,01" in res.advisories[0]
