@@ -605,3 +605,59 @@ def test_b3_movimentacao_atualizacao_custody_idempotency():
     assert len(rbrx_rows) == 2
     assert rbrx_rows[0]["operation"] == "buy" and rbrx_rows[0]["quantity"] == "102.52"
     assert rbrx_rows[1]["operation"] == "sell" and rbrx_rows[1]["quantity"] == "100"
+
+
+def test_b3_movimentacao_unpaired_transfers_and_unit_fraction_dismantling():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Simula ciclo real de bonificação e desmonte de fração de Unit (KLBN11 -> KLBN3 + KLBN4)
+    # e transferência interna pareada (TAEE11)
+    csv_content = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;07/11/2025;Transferência - Liquidação;KLBN11 - KLABIN S/A;INTER DTVM;10;18,53;185,30\n"
+        "Credito;19/12/2025;Bonificação em Ativos;KLBN11 - KLABIN S/A;INTER DTVM;0,1;-;-\n"
+        "Debito;23/12/2025;Transferência;KLBN11 - KLABIN S/A;INTER DTVM;0,1;-;-\n"
+        "Credito;23/12/2025;Transferência;KLBN3 - KLABIN S/A;INTER DTVM;0,1;-;-\n"
+        "Credito;23/12/2025;Transferência;KLBN4 - KLABIN S/A;INTER DTVM;0,4;-;-\n"
+        "Debito;08/01/2026;Transferência - Liquidação;KLBN11 - KLABIN S/A;INTER DTVM;10;18,70;187,00\n"
+        "Debito;22/01/2026;Fração em Ativos;KLBN3 - KLABIN S/A;INTER DTVM;0,1;-;-\n"
+        "Debito;22/01/2026;Fração em Ativos;KLBN4 - KLABIN S/A;INTER DTVM;0,4;-;-\n"
+        "Debito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
+        "Credito;15/05/2025;Transferência;TAEE11 - TAESA;INTER DTVM;20;-;-\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_content)
+    assert res.success is True, res.errors
+
+    # TAEE11 pareada deve ser segregada
+    taee_rows = [r for r in res.canonical_rows if r["ticker"] == "TAEE11"]
+    assert len(taee_rows) == 0
+    taee_skips = [s for s in res.skipped_items if s.raw_ticker and "TAEE11" in s.raw_ticker]
+    assert len(taee_skips) == 2
+    assert all("pareada" in s.reason for s in taee_skips)
+
+    # KLBN11: Compra 10 + Bonif 0.1 - Transf 0.1 - Venda 10 = Saldo 0.0
+    klbn11_rows = [r for r in res.canonical_rows if r["ticker"] == "KLBN11"]
+    assert len(klbn11_rows) == 4
+    klbn11_net = sum(
+        float(r["quantity"]) if r["operation"] == "buy" else -float(r["quantity"])
+        for r in klbn11_rows
+    )
+    assert round(klbn11_net, 4) == 0.0
+
+    # KLBN3: Transf 0.1 - Fracao 0.1 = Saldo 0.0
+    klbn3_rows = [r for r in res.canonical_rows if r["ticker"] == "KLBN3"]
+    assert len(klbn3_rows) == 2
+    klbn3_net = sum(
+        float(r["quantity"]) if r["operation"] == "buy" else -float(r["quantity"])
+        for r in klbn3_rows
+    )
+    assert round(klbn3_net, 4) == 0.0
+
+    # KLBN4: Transf 0.4 - Fracao 0.4 = Saldo 0.0
+    klbn4_rows = [r for r in res.canonical_rows if r["ticker"] == "KLBN4"]
+    assert len(klbn4_rows) == 2
+    klbn4_net = sum(
+        float(r["quantity"]) if r["operation"] == "buy" else -float(r["quantity"])
+        for r in klbn4_rows
+    )
+    assert round(klbn4_net, 4) == 0.0

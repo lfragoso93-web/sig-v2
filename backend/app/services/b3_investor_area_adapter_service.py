@@ -9,6 +9,7 @@ Arquitetura obrigatória (Issue #358):
 from __future__ import annotations
 
 import csv
+from collections import defaultdict
 import io
 import math
 import re
@@ -447,6 +448,48 @@ def adapt_b3_rows_to_canonical(
         except Exception:
             pass
 
+    # Pre-identificar transferências puras pareadas (mesmo ativo, data e quantidade com débito e crédito)
+    # Movimentações pareadas são transferências internas entre contas/garantias sem efeito no saldo total.
+    pure_transfers_by_key: dict[tuple[str, str], dict[str, list[tuple[int, Decimal]]]] = defaultdict(
+        lambda: {"CRED": [], "DEB": []}
+    )
+    for l_idx, r in data_rows:
+        try:
+            r_dt = str(r[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(r) else ""
+            r_tk = str(r[idx_map["ticker"]]).strip() if "ticker" in idx_map and idx_map["ticker"] < len(r) else ""
+            r_ee = str(r[idx_map["entry_exit"]]).strip() if "entry_exit" in idx_map and idx_map["entry_exit"] < len(r) else ""
+            r_mv = str(r[idx_map["movement_type"]]).strip() if "movement_type" in idx_map and idx_map["movement_type"] < len(r) else ""
+            r_qt = str(r[idx_map["quantity"]]).strip() if "quantity" in idx_map and idx_map["quantity"] < len(r) else ""
+            r_pr = str(r[idx_map["price"]]).strip() if "price" in idx_map and idx_map["price"] < len(r) else ""
+            r_tt = str(r[idx_map["total_value"]]).strip() if "total_value" in idx_map and idx_map["total_value"] < len(r) else ""
+
+            mv_u = r_mv.strip().upper()
+            dash = (r_pr.strip() in ("-", "", "None")) and (r_tt.strip() in ("-", "", "None"))
+            if ("TRANSFERÊNCIA" in mv_u or "TRANSFERENCIA" in mv_u) and "LIQUIDA" not in mv_u and dash:
+                tk = normalize_b3_ticker(r_tk)
+                dt = parse_b3_date(r_dt)
+                qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
+                ee_u = r_ee.strip().upper()
+                if "CRED" in ee_u or "ENTRADA" in ee_u or "BUY" in ee_u:
+                    pure_transfers_by_key[(dt, tk)]["CRED"].append((l_idx, qt))
+                elif "DEB" in ee_u or "SAIDA" in ee_u or "SAÍDA" in ee_u or "SELL" in ee_u:
+                    pure_transfers_by_key[(dt, tk)]["DEB"].append((l_idx, qt))
+        except Exception:
+            pass
+
+    paired_transfer_line_indices: set[int] = set()
+    for (dt, tk), group in pure_transfers_by_key.items():
+        creds = list(group["CRED"])
+        debs = list(group["DEB"])
+        matched_c = set()
+        for d_idx, (d_l_idx, d_qty) in enumerate(debs):
+            for c_idx, (c_l_idx, c_qty) in enumerate(creds):
+                if c_idx not in matched_c and c_qty == d_qty:
+                    matched_c.add(c_idx)
+                    paired_transfer_line_indices.add(d_l_idx)
+                    paired_transfer_line_indices.add(c_l_idx)
+                    break
+
     # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker
     lent_tracker: dict[str, float] = {}
 
@@ -502,15 +545,19 @@ def adapt_b3_rows_to_canonical(
             # Transferência pura sem liquidação de mercado (preço "-" ou sem valor)
             if ("TRANSFERÊNCIA" in mov_upper or "TRANSFERENCIA" in mov_upper) and "LIQUIDA" not in mov_upper:
                 if is_dash_price:
-                    skipped_items.append(
-                        B3SkippedItem(
-                            line_number=line_idx,
-                            raw_ticker=raw_ticker_cell,
-                            movement_type="Transferência",
-                            reason="Transferência interna de custódia sem liquidação financeira de mercado.",
+                    if line_idx in paired_transfer_line_indices:
+                        skipped_items.append(
+                            B3SkippedItem(
+                                line_number=line_idx,
+                                raw_ticker=raw_ticker_cell,
+                                movement_type="Transferência",
+                                reason="Transferência interna de custódia pareada sem efeito na quantidade total.",
+                            )
                         )
-                    )
-                    continue
+                        continue
+                    else:
+                        # Transferência não pareada (desmonte de frações de Unit ou movimentação real de custódia)
+                        is_custody_event = True
 
             # 3. Tratamento de Custódia Remunerada / Aluguel de Ações (BTC)
             # Na B3, o empréstimo/aluguel gera:
