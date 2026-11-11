@@ -792,3 +792,24 @@ def test_b3_movimentacao_mixed_explicit_and_fallback_btc_loans():
     # Ambos os retornos (20 em 20/02 e 10 em 20/06) devem ser segregados como Retorno de Aluguel
     returns = [s for s in res.skipped_items if "Retorno de Aluguel" in s.movement_type]
     assert len(returns) == 2
+
+def test_b3_movimentacao_unbacked_opening_with_explicit_closure_clears_tracker():
+    from app.services.b3_investor_area_adapter_service import adapt_b3_investor_csv_to_canonical
+
+    # Abertura sem linha Empréstimo (20 ações em 10/02) + encerramento explícito COM linha Empréstimo (20 em 20/02)
+    # seguida de compra genuína posterior (5 ações em 01/03). A compra genuína NÃO pode ser consumida pelo lent_tracker!
+    csv_descending = (
+        "Entrada/Saída;Data;Movimentação;Produto;Instituição;Quantidade;Preço unitário;Valor da Operação\n"
+        "Credito;01/03/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;5;32,00;160,00\n"
+        "Credito;20/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;28,00;560,00\n"
+        "Credito;19/02/2026;Empréstimo;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Debito;10/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;-;-\n"
+        "Credito;05/02/2026;Transferência - Liquidação;SANB11 - SANTANDER;INTER DTVM;20;27,50;550,00\n"
+    )
+    res = adapt_b3_investor_csv_to_canonical(csv_descending)
+    assert res.success is True, res.errors
+
+    sanb_buys = [r for r in res.canonical_rows if r["ticker"] == "SANB11" and r["operation"] == "buy"]
+    assert len(sanb_buys) == 2
+    assert float(sanb_buys[0]["quantity"]) == 20.0
+    assert float(sanb_buys[1]["quantity"]) == 5.0

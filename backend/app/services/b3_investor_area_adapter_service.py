@@ -537,6 +537,7 @@ def adapt_b3_rows_to_canonical(
 
     # Rastrear saldo alugado (BTC) apenas para empréstimos sem linha explícita de Empréstimo na abertura
     lent_tracker: dict[str, float] = {}
+    explicit_open_bal: dict[str, float] = {}
 
     for line_idx, row in data_rows:
         try:
@@ -645,6 +646,7 @@ def adapt_b3_rows_to_canonical(
                     backed = min(quantity_pre, exp_open) if exp_open > 0 else Decimal("0")
                     if backed > 0:
                         explicit_emp_openings_by_ticker_date[(ticker_clean, row_dt_str)] -= backed
+                        explicit_open_bal[ticker_clean] = explicit_open_bal.get(ticker_clean, 0.0) + float(backed)
                     unbacked = quantity_pre - backed
                     if unbacked > 0:
                         lent_tracker[ticker_clean] = lent_tracker.get(ticker_clean, 0.0) + float(unbacked)
@@ -674,6 +676,15 @@ def adapt_b3_rows_to_canonical(
                                 if matched_return_qty >= quantity_pre:
                                     break
                         if matched_return_qty > 0:
+                            # Reconciliar contra saldo explícito aberto; se exceder, abater também de lent_tracker
+                            matched_f = float(matched_return_qty)
+                            cur_exp = explicit_open_bal.get(ticker_clean, 0.0)
+                            from_exp = min(matched_f, cur_exp)
+                            explicit_open_bal[ticker_clean] = max(0.0, cur_exp - from_exp)
+                            overflow = matched_f - from_exp
+                            if overflow > 0 and lent_tracker.get(ticker_clean, 0.0) > 0:
+                                lent_tracker[ticker_clean] = max(0.0, lent_tracker[ticker_clean] - overflow)
+
                             skipped_items.append(
                                 B3SkippedItem(
                                     line_number=line_idx,
