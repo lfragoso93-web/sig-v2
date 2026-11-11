@@ -425,11 +425,28 @@ def adapt_b3_rows_to_canonical(
     errors: list[str] = []
     seen_signatures: set[str] = set()
 
-    for line_idx, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
-        try:
-            if not any(str(cell).strip() for cell in row):
-                continue
+    # Identificar e ordenar linhas de dados cronologicamente
+    # A B3 exporta extratos em ordem decrescente (mais recente primeiro).
+    # Inverter/ordenar cronologicamente garante que compras precedam saídas de aluguel e confirmações de custódia.
+    data_rows = [
+        (idx, r)
+        for idx, r in enumerate(rows[header_idx + 1:], start=header_idx + 2)
+        if any(str(cell).strip() for cell in r)
+    ]
 
+    # Verificar se as linhas estão em ordem decrescente analisando as datas das pontas
+    date_idx = idx_map.get("date")
+    if date_idx is not None and len(data_rows) >= 2:
+        first_d = parse_b3_date(str(data_rows[0][1][date_idx]).strip()) if date_idx < len(data_rows[0][1]) else ""
+        last_d = parse_b3_date(str(data_rows[-1][1][date_idx]).strip()) if date_idx < len(data_rows[-1][1]) else ""
+        if first_d and last_d and first_d > last_d:
+            data_rows.reverse()
+
+    # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker
+    lent_tracker: dict[str, float] = {}
+
+    for line_idx, row in data_rows:
+        try:
             raw_date = str(row[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(row) else ""
             raw_ticker_cell = str(row[idx_map["ticker"]]).strip() if "ticker" in idx_map and idx_map["ticker"] < len(row) else ""
             raw_entry_exit = str(row[idx_map["entry_exit"]]).strip() if "entry_exit" in idx_map and idx_map["entry_exit"] < len(row) else ""
@@ -443,6 +460,8 @@ def adapt_b3_rows_to_canonical(
                 continue
 
             combined_op_text = f"{raw_entry_exit} {raw_movement}".upper()
+            mov_upper = raw_movement.strip().upper()
+            entry_upper = raw_entry_exit.strip().upper()
 
             # 1. Segregação de eventos corporativos, proventos, empréstimos e transferências sem liquidação
             if any(kw in combined_op_text for kw in _CORPORATE_OR_INCOME_KEYWORDS):
@@ -469,10 +488,15 @@ def adapt_b3_rows_to_canonical(
                 )
                 continue
 
+            # Eventos corporativos de custódia (desdobro, bonificação, atualização de custódia, fração em ativos)
+            is_custody_event = any(kw in combined_op_text for kw in _CUSTODY_EVENT_KEYWORDS)
+            is_atualizacao = any(w in combined_op_text for w in ("ATUALIZACAO", "ATUALIZAÇÃO"))
+
+            is_dash_price = (raw_price.strip() in ("-", "", "None")) and (raw_total.strip() in ("-", "", "None"))
+
             # Transferência pura sem liquidação de mercado (preço "-" ou sem valor)
-            mov_upper = raw_movement.strip().upper()
             if ("TRANSFERÊNCIA" in mov_upper or "TRANSFERENCIA" in mov_upper) and "LIQUIDA" not in mov_upper:
-                if raw_price.strip() == "-" or raw_total.strip() == "-" or not raw_price.strip():
+                if is_dash_price:
                     skipped_items.append(
                         B3SkippedItem(
                             line_number=line_idx,
@@ -483,12 +507,59 @@ def adapt_b3_rows_to_canonical(
                     )
                     continue
 
-            # Eventos corporativos de custódia (desdobro, bonificação, atualização de custódia, fração em ativos)
-            is_custody_event = any(kw in combined_op_text for kw in _CUSTODY_EVENT_KEYWORDS)
+            # 3. Tratamento de Custódia Remunerada / Aluguel de Ações (BTC)
+            # Na B3, o empréstimo/aluguel gera:
+            # - Saída: "Debito" + "Transferência - Liquidação" com preço '-' e valor '-'
+            # - Retorno: "Credito" + "Transferência - Liquidação" com cotação de mercado
+            # Ambos são movimentações de custódia do aluguel, não compras/vendas financeiras
+            quantity_pre = parse_b3_number(raw_qty) if raw_qty else Decimal("0")
+            qty_float = float(quantity_pre)
 
-            # 2. Mapeamento da operação (buy / sell)
-            entry_upper = raw_entry_exit.strip().upper()
+            if "LIQUIDA" in mov_upper:
+                if is_dash_price and any(w in entry_upper for w in ("DEBITO", "DÉBITO", "SAIDA", "SAÍDA", "SELL")):
+                    lent_tracker[ticker_clean] = lent_tracker.get(ticker_clean, 0.0) + qty_float
+                    skipped_items.append(
+                        B3SkippedItem(
+                            line_number=line_idx,
+                            raw_ticker=raw_ticker_cell,
+                            movement_type="Aluguel de Ações (BTC)",
+                            reason="Transferência de custódia para aluguel de ações (BTC) segregada.",
+                        )
+                    )
+                    continue
+                elif any(w in entry_upper for w in ("CREDITO", "CRÉDITO", "ENTRADA", "BUY")):
+                    cur_lent = lent_tracker.get(ticker_clean, 0.0)
+                    if cur_lent > 0:
+                        returned = min(qty_float, cur_lent)
+                        lent_tracker[ticker_clean] -= returned
+                        skipped_items.append(
+                            B3SkippedItem(
+                                line_number=line_idx,
+                                raw_ticker=raw_ticker_cell,
+                                movement_type="Retorno de Aluguel (BTC)",
+                                reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
+                            )
+                        )
+                        if math.isclose(qty_float, returned, rel_tol=1e-7, abs_tol=1e-7):
+                            continue
+                        else:
+                            qty_float -= returned
+                            quantity_pre = Decimal(str(round(qty_float, 4)))
+                            raw_qty = str(quantity_pre)
 
+            # Segregação de movimentação interna com traço que não seja evento de custódia
+            if is_dash_price and not is_custody_event:
+                skipped_items.append(
+                    B3SkippedItem(
+                        line_number=line_idx,
+                        raw_ticker=raw_ticker_cell,
+                        movement_type=raw_movement or raw_entry_exit,
+                        reason="Movimentação interna de custódia sem liquidação financeira segregada.",
+                    )
+                )
+                continue
+
+            # 4. Mapeamento da operação (buy / sell)
             if is_custody_event:
                 if any(w in combined_op_text for w in ("DEBITO", "DÉBITO", "SAIDA", "SAÍDA", "SELL")):
                     operation = "sell"
@@ -508,7 +579,6 @@ def adapt_b3_rows_to_canonical(
                 elif any(w in entry_upper for w in ("DEBITO", "DÉBITO", "SAIDA", "SAÍDA", "SELL")):
                     operation = "sell"
                 else:
-                    # Se não há coluna de Entrada/Saída explícita (ex: em alguns PDFs), assume compra padrão
                     operation = "buy"
             elif any(w in combined_op_text for w in ("CREDITO", "CRÉDITO", "ENTRADA", "BUY")):
                 operation = "buy"
@@ -531,8 +601,8 @@ def adapt_b3_rows_to_canonical(
 
             date_str = parse_b3_date(raw_date)
             quantity = parse_b3_number(raw_qty)
-            price = parse_b3_number(raw_price) if raw_price else Decimal("0")
-            total_value = parse_b3_number(raw_total) if raw_total else Decimal("0")
+            price = parse_b3_number(raw_price) if raw_price and raw_price != "-" else Decimal("0")
+            total_value = parse_b3_number(raw_total) if raw_total and raw_total != "-" else Decimal("0")
 
             if quantity <= 0:
                 continue
@@ -565,6 +635,8 @@ def adapt_b3_rows_to_canonical(
                 "fees": "0",
                 "currency": "BRL",
                 "notes": notes,
+                "is_custody": is_custody_event,
+                "is_atualizacao": is_atualizacao,
             })
         except Exception as exc:
             errors.append(f"Linha {line_idx}: falha ao processar ({exc})")
@@ -598,8 +670,6 @@ def adapt_b3_rows_to_canonical(
     canonical_rows = filtered_canonical_rows
 
     # Ordenar transações em ordem cronológica (data ASC, compras antes de vendas na mesma data)
-    # Extratos da B3 vêm em ordem decrescente (mais recente para o mais antigo);
-    # ordenar cronologicamente garante que o histórico de compras preceda as vendas.
     canonical_rows.sort(
         key=lambda r: (
             r.get("date", ""),
@@ -607,10 +677,14 @@ def adapt_b3_rows_to_canonical(
         )
     )
 
-    # Segregar ou calibrar débitos de eventos corporativos de custódia (ex: Fração em Ativos)
-    # Se o investidor não possui saldo em custódia desse ativo no período do extrato (ex: frações
-    # oriundas de desmembramento ou bonificação de Units posteriormente leiloadas como KLBN3),
-    # o débito é segregado como informativo para não gerar vendas descobertas artificiais.
+    # Calibração de custódia:
+    # 1. 'Atualização' de custódia:
+    #    Se o investidor já possui a quantidade em carteira (ex: RBRF11, BBAS3, PETR4), é uma confirmação idempotente
+    #    e não deve duplicar o saldo. Se o investidor possui saldo menor ou zero (ex: RBRX11 de fusão ou AREA11),
+    #    incorpora apenas o delta faltante.
+    # 2. 'Fração em Ativos' / débitos de custódia:
+    #    Se não houver saldo em carteira (ex: frações residuais de Units posteriormente leiloadas como KLBN3),
+    #    segrega para evitar vendas a descoberto artificiais.
     running_balances: dict[str, float] = {}
     adjusted_canonical_rows: list[dict[str, Any]] = []
 
@@ -618,9 +692,27 @@ def adapt_b3_rows_to_canonical(
         ticker = item.get("ticker", "")
         op = item.get("operation", "")
         qty = float(item.get("quantity") or 0.0)
-        is_custody = "Evento Corporativo" in item.get("notes", "")
+        is_custody = item.pop("is_custody", False)
+        is_atualizacao = item.pop("is_atualizacao", False)
 
-        if op == "buy":
+        if is_atualizacao:
+            avail = running_balances.get(ticker, 0.0)
+            if avail >= qty - 1e-7:
+                skipped_items.append(
+                    B3SkippedItem(
+                        line_number=0,
+                        raw_ticker=ticker,
+                        movement_type="Atualização de Custódia",
+                        reason=f"Atualização de custódia já refletida no saldo (posição={avail:.4f} >= saldo={qty:.4f}).",
+                    )
+                )
+                continue
+            else:
+                delta = qty - avail
+                item["quantity"] = str(round(delta, 4))
+                running_balances[ticker] = avail + delta
+                adjusted_canonical_rows.append(item)
+        elif op == "buy":
             running_balances[ticker] = running_balances.get(ticker, 0.0) + qty
             adjusted_canonical_rows.append(item)
         elif op == "sell":
