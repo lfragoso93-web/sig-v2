@@ -855,3 +855,17 @@ def test_b3_movimentacao_duplicate_closure_rows_do_not_consume_later_buy():
     assert len(sanb_buys) == 2
     assert float(sanb_buys[0]["quantity"]) == 20.0
     assert float(sanb_buys[1]["quantity"]) == 5.0
+
+
+def test_normalize_b3_ticker_tesouro_handles_tab_flood_linearly():
+    import time
+
+    from app.services.b3_investor_area_adapter_service import normalize_b3_ticker
+
+    assert normalize_b3_ticker("TESOURO PREFIXADO 2027 INTER DTVM") == "TESOURO PREFIXADO 2027"
+    assert normalize_b3_ticker("TESOURO SELIC 2029 - NTN-B") == "TESOURO SELIC 2029"
+
+    tab_flood = "TESOURO\t" + ("\t" * 20000) + "PREFIXADO"
+    started = time.monotonic()
+    assert normalize_b3_ticker(tab_flood) == "TESOURO PREFIXADO"
+    assert (time.monotonic() - started) < 1.0
