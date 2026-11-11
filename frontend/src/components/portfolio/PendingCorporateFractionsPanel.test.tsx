@@ -95,4 +95,29 @@ describe('PendingCorporateFractionsPanel', () => {
     expect(screen.getAllByText(/1,29/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/-0,90/).length).toBeGreaterThan(0)
   })
+it('mostra o valor do leilão liquidado para frações liquidadas', () => {
+    mocks.fractions = [{
+      source_event_id: 'b3:klbn-leilao-2026',
+      ticker: 'KLBN11',
+      event_date: '2026-03-01',
+      event_type: 'GRUPAMENTO',
+      quantity_factor: 1.0,
+      fractional_quantity: 0.1,
+      settlement_status: 'SETTLED',
+      unit_settlement_price_brl: 3.94,
+      gross_amount_brl: 0.39,
+      cost_basis_brl: 1.29,
+      realized_pnl_brl: -0.90,
+      cash_treatment: 'PRO_RATA_AUCTION',
+      message: 'Fração vendida e valor creditado ao usuário.',
+    }]
+    mocks.rights = []
+
+    render(<PendingCorporateFractionsPanel portfolioId={15} />)
+
+    expect(screen.getByText('KLBN11')).toBeTruthy()
+    expect(screen.getByText('0,1')).toBeTruthy()
+    expect(screen.getByText(/Leilão liquidado/)).toBeTruthy()
+    expect(screen.getByText(/0,39/)).toBeTruthy()
+  })
 })

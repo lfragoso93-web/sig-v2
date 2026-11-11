@@ -104,6 +104,10 @@ frontend/
 - **Filtro Temporal no Extrato:** Seleção por período contábil no histórico de transações.
 - **Evolução Patrimonial Contínua:** Ponto intradiário em tempo real combinando o fechamento histórico a cotações ao vivo no `ResumePage.tsx`.
 
+### 3.8 Painel de Eventos Corporativos e Leilão de Frações (`PendingCorporateFractionsPanel.tsx`)
+- Histórico de eventos corporativos aplicados aos ativos da carteira (grupamentos, desdobramentos, bonificações) na página de Patrimônio.
+- Rastreamento explícito do status de liquidação de resíduos fracionários: exibe valor creditado em conta com indicação de liquidação (`R$ X,XX (Leilão liquidado)`) ou status `A confirmar (Aguardando leilão)` sem inferência de valor prévio.
+
 ---
 
 ## 4. Comandos de Desenvolvimento e Validação Local

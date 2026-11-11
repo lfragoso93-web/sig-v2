@@ -14,6 +14,7 @@ import io
 import math
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
@@ -453,6 +454,8 @@ def adapt_b3_rows_to_canonical(
     pure_transfers_by_key: dict[tuple[str, str], dict[str, list[tuple[int, Decimal]]]] = defaultdict(
         lambda: {"CRED": [], "DEB": []}
     )
+    grupamento_tickers: set[str] = set()
+    debits_by_ticker_date: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
     for l_idx, r in data_rows:
         try:
             r_dt = str(r[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(r) else ""
@@ -464,16 +467,24 @@ def adapt_b3_rows_to_canonical(
             r_tt = str(r[idx_map["total_value"]]).strip() if "total_value" in idx_map and idx_map["total_value"] < len(r) else ""
 
             mv_u = r_mv.strip().upper()
+            ee_u = r_ee.strip().upper()
             dash = (r_pr.strip() in ("-", "", "None")) and (r_tt.strip() in ("-", "", "None"))
+            tk = normalize_b3_ticker(r_tk)
+            if "GRUPAMENTO" in mv_u or "REVERSE" in mv_u:
+                if tk:
+                    grupamento_tickers.add(tk)
             if ("TRANSFERÊNCIA" in mv_u or "TRANSFERENCIA" in mv_u) and "LIQUIDA" not in mv_u and dash:
-                tk = normalize_b3_ticker(r_tk)
                 dt = parse_b3_date(r_dt)
                 qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
-                ee_u = r_ee.strip().upper()
                 if any(w in ee_u for w in ("CRED", "CRÉD", "ENTRADA", "BUY")):
                     pure_transfers_by_key[(dt, tk)]["CRED"].append((l_idx, qt))
                 elif any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")):
                     pure_transfers_by_key[(dt, tk)]["DEB"].append((l_idx, qt))
+            if any(w in ee_u for w in ("DEB", "DÉB", "SAIDA", "SAÍDA", "SELL")) and "TRANSFER" in mv_u:
+                dt = parse_b3_date(r_dt)
+                qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
+                if tk and dt and qt > 0:
+                    debits_by_ticker_date[(tk, dt)] += qt
         except Exception:
             pass
 
@@ -490,7 +501,35 @@ def adapt_b3_rows_to_canonical(
                     paired_transfer_line_indices.add(c_l_idx)
                     break
 
-    # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker
+    # Identificar retornos de empréstimo (BTC) com base em Credito Empréstimo sem débito simultâneo
+    btc_returns_by_ticker: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    tickers_with_explicit_loan_events: set[str] = set()
+    for l_idx, r in data_rows:
+        try:
+            r_dt = str(r[idx_map["date"]]).strip() if "date" in idx_map and idx_map["date"] < len(r) else ""
+            r_tk = str(r[idx_map["ticker"]]).strip() if "ticker" in idx_map and idx_map["ticker"] < len(r) else ""
+            r_ee = str(r[idx_map["entry_exit"]]).strip() if "entry_exit" in idx_map and idx_map["entry_exit"] < len(r) else ""
+            r_mv = str(r[idx_map["movement_type"]]).strip() if "movement_type" in idx_map and idx_map["movement_type"] < len(r) else ""
+            r_qt = str(r[idx_map["quantity"]]).strip() if "quantity" in idx_map and idx_map["quantity"] < len(r) else ""
+            ee_u = r_ee.strip().upper()
+            mv_u = r_mv.strip().upper()
+            if "EMPR" in mv_u:
+                tk = normalize_b3_ticker(r_tk)
+                if tk:
+                    tickers_with_explicit_loan_events.add(tk)
+                if any(w in ee_u for w in ("CRED", "CRÉD", "ENTRADA", "BUY")):
+                    dt = parse_b3_date(r_dt)
+                    qt = parse_b3_number(r_qt) if r_qt else Decimal("0")
+                    if tk and dt and qt > 0:
+                        if debits_by_ticker_date.get((tk, dt), Decimal("0")) == 0:
+                            btc_returns_by_ticker[tk].append({
+                                "date": datetime.strptime(dt, "%Y-%m-%d").date(),
+                                "qty": qt,
+                            })
+        except Exception:
+            pass
+
+    # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker (fallback para extratos sem linhas de Empréstimo)
     lent_tracker: dict[str, float] = {}
 
     for line_idx, row in data_rows:
@@ -532,6 +571,21 @@ def adapt_b3_rows_to_canonical(
                         raw_ticker=raw_ticker_cell,
                         movement_type=raw_movement or raw_entry_exit or "Subscrição",
                         reason="Direito ou recibo de subscrição segregado como evento corporativo.",
+                    )
+                )
+                continue
+
+            # Segregar "Fração em Ativos" decorrente de Grupamento
+            # Quando ocorre grupamento (reverse split), a B3 credita a quantidade agrupada e debita a fração.
+            # O motor canônico do SGI já aplica o grupamento e isola o resíduo fracionário como direito pendente.
+            # Importar o débito da fração geraria dupla dedução na posição de custódia.
+            if ("FRACAO EM ATIVOS" in mov_upper or "FRAÇÃO EM ATIVOS" in mov_upper) and ticker_clean in grupamento_tickers:
+                skipped_items.append(
+                    B3SkippedItem(
+                        line_number=line_idx,
+                        raw_ticker=raw_ticker_cell,
+                        movement_type="Fração em Ativos (Grupamento)",
+                        reason="Fração em Ativos decorrente de Grupamento segregada para o motor de eventos corporativos.",
                     )
                 )
                 continue
@@ -580,24 +634,53 @@ def adapt_b3_rows_to_canonical(
                     )
                     continue
                 elif any(w in entry_upper for w in ("CREDITO", "CRÉDITO", "ENTRADA", "BUY")):
-                    cur_lent = lent_tracker.get(ticker_clean, 0.0)
-                    if cur_lent > 0:
-                        returned = min(qty_float, cur_lent)
-                        lent_tracker[ticker_clean] -= returned
-                        skipped_items.append(
-                            B3SkippedItem(
-                                line_number=line_idx,
-                                raw_ticker=raw_ticker_cell,
-                                movement_type="Retorno de Aluguel (BTC)",
-                                reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
+                    if ticker_clean in tickers_with_explicit_loan_events:
+                        row_dt = datetime.strptime(parse_b3_date(raw_date), "%Y-%m-%d").date()
+                        available_returns = btc_returns_by_ticker.get(ticker_clean, [])
+                        matched_return_qty = Decimal("0")
+                        for item in available_returns:
+                            ret_dt = item["date"]
+                            ret_qty = item["qty"]
+                            if timedelta(0) <= (row_dt - ret_dt) <= timedelta(days=5) and ret_qty > 0:
+                                needed = quantity_pre - matched_return_qty
+                                take = min(needed, ret_qty)
+                                item["qty"] -= take
+                                matched_return_qty += take
+                                if matched_return_qty >= quantity_pre:
+                                    break
+                        if matched_return_qty > 0:
+                            skipped_items.append(
+                                B3SkippedItem(
+                                    line_number=line_idx,
+                                    raw_ticker=raw_ticker_cell,
+                                    movement_type="Retorno de Aluguel (BTC)",
+                                    reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
+                                )
                             )
-                        )
-                        if math.isclose(qty_float, returned, rel_tol=1e-7, abs_tol=1e-7):
-                            continue
-                        else:
-                            qty_float -= returned
-                            quantity_pre = Decimal(str(round(qty_float, 4)))
-                            raw_qty = str(quantity_pre)
+                            if matched_return_qty >= quantity_pre:
+                                continue
+                            else:
+                                quantity_pre -= matched_return_qty
+                                raw_qty = str(quantity_pre)
+                    else:
+                        cur_lent = lent_tracker.get(ticker_clean, 0.0)
+                        if cur_lent > 0:
+                            returned = min(qty_float, cur_lent)
+                            lent_tracker[ticker_clean] -= returned
+                            skipped_items.append(
+                                B3SkippedItem(
+                                    line_number=line_idx,
+                                    raw_ticker=raw_ticker_cell,
+                                    movement_type="Retorno de Aluguel (BTC)",
+                                    reason="Retorno de custódia de aluguel de ações (BTC) segregado.",
+                                )
+                            )
+                            if math.isclose(qty_float, returned, rel_tol=1e-7, abs_tol=1e-7):
+                                continue
+                            else:
+                                qty_float -= returned
+                                quantity_pre = Decimal(str(round(qty_float, 4)))
+                                raw_qty = str(quantity_pre)
 
             # Segregação de movimentação interna com traço que não seja evento de custódia
             if is_dash_price and not is_custody_event:

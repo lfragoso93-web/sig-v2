@@ -58,6 +58,11 @@ O desenvolvimento no backend do SGI v2 é rigidamente condicionado pelos seguint
   - **Contexto de Usuário:** `PortfolioAccessContext.for_user(portfolio_id=..., user_id=...)`, validando ownership e permissão explícita na persistência.
   - **Contexto de Sistema:** `PortfolioAccessContext.for_system(portfolio_id=..., purpose=...)`, exigindo preenchimento obrigatório da finalidade auditável para tarefas agendadas e rotinas CLI. Bypass implícito é proibido.
 
+### 2.4 Resiliência Contábil de Importações e Eventos Corporativos
+- O adaptador da Área do Investidor B3 segrega débitos de `Fração em Ativos` decorrentes de grupamentos de ações, permitindo que a fração seja tratada canonicamente pelo motor de eventos corporativos até sua liquidação em leilão sem provocar dupla redução na custódia.
+- Devoluções de empréstimo de ações (BTC) são desambiguadas de compras a mercado através do rastreamento de encerramentos contratuais de empréstimo, preservando a integridade das compras e o cálculo do Preço Médio (PM).
+- A API de eventos corporativos da carteira (`/corporate-events/pending-fractions`) suporta listagem completa e retroativa dos eventos aplicados e liquidações de leilão.
+
 ### 2.4 Ponto Único Canônico de Escrita (Single Writer Policy)
 - **Transações:** Apenas o `TransactionWriteService` possui autoridade para persistir lançamentos contábeis na tabela `transactions`. A tabela `transactions` é o livro-razão canônico de todas as classes (ações, FIIs, renda fixa, tesouro, cripto).
 - **Snapshots Patrimoniais:** Apenas o `PortfolioSnapshotWriterService` (`portfolio_snapshot_canonical_twr_service.py`) é autorizado a materializar snapshots patrimoniais e classes em `portfolio_snapshots` e `portfolio_class_snapshots`.

@@ -54,14 +54,14 @@ export interface PendingCorporateFraction {
   event_date: string
   event_type: string
   quantity_factor: number
-  fractional_quantity: number
-  settlement_status: 'PENDING_VALUE'
-  unit_settlement_price_brl: null
-  gross_amount_brl: null
-  cost_basis_brl: null
-  realized_pnl_brl: null
-  cash_treatment: null
-  message: string
+  fractional_quantity?: number | null
+  settlement_status?: 'PENDING_VALUE' | 'SETTLED' | string | null
+  unit_settlement_price_brl?: number | null
+  gross_amount_brl?: number | null
+  cost_basis_brl?: number | null
+  realized_pnl_brl?: number | null
+  cash_treatment?: string | null
+  message?: string | null
 }
 
 export interface PortfolioCorporateRight {

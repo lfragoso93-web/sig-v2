@@ -215,6 +215,7 @@ async def list_transaction_classes(
 )
 async def list_portfolio_pending_corporate_fractions(
     portfolio_id: int,
+    pending_only: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -224,9 +225,15 @@ async def list_portfolio_pending_corporate_fractions(
         permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
     )
     try:
+        kwargs = {}
+        import inspect
+        sig = inspect.signature(load_portfolio_pending_corporate_fractions)
+        if "pending_only" in sig.parameters:
+            kwargs["pending_only"] = pending_only
         return await load_portfolio_pending_corporate_fractions(
             db,
             access=access,
+            **kwargs,
         )
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
