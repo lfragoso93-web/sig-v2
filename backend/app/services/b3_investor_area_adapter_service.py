@@ -437,10 +437,15 @@ def adapt_b3_rows_to_canonical(
     # Verificar se as linhas estão em ordem decrescente analisando as datas das pontas
     date_idx = idx_map.get("date")
     if date_idx is not None and len(data_rows) >= 2:
-        first_d = parse_b3_date(str(data_rows[0][1][date_idx]).strip()) if date_idx < len(data_rows[0][1]) else ""
-        last_d = parse_b3_date(str(data_rows[-1][1][date_idx]).strip()) if date_idx < len(data_rows[-1][1]) else ""
-        if first_d and last_d and first_d > last_d:
-            data_rows.reverse()
+        try:
+            first_raw = str(data_rows[0][1][date_idx]).strip() if date_idx < len(data_rows[0][1]) else ""
+            last_raw = str(data_rows[-1][1][date_idx]).strip() if date_idx < len(data_rows[-1][1]) else ""
+            first_d = parse_b3_date(first_raw) if first_raw else ""
+            last_d = parse_b3_date(last_raw) if last_raw else ""
+            if first_d and last_d and first_d > last_d:
+                data_rows.reverse()
+        except Exception:
+            pass
 
     # Rastrear saldo alugado (BTC / Custódia Remunerada) por ticker
     lent_tracker: dict[str, float] = {}
@@ -695,7 +700,7 @@ def adapt_b3_rows_to_canonical(
         is_custody = item.pop("is_custody", False)
         is_atualizacao = item.pop("is_atualizacao", False)
 
-        if is_atualizacao:
+        if is_atualizacao and op == "buy":
             avail = running_balances.get(ticker, 0.0)
             if avail >= qty - 1e-7:
                 skipped_items.append(
