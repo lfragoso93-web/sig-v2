@@ -644,10 +644,12 @@ def adapt_b3_rows_to_canonical(
                     row_dt_str = parse_b3_date(raw_date)
                     exp_open = explicit_emp_openings_by_ticker_date.get((ticker_clean, row_dt_str), Decimal("0"))
                     backed = min(quantity_pre, exp_open) if exp_open > 0 else Decimal("0")
-                    if backed > 0:
+                    if backed > 0 and btc_returns_by_ticker.get(ticker_clean):
                         explicit_emp_openings_by_ticker_date[(ticker_clean, row_dt_str)] -= backed
                         explicit_open_bal[ticker_clean] = explicit_open_bal.get(ticker_clean, 0.0) + float(backed)
-                    unbacked = quantity_pre - backed
+                        unbacked = quantity_pre - backed
+                    else:
+                        unbacked = quantity_pre
                     if unbacked > 0:
                         lent_tracker[ticker_clean] = lent_tracker.get(ticker_clean, 0.0) + float(unbacked)
                     skipped_items.append(
