@@ -288,7 +288,6 @@ async def audit_asset_price_coverage(
                 last_price_date=last_date,
                 end_grace_days=end_grace_days,
                 include_start_gaps=include_start_gaps,
-                ignore_end_unavailable=ignore_end_unavailable,
             )
             ranges = build_missing_ranges(
                 status=status,
@@ -300,6 +299,7 @@ async def audit_asset_price_coverage(
                 provider_last_sync_at=provider_last_sync_at,
                 end_grace_days=end_grace_days,
                 include_start_gaps=include_start_gaps,
+                ignore_end_unavailable=ignore_end_unavailable,
             )
 
         report.append(
