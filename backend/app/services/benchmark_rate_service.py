@@ -11,12 +11,12 @@ Servico DB-first de benchmarks macroeconomicos para Renda Fixa.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Iterable, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +56,7 @@ def _daily_rate_from_annual_pct(annual_pct: Decimal) -> Decimal:
 
 async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
     inserted_or_updated = 0
+    now_utc = datetime.now(timezone.utc)
     for row in rows:
         values = {
             "indicator": row["indicator"],
@@ -72,15 +73,20 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
             values["rate_daily"] = None
             values["rate_monthly"] = row["value"]
 
+        rate_changed = (
+            RateHistory.rate_daily.is_distinct_from(values.get("rate_daily"))
+            | RateHistory.rate_monthly.is_distinct_from(values.get("rate_monthly"))
+        )
         stmt = (
             pg_insert(RateHistory)
-            .values(**values)
+            .values(**values, created_at=now_utc)
             .on_conflict_do_update(
                 index_elements=[RateHistory.indicator, RateHistory.date],
                 set_={
                     "rate_daily": values.get("rate_daily"),
                     "rate_monthly": values.get("rate_monthly"),
                     "source": values["source"],
+                    "created_at": case((rate_changed, now_utc), else_=RateHistory.created_at),
                 },
                 where=RateHistory.source.in_(_OFFICIAL_BENCHMARK_SOURCES),
             )

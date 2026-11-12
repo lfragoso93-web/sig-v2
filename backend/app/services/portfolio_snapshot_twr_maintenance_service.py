@@ -329,7 +329,11 @@ async def maintain_twr_snapshots_for_active_portfolios(
                     end_date=_today_brt(),
                 )
             if rebuild_classes:
-                class_snapshots += await rebuild_class_snapshots(db, access.portfolio_id)
+                class_snapshots += await rebuild_class_snapshots(
+                    db,
+                    access.portfolio_id,
+                    end_date=_today_brt(),
+                )
             processed += 1
         except Exception as exc:
             await db.rollback()
