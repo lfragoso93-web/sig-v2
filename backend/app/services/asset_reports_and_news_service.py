@@ -61,7 +61,7 @@ CURATED_FII_CNPJS: dict[str, str] = {
     "KNRI11": "12005956000165",
     "XPLG11": "26502794000185",
     "XPML11": "28757546000100",
-    "VISC11": "17554274000185",
+    "VISC11": "17554274000125",
     "KNIP11": "24960430000113",
     "KNCR11": "16706958000132",
     "BTLG11": "11839593000109",
@@ -75,7 +75,7 @@ CURATED_FII_CNPJS: dict[str, str] = {
     "LVBI11": "30629603000118",
     "PVBI11": "35652102000176",
     "TGAR11": "25032881000153",
-    "RECR11": "28152272000107",
+    "RECR11": "28152272000126",
     "VRTA11": "11664201000100",
     "HGCR11": "11160521000122",
     "RZTR11": "36501128000186",
@@ -83,9 +83,8 @@ CURATED_FII_CNPJS: dict[str, str] = {
     "GARE11": "37295919000160",
     "TRXF11": "28548288000152",
     "ALZR11": "28737771000185",
-    "MALL11": "26499833000188",
+    "MALL11": "26499833000132",
     "HSML11": "32892018000131",
-    "JSRE11": "13125917000192",
 }
 
 
@@ -93,6 +92,21 @@ def _digits_only(value: Optional[str]) -> str:
     if not value:
         return ""
     return re.sub(r"\D+", "", str(value))
+
+
+def _is_valid_cnpj(value: Optional[str]) -> bool:
+    digits = _digits_only(value)
+    if len(digits) != 14 or len(set(digits)) == 1:
+        return False
+    w1 = (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
+    s1 = sum(int(d) * w for d, w in zip(digits[:12], w1))
+    r1 = s1 % 11
+    d1 = 0 if r1 < 2 else 11 - r1
+    w2 = (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
+    s2 = sum(int(d) * w for d, w in zip(digits[:12] + str(d1), w2))
+    r2 = s2 % 11
+    d2 = 0 if r2 < 2 else 11 - r2
+    return digits[12:] == f"{d1}{d2}"
 
 
 def _parse_br_or_iso_date(value: Any) -> Optional[str]:
@@ -164,11 +178,12 @@ class AssetReportsAndNewsService:
         if enrichment and isinstance(enrichment.get("fii_indicators"), dict):
             raw_cnpj = enrichment["fii_indicators"].get("cnpj")
             digits = _digits_only(raw_cnpj)
-            if len(digits) == 14:
+            if _is_valid_cnpj(digits):
                 return digits
 
-        if clean_ticker in CURATED_FII_CNPJS:
-            return CURATED_FII_CNPJS[clean_ticker]
+        curated = CURATED_FII_CNPJS.get(clean_ticker)
+        if curated and _is_valid_cnpj(curated):
+            return curated
 
         # Tenta buscar via asset_enrichment_service (Brapi v2 FII indicators)
         try:
@@ -177,7 +192,7 @@ class AssetReportsAndNewsService:
             dto = await asset_enrichment_service.get_fii_indicators(clean_ticker)
             if dto and dto.cnpj:
                 digits = _digits_only(dto.cnpj)
-                if len(digits) == 14:
+                if _is_valid_cnpj(digits):
                     return digits
         except Exception:
             pass

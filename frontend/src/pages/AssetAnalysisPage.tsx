@@ -277,12 +277,17 @@ function DailyPriceHistorySection({ rows, currency }: { rows: DataRow[]; currenc
           close: Number.isFinite(closeVal) ? closeVal : 0,
         }
       })
-      .filter(point => point.day && point.close > 0)
+      .filter(point => /^\d{4}-\d{2}-\d{2}$/.test(point.day) && point.close > 0)
+      .sort((a, b) => a.day.localeCompare(b.day))
 
-    if (range === '30D') return normalized.slice(-30)
-    if (range === '90D') return normalized.slice(-90)
-    if (range === '1A') return normalized.slice(-252)
-    return normalized
+    if (range === 'ALL' || normalized.length === 0) return normalized
+
+    const latestDay = normalized[normalized.length - 1].day
+    const [y, m, d] = latestDay.split('-').map(Number)
+    const windowDays = range === '30D' ? 30 : range === '90D' ? 90 : 365
+    const cutoffDate = new Date(Date.UTC(y, m - 1, d - windowDays))
+    const cutoffIso = cutoffDate.toISOString().slice(0, 10)
+    return normalized.filter(point => point.day >= cutoffIso)
   }, [rows, range])
 
   return (
@@ -514,10 +519,10 @@ export default function AssetAnalysisPage() {
   })
 
   const targetIdentifier = urlParam || (selected?.id ? String(selected.id) : null)
-  const refreshPollCountRef = useRef(0)
+  const refreshDeadlineRef = useRef<number | null>(null)
 
   useEffect(() => {
-    refreshPollCountRef.current = 0
+    refreshDeadlineRef.current = null
   }, [targetIdentifier])
 
   const { data, isLoading, isError } = useQuery<AssetAnalysis>({
@@ -527,11 +532,15 @@ export default function AssetAnalysisPage() {
     staleTime: 60_000,
     refetchInterval: query => {
       const pending = query.state.data?.reports_news_refresh_pending
-      if (pending && refreshPollCountRef.current < 5) {
-        refreshPollCountRef.current += 1
-        return 3_000
+      if (!pending) {
+        refreshDeadlineRef.current = null
+        return false
       }
-      return false
+      const now = Date.now()
+      if (refreshDeadlineRef.current === null) {
+        refreshDeadlineRef.current = now + 20_000
+      }
+      return now < refreshDeadlineRef.current ? 3_000 : false
     },
   })
 

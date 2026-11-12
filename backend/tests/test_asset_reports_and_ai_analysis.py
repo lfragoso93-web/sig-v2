@@ -6,7 +6,9 @@ import pytest
 
 from app.services.asset_ai_analysis_service import asset_ai_analysis_service
 from app.services.asset_reports_and_news_service import (
+    CURATED_FII_CNPJS,
     AssetReportsAndNewsService,
+    _is_valid_cnpj,
     _parse_br_or_iso_date,
 )
 
@@ -15,6 +17,11 @@ def test_parse_br_or_iso_date():
     assert _parse_br_or_iso_date("15/10/2026 18:30") == "2026-10-15"
     assert _parse_br_or_iso_date("10/2026") == "2026-10-01"
     assert _parse_br_or_iso_date("2026-11-03") == "2026-11-03"
+
+
+def test_curated_fii_cnpjs_all_have_valid_check_digits():
+    for ticker, cnpj in CURATED_FII_CNPJS.items():
+        assert _is_valid_cnpj(cnpj), f"CNPJ inválido para {ticker}: {cnpj}"
 
 
 @pytest.mark.asyncio
