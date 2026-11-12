@@ -477,3 +477,56 @@ def test_project_snapshot_positions_retains_zero_qty_cash_flow_and_confirmed_com
     assert len(klbn_proj.corporate_action_cash_flows) == 1
     assert klbn_proj.corporate_action_cash_flows[0].gross_amount_brl == Decimal("2.50")
     assert all(r.status == "CONFIRMED" for r in klbn_proj.component_bonus_cash_rights)
+
+
+def test_class_snapshot_projection_carries_corporate_action_cash_flow_total() -> None:
+    from app.models.asset import AssetType
+    from app.services.class_snapshot_position_projection import (
+        project_class_positions_at,
+    )
+
+    tx = SimpleNamespace(
+        id=10,
+        ticker="NIKE34",
+        asset_type="BDR",
+        operation=OperationType.buy,
+        quantity=Decimal("1"),
+        price=Decimal("30.00"),
+        fees=Decimal("0"),
+        date=date(2026, 1, 10),
+        currency="BRL",
+        fx_rate=None,
+    )
+    action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:nike34-bdr-cash",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=None,
+            settlement_gross_amount_brl=Decimal("25.40"),
+            settlement_date=date(2026, 10, 21),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+    )
+
+    before_credit = project_class_positions_at(
+        [tx],
+        {"NIKE34": (action,)},
+        target_date=date(2026, 10, 15),
+    )
+    assert before_credit["NIKE34"].asset_type == AssetType.BDR
+    assert before_credit["NIKE34"].corporate_action_cash_flow_total == Decimal("0")
+
+    on_credit = project_class_positions_at(
+        [tx],
+        {"NIKE34": (action,)},
+        target_date=date(2026, 10, 21),
+    )
+    assert on_credit["NIKE34"].quantity == Decimal("0")
+    assert on_credit["NIKE34"].corporate_action_cash_flow_total == Decimal("25.40")
+    assert on_credit["NIKE34"].realized_pnl == Decimal("-4.60")

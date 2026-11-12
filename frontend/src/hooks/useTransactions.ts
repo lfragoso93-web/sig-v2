@@ -102,6 +102,7 @@ export function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, p
   // Eventos corporativos e frações
   qc.invalidateQueries({ queryKey: ['portfolio-pending-corporate-fractions', portfolioId] })
   qc.invalidateQueries({ queryKey: ['portfolio-corporate-rights', portfolioId] })
+  qc.invalidateQueries({ queryKey: ['portfolio-corporate-fraction-settlements', portfolioId] })
 }
 
 export function useTransactions(

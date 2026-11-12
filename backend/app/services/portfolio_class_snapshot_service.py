@@ -414,6 +414,7 @@ async def rebuild_class_snapshots(
     )
 
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
+    previous_cash_flow_by_class: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
     treasury_inputs: list[DailyTwrInput] = []
     treasury_realized_pnl = _ZERO
     count = 0
@@ -506,12 +507,22 @@ async def rebuild_class_snapshots(
 
             class_state = return_states[asset_type]
             dividends_day = dividends_by_class_day.get((asset_type, cursor), _ZERO)
+            cash_flow_total = sum(
+                (
+                    position.corporate_action_cash_flow_total
+                    for position in projected_positions.values()
+                    if position.asset_type == asset_type
+                ),
+                _ZERO,
+            )
+            cash_flow_day = cash_flow_total - previous_cash_flow_by_class[asset_type]
+            previous_cash_flow_by_class[asset_type] = cash_flow_total
             class_state.dividends_accumulated += dividends_day
             daily_return = calculate_daily_twr_pct(
                 class_state.previous_value,
                 market_value,
                 net_external_flow=external_flows[asset_type],
-                dividends_day=dividends_day,
+                dividends_day=(dividends_day + cash_flow_day),
             )
             class_state.accumulated_return_pct = append_compounded_return_pct(
                 class_state.accumulated_return_pct,

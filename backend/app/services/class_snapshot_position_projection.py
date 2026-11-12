@@ -22,6 +22,7 @@ class ClassProjectedPosition:
     cost: Decimal
     realized_pnl: Decimal
     has_pending_fraction: bool = False
+    corporate_action_cash_flow_total: Decimal = _ZERO
 
 
 def project_class_positions_at(
@@ -61,6 +62,10 @@ def project_class_positions_at(
             and not position.pending_corporate_action_fractions
         ):
             continue
+        cash_flow_total = sum(
+            (Decimal(str(cf.gross_amount_brl)) for cf in position.corporate_action_cash_flows),
+            _ZERO,
+        )
         positions[ticker] = ClassProjectedPosition(
             ticker=ticker,
             asset_type=asset_type,
@@ -70,6 +75,7 @@ def project_class_positions_at(
             has_pending_fraction=bool(
                 position.pending_corporate_action_fractions
             ),
+            corporate_action_cash_flow_total=cash_flow_total,
         )
     return positions
 

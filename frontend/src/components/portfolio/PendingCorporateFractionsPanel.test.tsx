@@ -5,6 +5,7 @@ import PendingCorporateFractionsPanel from './PendingCorporateFractionsPanel'
 const mocks = vi.hoisted(() => ({
   fractions: [] as unknown[],
   rights: [] as unknown[],
+  settlements: [] as unknown[],
   upsertAsync: vi.fn(),
   deleteAsync: vi.fn(),
 }))
@@ -16,6 +17,7 @@ vi.mock('@/hooks/usePortfolio', () => ({
     error: null,
   }),
   usePortfolioCorporateRights: () => ({ data: mocks.rights }),
+  useCorporateFractionSettlements: () => ({ data: mocks.settlements }),
   useUpsertCorporateFractionSettlement: () => ({
     mutateAsync: mocks.upsertAsync,
     isPending: false,
@@ -30,6 +32,7 @@ describe('PendingCorporateFractionsPanel', () => {
   beforeEach(() => {
     mocks.fractions = []
     mocks.rights = []
+    mocks.settlements = []
     mocks.upsertAsync.mockReset().mockResolvedValue({})
     mocks.deleteAsync.mockReset().mockResolvedValue({})
   })
@@ -99,6 +102,54 @@ describe('PendingCorporateFractionsPanel', () => {
         gross_amount_brl: 25.4,
         settlement_date: '2026-10-20',
         notes: 'Extrato corretora',
+      })
+    })
+  })
+
+  it('preserva a data de crédito e observação salvas ao editar liquidação confirmada', async () => {
+    mocks.fractions = [{
+      source_event_id: 'b3:nike34',
+      ticker: 'NIKE34',
+      event_date: '2026-10-13',
+      event_type: 'GRUPAMENTO',
+      quantity_factor: 0.2,
+      fractional_quantity: 0.2,
+      settlement_status: 'SETTLED',
+      unit_settlement_price_brl: 127,
+      gross_amount_brl: 25.4,
+      cost_basis_brl: 30.0,
+      realized_pnl_brl: -4.6,
+      cash_treatment: 'PORTFOLIO_USER_CONFIRMED_AUCTION',
+      message: 'Fração vendida e valor creditado ao usuário.',
+    }]
+    mocks.settlements = [{
+      id: 1,
+      portfolio_id: 15,
+      source_event_id: 'b3:nike34',
+      ticker: 'NIKE34',
+      gross_amount_brl: 25.4,
+      settlement_date: '2026-10-21',
+      notes: 'Extrato salvo',
+      cash_treatment: 'PORTFOLIO_USER_CONFIRMED_AUCTION',
+      event_date: '2026-10-21',
+    }]
+
+    render(<PendingCorporateFractionsPanel portfolioId={15} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Editar/i }))
+    expect((screen.getByLabelText(/Data do crédito/i) as HTMLInputElement).value).toBe('2026-10-21')
+    expect((screen.getByLabelText(/Observação/i) as HTMLInputElement).value).toBe('Extrato salvo')
+    fireEvent.change(screen.getByLabelText(/Valor recebido no leilão/i), {
+      target: { value: '26,00' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar liquidação/i }))
+
+    await waitFor(() => {
+      expect(mocks.upsertAsync).toHaveBeenCalledWith({
+        source_event_id: 'b3:nike34',
+        gross_amount_brl: 26,
+        settlement_date: '2026-10-21',
+        notes: 'Extrato salvo',
       })
     })
   })

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Clock3, CheckCircle2, PencilLine, RotateCcw } from 'lucide-react'
 import {
+  useCorporateFractionSettlements,
   useDeleteCorporateFractionSettlement,
   usePendingCorporateFractions,
   usePortfolioCorporateRights,
@@ -13,6 +14,7 @@ interface EditingSettlementTarget {
   eventLabel: string
   defaultDate: string
   initialAmount: string
+  initialNotes: string
 }
 
 function parseBrlInput(raw: string): number | null {
@@ -42,6 +44,10 @@ export default function PendingCorporateFractionsPanel({
     usePendingCorporateFractions(portfolioId)
   const rightsQuery = usePortfolioCorporateRights(portfolioId)
   const rights = rightsQuery.data ?? []
+  const settlementsQuery = useCorporateFractionSettlements(portfolioId)
+  const settlementByEvent = new Map(
+    (settlementsQuery.data ?? []).map(item => [item.source_event_id, item])
+  )
 
   const upsertSettlement = useUpsertCorporateFractionSettlement(portfolioId)
   const deleteSettlement = useDeleteCorporateFractionSettlement(portfolioId)
@@ -58,7 +64,7 @@ export default function PendingCorporateFractionsPanel({
     setEditing(target)
     setAmountInput(target.initialAmount)
     setDateInput(target.defaultDate)
-    setNotesInput('')
+    setNotesInput(target.initialNotes)
     setFormError(null)
   }
 
@@ -144,8 +150,10 @@ export default function PendingCorporateFractionsPanel({
                     {fractions.map(fraction => {
                       const hasFraction =
                         fraction.fractional_quantity != null && Number(fraction.fractional_quantity) > 0
+                      const savedSettlement = settlementByEvent.get(fraction.source_event_id)
                       const isUserConfirmed =
                         fraction.cash_treatment === 'PORTFOLIO_USER_CONFIRMED_AUCTION'
+                        || savedSettlement != null
 
                       return (
                         <tr
@@ -178,36 +186,18 @@ export default function PendingCorporateFractionsPanel({
                             ) : fraction.settlement_status === 'PENDING_VALUE' ? (
                               <div>
                                 <span>A confirmar</span>
-                                <span className="block text-xs" style={{ color: 'var(--color-text-faint)' }}>Aguardando leilão</span>
+                                <span className="block text-xs" style={{ color: 'var(--color-text-faint)' }}>
+                                  {savedSettlement
+                                    ? `Crédito agendado: R$ ${formatBrl(savedSettlement.gross_amount_brl)}`
+                                    : 'Aguardando leilão'}
+                                </span>
                               </div>
                             ) : (
                               <span>Aplicado</span>
                             )}
                           </td>
                           <td className="py-3 pl-4 text-right whitespace-nowrap">
-                            {fraction.settlement_status === 'PENDING_VALUE' && hasFraction ? (
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() =>
-                                  openEditor({
-                                    sourceEventId: fraction.source_event_id,
-                                    ticker: fraction.ticker,
-                                    eventLabel: `${fraction.ticker} · ${fraction.event_type}`,
-                                    defaultDate: fraction.event_date,
-                                    initialAmount: '',
-                                  })
-                                }
-                                className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border transition-colors hover:opacity-90"
-                                style={{
-                                  borderColor: 'var(--color-divider)',
-                                  color: 'var(--color-text-primary)',
-                                }}
-                              >
-                                <PencilLine size={12} />
-                                Informar leilão
-                              </button>
-                            ) : isUserConfirmed ? (
+                            {isUserConfirmed ? (
                               <div className="inline-flex items-center gap-2">
                                 <button
                                   type="button"
@@ -217,11 +207,14 @@ export default function PendingCorporateFractionsPanel({
                                       sourceEventId: fraction.source_event_id,
                                       ticker: fraction.ticker,
                                       eventLabel: `${fraction.ticker} · ${fraction.event_type}`,
-                                      defaultDate: fraction.event_date,
+                                      defaultDate: savedSettlement?.settlement_date ?? fraction.event_date,
                                       initialAmount:
-                                        fraction.gross_amount_brl != null
-                                          ? formatBrl(fraction.gross_amount_brl)
-                                          : '',
+                                        savedSettlement != null
+                                          ? formatBrl(savedSettlement.gross_amount_brl)
+                                          : fraction.gross_amount_brl != null
+                                            ? formatBrl(fraction.gross_amount_brl)
+                                            : '',
+                                      initialNotes: savedSettlement?.notes ?? '',
                                     })
                                   }
                                   className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium border"
@@ -242,6 +235,29 @@ export default function PendingCorporateFractionsPanel({
                                   Limpar
                                 </button>
                               </div>
+                            ) : fraction.settlement_status === 'PENDING_VALUE' && hasFraction ? (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() =>
+                                  openEditor({
+                                    sourceEventId: fraction.source_event_id,
+                                    ticker: fraction.ticker,
+                                    eventLabel: `${fraction.ticker} · ${fraction.event_type}`,
+                                    defaultDate: fraction.event_date,
+                                    initialAmount: '',
+                                    initialNotes: '',
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border transition-colors hover:opacity-90"
+                                style={{
+                                  borderColor: 'var(--color-divider)',
+                                  color: 'var(--color-text-primary)',
+                                }}
+                              >
+                                <PencilLine size={12} />
+                                Informar leilão
+                              </button>
                             ) : null}
                           </td>
                         </tr>
@@ -383,63 +399,69 @@ export default function PendingCorporateFractionsPanel({
                       <td className="py-3 pl-4" />
                     </tr>
                   )))}
-                  {rights.map(right => (
-                    <tr key={`${right.event_id}:total`} className="border-t font-semibold" style={{ borderColor: 'var(--color-divider)' }}>
-                      <td className="py-3 pr-4">Total {right.ticker}</td>
-                      <td className="py-3 pr-4" colSpan={3}>
-                        {right.cash_status === 'CONFIRMED' ? (
-                          <span className="inline-flex items-center gap-1" style={{ color: 'var(--color-success, #16a34a)' }}>
-                            <CheckCircle2 size={13} />
-                            Crédito confirmado manualmente
-                          </span>
-                        ) : right.settlement_status === 'AVAILABLE' ? (
-                          'Disponível segundo o emissor; crédito individual não confirmado'
-                        ) : (
-                          'Data de pagamento futura'
-                        )}
-                      </td>
-                      <td className="py-3 pl-4 text-right tabular-nums">
-                        R$ {formatBrl(right.gross_amount_brl)}
-                      </td>
-                      <td className="py-3 pl-4 text-right tabular-nums">R$ {formatBrl(right.fractional_cost_basis_brl)}</td>
-                      <td className="py-3 pl-4 text-right tabular-nums">R$ {formatBrl(right.estimated_fractional_result_brl)}</td>
-                      <td className="py-3 pl-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-2 font-normal">
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() =>
-                              openEditor({
-                                sourceEventId: right.source_event_id,
-                                ticker: right.ticker,
-                                eventLabel: `${right.ticker} · ${right.event_type}`,
-                                defaultDate: right.settlement_date,
-                                initialAmount: formatBrl(right.gross_amount_brl),
-                              })
-                            }
-                            className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border"
-                            style={{ borderColor: 'var(--color-divider)' }}
-                          >
-                            <PencilLine size={12} />
-                            {right.cash_status === 'CONFIRMED' ? 'Editar' : 'Confirmar valor'}
-                          </button>
-                          {right.cash_status === 'CONFIRMED' && (
+                  {rights.map(right => {
+                    const savedRightSettlement = settlementByEvent.get(right.source_event_id)
+                    return (
+                      <tr key={`${right.event_id}:total`} className="border-t font-semibold" style={{ borderColor: 'var(--color-divider)' }}>
+                        <td className="py-3 pr-4">Total {right.ticker}</td>
+                        <td className="py-3 pr-4" colSpan={3}>
+                          {right.cash_status === 'CONFIRMED' ? (
+                            <span className="inline-flex items-center gap-1" style={{ color: 'var(--color-success, #16a34a)' }}>
+                              <CheckCircle2 size={13} />
+                              Crédito confirmado manualmente
+                            </span>
+                          ) : right.settlement_status === 'AVAILABLE' ? (
+                            'Disponível segundo o emissor; crédito individual não confirmado'
+                          ) : (
+                            'Data de pagamento futura'
+                          )}
+                        </td>
+                        <td className="py-3 pl-4 text-right tabular-nums">
+                          R$ {formatBrl(right.gross_amount_brl)}
+                        </td>
+                        <td className="py-3 pl-4 text-right tabular-nums">R$ {formatBrl(right.fractional_cost_basis_brl)}</td>
+                        <td className="py-3 pl-4 text-right tabular-nums">R$ {formatBrl(right.estimated_fractional_result_brl)}</td>
+                        <td className="py-3 pl-4 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-2 font-normal">
                             <button
                               type="button"
                               disabled={isBusy}
-                              onClick={() => void handleClear(right.source_event_id)}
-                              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs"
-                              style={{ color: 'var(--color-text-faint)' }}
-                              aria-label={`Remover confirmação de ${right.ticker}`}
+                              onClick={() =>
+                                openEditor({
+                                  sourceEventId: right.source_event_id,
+                                  ticker: right.ticker,
+                                  eventLabel: `${right.ticker} · ${right.event_type}`,
+                                  defaultDate: savedRightSettlement?.settlement_date ?? right.settlement_date,
+                                  initialAmount: formatBrl(
+                                    savedRightSettlement?.gross_amount_brl ?? right.gross_amount_brl
+                                  ),
+                                  initialNotes: savedRightSettlement?.notes ?? '',
+                                })
+                              }
+                              className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border"
+                              style={{ borderColor: 'var(--color-divider)' }}
                             >
-                              <RotateCcw size={12} />
-                              Limpar
+                              <PencilLine size={12} />
+                              {right.cash_status === 'CONFIRMED' ? 'Editar' : 'Confirmar valor'}
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {right.cash_status === 'CONFIRMED' && (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => void handleClear(right.source_event_id)}
+                                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs"
+                                style={{ color: 'var(--color-text-faint)' }}
+                                aria-label={`Remover confirmação de ${right.ticker}`}
+                              >
+                                <RotateCcw size={12} />
+                                Limpar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -42,6 +42,7 @@ from app.services.portfolio_asset_corporate_lifecycle_service import (
 from app.services.portfolio_corporate_fraction_settlement_service import (
     WRITE_PORTFOLIO_CORPORATE_FRACTIONS,
     delete_portfolio_corporate_fraction_settlement,
+    list_portfolio_corporate_fraction_settlements,
     upsert_portfolio_corporate_fraction_settlement,
 )
 from app.services.portfolio_corporate_rights_service import (
@@ -298,6 +299,29 @@ async def list_portfolio_corporate_rights(
     )
     try:
         return await load_portfolio_corporate_rights(db, access=access)
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    response_model=list[CorporateFractionSettlementOut],
+)
+async def list_portfolio_fraction_settlements_route(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await list_portfolio_corporate_fraction_settlements(
+            db,
+            access=access,
+        )
     except PortfolioAccessDenied as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

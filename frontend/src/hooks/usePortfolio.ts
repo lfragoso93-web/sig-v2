@@ -99,6 +99,18 @@ export interface PortfolioCorporateRight {
   cash_treatment: string
 }
 
+export interface CorporateFractionSettlementRecord {
+  id: number
+  portfolio_id: number
+  source_event_id: string
+  ticker: string
+  gross_amount_brl: number
+  settlement_date?: string | null
+  notes?: string | null
+  cash_treatment: string
+  event_date: string
+}
+
 export interface UpsertCorporateFractionSettlementInput {
   source_event_id: string
   gross_amount_brl: number
@@ -123,6 +135,18 @@ export function usePendingCorporateFractions(portfolioId: number) {
     queryKey: ['portfolio-pending-corporate-fractions', portfolioId],
     queryFn: () => api
       .get(`/portfolios/${portfolioId}/corporate-events/pending-fractions`)
+      .then(response => response.data),
+    enabled: portfolioId > 0,
+    retry: false,
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useCorporateFractionSettlements(portfolioId: number) {
+  return useQuery<CorporateFractionSettlementRecord[]>({
+    queryKey: ['portfolio-corporate-fraction-settlements', portfolioId],
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/corporate-events/fraction-settlements`)
       .then(response => response.data),
     enabled: portfolioId > 0,
     retry: false,

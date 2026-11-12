@@ -23,6 +23,7 @@ from app.services.corporate_event_fractional_resolution import (
     FractionalResolutionPolicy,
 )
 
+READ_PORTFOLIO_CORPORATE_FRACTIONS = "portfolio:corporate-lifecycle:read"
 WRITE_PORTFOLIO_CORPORATE_FRACTIONS = "portfolio:corporate-fractions:write"
 PORTFOLIO_USER_CONFIRMED_AUCTION = "PORTFOLIO_USER_CONFIRMED_AUCTION"
 
@@ -110,6 +111,37 @@ async def apply_portfolio_corporate_fraction_settlements(
             next_actions.append(replace(action, fractional_resolution=next_resolution))
         overlaid[ticker] = tuple(next_actions)
     return overlaid
+
+
+async def list_portfolio_corporate_fraction_settlements(
+    db: AsyncSession,
+    *,
+    access: PortfolioAccessContext,
+) -> list[dict[str, Any]]:
+    """Lista liquidacoes manuais salvas na carteira com settlement_date e observacoes."""
+    await get_accessible_portfolio(
+        db,
+        access,
+        required_permission=READ_PORTFOLIO_CORPORATE_FRACTIONS,
+    )
+    settlements = await load_portfolio_fraction_settlement_map(
+        db,
+        portfolio_id=access.portfolio_id,
+    )
+    return [
+        {
+            "id": int(row.id),
+            "portfolio_id": int(row.portfolio_id),
+            "source_event_id": row.source_event_id,
+            "ticker": row.ticker,
+            "gross_amount_brl": Decimal(str(row.gross_amount_brl)),
+            "settlement_date": row.settlement_date,
+            "notes": row.notes,
+            "cash_treatment": PORTFOLIO_USER_CONFIRMED_AUCTION,
+            "event_date": row.settlement_date or row.created_at.date(),
+        }
+        for row in sorted(settlements.values(), key=lambda r: (r.source_event_id,))
+    ]
 
 
 async def upsert_portfolio_corporate_fraction_settlement(
