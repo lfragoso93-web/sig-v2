@@ -666,10 +666,17 @@ class AssetReportsAndNewsService:
                 enrichment=enrichment,
             )
 
+        inflight_key = f"inflight:{clean_ticker}"
+        inflight_active = (
+            inflight_key in self._memory_cache
+            and time.time() < self._memory_cache[inflight_key][0]
+        )
+
         return {
             "reports": reports_list,
             "latest_report_excerpt": report_excerpt,
             "news": news_list,
+            "refresh_pending": bool((is_miss and schedule_refresh_on_miss) or inflight_active),
         }
 
     def schedule_background_refresh(

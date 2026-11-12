@@ -171,3 +171,51 @@ async def test_asset_ai_analysis_preserves_normalized_percentages_and_timestamp_
     assert not any("100,00%" in item for item in result["strengths"])
     assert result["price_trend"]["return_30d_pct"] == 10.0
     assert result["price_trend"]["return_90d_pct"] is None
+
+
+@pytest.mark.asyncio
+async def test_asset_ai_analysis_bdr_indicators_future_dividends_and_usd_yield_guard() -> None:
+    bdr_result = await asset_ai_analysis_service.analyze_asset(
+        asset={
+            "ticker": "AAPL34",
+            "name": "Apple BDR",
+            "asset_type": "BDR",
+            "currency": "BRL",
+            "last_price": 55.0,
+        },
+        enrichment={"bdr_indicators": {"pe": -10.0}},
+        price_history=[],
+        dividends=[
+            {"payment_date": "2026-10-01", "value_per_unit": 0.5, "type": "DIVIDENDO"},
+            {"payment_date": "2027-04-01", "value_per_unit": 9.0, "type": "DIVIDENDO"},
+        ],
+        reports=[],
+        latest_report_excerpt=None,
+        news=[],
+    )
+    assert bdr_result["score"] == 58
+    assert any("P/L negativo" in item for item in bdr_result["attention_points"])
+    assert bdr_result["dividend_outlook"]["payments_count_12m"] == 1
+    assert bdr_result["dividend_outlook"]["total_paid_12m"] == 0.5
+
+    usd_result = await asset_ai_analysis_service.analyze_asset(
+        asset={
+            "ticker": "AAPL",
+            "name": "Apple Inc.",
+            "asset_type": "STOCK",
+            "currency": "USD",
+            "last_price": 100.0,
+        },
+        enrichment={
+            "dividend_metrics": {
+                "payments_count_12m": 4,
+                "total_paid_12m": 20.0,
+            }
+        },
+        price_history=[],
+        dividends=[],
+        reports=[],
+        latest_report_excerpt=None,
+        news=[],
+    )
+    assert usd_result["dividend_outlook"]["dividend_yield_pct"] is None

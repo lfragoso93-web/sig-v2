@@ -82,6 +82,7 @@ type AssetAnalysis = {
   corporate_events: DataRow[]
   reports: ReportItem[]
   news?: NewsItem[]
+  reports_news_refresh_pending?: boolean
   ai_analysis?: AiAnalysis
 }
 
@@ -513,12 +514,25 @@ export default function AssetAnalysisPage() {
   })
 
   const targetIdentifier = urlParam || (selected?.id ? String(selected.id) : null)
+  const refreshPollCountRef = useRef(0)
+
+  useEffect(() => {
+    refreshPollCountRef.current = 0
+  }, [targetIdentifier])
 
   const { data, isLoading, isError } = useQuery<AssetAnalysis>({
     queryKey: ['asset-analysis', targetIdentifier],
     queryFn: () => api.get('/assets/analysis/' + encodeURIComponent(targetIdentifier!)).then(response => response.data),
     enabled: targetIdentifier !== null,
     staleTime: 60_000,
+    refetchInterval: query => {
+      const pending = query.state.data?.reports_news_refresh_pending
+      if (pending && refreshPollCountRef.current < 5) {
+        refreshPollCountRef.current += 1
+        return 3_000
+      }
+      return false
+    },
   })
 
   useEffect(() => {

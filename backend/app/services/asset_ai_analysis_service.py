@@ -66,7 +66,9 @@ class AssetAiAnalysisService:
         last_price = _flt(asset.get("last_price"))
 
         price_stats = self._compute_price_trend(price_history, last_price)
-        div_stats = self._compute_dividend_consistency(dividends, enrichment, last_price)
+        div_stats = self._compute_dividend_consistency(
+            dividends, enrichment, last_price, currency=currency
+        )
 
         strengths: list[str] = []
         attention_points: list[str] = []
@@ -88,7 +90,12 @@ class AssetAiAnalysisService:
             attention_points.extend(a_pts)
             confrontation_points.extend(c_pts)
         elif asset_type in ("ACAO", "STOCK", "BDR"):
-            fundamentals = enrichment.get("stock_fundamentals") or {}
+            fundamentals = (
+                enrichment.get("stock_fundamentals")
+                or enrichment.get("bdr_indicators")
+                or enrichment.get("fundamentals")
+                or {}
+            )
             score, s_pts, a_pts, c_pts = self._evaluate_equity(
                 ticker=ticker,
                 asset_type=asset_type,
@@ -296,16 +303,20 @@ class AssetAiAnalysisService:
         dividends: list[dict[str, Any]],
         enrichment: dict[str, Any],
         last_price: Optional[float],
+        *,
+        currency: str = "BRL",
     ) -> dict[str, Any]:
         div_metrics = enrichment.get("dividend_metrics") if isinstance(enrichment.get("dividend_metrics"), dict) else {}
-        cutoff_iso = (datetime.now(timezone.utc).date() - timedelta(days=365)).isoformat()
+        today_dt = datetime.now(timezone.utc).date()
+        today_iso = today_dt.isoformat()
+        cutoff_iso = (today_dt - timedelta(days=365)).isoformat()
         trailing_values: list[float] = []
         for d in dividends:
             val = float(d.get("value_per_unit") or d.get("value") or 0.0)
             if val <= 0:
                 continue
             ev_date = str(d.get("payment_date") or d.get("ex_date") or d.get("record_date") or "")[:10]
-            if ev_date and ev_date >= cutoff_iso:
+            if ev_date and cutoff_iso <= ev_date <= today_iso:
                 trailing_values.append(val)
 
         has_cached_metrics = bool(div_metrics and div_metrics.get("payments_count_12m") is not None)
@@ -336,8 +347,19 @@ class AssetAiAnalysisService:
         if dy_12m is None:
             fii_ind = enrichment.get("fii_indicators") if isinstance(enrichment.get("fii_indicators"), dict) else {}
             stock_ind = enrichment.get("stock_fundamentals") if isinstance(enrichment.get("stock_fundamentals"), dict) else {}
-            dy_12m = _flt(fii_ind.get("dividend_yield")) or _flt(stock_ind.get("dividend_yield"))
-            if dy_12m is None and last_price and last_price > 0 and total_12m > 0:
+            bdr_ind = enrichment.get("bdr_indicators") if isinstance(enrichment.get("bdr_indicators"), dict) else {}
+            dy_12m = (
+                _flt(fii_ind.get("dividend_yield"))
+                or _flt(stock_ind.get("dividend_yield"))
+                or _flt(bdr_ind.get("dividend_yield"))
+            )
+            if (
+                dy_12m is None
+                and currency.upper() == "BRL"
+                and last_price
+                and last_price > 0
+                and total_12m > 0
+            ):
                 dy_12m = round((total_12m / last_price) * 100.0, 2)
 
         avg_payment = round(total_12m / payments_12m, 4) if payments_12m > 0 else 0.0

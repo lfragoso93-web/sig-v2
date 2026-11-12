@@ -567,6 +567,7 @@ async def get_asset_analysis(
         ],
         "reports": reports_list,
         "news": news_list,
+        "reports_news_refresh_pending": bool(reports_and_news.get("refresh_pending", False)),
         "ai_analysis": ai_analysis,
     }
 
