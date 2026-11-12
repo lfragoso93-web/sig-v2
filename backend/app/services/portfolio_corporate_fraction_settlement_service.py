@@ -48,6 +48,18 @@ def _has_positive_component_fraction(right: Mapping[str, Any]) -> bool:
     return bool(right.get("has_fractional_entitlement", False))
 
 
+def _result_rows(result: Any) -> list[Any]:
+    scalars_fn = getattr(result, "scalars", None)
+    if not callable(scalars_fn):
+        return []
+    scalars = scalars_fn()
+    all_fn = getattr(scalars, "all", None)
+    if not callable(all_fn):
+        return []
+    rows = all_fn()
+    return list(rows) if isinstance(rows, Iterable) else []
+
+
 async def load_portfolio_fraction_settlement_map(
     db: AsyncSession,
     *,
@@ -72,7 +84,7 @@ async def load_portfolio_fraction_settlement_map(
         return {}
     return {
         row.source_event_id: row
-        for row in result.scalars().all()
+        for row in _result_rows(result)
         if isinstance(row, PortfolioCorporateFractionSettlement)
     }
 
@@ -345,7 +357,7 @@ async def reconcile_portfolio_corporate_fraction_settlements(
 
     settlements = [
         row
-        for row in rows_result.scalars().all()
+        for row in _result_rows(rows_result)
         if isinstance(row, PortfolioCorporateFractionSettlement)
     ]
     if not settlements:
@@ -382,7 +394,7 @@ async def reconcile_portfolio_corporate_fraction_settlements(
             )
             transactions = [
                 tx
-                for tx in tx_result.scalars().all()
+                for tx in _result_rows(tx_result)
                 if hasattr(tx, "ticker") and hasattr(tx, "date")
             ]
         except StopAsyncIteration:

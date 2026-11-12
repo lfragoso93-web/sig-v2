@@ -466,12 +466,14 @@ async def create_transaction(
         status_code = 400 if detail.startswith("Quantidade insuficiente") else 422
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
-        db,
-        portfolio_id=portfolio_id,
-        tickers=[tx.ticker],
-        commit=True,
-    )
+    reconciled_from = None
+    if tx.asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[tx.ticker],
+            commit=True,
+        )
     backfill_from = min(payload.date, reconciled_from) if reconciled_from else payload.date
 
     # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
@@ -513,6 +515,7 @@ async def update_transaction(
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     old_ticker = tx.ticker
+    old_asset_type = tx.asset_type
     ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
     asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
     if asset_type in {"ACAO", "FII", "ETF_NACIONAL", "BDR", "ETF", "AÇÃO"}:
@@ -614,12 +617,14 @@ async def update_transaction(
 
     await db.commit()
     await db.refresh(tx)
-    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
-        db,
-        portfolio_id=portfolio_id,
-        tickers=[old_ticker, ticker],
-        commit=True,
-    )
+    reconciled_from = None
+    if asset_type != "RENDA_FIXA" or old_asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[old_ticker, ticker],
+            commit=True,
+        )
     backfill_from = min(invalidate_from, reconciled_from) if reconciled_from else invalidate_from
 
     background_tasks.add_task(
@@ -659,15 +664,18 @@ async def delete_transaction(
 
     tx_date = tx.date
     tx_ticker = tx.ticker
+    tx_asset_type = tx.asset_type
 
     await db.delete(tx)
     await db.commit()
-    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
-        db,
-        portfolio_id=portfolio_id,
-        tickers=[tx_ticker],
-        commit=True,
-    )
+    reconciled_from = None
+    if tx_asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[tx_ticker],
+            commit=True,
+        )
     backfill_from = min(tx_date, reconciled_from) if reconciled_from else tx_date
 
     background_tasks.add_task(
@@ -753,12 +761,14 @@ async def bulk_delete_transactions(
         )
     )
     await db.commit()
-    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
-        db,
-        portfolio_id=portfolio_id,
-        tickers=affected_tickers or None,
-        commit=True,
-    )
+    reconciled_from = None
+    if payload.asset_type != "RENDA_FIXA" and affected_tickers:
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=affected_tickers,
+            commit=True,
+        )
     backfill_from = min(earliest_date, reconciled_from) if reconciled_from else earliest_date
 
     background_tasks.add_task(
@@ -810,6 +820,13 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
             while (next_date := pop_next_snapshot_rebuild_date(portfolio_id)) is not None:
                 try:
                     async with AsyncSessionLocal() as db:
+                        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+                            db,
+                            portfolio_id=portfolio_id,
+                            commit=True,
+                        )
+                        if reconciled_from and reconciled_from < next_date:
+                            next_date = reconciled_from
                         deleted = await invalidate_snapshots_from(db, portfolio_id, next_date, commit=True)
                         log.info(
                             (
