@@ -247,6 +247,7 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
         get_runtime_provider_key,
     )
     from app.integrations import alpha_vantage, brapi, finnhub, tiingo
+    from app.integrations.brapi_v2_client import BrapiV2Client
 
     clear_runtime_provider_key_overrides()
     try:
@@ -259,6 +260,8 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
         assert tiingo._api_key() == "tg-env"
         assert alpha_vantage._api_key() == "av-env"
         assert brapi._auth_headers() == {"Authorization": "Bearer br-env"}
+        singleton_v2 = BrapiV2Client()
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
 
         user = User(
             name="Admin Runtime",
@@ -286,13 +289,16 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
         assert get_runtime_provider_key(ProviderId.FINNHUB) == "fh-panel"
         assert finnhub._api_key() == "fh-panel"
         assert brapi._auth_headers() == {"Authorization": "Bearer br-panel"}
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
 
         clear_runtime_provider_key_overrides()
         assert finnhub._api_key() == "fh-env"
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
 
         await ProviderConfigService.sync_runtime_key_overrides(db)
         assert finnhub._api_key() == "fh-panel"
         assert brapi._auth_headers() == {"Authorization": "Bearer br-panel"}
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
 
         await ProviderConfigService.reset_provider_to_default(
             provider_id=ProviderId.FINNHUB.value,
@@ -300,5 +306,11 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
             db=db,
         )
         assert finnhub._api_key() == "fh-env"
+        await ProviderConfigService.reset_provider_to_default(
+            provider_id=ProviderId.BRAPI.value,
+            user_id=user.id,
+            db=db,
+        )
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
     finally:
         clear_runtime_provider_key_overrides()

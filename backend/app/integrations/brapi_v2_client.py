@@ -219,14 +219,19 @@ class BrapiV2Client:
         if not raw_base.endswith("/api"):
             raw_base = f"{raw_base}/api"
         self._base_url = raw_base
-        self._token = token if token is not None else get_runtime_provider_key(ProviderId.BRAPI)
+        self._token = token
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
 
     def _headers(self) -> dict[str, str]:
-        if not self._token:
+        token = (
+            self._token
+            if self._token is not None
+            else get_runtime_provider_key(ProviderId.BRAPI)
+        )
+        if not token:
             return {}
-        return {"Authorization": f"Bearer {self._token}"}
+        return {"Authorization": f"Bearer {token}"}
 
     async def _request_with_retry(
         self,
