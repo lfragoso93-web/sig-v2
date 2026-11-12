@@ -320,9 +320,9 @@ async def list_assets(
 async def get_asset_detail(
     ticker: str,
     days: int = Query(90, ge=7, le=1825),
-    asset_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
+    asset_type: Optional[str] = Query(None),
 ):
     asset = await _find_catalog_asset(db, ticker, asset_type)
     if asset is None:
@@ -528,9 +528,9 @@ async def upsert_asset(
 async def suggest_tickers(
     q: str = Query("", min_length=2),
     limit: int = Query(10, ge=1, le=20),
-    asset_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
+    asset_type: Optional[str] = Query(None),
 ):
     items = await suggest_assets_from_catalog(
         db,

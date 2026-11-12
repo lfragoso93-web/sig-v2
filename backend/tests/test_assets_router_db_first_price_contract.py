@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.routers import assets
+from app.schemas.asset import AssetType
 
 
 def _asset(ticker: str = "PETR4", asset_type: str = "ACAO") -> MagicMock:
@@ -35,7 +36,7 @@ async def test_current_quote_uses_persisted_last_price() -> None:
     ):
         result = await assets.get_ticker_quote("PETR4", None, None, db, None)
 
-    current_reader.assert_awaited_once_with(db, ["PETR4"])
+    current_reader.assert_awaited_once_with(db, ["PETR4"], asset_type=AssetType.ACAO)
     assert result.price == 31.5
     assert result.source == "assets.last_price"
 
