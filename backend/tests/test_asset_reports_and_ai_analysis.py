@@ -110,3 +110,31 @@ async def test_asset_ai_analysis_confronts_fii_report_and_metrics():
     assert any("Relatório Gerencial oficial" in c for c in result["report_confrontation"])
     assert any("Noticiário recente" in c for c in result["report_confrontation"])
     assert result["latest_report_referenced"]["url"].startswith("https://fnet.bmfbovespa.com.br")
+
+
+@pytest.mark.asyncio
+async def test_asset_ai_analysis_handles_reports_without_excerpt_and_filters_trailing_12m_dividends():
+    result = await asset_ai_analysis_service.analyze_asset(
+        asset={"ticker": "PETR4", "name": "Petrobras", "asset_type": "ACAO", "currency": "BRL", "last_price": 38.0},
+        enrichment={"stock_fundamentals": {"pe": 5.5, "pb": 1.2, "roe": 22.0}},
+        price_history=[{"timestamp": "2026-11-01", "close": 38.0}],
+        dividends=[
+            {"ex_date": "2026-10-01", "value_per_unit": 1.0, "type": "DIVIDENDO"},
+            {"ex_date": "2023-05-01", "value_per_unit": 5.0, "type": "DIVIDENDO"},
+        ],
+        reports=[
+            {
+                "id": "9512-itr-2026",
+                "title": "ITR — Informações Trimestrais",
+                "reference_date": "2026-09-30",
+                "delivery_date": "2026-11-01",
+                "url": "https://www.rad.cvm.gov.br/ENET/frmGerenciaPaginaFRE.aspx",
+                "is_management_report": True,
+            }
+        ],
+        latest_report_excerpt=None,
+        news=[],
+    )
+    assert result["latest_report_referenced"]["title"] == "ITR — Informações Trimestrais"
+    assert result["dividend_outlook"]["payments_count_12m"] == 1
+    assert result["dividend_outlook"]["total_paid_12m"] == 1.0

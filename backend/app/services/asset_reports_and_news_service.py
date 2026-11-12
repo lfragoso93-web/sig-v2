@@ -52,6 +52,7 @@ FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/company-news"
 TTL_REPORTS_SECONDS = 21600      # 6 horas para relatórios CVM/B3/FNet
 TTL_REPORT_TEXT_SECONDS = 86400  # 24 horas para texto extraído de PDF
 TTL_NEWS_SECONDS = 3600          # 1 hora para notícias externas
+TTL_EMPTY_SECONDS = 900          # 15 minutos de cooldown para resultados vazios
 
 # Mapa curado de CNPJs dos principais FIIs da B3 para resolução instantânea mesmo sem cache prévio
 CURATED_FII_CNPJS: dict[str, str] = {
@@ -269,9 +270,13 @@ class AssetReportsAndNewsService:
             ),
             reverse=True,
         )
-        if reports:
-            await self._set_cached(cache_key, reports[:15], TTL_REPORTS_SECONDS)
-        return reports[:15]
+        final_reports = reports[:15]
+        await self._set_cached(
+            cache_key,
+            final_reports,
+            TTL_REPORTS_SECONDS if final_reports else TTL_EMPTY_SECONDS,
+        )
+        return final_reports
 
     async def extract_latest_fii_report_excerpt(
         self,
@@ -444,9 +449,13 @@ class AssetReportsAndNewsService:
             ),
             reverse=True,
         )
-        if reports:
-            await self._set_cached(cache_key, reports[:15], TTL_REPORTS_SECONDS)
-        return reports[:15]
+        final_reports = reports[:15]
+        await self._set_cached(
+            cache_key,
+            final_reports,
+            TTL_REPORTS_SECONDS if final_reports else TTL_EMPTY_SECONDS,
+        )
+        return final_reports
 
     # -------------------------------------------------------------------------
     # 3. Notícias Externas do Ativo (Finnhub + Google News RSS)
@@ -599,13 +608,103 @@ class AssetReportsAndNewsService:
                     news.append(item)
                     seen_titles.add(item["title"].lower())
 
-        if news:
-            await self._set_cached(cache_key, news[:10], TTL_NEWS_SECONDS)
-        return news[:10]
+        final_news = news[:10]
+        await self._set_cached(
+            cache_key,
+            final_news,
+            TTL_NEWS_SECONDS if final_news else TTL_EMPTY_SECONDS,
+        )
+        return final_news
 
     # -------------------------------------------------------------------------
-    # 4. Orquestrador Unificado para a Página de Análise de Ativos
+    # 4. Leitura DB-first / Cache-only e Refresh em Background
     # -------------------------------------------------------------------------
+
+    async def get_cached_reports_and_news(
+        self,
+        ticker: str,
+        asset_type: Optional[str] = None,
+        *,
+        schedule_refresh_on_miss: bool = True,
+        asset_name: Optional[str] = None,
+        enrichment: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Lê apenas relatórios e notícias já em cache (sem bloquear o read path com chamadas externas)."""
+        clean_ticker = ticker.strip().upper()
+        tipo = (asset_type or "").upper()
+
+        if tipo == "FII" or (not tipo and clean_ticker.endswith("11")):
+            reports_key = f"asset_reports:fii:v1:{clean_ticker}"
+        elif tipo in ("ACAO", "BDR"):
+            reports_key = f"asset_reports:company:v1:{clean_ticker}"
+        else:
+            reports_key = ""
+
+        cached_reports = await self._get_cached(reports_key) if reports_key else []
+        cached_news = await self._get_cached(f"asset_news:v1:{clean_ticker}")
+
+        reports_list = cached_reports if isinstance(cached_reports, list) else []
+        news_list = cached_news if isinstance(cached_news, list) else []
+
+        report_excerpt: Optional[dict[str, Any]] = None
+        if (tipo == "FII" or clean_ticker.endswith("11")) and reports_list:
+            mgmt = [r for r in reports_list if isinstance(r, dict) and r.get("is_management_report")]
+            target = mgmt[0] if mgmt else reports_list[0]
+            if isinstance(target, dict) and target.get("id"):
+                excerpt_cached = await self._get_cached(
+                    f"asset_report_excerpt:v1:{clean_ticker}:{target['id']}"
+                )
+                if isinstance(excerpt_cached, dict):
+                    report_excerpt = excerpt_cached
+
+        is_miss = (bool(reports_key) and cached_reports is None) or (cached_news is None)
+        if is_miss and schedule_refresh_on_miss:
+            self.schedule_background_refresh(
+                clean_ticker,
+                asset_type=tipo,
+                asset_name=asset_name,
+                enrichment=enrichment,
+            )
+
+        return {
+            "reports": reports_list,
+            "latest_report_excerpt": report_excerpt,
+            "news": news_list,
+        }
+
+    def schedule_background_refresh(
+        self,
+        ticker: str,
+        asset_type: Optional[str] = None,
+        asset_name: Optional[str] = None,
+        enrichment: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Agenda atualização assíncrona em background sem bloquear a requisição HTTP."""
+        clean_ticker = ticker.strip().upper()
+        inflight_key = f"inflight:{clean_ticker}"
+        now = time.time()
+        if inflight_key in self._memory_cache and now < self._memory_cache[inflight_key][0]:
+            return
+        self._memory_cache[inflight_key] = (now + 60, True)
+
+        async def _runner() -> None:
+            try:
+                await self.get_reports_and_news(
+                    clean_ticker,
+                    asset_type=asset_type,
+                    asset_name=asset_name,
+                    enrichment=enrichment,
+                )
+            except Exception:
+                pass
+            finally:
+                self._memory_cache.pop(inflight_key, None)
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_runner())
+        except RuntimeError:
+            pass
 
     async def get_reports_and_news(
         self,

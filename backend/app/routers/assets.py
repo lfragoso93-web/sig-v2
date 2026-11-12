@@ -511,7 +511,7 @@ async def get_asset_analysis(
                     "remarks": None,
                 })
 
-    reports_and_news = await asset_reports_and_news_service.get_reports_and_news(
+    reports_and_news = await asset_reports_and_news_service.get_cached_reports_and_news(
         asset.ticker,
         asset_type=asset.asset_type,
         asset_name=asset.name,

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import httpx
@@ -161,7 +161,11 @@ class AssetAiAnalysisService:
             "dividend_outlook": div_stats,
             "latest_report_referenced": (
                 {
-                    "title": latest_report_excerpt.get("title") or (reports[0].get("title") if reports else None),
+                    "title": (
+                        latest_report_excerpt.get("title")
+                        if latest_report_excerpt
+                        else (reports[0].get("title") if reports else None)
+                    ),
                     "reference_date": (
                         latest_report_excerpt.get("reference_date")
                         if latest_report_excerpt
@@ -193,20 +197,6 @@ class AssetAiAnalysisService:
                 "documentos públicos (CVM/B3). Não constitui recomendação de compra ou venda."
             ),
         }
-
-        llm_override = await self._try_llm_synthesis(
-            base_payload=base_payload,
-            enrichment=enrichment,
-            latest_report_excerpt=latest_report_excerpt,
-            news_list=news_list,
-        )
-        if llm_override:
-            base_payload["executive_summary"] = llm_override.get(
-                "executive_summary", base_payload["executive_summary"]
-            )
-            if isinstance(llm_override.get("report_confrontation"), list) and llm_override["report_confrontation"]:
-                base_payload["report_confrontation"] = llm_override["report_confrontation"]
-            base_payload["provider_mode"] = llm_override.get("provider_mode", "llm")
 
         return base_payload
 
@@ -277,14 +267,39 @@ class AssetAiAnalysisService:
         last_price: Optional[float],
     ) -> dict[str, Any]:
         div_metrics = enrichment.get("dividend_metrics") if isinstance(enrichment.get("dividend_metrics"), dict) else {}
-        values = [
-            float(d.get("value_per_unit") or d.get("value") or 0.0)
-            for d in dividends
-            if float(d.get("value_per_unit") or d.get("value") or 0.0) > 0
-        ]
-        payments_12m = int(div_metrics.get("payments_count_12m") or min(len(values), 12))
-        total_12m = float(div_metrics.get("total_paid_12m") or sum(values[:12]))
-        frequency = str(div_metrics.get("frequency") or ("Mensal" if payments_12m >= 10 else "Periódica" if payments_12m > 0 else "Sem pagamentos"))
+        cutoff_iso = (datetime.now(timezone.utc).date() - timedelta(days=365)).isoformat()
+        trailing_values: list[float] = []
+        for d in dividends:
+            val = float(d.get("value_per_unit") or d.get("value") or 0.0)
+            if val <= 0:
+                continue
+            ev_date = str(d.get("payment_date") or d.get("ex_date") or d.get("record_date") or "")[:10]
+            if ev_date and ev_date >= cutoff_iso:
+                trailing_values.append(val)
+
+        has_cached_metrics = bool(div_metrics and div_metrics.get("payments_count_12m") is not None)
+        payments_12m = (
+            int(div_metrics["payments_count_12m"])
+            if has_cached_metrics
+            else len(trailing_values)
+        )
+        total_12m = (
+            float(div_metrics.get("total_paid_12m") or 0.0)
+            if has_cached_metrics
+            else sum(trailing_values)
+        )
+        if div_metrics.get("frequency"):
+            frequency = str(div_metrics["frequency"])
+        elif payments_12m >= 10:
+            frequency = "Mensal"
+        elif payments_12m in (3, 4, 5):
+            frequency = "Trimestral"
+        elif payments_12m in (1, 2):
+            frequency = "Semestral"
+        elif payments_12m > 0:
+            frequency = "Periódica"
+        else:
+            frequency = "Sem pagamentos"
 
         dy_12m = _flt(div_metrics.get("dy_12m"))
         if dy_12m is None:

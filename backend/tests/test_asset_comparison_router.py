@@ -100,7 +100,7 @@ async def test_asset_analysis_reads_catalog_history_and_cached_fields(monkeypatc
     monkeypatch.setattr(asset_enrichment_service, "get_cached_asset_enrichment", cached_reader)
     monkeypatch.setattr(
         asset_reports_and_news_service,
-        "get_reports_and_news",
+        "get_cached_reports_and_news",
         AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
     )
 
@@ -150,7 +150,7 @@ async def test_asset_analysis_resolves_by_ticker_symbol(monkeypatch):
     monkeypatch.setattr(asset_enrichment_service, "get_cached_asset_enrichment", cached_reader)
     monkeypatch.setattr(
         asset_reports_and_news_service,
-        "get_reports_and_news",
+        "get_cached_reports_and_news",
         AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
     )
 
@@ -198,7 +198,7 @@ async def test_asset_analysis_deduplicates_intraday_prices_to_daily_close(monkey
     )
     monkeypatch.setattr(
         asset_reports_and_news_service,
-        "get_reports_and_news",
+        "get_cached_reports_and_news",
         AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
     )
 
