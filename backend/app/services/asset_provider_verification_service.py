@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from typing import Optional
 
 from app.core.log_safety import sanitize_log_value
@@ -36,6 +35,15 @@ _CRYPTO_SYNONYMS: dict[str, str] = {
     "BITCOIN CASH": "BCH",
     "USD COIN": "USDC",
 }
+
+
+def _is_valid_b3_ticker_format(ticker: str) -> bool:
+    if not (2 <= len(ticker) <= 12) or not ticker.isascii():
+        return False
+    if not ticker.isalnum() or ticker != ticker.upper() or not ticker[0].isalpha():
+        return False
+    core = ticker[:-1] if ticker[-1].isalpha() else ticker
+    return bool(core) and core[-1].isdigit()
 
 
 async def verify_market_asset_exists(
@@ -74,7 +82,7 @@ async def verify_market_asset_exists(
         from app.core.asset_types import normalize_b3_equity_ticker
         from app.integrations.brapi import fetch_asset_info, fetch_ticker_suggestions
         normalized_ticker = normalize_b3_equity_ticker(normalized_ticker, normalized_type)
-        if not re.fullmatch(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$", normalized_ticker):
+        if not _is_valid_b3_ticker_format(normalized_ticker):
             return False, None
 
         try:
