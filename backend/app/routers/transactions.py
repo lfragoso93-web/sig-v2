@@ -20,6 +20,8 @@ from app.repositories.portfolio_access_repository import (
 )
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.schemas.transaction import (
+    CorporateFractionSettlementOut,
+    CorporateFractionSettlementUpsert,
     CorporateLifecycleEventOut,
     PagedTransactions,
     TransactionClassSummary,
@@ -36,6 +38,13 @@ from app.services.portfolio_asset_corporate_lifecycle_service import (
     load_portfolio_asset_corporate_lifecycle,
     load_portfolio_pending_corporate_fractions,
     load_upcoming_portfolio_corporate_events,
+)
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    WRITE_PORTFOLIO_CORPORATE_FRACTIONS,
+    delete_portfolio_corporate_fraction_settlement,
+    list_portfolio_corporate_fraction_settlements,
+    reconcile_portfolio_corporate_fraction_settlements,
+    upsert_portfolio_corporate_fraction_settlement,
 )
 from app.services.portfolio_corporate_rights_service import (
     load_portfolio_corporate_rights,
@@ -296,6 +305,111 @@ async def list_portfolio_corporate_rights(
 
 
 @router.get(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    response_model=list[CorporateFractionSettlementOut],
+)
+async def list_portfolio_fraction_settlements_route(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+    )
+    try:
+        return await list_portfolio_corporate_fraction_settlements(
+            db,
+            access=access,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.put(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    response_model=CorporateFractionSettlementOut,
+)
+async def upsert_portfolio_fraction_settlement_route(
+    portfolio_id: int,
+    payload: CorporateFractionSettlementUpsert,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+    )
+    try:
+        settlement = await upsert_portfolio_corporate_fraction_settlement(
+            db,
+            access=access,
+            source_event_id=payload.source_event_id,
+            gross_amount_brl=payload.gross_amount_brl,
+            settlement_date=payload.settlement_date,
+            notes=payload.notes,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=settlement["event_date"],
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
+    return settlement
+
+
+@router.delete(
+    "/{portfolio_id}/corporate-events/fraction-settlements",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_portfolio_fraction_settlement_route(
+    portfolio_id: int,
+    background_tasks: BackgroundTasks,
+    source_event_id: str = Query(..., min_length=1, max_length=160),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    access = PortfolioAccessContext.for_user(
+        user_id=current_user.id,
+        portfolio_id=portfolio_id,
+        permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+    )
+    try:
+        rebuild_from = await delete_portfolio_corporate_fraction_settlement(
+            db,
+            access=access,
+            source_event_id=source_event_id,
+        )
+    except PortfolioAccessDenied as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=rebuild_from,
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
+
+
+@router.get(
     "/{portfolio_id}/assets/{ticker}/corporate-events",
     response_model=list[CorporateLifecycleEventOut],
 )
@@ -352,12 +466,22 @@ async def create_transaction(
         status_code = 400 if detail.startswith("Quantidade insuficiente") else 422
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
+    reconciled_from = None
+    if tx.asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[tx.ticker],
+            commit=True,
+        )
+    backfill_from = min(payload.date, reconciled_from) if reconciled_from else payload.date
+
     # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
     # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=payload.date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -391,6 +515,7 @@ async def update_transaction(
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     old_ticker = tx.ticker
+    old_asset_type = tx.asset_type
     ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
     asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
     if asset_type in {"ACAO", "FII", "ETF_NACIONAL", "BDR", "ETF", "AÇÃO"}:
@@ -492,11 +617,20 @@ async def update_transaction(
 
     await db.commit()
     await db.refresh(tx)
+    reconciled_from = None
+    if asset_type != "RENDA_FIXA" or old_asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[old_ticker, ticker],
+            commit=True,
+        )
+    backfill_from = min(invalidate_from, reconciled_from) if reconciled_from else invalidate_from
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=invalidate_from,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -529,14 +663,25 @@ async def delete_transaction(
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     tx_date = tx.date
+    tx_ticker = tx.ticker
+    tx_asset_type = tx.asset_type
 
     await db.delete(tx)
     await db.commit()
+    reconciled_from = None
+    if tx_asset_type != "RENDA_FIXA":
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=[tx_ticker],
+            commit=True,
+        )
+    backfill_from = min(tx_date, reconciled_from) if reconciled_from else tx_date
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=tx_date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -582,7 +727,7 @@ async def bulk_delete_transactions(
             detail="Informe transaction_ids ou ao menos um filtro para exclusao em lote.",
         )
 
-    stmt = select(Transaction.id, Transaction.date).where(Transaction.portfolio_id == portfolio_id)
+    stmt = select(Transaction.id, Transaction.date, Transaction.ticker).where(Transaction.portfolio_id == portfolio_id)
     if payload.transaction_ids:
         stmt = stmt.where(Transaction.id.in_(payload.transaction_ids))
     if payload.asset_type:
@@ -607,6 +752,7 @@ async def bulk_delete_transactions(
 
     tx_ids = [row[0] for row in rows]
     earliest_date = min(row[1] for row in rows)
+    affected_tickers = {row[2] for row in rows if len(row) > 2 and row[2]}
 
     await db.execute(
         delete(Transaction).where(
@@ -615,11 +761,20 @@ async def bulk_delete_transactions(
         )
     )
     await db.commit()
+    reconciled_from = None
+    if payload.asset_type != "RENDA_FIXA" and affected_tickers:
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            tickers=affected_tickers,
+            commit=True,
+        )
+    backfill_from = min(earliest_date, reconciled_from) if reconciled_from else earliest_date
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=earliest_date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -665,6 +820,13 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
             while (next_date := pop_next_snapshot_rebuild_date(portfolio_id)) is not None:
                 try:
                     async with AsyncSessionLocal() as db:
+                        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+                            db,
+                            portfolio_id=portfolio_id,
+                            commit=True,
+                        )
+                        if reconciled_from and reconciled_from < next_date:
+                            next_date = reconciled_from
                         deleted = await invalidate_snapshots_from(db, portfolio_id, next_date, commit=True)
                         log.info(
                             (

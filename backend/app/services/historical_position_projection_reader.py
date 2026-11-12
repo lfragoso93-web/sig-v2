@@ -11,6 +11,9 @@ from app.models.transaction import Transaction
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
+)
 from app.services.portfolio_service import normalize_type
 from app.services.snapshot_position_projection import project_transaction_timelines
 
@@ -47,6 +50,11 @@ async def load_position_timelines_as_of(
     actions_by_ticker = await load_global_corporate_actions_by_ticker(
         db,
         [str(tx.ticker) for tx in transactions],
+    )
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
     )
     return project_transaction_timelines(
         transactions=transactions,

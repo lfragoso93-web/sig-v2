@@ -37,6 +37,9 @@ from app.services.class_snapshot_position_projection import (
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
+)
 from app.services.fixed_income_valuation_service import (
     fixed_income_coverage_from_transactions,
     get_fixed_income_totals_from_transactions,
@@ -404,8 +407,14 @@ async def rebuild_class_snapshots(
         db,
         [str(transaction.ticker) for transaction in market_transactions],
     )
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
 
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
+    previous_cash_flow_by_class: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
     treasury_inputs: list[DailyTwrInput] = []
     treasury_realized_pnl = _ZERO
     count = 0
@@ -498,12 +507,31 @@ async def rebuild_class_snapshots(
 
             class_state = return_states[asset_type]
             dividends_day = dividends_by_class_day.get((asset_type, cursor), _ZERO)
+            cash_flow_total = sum(
+                (
+                    position.corporate_action_cash_flow_total
+                    for position in projected_positions.values()
+                    if position.asset_type == asset_type
+                ),
+                _ZERO,
+            )
+            pending_fraction_value = sum(
+                (
+                    position.pending_fraction_cost_basis
+                    for position in projected_positions.values()
+                    if position.asset_type == asset_type
+                ),
+                _ZERO,
+            )
+            cash_flow_day = cash_flow_total - previous_cash_flow_by_class[asset_type]
+            previous_cash_flow_by_class[asset_type] = cash_flow_total
             class_state.dividends_accumulated += dividends_day
+            twr_value = market_value + pending_fraction_value
             daily_return = calculate_daily_twr_pct(
                 class_state.previous_value,
-                market_value,
+                twr_value,
                 net_external_flow=external_flows[asset_type],
-                dividends_day=dividends_day,
+                dividends_day=(dividends_day + cash_flow_day),
             )
             class_state.accumulated_return_pct = append_compounded_return_pct(
                 class_state.accumulated_return_pct,
@@ -539,7 +567,7 @@ async def rebuild_class_snapshots(
                     ),
                 },
             )
-            class_state.previous_value = market_value
+            class_state.previous_value = twr_value
             count += 1
 
         if AssetType.TESOURO_DIRETO in portfolio_types:

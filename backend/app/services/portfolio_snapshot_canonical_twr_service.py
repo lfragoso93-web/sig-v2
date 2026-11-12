@@ -41,6 +41,7 @@ _DIAGNOSTIC_PREFIXES = (
     "treasury_",
     "pre_listing_",
     "real_price_",
+    "pending_fraction_",
 )
 _SNAPSHOT_COLUMNS = set(PortfolioSnapshot.__table__.columns.keys())
 _PERSISTED_PRICE_COVERAGE_ERROR = "cobertura persistida de preço indisponível para:"
@@ -82,7 +83,7 @@ async def backfill_canonical_snapshots_with_returns(
     upper_bound = end_date or (clock.today() if clock is not SYSTEM_CLOCK else date.today())
     start = transactions[0].date
 
-    previous_value = _ZERO
+    previous_twr_value = _ZERO
     previous_corporate_action_cash_flow_total = _ZERO
     accumulated_return = _ZERO
     count = 0
@@ -144,9 +145,11 @@ async def backfill_canonical_snapshots_with_returns(
             cursor,
         )
         current_value = decimal_value(totals["market_value"])
+        pending_fraction_value = decimal_value(totals.get("pending_fraction_value", _ZERO))
+        current_twr_value = current_value + pending_fraction_value
         daily_return = calculate_daily_twr_pct(
-            previous_value,
-            current_value,
+            previous_twr_value,
+            current_twr_value,
             net_external_flow=net_external_flow,
             dividends_day=(dividends_day + corporate_action_cash_flow_day),
         )
@@ -181,7 +184,7 @@ async def backfill_canonical_snapshots_with_returns(
             "return_is_estimated": has_partial_prices,
         }
         await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
-        previous_value = current_value
+        previous_twr_value = current_twr_value
         previous_corporate_action_cash_flow_total = (
             corporate_action_cash_flow_total
         )

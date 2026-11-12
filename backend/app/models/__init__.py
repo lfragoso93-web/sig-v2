@@ -22,6 +22,9 @@ from app.models.goal import Goal
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_class_target import PortfolioClassTarget
+from app.models.portfolio_corporate_fraction_settlement import (
+    PortfolioCorporateFractionSettlement,
+)
 from app.models.portfolio_position import PortfolioPosition
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.rate_history import RateHistory
@@ -54,6 +57,7 @@ __all__ = [
     "Portfolio",
     "PortfolioClassSnapshot",
     "PortfolioClassTarget",
+    "PortfolioCorporateFractionSettlement",
     "PortfolioPosition",
     "PortfolioSnapshot",
     "ProviderConfiguration",

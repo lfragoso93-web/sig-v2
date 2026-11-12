@@ -23,8 +23,14 @@ from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
 from app.services.class_target_service import get_targets_map
+from app.services.corporate_action_multi_asset_timeline import (
+    expand_component_bonus_movements,
+)
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
+)
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
 )
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
@@ -202,6 +208,11 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         for tx in transactions
     })
     actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
 
     movements_by_ticker: dict[str, list[PositionMovement]] = {}
     metadata_by_ticker: dict[str, dict] = {}
@@ -246,11 +257,37 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
             {"asset_type": asset_type, "is_usd": is_usd},
         )
 
+    if any(
+        getattr(action, "component_bonus", None) is not None
+        for actions in actions_by_ticker.values()
+        for action in actions
+    ):
+        component_meta = {
+            ticker: (meta["asset_type"], meta["is_usd"])
+            for ticker, meta in metadata_by_ticker.items()
+        }
+        expand_component_bonus_movements(
+            movements_by_ticker=movements_by_ticker,
+            metadata_by_ticker=component_meta,
+            actions_by_ticker=actions_by_ticker,
+            target_date=DateType.max,
+        )
+        for ticker, (comp_type, comp_is_usd) in component_meta.items():
+            metadata_by_ticker.setdefault(
+                ticker,
+                {"asset_type": comp_type, "is_usd": comp_is_usd},
+            )
+
     positions: list[dict] = []
     for ticker in sorted(movements_by_ticker):
+        ticker_actions = tuple(
+            action
+            for action in actions_by_ticker.get(ticker, ())
+            if getattr(action, "component_bonus", None) is None
+        )
         projection = project_position_timeline(
             movements=movements_by_ticker[ticker],
-            actions=actions_by_ticker.get(ticker, ()),
+            actions=ticker_actions,
         )
         if projection.quantity <= Decimal("0.000000001"):
             continue

@@ -64,6 +64,14 @@ def _corporate_action_cash_flow_total(positions: dict) -> Decimal:
     return total.quantize(_MONEY)
 
 
+def _pending_fraction_value(positions: dict) -> Decimal:
+    """Soma custo pendente de fracoes em liquidacao futura para preservar base de TWR."""
+    total = _ZERO
+    for state in positions.values():
+        total += Decimal(str(getattr(state, "pending_fraction_cost_basis", 0) or 0))
+    return total.quantize(_MONEY)
+
+
 async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
     result = await db.execute(
         select(Asset.ticker).where(
@@ -145,6 +153,7 @@ async def _base_totals_without_dedicated_lookup(
             "total_pnl": _ZERO,
             "return_pct": _ZERO,
             "corporate_action_cash_flow_total": _ZERO,
+            "pending_fraction_value": _ZERO,
             "pre_listing_assets": 0,
             "real_price_gaps": 0,
             "market_value_by_class": {},
@@ -161,7 +170,7 @@ async def _base_totals_without_dedicated_lookup(
     for ticker, state in positions.items():
         current_type = persisted_types.get(ticker) or _asset_type(state.asset_type)
         effective_types[ticker] = current_type
-        if current_type not in _NON_MARKET_TYPES:
+        if state.qty > 0 and current_type not in _NON_MARKET_TYPES:
             requirements.append((ticker, current_type))
 
     if requirements:
@@ -195,7 +204,9 @@ async def _base_totals_without_dedicated_lookup(
     for ticker, state in positions.items():
         current_type = effective_types[ticker]
         average_price = _average_price_from_state(state)
-        if current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
+        if state.qty <= 0:
+            close = _ZERO
+        elif current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
             close = average_price
         else:
             close = Decimal(str(prices[ticker.upper()]))
@@ -252,6 +263,7 @@ async def _base_totals_without_dedicated_lookup(
         "corporate_action_cash_flow_total": _corporate_action_cash_flow_total(
             positions,
         ),
+        "pending_fraction_value": _pending_fraction_value(positions),
         "pre_listing_assets": len(pre_listing),
         "real_price_gaps": len(real_gaps),
         "market_value_by_class": {

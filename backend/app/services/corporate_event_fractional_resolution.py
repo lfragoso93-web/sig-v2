@@ -1,10 +1,13 @@
-"""Contrato compartilhado para resolu??o fracion?ria de eventos corporativos."""
+"""Contrato compartilhado para resolucao fracionaria de eventos corporativos."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+
+PORTFOLIO_USER_CONFIRMED_AUCTION = "PORTFOLIO_USER_CONFIRMED_AUCTION"
 
 
 class FractionalResolutionPolicy(StrEnum):
@@ -22,3 +25,5 @@ class FractionalResolution:
     cash_treatment: str | None = None
     ledger_basis: str | None = None
     fraction_is_post_event_quantity: bool = False
+    settlement_gross_amount_brl: Decimal | None = None
+    settlement_date: date | None = None

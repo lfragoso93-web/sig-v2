@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from decimal import Decimal
 from typing import Literal, Optional, List
 from datetime import date as DateType
@@ -179,13 +179,34 @@ class PortfolioCorporateRightOut(BaseModel):
     components: List[CorporateActionComponentRightOut]
     gross_amount_brl: Decimal
     calculated_gross_amount_brl: Decimal
+    confirmed_gross_amount_brl: Optional[Decimal] = None
     bonus_cost_per_share_brl: Decimal
     attributed_bonus_cost_brl: Decimal
     fractional_cost_basis_brl: Decimal
     estimated_fractional_result_brl: Decimal
-    cash_status: Literal["CALCULATED_NOT_CONFIRMED"]
+    cash_status: Literal["CALCULATED_NOT_CONFIRMED", "CONFIRMED"]
     cash_treatment: str
     evidence_reference: str
+    has_fractional_entitlement: bool = True
+
+
+class CorporateFractionSettlementUpsert(BaseModel):
+    source_event_id: str = Field(..., min_length=1, max_length=160)
+    gross_amount_brl: Decimal = Field(..., ge=0, max_digits=18, decimal_places=2)
+    settlement_date: Optional[DateType] = None
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class CorporateFractionSettlementOut(BaseModel):
+    id: int
+    portfolio_id: int
+    source_event_id: str
+    ticker: str
+    gross_amount_brl: Decimal
+    settlement_date: Optional[DateType] = None
+    notes: Optional[str] = None
+    cash_treatment: str
+    event_date: DateType
 
 
 class TransactionBulkDeleteRequest(BaseModel):

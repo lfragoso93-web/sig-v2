@@ -16,6 +16,9 @@ from app.repositories.portfolio_access_repository import get_accessible_portfoli
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
+)
 from app.services.corporate_action_engine import NormalizedCorporateAction
 from app.services.position_timeline_projection import PositionTimelineProjection
 from app.services.snapshot_position_projection import (
@@ -140,6 +143,11 @@ async def load_portfolio_asset_corporate_lifecycle(
         db,
         [normalized_ticker],
     )
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
     actions = actions_by_ticker.get(normalized_ticker, ())
     timelines = project_transaction_timelines(
         transactions=transactions,
@@ -178,6 +186,11 @@ async def load_portfolio_pending_corporate_fractions(
 
     tickers = sorted({str(tx.ticker).strip().upper() for tx in transactions})
     actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=access.portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
     timelines = project_transaction_timelines(
         transactions=transactions,
         actions_by_ticker=actions_by_ticker,

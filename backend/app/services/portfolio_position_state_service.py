@@ -15,6 +15,9 @@ from app.models.transaction import Transaction
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    apply_portfolio_corporate_fraction_settlements,
+)
 from app.services.snapshot_position_projection import project_snapshot_positions
 
 
@@ -28,6 +31,7 @@ class TickerState:
         "cost",
         "realized_pnl",
         "corporate_action_cash_flows",
+        "pending_fraction_cost_basis",
         "is_usd",
     )
 
@@ -38,6 +42,7 @@ class TickerState:
         self.cost = Decimal("0")
         self.realized_pnl = Decimal("0")
         self.corporate_action_cash_flows = ()
+        self.pending_fraction_cost_basis = Decimal("0")
         self.is_usd = is_usd
 
 
@@ -62,10 +67,17 @@ async def build_positions_at(
         db,
         [str(tx.ticker) for tx in transactions],
     )
+    actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        actions_by_ticker=actions_by_ticker,
+    )
     projections = project_snapshot_positions(
         transactions=transactions,
         actions_by_ticker=actions_by_ticker,
         target_date=target_date,
+        include_pending_fractions=True,
+        include_corporate_action_cash_flows=True,
     )
 
     states: dict[str, TickerState] = {}
@@ -75,6 +87,13 @@ async def build_positions_at(
         state.cost = projection.total_cost
         state.realized_pnl = projection.realized_pnl
         state.corporate_action_cash_flows = projection.corporate_action_cash_flows
+        state.pending_fraction_cost_basis = sum(
+            (
+                Decimal(str(pf.cost_basis_brl))
+                for pf in projection.pending_corporate_action_fractions
+            ),
+            Decimal("0"),
+        )
         states[ticker] = state
 
     return states
