@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import case, func, select
@@ -116,13 +116,14 @@ async def _treasury_prices_at_or_before_batch(
     if not normalized:
         return {}
 
+    upper_ts = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
     result = await db.execute(
         select(func.lower(Asset.ticker), AssetPrice.close)
         .join(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(
             Asset.asset_type == _TREASURY_TYPE,
             func.lower(Asset.ticker).in_(normalized),
-            func.date(AssetPrice.timestamp) <= target_date,
+            AssetPrice.timestamp <= upper_ts,
         )
         .distinct(func.lower(Asset.ticker))
         .order_by(func.lower(Asset.ticker).asc(), AssetPrice.timestamp.desc())
@@ -163,12 +164,19 @@ async def _base_totals_without_dedicated_lookup(
     rows = await db.execute(
         select(Asset.ticker, Asset.asset_type).where(Asset.ticker.in_(tickers))
     )
-    persisted_types = {str(row.ticker): _asset_type(row.asset_type) for row in rows.all()}
+    persisted_types_by_ticker: dict[str, set[AssetType]] = defaultdict(set)
+    for row in rows.all():
+        persisted_types_by_ticker[str(row.ticker)].add(_asset_type(row.asset_type))
 
     requirements: list[tuple[str, AssetType]] = []
     effective_types: dict[str, AssetType] = {}
     for ticker, state in positions.items():
-        current_type = persisted_types.get(ticker) or _asset_type(state.asset_type)
+        state_type = _asset_type(state.asset_type)
+        matching_types = persisted_types_by_ticker.get(ticker, set())
+        if state_type in matching_types or not matching_types:
+            current_type = state_type
+        else:
+            current_type = next(iter(matching_types))
         effective_types[ticker] = current_type
         if state.qty > 0 and current_type not in _NON_MARKET_TYPES:
             requirements.append((ticker, current_type))

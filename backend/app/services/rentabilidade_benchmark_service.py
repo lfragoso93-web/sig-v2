@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -71,12 +71,14 @@ async def _ibov_monthly(
     if asset is None:
         return {}
 
+    upper_ts = datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
     query = select(AssetPrice).where(
         AssetPrice.asset_id == asset.id,
-        func.date(AssetPrice.timestamp) <= end_date,
+        AssetPrice.timestamp <= upper_ts,
     )
     if start_date is not None:
-        query = query.where(func.date(AssetPrice.timestamp) >= start_date)
+        lower_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+        query = query.where(AssetPrice.timestamp >= lower_ts)
     result = await db.execute(query.order_by(AssetPrice.timestamp.asc()))
 
     closes: dict[str, Decimal] = {}
