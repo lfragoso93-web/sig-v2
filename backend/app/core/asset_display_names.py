@@ -493,12 +493,24 @@ def _clean_corporate_registration_name(raw_name: str) -> str:
 
 def _format_treasury_slug(slug: str) -> str:
     lower = slug.strip().lower()
-    year_match = re.search(r"(\d{4})$", lower)
-    year_suffix = f" {year_match.group(1)}" if year_match else ""
-    if "renda-mais" in lower or "renda+" in lower:
-        return f"Tesouro Renda+{year_suffix}"
-    if "educa-mais" in lower or "educa+" in lower:
-        return f"Tesouro Educa+{year_suffix}"
+    full_date_match = re.search(r"\d{4}(20\d{2})$", lower)
+    year_match = re.search(r"(20\d{2})$", lower)
+    year = int(year_match.group(1)) if year_match else None
+    if "renda-mais" in lower or "renda+" in lower or "renda-" in lower:
+        if year is not None and (
+            (full_date_match is not None and year >= 2049)
+            or (year >= 2049 and year % 5 == 4)
+        ):
+            year -= 19
+        return f"Tesouro Renda+ {year}" if year else "Tesouro Renda+"
+    if "educa-mais" in lower or "educa+" in lower or "educa-" in lower:
+        if year is not None and (
+            (full_date_match is not None and year >= 2030)
+            or year > 2043
+        ):
+            year -= 4
+        return f"Tesouro Educa+ {year}" if year else "Tesouro Educa+"
+    year_suffix = f" {year}" if year else ""
     if "selic" in lower:
         return f"Tesouro Selic{year_suffix}"
     if "prefixado" in lower:
