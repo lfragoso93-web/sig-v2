@@ -219,6 +219,91 @@ def start_scheduler() -> None:
                 )
                 raise
 
+    async def _run_daily_close_catchup(job_name: str) -> None:
+        from datetime import timedelta
+        from sqlalchemy import func, select
+        from app.core.database import AsyncSessionLocal
+        from app.models.asset import AssetType
+        from app.models.transaction import Transaction
+        from app.services.asset_price_global_backfill_service import (
+            run_global_asset_price_backfill,
+        )
+
+        async with distributed_job_lock(
+            job_name=job_name,
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            today = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).date()
+            is_weekend = today.weekday() >= 5
+            async with AsyncSessionLocal() as db:
+                ticker_query = select(func.upper(func.trim(Transaction.ticker))).distinct()
+                if is_weekend:
+                    ticker_query = ticker_query.where(
+                        Transaction.asset_type == AssetType.CRIPTO.value
+                    )
+                tx_tickers = {
+                    ticker
+                    for ticker in (await db.execute(ticker_query)).scalars().all()
+                    if ticker
+                }
+            if is_weekend and not tx_tickers:
+                return
+            result = await run_global_asset_price_backfill(
+                required_to=today,
+                history_start=today - timedelta(days=2),
+                full_history=False,
+                end_grace_days=2,
+                include_start_gaps=False,
+                asset_types={AssetType.CRIPTO.value} if is_weekend else None,
+                tickers=tx_tickers if tx_tickers else None,
+            )
+            logger.info("[scheduler] Repescagem de fechamento (%s): %s", job_name, result)
+
+    @scheduler.scheduled_job(
+        _cron_trigger(hour=22, minute=45),
+        id="persist_daily_close_prices_catchup_night",
+        name="Repescagem noturna de fechamento de preços (US/FII/Cripto)",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def persist_daily_close_prices_catchup_night():
+        await _run_daily_close_catchup("persist_daily_close_prices_catchup_night")
+
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=7, minute=30),
+        id="persist_daily_close_prices_catchup_morning",
+        name="Repescagem matinal de fechamento de preços (D-1)",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def persist_daily_close_prices_catchup_morning():
+        await _run_daily_close_catchup("persist_daily_close_prices_catchup_morning")
+
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour="14,19,21", minute=15),
+        id="sync_fx_rates_daily",
+        name="Sincronizar taxa PTAX USD-BRL diária",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_fx_rates_daily():
+        from app.core.database import AsyncSessionLocal
+        from app.services.fx_rate_sync_service import sync_usd_brl_fx_rates
+
+        async with distributed_job_lock(
+            job_name="sync_fx_rates_daily",
+            period="daily",
+            ttl_seconds=3600,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                result = await sync_usd_brl_fx_rates(db)
+                logger.info("[scheduler] PTAX USD-BRL atualizada: %s", result)
+
     if settings.ENABLE_DAILY_BENCHMARK_SYNC:
 
         @scheduler.scheduled_job(
@@ -455,6 +540,33 @@ def start_scheduler() -> None:
                         exc,
                     )
                     raise
+
+    @scheduler.scheduled_job(
+        _cron_trigger(hour="9,23", minute=5),
+        id="portfolio_snapshot_reconcile_late_data",
+        name="Reconciliar snapshots TWR após CDI/FX/preços tardios",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def portfolio_snapshot_reconcile_late_data():
+        from app.core.database import AsyncSessionLocal
+        from app.services.portfolio_snapshot_twr_maintenance_service import (
+            maintain_twr_snapshots_for_active_portfolios,
+        )
+
+        async with distributed_job_lock(
+            job_name="portfolio_snapshot_reconcile_late_data",
+            period="daily",
+            ttl_seconds=7200,
+        ) as acquired:
+            if not acquired:
+                return
+            async with AsyncSessionLocal() as db:
+                result = await maintain_twr_snapshots_for_active_portfolios(db)
+                logger.info(
+                    "[scheduler] Reconciliação TWR pós-fechamento/D+1: %s",
+                    result,
+                )
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=21, minute=30),

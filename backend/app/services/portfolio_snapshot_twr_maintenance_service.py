@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import AssetType
+from app.models.asset import Asset, AssetType
+from app.models.fx_rate import FxRate
+from app.models.rate_history import RateHistory
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -34,6 +37,7 @@ from app.services.portfolio_snapshot_access_service import (
 )
 
 logger = logging.getLogger(__name__)
+_BRT = ZoneInfo("America/Sao_Paulo")
 _MONEY_TOLERANCE = Decimal("0.01")
 _RETURN_TOLERANCE = Decimal("0.000001")
 
@@ -44,9 +48,21 @@ def _decimal(value: object) -> Decimal:
     return Decimal(str(value or 0))
 
 
+def _today_brt() -> date:
+    return datetime.now(_BRT).date()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _latest_weekday_close_date(today: date | None = None) -> date:
     """Class snapshots follow market weekdays; avoid rebuilding them on weekends."""
-    target = today or date.today()
+    target = today or _today_brt()
     while target.weekday() >= 5:
         target -= timedelta(days=1)
     return target
@@ -82,7 +98,82 @@ def _latest_snapshot_has_legacy_zero_twr(
     return twr_is_zero and (historical_twr_exists or monetary_return_exists)
 
 
-async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> bool:
+async def _has_newer_market_inputs(
+    db: AsyncSession,
+    portfolio_id: int,
+    latest: PortfolioSnapshot,
+    *,
+    now_brt: datetime,
+) -> bool:
+    snapshot_updated = _as_utc(latest.updated_at or latest.created_at)
+    if snapshot_updated is None:
+        return True
+
+    today_brt = now_brt.date()
+    snapshot_brt = snapshot_updated.astimezone(_BRT)
+    if (
+        latest.snapshot_date == today_brt
+        and now_brt.time() >= time(20, 45)
+        and (snapshot_brt.date() < today_brt or snapshot_brt.time() < time(20, 45))
+    ):
+        return True
+
+    portfolio_assets = (
+        select(Asset.id)
+        .join(
+            Transaction,
+            (func.upper(func.trim(Transaction.ticker)) == func.upper(func.trim(Asset.ticker)))
+            & (Transaction.asset_type == Asset.asset_type),
+        )
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+    max_price_sync = _as_utc(
+        (
+            await db.execute(
+                select(func.max(Asset.provider_last_sync_at)).where(
+                    Asset.id.in_(portfolio_assets),
+                )
+            )
+        ).scalar_one_or_none()
+    )
+    if max_price_sync is not None and max_price_sync > snapshot_updated:
+        return True
+
+    max_fx_created = _as_utc(
+        (
+            await db.execute(
+                select(func.max(FxRate.created_at)).where(FxRate.pair == "USD-BRL")
+            )
+        ).scalar_one_or_none()
+    )
+    if max_fx_created is not None and max_fx_created > snapshot_updated:
+        return True
+
+    max_rate_created = _as_utc(
+        (
+            await db.execute(
+                select(func.max(RateHistory.created_at)).where(
+                    RateHistory.indicator.in_(("CDI", "SELIC"))
+                )
+            )
+        ).scalar_one_or_none()
+    )
+    if max_rate_created is not None and max_rate_created > snapshot_updated:
+        return True
+
+    return False
+
+
+async def _portfolio_needs_twr_rebuild(
+    db: AsyncSession,
+    portfolio_id: int,
+    *,
+    now_brt: datetime | None = None,
+) -> bool:
+    current_brt = now_brt or datetime.now(_BRT)
+    today_brt = current_brt.date()
+
     first_tx_result = await db.execute(
         select(func.min(Transaction.date)).where(Transaction.portfolio_id == portfolio_id)
     )
@@ -100,7 +191,7 @@ async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> b
     count, min_date, max_date = snapshot_result.one()
     if int(count or 0) == 0 or min_date is None or min_date > first_date:
         return True
-    if max_date is None or max_date < date.today():
+    if max_date is None or max_date < today_brt:
         return True
 
     latest_rows_result = await db.execute(
@@ -128,6 +219,13 @@ async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> b
             "[snapshot_twr_auto] portfolio=%s snapshot=%s possui TWR técnico zerado; reconstruindo",
             portfolio_id,
             latest.snapshot_date,
+        )
+        return True
+
+    if await _has_newer_market_inputs(db, portfolio_id, latest, now_brt=current_brt):
+        logger.info(
+            "[snapshot_twr_auto] portfolio=%s possui insumos de mercado mais recentes; reconstruindo",
+            portfolio_id,
         )
         return True
 
@@ -166,7 +264,7 @@ async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int
     weekday_close = _latest_weekday_close_date()
     if any(
         latest_by_type.get(asset_type) is None
-        or latest_by_type[asset_type] < (date.today() if asset_type == AssetType.CRIPTO.value else weekday_close)
+        or latest_by_type[asset_type] < (_today_brt() if asset_type == AssetType.CRIPTO.value else weekday_close)
         for asset_type in transaction_types
     ):
         return True
@@ -224,6 +322,7 @@ async def maintain_twr_snapshots_for_active_portfolios(
                 snapshots += await backfill_canonical_snapshots_with_returns(
                     db,
                     access.portfolio_id,
+                    end_date=_today_brt(),
                 )
             if rebuild_classes:
                 class_snapshots += await rebuild_class_snapshots(db, access.portfolio_id)

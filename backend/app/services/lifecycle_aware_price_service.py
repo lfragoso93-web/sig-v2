@@ -30,6 +30,41 @@ def _is_stale_price_usable(
     return (target_date - last_price_date).days <= max_age_days
 
 
+def _asset_type_str(raw: object) -> str:
+    return str(getattr(raw, "value", raw) or "").strip().upper()
+
+
+async def resolve_asset_ids_by_ticker_and_type(
+    db: AsyncSession,
+    tickers_with_types: list[tuple[str, AssetType]],
+) -> tuple[dict[int, str], dict[str, int]]:
+    """Resolve ``asset_id <-> TICKER`` respeitando ``(ticker, asset_type)``."""
+    requested_pairs = {
+        (str(ticker).strip().upper(), _asset_type_str(asset_type))
+        for ticker, asset_type in tickers_with_types
+        if str(ticker).strip()
+    }
+    tickers = list(dict.fromkeys(t for t, _ in requested_pairs))
+    if not tickers:
+        return {}, {}
+
+    assets_result = await db.execute(
+        select(Asset.id, Asset.ticker, Asset.asset_type).where(
+            func.upper(Asset.ticker).in_(tickers)
+        )
+    )
+    asset_id_to_ticker: dict[int, str] = {}
+    ticker_to_asset_id: dict[str, int] = {}
+    for row in assets_result.all():
+        ticker_upper = str(row.ticker).strip().upper()
+        type_upper = _asset_type_str(row.asset_type)
+        if (ticker_upper, type_upper) in requested_pairs:
+            asset_id = int(row.id)
+            asset_id_to_ticker[asset_id] = ticker_upper
+            ticker_to_asset_id.setdefault(ticker_upper, asset_id)
+    return asset_id_to_ticker, ticker_to_asset_id
+
+
 async def get_prices_at_date_with_lifecycle(
     db: AsyncSession,
     tickers_with_types: list[tuple[str, AssetType]],
@@ -38,8 +73,8 @@ async def get_prices_at_date_with_lifecycle(
     """Retorna precos, tickers PRE_LISTING e lacunas reais.
 
     A busca de preco preserva a janela operacional de cinco dias usada pelo
-    PriceHistory. Quando nao existe preco nessa janela, consultamos a primeira
-    cotacao oficial do ativo:
+    PriceHistory sem invadir ``target_date + 1`` (evita look-ahead). Quando nao
+    existe preco nessa janela, consultamos a primeira cotacao oficial do ativo:
 
     - target_date < first_price_date: PRE_LISTING, sem warning;
     - target_date >= first_price_date: REAL_GAP, com warning;
@@ -50,14 +85,12 @@ async def get_prices_at_date_with_lifecycle(
 
     tickers = list(dict.fromkeys(ticker.upper() for ticker, _ in tickers_with_types))
     start = datetime.combine(target_date - timedelta(days=5), datetime.min.time(), tzinfo=timezone.utc)
-    end = datetime.combine(target_date + timedelta(days=1), datetime.max.time(), tzinfo=timezone.utc)
+    end = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
 
-    assets_result = await db.execute(
-        select(Asset.id, Asset.ticker).where(func.upper(Asset.ticker).in_(tickers))
+    asset_id_to_ticker, ticker_to_asset_id = await resolve_asset_ids_by_ticker_and_type(
+        db,
+        tickers_with_types,
     )
-    asset_rows = assets_result.all()
-    asset_id_to_ticker = {int(row.id): str(row.ticker).upper() for row in asset_rows}
-    ticker_to_asset_id = {ticker: asset_id for asset_id, ticker in asset_id_to_ticker.items()}
 
     prices: dict[str, float] = {}
     if asset_id_to_ticker:

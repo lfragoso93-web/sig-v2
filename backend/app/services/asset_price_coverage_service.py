@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from enum import Enum
 
 from sqlalchemy import func, select
@@ -161,8 +162,19 @@ def build_missing_ranges(
     }
     # HISTORY_END_UNAVAILABLE suprime novas tentativas apenas no mesmo dia;
     # em dias seguintes reabilita stale_end para recuperar apos feriados ou atraso de feed.
+    sync_date_brt = (
+        (
+            provider_last_sync_at
+            if provider_last_sync_at.tzinfo is not None
+            else provider_last_sync_at.replace(tzinfo=timezone.utc)
+        )
+        .astimezone(ZoneInfo("America/Sao_Paulo"))
+        .date()
+        if provider_last_sync_at is not None
+        else None
+    )
     end_unavailable_same_day = normalized_provider_status == "HISTORY_END_UNAVAILABLE" and (
-        provider_last_sync_at is None or provider_last_sync_at.date() >= required_to
+        sync_date_brt is None or sync_date_brt >= required_to
     )
     end_unavailable = history_unavailable or end_unavailable_same_day
 
