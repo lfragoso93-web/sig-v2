@@ -17,9 +17,7 @@ _CLASS_LABELS = frozenset({
     "Outros",
 })
 
-# Nomes comerciais canônicos por ticker exato (Ações, FIIs, Fiagros, ETFs, BDRs, Stocks, Cripto)
-_KNOWN_TICKER_NAMES: dict[str, str] = {
-    # Ações B3
+_KNOWN_ACAO_NAMES: dict[str, str] = {
     "ALOS3": "Allos",
     "ALUP11": "Alupar",
     "AMOB3": "Automob",
@@ -62,7 +60,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "VALE3": "Vale",
     "VULC3": "Vulcabras",
     "WEGE3": "WEG",
-    # FIIs e Fiagros
+}
+
+_KNOWN_FII_NAMES: dict[str, str] = {
     "AAZQ11": "AZ Quest Sole Fiagro",
     "ALZC11": "Alianza Crédito Imobiliário FII",
     "ALZR11": "Alianza Trust Renda Imobiliária FII",
@@ -118,7 +118,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "XPLG11": "XP Log FII",
     "XPML11": "XP Malls FII",
     "XPSF11": "XP Selection FII",
-    # ETFs Nacionais
+}
+
+_KNOWN_ETF_NACIONAL_NAMES: dict[str, str] = {
     "ACWI11": "Trend MSCI ACWI ETF",
     "AREA11": "Investo US Real Estate ETF",
     "AURO11": "Buena Vista Gold High Income ETF",
@@ -143,7 +145,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "SPXI11": "It Now S&P 500 ETF",
     "WRLD11": "Investo FTSE Global ETF",
     "XINA11": "Trend MSCI China ETF",
-    # ETFs Internacionais
+}
+
+_KNOWN_ETF_INTERNACIONAL_NAMES: dict[str, str] = {
     "DGRO": "iShares Core Dividend Growth ETF",
     "IVV": "iShares Core S&P 500 ETF",
     "JEPI": "JPMorgan Equity Premium Income ETF",
@@ -162,7 +166,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "VTI": "Vanguard Total Stock Market ETF",
     "VXUS": "Vanguard Total International Stock ETF",
     "VYM": "Vanguard High Dividend Yield ETF",
-    # BDRs
+}
+
+_KNOWN_BDR_NAMES: dict[str, str] = {
     "AAPL34": "Apple",
     "AMZO34": "Amazon",
     "ASML34": "ASML Holding",
@@ -198,7 +204,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "VISA34": "Visa",
     "WALM34": "Walmart",
     "XPBR31": "XP Inc.",
-    # Stocks EUA
+}
+
+_KNOWN_STOCK_NAMES: dict[str, str] = {
     "AAPL": "Apple",
     "ABBV": "AbbVie",
     "ADBE": "Adobe",
@@ -249,7 +257,9 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "WMT": "Walmart",
     "XOM": "ExxonMobil",
     "XP": "XP Inc.",
-    # Criptomoedas
+}
+
+_KNOWN_CRIPTO_NAMES: dict[str, str] = {
     "AAVE": "Aave",
     "ADA": "Cardano",
     "ALGO": "Algorand",
@@ -286,6 +296,32 @@ _KNOWN_TICKER_NAMES: dict[str, str] = {
     "XLM": "Stellar",
     "XMR": "Monero",
     "XRP": "XRP (Ripple)",
+}
+
+_KNOWN_NAMES_BY_TYPE: dict[str, dict[str, str]] = {
+    "ACAO": _KNOWN_ACAO_NAMES,
+    "ACOES": _KNOWN_ACAO_NAMES,
+    "ACAO_NACIONAL": _KNOWN_ACAO_NAMES,
+    "FII": _KNOWN_FII_NAMES,
+    "ETF_NACIONAL": _KNOWN_ETF_NACIONAL_NAMES,
+    "ETF": _KNOWN_ETF_NACIONAL_NAMES,
+    "ETF_INTERNACIONAL": _KNOWN_ETF_INTERNACIONAL_NAMES,
+    "ETF_INT": _KNOWN_ETF_INTERNACIONAL_NAMES,
+    "BDR": _KNOWN_BDR_NAMES,
+    "STOCK": _KNOWN_STOCK_NAMES,
+    "STOCKS": _KNOWN_STOCK_NAMES,
+    "CRIPTO": _KNOWN_CRIPTO_NAMES,
+    "CRIPTOMOEDA": _KNOWN_CRIPTO_NAMES,
+}
+
+_KNOWN_TICKER_NAMES: dict[str, str] = {
+    **_KNOWN_ACAO_NAMES,
+    **_KNOWN_FII_NAMES,
+    **_KNOWN_ETF_NACIONAL_NAMES,
+    **_KNOWN_ETF_INTERNACIONAL_NAMES,
+    **_KNOWN_BDR_NAMES,
+    **_KNOWN_STOCK_NAMES,
+    **_KNOWN_CRIPTO_NAMES,
 }
 
 # Prefixos B3 de 4 letras para ações (cobre classes ON/PN/UNT como POMO3/POMO4, PETR3/PETR4)
@@ -477,8 +513,12 @@ def format_asset_display_name(
     ):
         return clean_raw
 
-    # 2. Mapa canônico por ticker exato (respeitando colisão BTC em ACAO se houver)
-    if not (upper_ticker == "BTC" and norm_type == "ACAO"):
+    # 2. Mapa canônico por (asset_type, ticker) para evitar colisão entre classes
+    if norm_type in _KNOWN_NAMES_BY_TYPE:
+        known = _KNOWN_NAMES_BY_TYPE[norm_type].get(upper_ticker)
+        if known:
+            return known
+    elif not norm_type:
         known = _KNOWN_TICKER_NAMES.get(upper_ticker)
         if known:
             return known

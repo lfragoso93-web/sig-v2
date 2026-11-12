@@ -376,10 +376,14 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
     return {row.ticker: row.logo_url for row in result.all()}
 
 
-async def _fetch_asset_names_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
+async def _fetch_asset_names_batch(
+    db: AsyncSession, tickers: list[str]
+) -> dict[tuple[str, str], str | None]:
     if not tickers:
         return {}
-    stmt = select(Asset.ticker, Asset.name).where(Asset.ticker.in_(tickers))
+    stmt = select(Asset.ticker, Asset.asset_type, Asset.name).where(
+        Asset.ticker.in_(tickers)
+    )
     result = await db.execute(stmt)
     all_fn = getattr(result, "all", None)
     if all_fn is None or inspect.iscoroutinefunction(all_fn):
@@ -388,7 +392,10 @@ async def _fetch_asset_names_batch(db: AsyncSession, tickers: list[str]) -> dict
     if not isinstance(rows, (list, tuple)):
         return {}
     return {
-        str(row.ticker): str(row.name) if row.name is not None else None
+        (
+            str(row.ticker).strip().upper(),
+            normalize_type(getattr(row, "asset_type", None)),
+        ): str(row.name) if row.name is not None else None
         for row in rows
         if getattr(row, "ticker", None)
     }
@@ -697,8 +704,12 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
                 "positions": [],
             }
 
+        ticker_key = str(e["ticker"]).strip().upper()
+        persisted_name = asset_names.get((ticker_key, normalize_type(at)))
+        if persisted_name is None:
+            persisted_name = asset_names.get(e["ticker"])  # type: ignore[arg-type]
         asset_display_name = format_asset_display_name(
-            asset_names.get(e["ticker"]) or e.get("asset_label"),
+            persisted_name or e.get("asset_label"),
             e["ticker"],
             at,
             fallback_label=label,

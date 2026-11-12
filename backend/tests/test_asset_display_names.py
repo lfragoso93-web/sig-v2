@@ -92,7 +92,12 @@ async def test_get_portfolio_positions_uses_company_display_name_in_asset_label(
     monkeypatch.setattr(
         portfolio_service,
         "_fetch_asset_names_batch",
-        AsyncMock(return_value={"POMO4": "MARCOPOLO S.A.", "MXRF11": "MXRF11"}),
+        AsyncMock(
+            return_value={
+                ("POMO4", "ACAO"): "MARCOPOLO S.A.",
+                ("MXRF11", "FII"): "MXRF11",
+            }
+        ),
     )
     monkeypatch.setattr(portfolio_service, "sum_dividends_by_ticker", AsyncMock(return_value={}))
     monkeypatch.setattr(
@@ -151,3 +156,22 @@ async def test_catalog_services_overwrite_placeholder_ticker_names(db: AsyncSess
     assert mxrf.name == "FII MAXI RENDA"
     assert seed_status == "updated"
     assert btc.name == "Bitcoin"
+
+
+@pytest.mark.asyncio
+async def test_fetch_asset_names_batch_keys_by_ticker_and_asset_type(db: AsyncSession) -> None:
+    db.add_all([
+        Asset(ticker="DIA", name="DIA Crypto", asset_type=AssetType.CRIPTO.value, currency="BRL"),
+        Asset(
+            ticker="DIA",
+            name="SPDR Dow Jones Industrial Average ETF",
+            asset_type=AssetType.ETF_INTERNACIONAL.value,
+            currency="USD",
+        ),
+    ])
+    await db.commit()
+
+    names = await portfolio_service._fetch_asset_names_batch(db, ["DIA"])
+    assert names[("DIA", "CRIPTO")] == "DIA Crypto"
+    assert names[("DIA", "ETF_INTERNACIONAL")] == "SPDR Dow Jones Industrial Average ETF"
+
