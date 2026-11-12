@@ -856,7 +856,7 @@ async def test_deferred_full_position_settlement_preserves_twr_return_base_in_bo
             )
 
             port_snaps = {
-                s.date: s
+                s.snapshot_date: s
                 for s in (
                     await db.execute(
                         select(PortfolioSnapshot).where(
@@ -866,7 +866,7 @@ async def test_deferred_full_position_settlement_preserves_twr_return_base_in_bo
                 ).scalars().all()
             }
             class_snaps = {
-                s.date: s
+                s.snapshot_date: s
                 for s in (
                     await db.execute(
                         select(PortfolioClassSnapshot).where(
