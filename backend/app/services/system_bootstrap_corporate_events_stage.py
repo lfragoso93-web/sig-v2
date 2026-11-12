@@ -8,6 +8,7 @@ eventos corporativos.
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy import func, select, text
@@ -20,6 +21,8 @@ from app.services.corporate_event_service import sync_corporate_events_for_asset
 from app.services.system_bootstrap_execution_context import (
     SystemBootstrapExecutionContext,
 )
+
+logger = logging.getLogger(__name__)
 
 CORPORATE_EVENTS_BOOTSTRAP_AUTH_ENV = "SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS"
 CORPORATE_EVENTS_ADVISORY_LOCK_KEY = 254_001
@@ -42,12 +45,16 @@ class CorporateEventsStageReport:
     assets_processed: int
     events_created: int
     assets_skipped: int
+    assets_failed: int = 0
 
     def to_detail(self) -> str:
-        return (
+        detail = (
             f"processed={self.assets_processed} created={self.events_created} "
             f"skipped={self.assets_skipped}"
         )
+        if self.assets_failed > 0:
+            detail += f" failed={self.assets_failed}"
+        return detail
 
 
 def corporate_events_bootstrap_authorized() -> bool:
@@ -63,6 +70,7 @@ async def run_system_bootstrap_corporate_events_stage(
     context: SystemBootstrapExecutionContext,
     *,
     authorized: bool | None = None,
+    continue_on_asset_error: bool = False,
 ) -> str:
     """Coleta eventos globais com gate, lock e transação única do estágio."""
 
@@ -96,9 +104,33 @@ async def run_system_bootstrap_corporate_events_stage(
             assets = tuple(assets_result.scalars().all())
 
             events_created = 0
+            assets_processed = 0
+            assets_failed = 0
+            first_failure: Exception | None = None
             for asset in assets:
-                created = await sync_corporate_events_for_asset(db, asset)
-                events_created += len(created)
+                if not continue_on_asset_error:
+                    created = await sync_corporate_events_for_asset(db, asset)
+                    events_created += len(created)
+                    assets_processed += 1
+                    continue
+                try:
+                    async with db.begin_nested():
+                        created = await sync_corporate_events_for_asset(db, asset)
+                    events_created += len(created)
+                    assets_processed += 1
+                except Exception as exc:
+                    assets_failed += 1
+                    if first_failure is None:
+                        first_failure = exc
+                    logger.warning(
+                        "[corporate_events_stage] Falha isolada ao sincronizar %s (%s): %s",
+                        asset.ticker,
+                        asset.asset_type,
+                        exc,
+                    )
+
+            if assets_processed == 0 and assets_failed > 0 and first_failure is not None:
+                raise first_failure
 
             await db.commit()
         except Exception:
@@ -106,8 +138,9 @@ async def run_system_bootstrap_corporate_events_stage(
             raise
 
     report = CorporateEventsStageReport(
-        assets_processed=len(assets),
+        assets_processed=assets_processed,
         events_created=events_created,
         assets_skipped=0,
+        assets_failed=assets_failed,
     )
     return report.to_detail()

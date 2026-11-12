@@ -30,6 +30,7 @@ from app.services.treasury_catalog_service import resolve_treasury_symbol
 logger = logging.getLogger(__name__)
 
 PRICE_TTL_SECONDS = 900
+INTL_PRICE_TTL_SECONDS = 3600
 MEM_CACHE_TTL = 300
 BRAPI_CHUNK_SIZE = 20
 BRAPI_CHUNK_DELAY = 1.0
@@ -93,8 +94,13 @@ async def _db_get_fresh_batch(db: AsyncSession, pairs: list[tuple[str, str]]) ->
         asset = (await db.execute(_asset_lookup_stmt(ticker, asset_type))).scalars().first()
         if not asset or asset.last_price is None or asset.last_price_updated_at is None:
             continue
+        ttl_seconds = (
+            INTL_PRICE_TTL_SECONDS
+            if _asset_type_from_any(asset_type) in INTL_TYPES
+            else PRICE_TTL_SECONDS
+        )
         age = (now - asset.last_price_updated_at).total_seconds()
-        if age <= PRICE_TTL_SECONDS:
+        if age <= ttl_seconds:
             fresh[ticker] = float(asset.last_price)
     return fresh
 
@@ -520,12 +526,16 @@ async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> in
 async def update_all_quotes(
     db: AsyncSession,
     asset_types: Optional[list[AssetType]] = None,
+    include_unheld_intl: bool = False,
 ) -> int:
     from app.models.transaction import Transaction
 
     filter_values = [asset_type.value for asset_type in asset_types] if asset_types else None
+    excluded_catalog_types = [asset_type.value for asset_type in NO_QUOTE_TYPES]
+    if not include_unheld_intl:
+        excluded_catalog_types.extend(asset_type.value for asset_type in INTL_TYPES)
     asset_query = select(Asset.ticker, Asset.asset_type).where(
-        Asset.asset_type.notin_([asset_type.value for asset_type in NO_QUOTE_TYPES])
+        Asset.asset_type.notin_(excluded_catalog_types)
     )
     if filter_values:
         asset_query = asset_query.where(Asset.asset_type.in_(filter_values))

@@ -136,3 +136,62 @@ def test_corporate_events_stage_report_is_deterministic():
     )
 
     assert report.to_detail() == "processed=7 created=11 skipped=0"
+
+
+class _NestedSavepoint:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+@pytest.mark.asyncio
+async def test_corporate_events_stage_isolates_asset_failures_when_enabled(monkeypatch):
+    asset_a = SimpleNamespace(id=1, ticker="SNAG11", asset_type="FII")
+    asset_b = SimpleNamespace(id=2, ticker="PETR4", asset_type="ACAO")
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[MagicMock(), _assets_result(asset_a, asset_b)])
+    db.begin_nested = MagicMock(side_effect=[_NestedSavepoint(), _NestedSavepoint()])
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    monkeypatch.setattr(stage, "AsyncSessionLocal", lambda: _SessionContext(db))
+
+    sync = AsyncMock(side_effect=[RuntimeError("SNAG11 transient"), [object(), object()]])
+    monkeypatch.setattr(stage, "sync_corporate_events_for_asset", sync)
+
+    detail = await stage.run_system_bootstrap_corporate_events_stage(
+        _CONTEXT,
+        authorized=True,
+        continue_on_asset_error=True,
+    )
+
+    assert sync.await_count == 2
+    assert db.begin_nested.call_count == 2
+    db.commit.assert_awaited_once()
+    db.rollback.assert_not_awaited()
+    assert detail == "processed=1 created=2 skipped=0 failed=1"
+
+
+@pytest.mark.asyncio
+async def test_corporate_events_stage_raises_if_all_assets_fail_when_isolated(monkeypatch):
+    asset_a = SimpleNamespace(id=1, ticker="SNAG11", asset_type="FII")
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[MagicMock(), _assets_result(asset_a)])
+    db.begin_nested = MagicMock(return_value=_NestedSavepoint())
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    monkeypatch.setattr(stage, "AsyncSessionLocal", lambda: _SessionContext(db))
+
+    sync = AsyncMock(side_effect=RuntimeError("total outage"))
+    monkeypatch.setattr(stage, "sync_corporate_events_for_asset", sync)
+
+    with pytest.raises(RuntimeError, match="total outage"):
+        await stage.run_system_bootstrap_corporate_events_stage(
+            _CONTEXT,
+            authorized=True,
+            continue_on_asset_error=True,
+        )
+
+    db.commit.assert_not_awaited()
+    db.rollback.assert_awaited_once()

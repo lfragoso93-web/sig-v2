@@ -77,3 +77,21 @@ def test_crypto_quotes_run_hourly_outside_market_hours_and_on_weekends() -> None
         "2026-07-18 02:00",
         "2026-07-18 03:00",
     ]
+
+
+def test_intl_quotes_run_only_on_reduced_intraday_hours() -> None:
+    from app.core.scheduler import INTL_INTRADAY_HOURS, _intraday_asset_types
+    from app.models.asset import AssetType
+
+    assert INTL_INTRADAY_HOURS == frozenset({11, 14, 17})
+
+    for hour in range(9, 19):
+        types = _intraday_asset_types(hour)
+        assert AssetType.ACAO in types
+        assert AssetType.FII in types
+        if hour in INTL_INTRADAY_HOURS:
+            assert AssetType.STOCK in types
+            assert AssetType.ETF_INTERNACIONAL in types
+        else:
+            assert AssetType.STOCK not in types
+            assert AssetType.ETF_INTERNACIONAL not in types

@@ -1,7 +1,8 @@
-﻿"""Read-only client for B3 Listed Companies structured public endpoints."""
+"""Read-only client for B3 Listed Companies structured public endpoints."""
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
@@ -76,32 +77,46 @@ class B3ListedCompaniesClient:
         self._language = language
 
     async def _get_json(self, endpoint: str, parameters: dict[str, Any]) -> Any:
-        try:
-            response = await self._client.get(
-                f"{self._base_url}/{b3_service_path(endpoint, parameters)}",
-                headers={"Accept": "application/json"},
-            )
-            response.raise_for_status()
-            payload: Any = response.json()
-            # The portal currently wraps some JSON responses as a JSON string
-            # whose contents are the actual serialized array/object.
-            for _ in range(2):
-                if not isinstance(payload, str):
-                    break
-                payload = json.loads(payload)
-            if isinstance(payload, str):
-                raise B3ListedCompaniesError(
-                    f"B3 endpoint {endpoint} retornou JSON encapsulado demais"
+        url = f"{self._base_url}/{b3_service_path(endpoint, parameters)}"
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = await self._client.get(
+                    url,
+                    headers={"Accept": "application/json"},
                 )
-            return payload
-        except httpx.HTTPError as exc:
-            raise B3ListedCompaniesError(
-                f"B3 endpoint {endpoint} indisponÃ­vel"
-            ) from exc
-        except ValueError as exc:
-            raise B3ListedCompaniesError(
-                f"B3 endpoint {endpoint} retornou JSON invalido"
-            ) from exc
+                response.raise_for_status()
+                payload: Any = response.json()
+                # The portal currently wraps some JSON responses as a JSON string
+                # whose contents are the actual serialized array/object.
+                for _ in range(2):
+                    if not isinstance(payload, str):
+                        break
+                    if not payload.strip():
+                        raise ValueError("B3 retornou payload JSON vazio")
+                    payload = json.loads(payload)
+                if isinstance(payload, str):
+                    raise B3ListedCompaniesError(
+                        f"B3 endpoint {endpoint} retornou JSON encapsulado demais"
+                    )
+                return payload
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                if attempt < 2:
+                    await asyncio.sleep(0.35 * (attempt + 1))
+                    continue
+                raise B3ListedCompaniesError(
+                    f"B3 endpoint {endpoint} indisponível"
+                ) from exc
+            except ValueError as exc:
+                last_exc = exc
+                if attempt < 2:
+                    await asyncio.sleep(0.35 * (attempt + 1))
+                    continue
+                raise B3ListedCompaniesError(
+                    f"B3 endpoint {endpoint} retornou JSON invalido"
+                ) from exc
+        raise B3ListedCompaniesError(f"B3 endpoint {endpoint} falhou") from last_exc
 
     async def company_supplement(
         self,

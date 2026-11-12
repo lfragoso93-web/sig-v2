@@ -280,3 +280,27 @@ def test_b3_factor_with_thousands_separator_and_commas() -> None:
     action, = normalize_b3_corporate_actions("TEST3", payload)
     assert action.kind == CorporateActionKind.SPLIT
     assert action.quantity_factor == Decimal("50")
+
+
+@pytest.mark.asyncio
+async def test_b3_adapter_retries_transient_empty_json_then_succeeds() -> None:
+    payload = [{
+        "code": "SNAG", "tradingName": "SNAG11", "cashDividends": [],
+        "stockDividends": [], "subscriptions": [],
+    }]
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(200, json="")
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        result = await B3ListedCompaniesClient(client=http).company_supplement(
+            ticker="SNAG11", is_bdr=False
+        )
+
+    assert calls == 2
+    assert result == payload[0]

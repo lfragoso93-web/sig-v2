@@ -258,7 +258,7 @@ As tarefas em lote e rotinas de manutenção periódica são gerenciadas pelo **
 
 | ID da Tarefa | Horário / Frequência | Descrição da Atividade Operacional |
 | :--- | :--- | :--- |
-| `update_quotes_intraday_full_hour` | Seg–Sex, 09h às 18h (hora cheia) | Atualização de cotações de mercado aberto (Ações, FIIs, BDRs, ETFs, Tesouro). Invalida caches dependentes. |
+| `update_quotes_intraday_full_hour` | Seg–Sex, 09h às 18h (hora cheia; internacionais às 11h, 14h e 17h) | Atualização de cotações de mercado aberto (Ações, FIIs, BDRs, ETFs, Tesouro; classes internacionais `STOCK`/`ETF_INTERNACIONAL` limitadas a ativos transacionados e 3 janelas diárias). Invalida caches dependentes. |
 | `update_crypto_quotes_offhours_weekdays` | Seg–Sex, 00h–08h e 19h–23h (hora cheia) | Manutenção horária de cotações de criptoativos fora da janela do pregão da bolsa. |
 | `update_crypto_quotes_weekends` | Sáb e Dom, 24 horas (hora cheia) | Manutenção contínua de cotações cripto durante os finais de semana. |
 | `persist_daily_close_prices` | Diariamente, às 20h45 | Persistência definitiva dos preços de fechamento diário (Seg–Sex para todos os ativos com transações; Sáb–Dom escopado em Cripto), operando sem janela de carência (`end_grace_days=0`) para eliminar lacunas D-1 em `asset_prices`. |
@@ -267,7 +267,7 @@ As tarefas em lote e rotinas de manutenção periódica são gerenciadas pelo **
 | `persist_treasury_daily_close` | Seg–Sex, às 20h50 | Persistência dos preços unitários e taxas de fechamento de todos os títulos do Tesouro Direto. |
 | `notify_daily_dividend_payments` | Seg–Sex, às 08h30 | Disparo de e-mail institucional matinal com o resumo dos proventos que caem na conta do investidor na data. |
 | `sync_asset_dividends_morning` | Seg–Sáb, às 08h00 | Ingestão global de proventos anunciados pelas empresas e fundos (janela de -90 dias a +365 dias). |
-| `sync_corporate_events_daily` | Seg–Sex, às 22h00 | Sincronização de eventos societários (desdobramentos, grupamentos, bonificações, fusões). |
+| `sync_corporate_events_daily` | Seg–Sex, às 22h00 | Sincronização de eventos societários (desdobramentos, grupamentos, bonificações, fusões) com isolamento por savepoint por ativo e retry em falhas transitórias da B3. |
 | `portfolio_snapshot_auto_maintenance` | Diariamente, às 21h00 (inclui fins de semana) | Consolidação oficial do fechamento patrimonial diário e encadeamento da série temporal TWR das carteiras ativas. |
 | `refresh_asset_fundamentals_daily` | Seg–Sex, às 21h30 | Atualização de métricas e múltiplos fundamentalistas (P/L, P/VP, DY, ROE, Margens e consenso de mercado). |
 | `audit_b3_market_calendar_monthly` | Dia 01 de cada mês, às 08h15 | Auditoria read-only do calendário de feriados oficiais da B3 contra a fonte pública oficial. |

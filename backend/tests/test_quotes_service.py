@@ -128,3 +128,46 @@ class TestGetPrices:
             mock_yf.assert_called_once()
             mock_crypto.assert_called_once()
             assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_intl_uses_extended_db_ttl_and_skips_unheld_catalog_in_batch() -> None:
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    now = datetime.now(timezone.utc)
+    stale_30m = now - timedelta(minutes=30)
+
+    nvda_asset = SimpleNamespace(last_price=180.0, last_price_updated_at=stale_30m)
+    petr_asset = SimpleNamespace(last_price=36.0, last_price_updated_at=stale_30m)
+
+    def _scalar_first(obj):
+        res = MagicMock()
+        res.scalars.return_value.first.return_value = obj
+        return res
+
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=[_scalar_first(nvda_asset), _scalar_first(petr_asset)]
+    )
+
+    fresh = await quotes_service._db_get_fresh_batch(
+        db,
+        [("NVDA", "STOCK"), ("PETR4", "ACAO")],
+    )
+    assert fresh == {"NVDA": 180.0}
+
+    # Verify update_all_quotes excludes INTL_TYPES from Asset catalog scan while preserving transactions
+    rows_empty = MagicMock()
+    rows_empty.all.return_value = []
+    db_batch = MagicMock()
+    db_batch.execute = AsyncMock(side_effect=[rows_empty, rows_empty])
+    db_batch.commit = AsyncMock()
+
+    with patch("app.services.quotes_service.get_prices", new=AsyncMock(return_value={})):
+        await quotes_service.update_all_quotes(db_batch)
+
+    asset_stmt = str(db_batch.execute.await_args_list[0].args[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "STOCK" in asset_stmt
+    assert "ETF_INTERNACIONAL" in asset_stmt
