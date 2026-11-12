@@ -116,7 +116,10 @@ async def test_asset_ai_analysis_confronts_fii_report_and_metrics():
     assert len(result["strengths"]) >= 2
     assert any("Relatório Gerencial oficial" in c for c in result["report_confrontation"])
     assert any("Noticiário recente" in c for c in result["report_confrontation"])
-    assert result["latest_report_referenced"]["url"].startswith("https://fnet.bmfbovespa.com.br")
+    assert (
+        result["latest_report_referenced"]["url"]
+        == "https://fnet.bmfbovespa.com.br/fnet/publico/exibirDocumento?id=987654&cvm=true"
+    )
 
 
 @pytest.mark.asyncio
