@@ -94,12 +94,19 @@ export default function FixedIncomeCalculatorPage() {
 
   return (
     <div className="page-container">
+      <header className="mb-1">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Comparação</p>
+        <h1 className="page-title">Comparador de RF</h1>
+        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Compare lado a lado títulos de renda fixa tributáveis e isentos, estimando imposto regressivo, retorno líquido e taxa equivalente.
+        </p>
+      </header>
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]" aria-label="Premissas e comparação">
         <div className="card flex flex-col gap-5 p-4 sm:p-5">
           <div>
             <h2 className="section-card-title">Premissas</h2>
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Informe taxas efetivas anuais. O simulador não busca taxas de mercado.
+              Informe taxas efetivas anuais. O comparador não busca taxas de mercado.
             </p>
           </div>
           <Field

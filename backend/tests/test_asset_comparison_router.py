@@ -67,6 +67,7 @@ async def test_asset_analysis_reads_catalog_history_and_cached_fields(monkeypatc
     from datetime import date, datetime, timezone
 
     from app.services.asset_enrichment_service import asset_enrichment_service
+    from app.services.asset_reports_and_news_service import asset_reports_and_news_service
 
     asset = SimpleNamespace(
         id=7, ticker="PETR4", name="Petrobras", asset_type="ACAO", currency="BRL",
@@ -97,15 +98,22 @@ async def test_asset_analysis_reads_catalog_history_and_cached_fields(monkeypatc
     ])
     cached_reader = AsyncMock(return_value={"ticker": "PETR4", "coverage_status": "PARTIAL", "stock_fundamentals": {"pe": 5}})
     monkeypatch.setattr(asset_enrichment_service, "get_cached_asset_enrichment", cached_reader)
+    monkeypatch.setattr(
+        asset_reports_and_news_service,
+        "get_cached_reports_and_news",
+        AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
+    )
 
-    response = await get_asset_analysis(7, db, None)
+    response = await get_asset_analysis("7", db, None)
 
     assert response["asset"]["ticker"] == "PETR4"
     assert response["enrichment"]["stock_fundamentals"]["pe"] == 5
     assert response["price_history"][0]["close"] == 37.5
+    assert response["price_history"][0]["timestamp"] == "2026-11-03"
     assert response["dividends"][0]["value_per_unit"] == 0.5
     assert response["corporate_events"][0]["requires_review"] is True
     assert response["reports"] == []
+    assert response["ai_analysis"]["ticker"] == "PETR4"
     event_query = db.execute.await_args_list[2].args[0]
     assert "corporate_events.portfolio_id IS NULL" in str(event_query)
     cached_reader.assert_awaited_once_with("PETR4", "ACAO")
@@ -116,11 +124,14 @@ async def test_asset_analysis_requires_catalog_asset():
     db = AsyncMock()
     db.get = AsyncMock(return_value=None)
     with pytest.raises(HTTPException) as missing:
-        await get_asset_analysis(99, db, None)
+        await get_asset_analysis("99", db, None)
     assert missing.value.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_asset_analysis_resolves_by_ticker_symbol(monkeypatch):
     from app.services.asset_enrichment_service import asset_enrichment_service
+    from app.services.asset_reports_and_news_service import asset_reports_and_news_service
 
     asset = SimpleNamespace(
         id=14, ticker="VALE3", name="Vale", asset_type="ACAO", currency="BRL",
@@ -137,7 +148,63 @@ async def test_asset_analysis_resolves_by_ticker_symbol(monkeypatch):
     ])
     cached_reader = AsyncMock(return_value={"ticker": "VALE3", "coverage_status": "FULL"})
     monkeypatch.setattr(asset_enrichment_service, "get_cached_asset_enrichment", cached_reader)
+    monkeypatch.setattr(
+        asset_reports_and_news_service,
+        "get_cached_reports_and_news",
+        AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
+    )
 
     response = await get_asset_analysis("vale3", db, None)
     assert response["asset"]["id"] == 14
     assert response["asset"]["ticker"] == "VALE3"
+
+
+@pytest.mark.asyncio
+async def test_asset_analysis_deduplicates_intraday_prices_to_daily_close(monkeypatch):
+    from datetime import datetime, timezone
+    from app.services.asset_enrichment_service import asset_enrichment_service
+    from app.services.asset_reports_and_news_service import asset_reports_and_news_service
+
+    asset = SimpleNamespace(
+        id=7, ticker="PETR4", name="Petrobras", asset_type="ACAO", currency="BRL",
+        sector="Energy", sub_sector="Oil", isin_code="BRPETRACNPR6", provider="brapi",
+        provider_status="active", provider_last_sync_at=None, last_price=38.0,
+        last_price_updated_at=None,
+    )
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=asset)
+    # Descending order from DB: 18:00 close is first, 12:00 intraday is second on the same day
+    p_close = SimpleNamespace(
+        timestamp=datetime(2026, 11, 3, 18, 0, tzinfo=timezone.utc),
+        open=36.0, high=38.5, low=35.5, close=38.0, volume=2000, source="b3",
+    )
+    p_intraday = SimpleNamespace(
+        timestamp=datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc),
+        open=36.0, high=37.0, low=35.5, close=36.8, volume=900, source="b3",
+    )
+    p_prev_day = SimpleNamespace(
+        timestamp=datetime(2026, 11, 2, 18, 0, tzinfo=timezone.utc),
+        open=35.0, high=36.5, low=34.8, close=36.0, volume=1500, source="b3",
+    )
+    db.execute = AsyncMock(side_effect=[
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [p_close, p_intraday, p_prev_day])),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [])),
+    ])
+    monkeypatch.setattr(
+        asset_enrichment_service,
+        "get_cached_asset_enrichment",
+        AsyncMock(return_value={"ticker": "PETR4", "coverage_status": "FULL"}),
+    )
+    monkeypatch.setattr(
+        asset_reports_and_news_service,
+        "get_cached_reports_and_news",
+        AsyncMock(return_value={"reports": [], "latest_report_excerpt": None, "news": []}),
+    )
+
+    response = await get_asset_analysis("7", db, None)
+    assert len(response["price_history"]) == 2
+    assert response["price_history"][0]["timestamp"] == "2026-11-02"
+    assert response["price_history"][0]["close"] == 36.0
+    assert response["price_history"][1]["timestamp"] == "2026-11-03"
+    assert response["price_history"][1]["close"] == 38.0

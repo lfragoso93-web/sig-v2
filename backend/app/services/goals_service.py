@@ -34,11 +34,97 @@ from app.services.canonical_dividend_entitlement_reader import (
 # helpers
 # ---------------------------------------------------------------------------
 
+DEFAULT_MONTHLY_DIVIDEND_YIELD = 0.007  # 0.70% a.m. (~8.4% a.a.)
+MIN_MONTHLY_DIVIDEND_YIELD = 0.003      # 0.30% a.m. (~3.6% a.a.)
+MAX_MONTHLY_DIVIDEND_YIELD = 0.015      # 1.50% a.m. (~18.0% a.a.)
+MAX_PROJECTION_MONTHS = 600             # teto de 50 anos
+
+
+def _resolve_effective_monthly_yield(
+    current_monthly_dividends: float,
+    portfolio_patrimonio: Optional[float],
+) -> float:
+    """Estima o yield mensal efetivo da carteira para projeção de proventos."""
+    if (
+        portfolio_patrimonio is not None
+        and portfolio_patrimonio > 0
+        and current_monthly_dividends > 0
+    ):
+        observed = current_monthly_dividends / portfolio_patrimonio
+        return min(
+            max(observed, MIN_MONTHLY_DIVIDEND_YIELD),
+            MAX_MONTHLY_DIVIDEND_YIELD,
+        )
+    return DEFAULT_MONTHLY_DIVIDEND_YIELD
+
+
+def _calc_proventos_projection(
+    current_monthly_dividends: float,
+    target_monthly_dividends: float,
+    monthly_contribution: Optional[float],
+    *,
+    portfolio_patrimonio: Optional[float] = None,
+    clock: Clock = SYSTEM_CLOCK,
+) -> tuple[Optional[float], Optional[datetime]]:
+    """Projeta prazo para meta de proventos mensais (R$/mês).
+
+    A cada mês, o capital gerador cresce pelo aporte mensal (`monthly_contribution`)
+    somado ao reinvestimento dos proventos mensais atuais, gerando novos proventos
+    à taxa `yield_mensal` da carteira.
+    """
+    if not target_monthly_dividends or target_monthly_dividends <= 0:
+        return None, None
+    if current_monthly_dividends >= target_monthly_dividends:
+        return 0.0, None
+
+    contrib = float(monthly_contribution or 0.0)
+    if contrib <= 0 and current_monthly_dividends <= 0:
+        return None, None
+
+    monthly_yield = _resolve_effective_monthly_yield(
+        current_monthly_dividends,
+        portfolio_patrimonio,
+    )
+    if monthly_yield <= 0:
+        return None, None
+
+    # Incremento mensal inicial de renda passiva: (aporte + provento atual) * yield_mensal
+    projected_income = max(0.0, float(current_monthly_dividends))
+    if contrib <= 0 and projected_income <= 0:
+        return None, None
+
+    months = 0
+    while (
+        projected_income < target_monthly_dividends
+        and months < MAX_PROJECTION_MONTHS
+    ):
+        new_capital = contrib + projected_income
+        income_increment = new_capital * monthly_yield
+        if income_increment <= 1e-6:
+            return None, None
+        remaining = target_monthly_dividends - projected_income
+        if income_increment >= remaining and months == 0:
+            # Caso o aporte mensal seja gigantesco e atinja a meta já no 1º mês
+            fractional = max(0.1, round(remaining / income_increment, 1))
+            proj = clock.now() + relativedelta(months=+max(1, round(fractional)))
+            return fractional, proj
+        projected_income += income_increment
+        months += 1
+
+    if projected_income < target_monthly_dividends:
+        return None, None
+
+    proj = clock.now() + relativedelta(months=+months)
+    return float(months), proj
+
+
 def _calc_projection(
     current: float,
     target: float,
     monthly: Optional[float],
     *,
+    goal_type: str = "PATRIMONIO",
+    portfolio_patrimonio: Optional[float] = None,
     clock: Clock = SYSTEM_CLOCK,
 ) -> tuple[Optional[float], Optional[datetime]]:
     """Retorna (months_to_goal, projected_date) ou (None, None)."""
@@ -46,6 +132,17 @@ def _calc_projection(
         return None, None
     if current >= target:
         return 0.0, None  # já concluído
+    if goal_type == "RENTABILIDADE":
+        # Rentabilidade é em %, não pode ser dividida linearmente por aporte em R$
+        return None, None
+    if goal_type == "PROVENTOS":
+        return _calc_proventos_projection(
+            current,
+            target,
+            monthly,
+            portfolio_patrimonio=portfolio_patrimonio,
+            clock=clock,
+        )
     if not monthly or monthly <= 0:
         return None, None  # sem aporte projetado
     months = (target - current) / monthly
@@ -57,6 +154,7 @@ def _enrich(
     goal: Goal,
     current_value: float | None = None,
     *,
+    portfolio_patrimonio: float | None = None,
     clock: Clock = SYSTEM_CLOCK,
 ) -> dict:
     resolved_current_value = (
@@ -77,6 +175,8 @@ def _enrich(
         resolved_current_value,
         target_val,
         goal.monthly_contribution,
+        goal_type=str(getattr(goal, "goal_type", "PATRIMONIO") or "PATRIMONIO"),
+        portfolio_patrimonio=portfolio_patrimonio,
         clock=clock,
     )
 
@@ -175,6 +275,19 @@ async def _resolve_current_value(
     return provided_current  # LIVRE
 
 
+async def _resolve_patrimonio_safe(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int | None,
+) -> Optional[float]:
+    if user_id is None:
+        return None
+    try:
+        return await _get_patrimonio_atual(db, portfolio_id, user_id)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
@@ -189,8 +302,13 @@ async def list_goals(
         .where(Goal.portfolio_id == portfolio_id)
         .order_by(Goal.created_at.desc())
     )
+    goals = list(result.scalars().all())
+    patrimonio_cache: Optional[float] = None
+    if any(getattr(g, "goal_type", None) == "PROVENTOS" for g in goals):
+        patrimonio_cache = await _resolve_patrimonio_safe(db, portfolio_id, user_id)
+
     payloads = []
-    for goal in result.scalars().all():
+    for goal in goals:
         current_value = await _resolve_current_value(
             db,
             portfolio_id,
@@ -198,7 +316,15 @@ async def list_goals(
             float(goal.current_value or 0.0),
             user_id=user_id,
         )
-        payloads.append(_enrich(goal, current_value=current_value))
+        if goal.goal_type == "PATRIMONIO" and patrimonio_cache is None:
+            patrimonio_cache = current_value
+        payloads.append(
+            _enrich(
+                goal,
+                current_value=current_value,
+                portfolio_patrimonio=patrimonio_cache,
+            )
+        )
     return payloads
 
 
@@ -223,7 +349,16 @@ async def get_goal(
         float(goal.current_value or 0.0),
         user_id=user_id,
     )
-    return _enrich(goal, current_value=current_value)
+    patrimonio = (
+        await _resolve_patrimonio_safe(db, portfolio_id, user_id)
+        if goal.goal_type == "PROVENTOS"
+        else None
+    )
+    return _enrich(
+        goal,
+        current_value=current_value,
+        portfolio_patrimonio=patrimonio,
+    )
 
 
 async def create_goal(
@@ -251,7 +386,12 @@ async def create_goal(
     db.add(goal)
     await db.commit()
     await db.refresh(goal)
-    return _enrich(goal)
+    patrimonio = (
+        await _resolve_patrimonio_safe(db, data.portfolio_id, user_id)
+        if data.goal_type == "PROVENTOS"
+        else None
+    )
+    return _enrich(goal, portfolio_patrimonio=patrimonio)
 
 
 async def update_goal(
@@ -282,7 +422,16 @@ async def update_goal(
         float(goal.current_value or 0.0),
         user_id=user_id,
     )
-    return _enrich(goal, current_value=current_value)
+    patrimonio = (
+        await _resolve_patrimonio_safe(db, portfolio_id, user_id)
+        if goal.goal_type == "PROVENTOS"
+        else None
+    )
+    return _enrich(
+        goal,
+        current_value=current_value,
+        portfolio_patrimonio=patrimonio,
+    )
 
 
 async def delete_goal(

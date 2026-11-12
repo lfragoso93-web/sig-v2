@@ -17,6 +17,7 @@ from app.models.asset import Asset
 from app.models.portfolio_position import PortfolioPosition
 from app.models.transaction import Transaction
 from app.services.asset_enrichment_service import asset_enrichment_service
+from app.services.asset_reports_and_news_service import asset_reports_and_news_service
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,14 @@ async def run_asset_fundamentals_refresh(
                     asset_type,
                     force_refresh=force_refresh,
                 )
+                try:
+                    await asset_reports_and_news_service.get_reports_and_news(
+                        ticker,
+                        asset_type=asset_type,
+                        enrichment=data,
+                    )
+                except Exception:
+                    pass
                 if data.get("crypto_indicators"):
                     stats["crypto"] += 1
                 elif data.get("treasury_indicators"):

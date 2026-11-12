@@ -20,8 +20,8 @@ describe('Sidebar portfolio route hierarchy', () => {
   it('groups both calculator routes under the Ferramentas menu', () => {
     expect(sidebarSource).toContain('aria-label="Ferramentas"')
     expect(sidebarSource).toContain("location.pathname.startsWith('/carteira/ferramentas/')")
-    expect(sidebarSource).toContain('label="Calculadora"')
-    expect(sidebarSource).toContain('label="Simulador RF"')
+    expect(sidebarSource).toContain('label="Simulador de RF"')
+    expect(sidebarSource).toContain('label="Comparador de RF"')
     expect(sidebarSource).toContain('label="Comparar ativos"')
     expect(sidebarSource).toContain("/carteira/ferramentas/comparador")
   })

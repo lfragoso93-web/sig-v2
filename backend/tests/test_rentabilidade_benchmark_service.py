@@ -74,3 +74,49 @@ async def test_monthly_benchmarks_reads_persisted_ibov_history(
             "ipca_monthly_pct": None,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_monthly_benchmarks_includes_prior_month_baseline_for_first_period(
+    db: AsyncSession,
+) -> None:
+    asset = Asset(
+        ticker="IBOV",
+        name="Ibovespa",
+        asset_type=AssetType.OUTRO.value,
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+    db.add_all(
+        [
+            AssetPrice(
+                asset_id=asset.id,
+                timestamp=datetime(2026, 5, 29, tzinfo=timezone.utc),
+                close=Decimal("100000"),
+                source="yahoo_ibov",
+            ),
+            AssetPrice(
+                asset_id=asset.id,
+                timestamp=datetime(2026, 6, 30, tzinfo=timezone.utc),
+                close=Decimal("105000"),
+                source="yahoo_ibov",
+            ),
+            AssetPrice(
+                asset_id=asset.id,
+                timestamp=datetime(2026, 7, 31, tzinfo=timezone.utc),
+                close=Decimal("115500"),
+                source="yahoo_ibov",
+            ),
+        ]
+    )
+    await db.commit()
+
+    result = await get_persisted_monthly_benchmarks(
+        db,
+        months=2,
+        end_date=date(2026, 7, 31),
+    )
+
+    assert [p["period"] for p in result["points"]] == ["2026-06", "2026-07"]
+    assert [p["ibov_monthly_pct"] for p in result["points"]] == [5.0, 10.0]

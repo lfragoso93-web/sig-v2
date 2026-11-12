@@ -76,8 +76,11 @@ async def _ibov_monthly(
         AssetPrice.asset_id == asset.id,
         AssetPrice.timestamp <= upper_ts,
     )
+    start_period: str | None = None
     if start_date is not None:
-        lower_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+        start_period = start_date.strftime("%Y-%m")
+        prev_month_start = _month_start(start_date) - relativedelta(months=1)
+        lower_ts = datetime.combine(prev_month_start, datetime.min.time(), tzinfo=timezone.utc)
         query = query.where(AssetPrice.timestamp >= lower_ts)
     result = await db.execute(query.order_by(AssetPrice.timestamp.asc()))
 
@@ -89,7 +92,9 @@ async def _ibov_monthly(
     previous: Decimal | None = None
     for period in sorted(closes):
         current = closes[period]
-        if previous not in (None, Decimal("0")):
+        if previous not in (None, Decimal("0")) and (
+            start_period is None or period >= start_period
+        ):
             returns[period] = round(float((current / previous - Decimal("1")) * Decimal("100")), 6)
         previous = current
     return returns

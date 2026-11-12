@@ -359,7 +359,9 @@ def start_scheduler() -> None:
                     return
                 async with AsyncSessionLocal() as db:
                     try:
-                        count = await sync_ibov_benchmark_prices(db, range_str="1mo")
+                        count = await sync_ibov_benchmark_prices(
+                            db, range_str="1mo", ensure_full_history=True
+                        )
                         logger.info("[scheduler] Fechamento do IBOV atualizado: %d registros", count)
                     except Exception as exc:
                         logger.error("[scheduler] Erro ao sincronizar fechamento do IBOV: %s", exc)

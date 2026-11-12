@@ -205,10 +205,16 @@ async def _bootstrap_benchmarks() -> str:
     from app.services.benchmark_rate_service import (
         import_missing_benchmark_history,
     )
+    from app.services.ibov_benchmark_service import (
+        sync_ibov_benchmark_prices,
+    )
 
     async with AsyncSessionLocal() as db:
         result = await import_missing_benchmark_history(db)
-    return str(result)
+        ibov_count = await sync_ibov_benchmark_prices(
+            db, range_str="max", ensure_full_history=True
+        )
+    return f"{result} ibov={ibov_count}"
 
 
 async def _bootstrap_international_catalog() -> str:

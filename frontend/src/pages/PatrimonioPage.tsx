@@ -544,11 +544,11 @@ function ConsolidationSection({
             Sem posições para consolidar.
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,320px)_1fr] gap-6 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,260px)_1fr] gap-5 items-center">
             <div className="flex justify-center w-full">
               <AssetDonutChart data={distribution} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="flex flex-col gap-2">
               {distribution.map(item => {
                 const { Icon: ClassIcon, color: classColor, bg: classBg } = resolveClassVisual(item.asset_type)
                 const safePct = clampPercentage(item.percentage)
@@ -556,73 +556,69 @@ function ConsolidationSection({
                 return (
                   <div
                     key={item.asset_type}
-                    className="rounded-xl p-4 flex flex-col justify-between gap-3"
+                    className="rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3"
                     style={{
                       background: 'var(--color-surface-offset)',
                       border: '1px solid var(--color-divider)',
                     }}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 'var(--radius-sm)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                            background: classBg,
-                            color: item.color ?? classColor,
-                          }}
-                        >
-                          <ClassIcon size={13} strokeWidth={2} />
-                        </span>
-                        <span
-                          className="text-xs font-semibold truncate"
-                          style={{ color: 'var(--color-text)' }}
-                          title={item.label}
-                        >
-                          {item.label}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <span
-                        className="text-[11px] px-2 py-0.5 rounded-full shrink-0"
+                        aria-hidden="true"
                         style={{
-                          color: 'var(--color-text-muted)',
-                          background: 'var(--color-surface)',
-                          border: '1px solid oklch(from var(--color-text) l c h / 0.06)',
+                          width: 24,
+                          height: 24,
+                          borderRadius: 'var(--radius-sm)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          background: classBg,
+                          color: item.color ?? classColor,
                         }}
                       >
-                        {count} ativo{count === 1 ? '' : 's'}
+                        <ClassIcon size={13} strokeWidth={2} />
                       </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className="text-xs font-semibold truncate"
+                            style={{ color: 'var(--color-text)' }}
+                            title={item.label}
+                          >
+                            {item.label}
+                          </span>
+                          <span
+                            className="text-[11px] tabular-nums shrink-0"
+                            style={{ color: 'var(--color-text-faint)' }}
+                          >
+                            {count} ativo{count === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <div
+                          className="w-full h-1.5 rounded-full overflow-hidden mt-1.5"
+                          style={{ background: 'var(--color-surface-dynamic)' }}
+                        >
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${safePct}%`,
+                              background: item.color ?? 'var(--color-primary)',
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <div className="flex items-end justify-between gap-3 mb-2">
-                        <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
-                          {formatBRL(safeNum(item.value))}
-                        </span>
-                        <span
-                          className="text-xs font-semibold tabular-nums"
-                          style={{ color: item.color ?? 'var(--color-primary)' }}
-                        >
-                          {safePct.toFixed(1)}%
-                        </span>
+                    <div className="text-right shrink-0 pl-2">
+                      <div className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
+                        {formatBRL(safeNum(item.value))}
                       </div>
                       <div
-                        className="w-full h-1.5 rounded-full overflow-hidden"
-                        style={{ background: 'var(--color-surface-dynamic)' }}
+                        className="text-[11px] font-semibold tabular-nums"
+                        style={{ color: item.color ?? 'var(--color-primary)' }}
                       >
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${safePct}%`,
-                            background: item.color ?? 'var(--color-primary)',
-                          }}
-                        />
+                        {safePct.toFixed(1)}%
                       </div>
                     </div>
                   </div>
@@ -896,23 +892,42 @@ export default function PatrimonioPage() {
 
       {summary && metrics && (
         <div
-          className="card px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-1.5 text-xs"
+          style={{
+            color: 'var(--color-text-muted)',
+            background: 'var(--color-surface-offset)',
+            border: '1px solid var(--color-divider)',
+          }}
         >
-          <span>Patrimônio e posições: {valuationReference ?? 'sem horário de cotação'}</span>
-          <span className="inline-flex items-center gap-1">
-            <span>
-              TWR até: {performanceReference ?? 'sem snapshot fechado'}
-              {metrics.returnIsEstimated ? ' (estimado)' : ''}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span>Patrimônio e posições: <strong className="font-medium" style={{ color: 'var(--color-text)' }}>{valuationReference ?? 'sem horário de cotação'}</strong></span>
+            <span className="inline-flex items-center gap-1">
+              <span>
+                TWR até: <strong className="font-medium" style={{ color: 'var(--color-text)' }}>{performanceReference ?? 'sem snapshot fechado'}</strong>
+                {metrics.returnIsEstimated ? ' (estimado)' : ''}
+              </span>
+              <TwrHelpPopover size={12} />
             </span>
-            <TwrHelpPopover size={12} />
+            <span>Proventos até: <strong className="font-medium" style={{ color: 'var(--color-text)' }}>{proventosReference ?? '—'}</strong></span>
+          </div>
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium tabular-nums"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-divider)',
+              color: 'var(--color-text)',
+            }}
+          >
+            Cobertura de preços: {safeNum(summary.price_coverage_pct).toFixed(1)}%
           </span>
-          <span>Proventos até: {proventosReference ?? '—'}</span>
-          <span>Cobertura de preços: {safeNum(summary.price_coverage_pct).toFixed(1)}%</span>
         </div>
       )}
 
-      {/* Bloco 1.5: Destaques da Carteira, Posições no Lucro e Oportunidades de Compra */}
+      {/* Alertas operacionais de conciliação e frações pendentes */}
+      <PortfolioReconciliationPanel portfolioId={portfolioId} />
+      <PendingCorporateFractionsPanel portfolioId={portfolioId} />
+
+      {/* Bloco 2: Destaques Rápidos da Carteira */}
       <PortfolioHighlightsSection
         portfolioId={portfolioId}
         groups={groups}
@@ -920,26 +935,7 @@ export default function PatrimonioPage() {
         onSelectTicker={setSelectedTicker}
       />
 
-      <PortfolioReconciliationPanel portfolioId={portfolioId} />
-      <PendingCorporateFractionsPanel portfolioId={portfolioId} />
-
-      {/* Bloco 2: Evolução do Patrimônio */}
-      <PortfolioEvolutionSection portfolioId={portfolioId} />
-
-      {/* Bloco 3: Consolidação por Classe & Alocação Ideal vs. Atual (separados em cards próprios) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-5 items-stretch">
-        <ConsolidationSection
-          portfolioId={portfolioId}
-          groups={groups}
-          loadingPositions={loadingPositions}
-        />
-        <AllocationTargetsCard portfolioId={portfolioId} />
-      </div>
-
-      {/* Bloco 4: Concentração & Top 5 Posições */}
-      <ConcentrationSection groups={groups} onSelectTicker={setSelectedTicker} />
-
-      {/* Bloco 5: Posições da Carteira (separadas visualmente) */}
+      {/* Bloco 3: Posições da Carteira por Classe (acesso prioritário) */}
       <section className="flex flex-col gap-3.5" aria-label="Posições da carteira">
         <div className="flex items-center gap-3">
           <Layers size={15} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
@@ -985,6 +981,24 @@ export default function PatrimonioPage() {
           </div>
         )}
       </section>
+
+      {/* Bloco 4: Consolidação por Classe & Alocação Ideal vs. Atual */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
+        <div className="xl:col-span-7 flex flex-col">
+          <ConsolidationSection
+            portfolioId={portfolioId}
+            groups={groups}
+            loadingPositions={loadingPositions}
+          />
+        </div>
+        <div className="xl:col-span-5 flex flex-col">
+          <AllocationTargetsCard portfolioId={portfolioId} />
+        </div>
+      </div>
+
+      {/* Bloco 5: Evolução do Patrimônio & Concentração */}
+      <PortfolioEvolutionSection portfolioId={portfolioId} />
+      <ConcentrationSection groups={groups} onSelectTicker={setSelectedTicker} />
 
       {selectedTicker && (
         <AssetDetailDrawer

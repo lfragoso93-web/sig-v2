@@ -93,6 +93,13 @@ export default function IncomeCalculatorPage() {
 
   return (
     <div className="page-container">
+      <header className="mb-1">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Simulação</p>
+        <h1 className="page-title">Simulador de RF</h1>
+        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Simule a evolução de patrimônio e rendimentos em juros compostos a partir de aportes e taxa efetiva anual.
+        </p>
+      </header>
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]" aria-label="Premissas e projeção">
         <div className="card flex flex-col gap-5 p-4 sm:p-5">
           <div>

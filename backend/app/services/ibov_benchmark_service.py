@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Optional
 
 import httpx
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,20 +81,49 @@ def _fetch_ibov_yahoo(period: str = "1mo") -> list[dict]:
         return []
 
 
+async def _has_full_ibov_history(db: AsyncSession, asset_id: int) -> bool:
+    """Verifica se o ativo IBOV já possui série histórica longa persistida."""
+    res = await db.execute(
+        select(func.count(AssetPrice.id), func.min(AssetPrice.timestamp)).where(
+            AssetPrice.asset_id == asset_id
+        )
+    )
+    row = res.one_or_none()
+    if not row:
+        return False
+    total_rows = int(row[0] or 0)
+    min_ts = row[1]
+    if total_rows < 1000 or min_ts is None:
+        return False
+    return min_ts.year <= 2005
+
+
 async def sync_ibov_benchmark_prices(
     db: AsyncSession,
     *,
     range_str: str = "1mo",
+    ensure_full_history: bool = False,
     commit: bool = True,
 ) -> int:
     """Busca cotações do IBOV e persiste de forma idempotente em asset_prices."""
     asset = await _ensure_ibov_benchmark_asset(db)
 
-    rows = await _fetch_ibov_brapi(range_str=range_str)
-    if not rows:
+    effective_range = range_str
+    if ensure_full_history and effective_range not in ("max", "10y", "5y"):
+        if not await _has_full_ibov_history(db, int(asset.id)):
+            logger.info(
+                "[ibov_sync] Histórico completo do IBOV ausente; expandindo sincronização para range=max"
+            )
+            effective_range = "max"
+
+    rows = await _fetch_ibov_brapi(range_str=effective_range)
+    if not rows or (effective_range in ("max", "10y", "5y") and len(rows) < 1000):
         import asyncio
+
         loop = asyncio.get_running_loop()
-        rows = await loop.run_in_executor(None, _fetch_ibov_yahoo, range_str)
+        yahoo_rows = await loop.run_in_executor(None, _fetch_ibov_yahoo, effective_range)
+        if len(yahoo_rows) > len(rows):
+            rows = yahoo_rows
 
     if not rows:
         logger.warning("[ibov_sync] Nenhuma cotação do IBOV obtida de nenhum provider")
@@ -103,28 +133,57 @@ async def sync_ibov_benchmark_prices(
     latest_ts: Optional[datetime] = None
     latest_close: Optional[Decimal] = None
 
-    for item in rows:
-        ts = item["timestamp"]
-        close = item["close"]
-        source = item["source"]
-        stmt = (
-            pg_insert(AssetPrice)
-            .values(
-                asset_id=asset.id,
-                timestamp=ts,
-                close=close,
-                source=source,
-            )
-            .on_conflict_do_update(
+    if len(rows) > 100:
+        batch_size = 500
+        for idx in range(0, len(rows), batch_size):
+            chunk = rows[idx:idx + batch_size]
+            values = [
+                {
+                    "asset_id": asset.id,
+                    "timestamp": item["timestamp"],
+                    "close": item["close"],
+                    "source": item["source"],
+                }
+                for item in chunk
+            ]
+            stmt = pg_insert(AssetPrice).values(values)
+            stmt = stmt.on_conflict_do_update(
                 constraint="uq_price_asset_timestamp",
-                set_={"close": close, "source": source},
+                set_={
+                    "close": stmt.excluded.close,
+                    "source": stmt.excluded.source,
+                },
             )
-        )
-        await db.execute(stmt)
-        inserted += 1
-        if latest_ts is None or ts > latest_ts:
-            latest_ts = ts
-            latest_close = close
+            await db.execute(stmt)
+            inserted += len(chunk)
+        for item in rows:
+            ts = item["timestamp"]
+            if latest_ts is None or ts > latest_ts:
+                latest_ts = ts
+                latest_close = item["close"]
+    else:
+        for item in rows:
+            ts = item["timestamp"]
+            close = item["close"]
+            source = item["source"]
+            stmt = (
+                pg_insert(AssetPrice)
+                .values(
+                    asset_id=asset.id,
+                    timestamp=ts,
+                    close=close,
+                    source=source,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_price_asset_timestamp",
+                    set_={"close": close, "source": source},
+                )
+            )
+            await db.execute(stmt)
+            inserted += 1
+            if latest_ts is None or ts > latest_ts:
+                latest_ts = ts
+                latest_close = close
 
     if latest_close is not None:
         asset.last_price = float(latest_close)

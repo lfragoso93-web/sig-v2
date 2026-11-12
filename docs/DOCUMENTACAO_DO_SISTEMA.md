@@ -171,10 +171,10 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
 /carteira/proventos                 Calendário dinâmico, proventos provisionados e recebidos
 /carteira/metas                     Alocação alvo estratégica e cálculo de rebalanceamento
 /carteira/analise                   Análise patrimonial diagnóstica com síntese em IA
-/carteira/ferramentas/rendimentos   Calculadora de juros compostos e aportes futuros
-/carteira/ferramentas/renda-fixa    Simulador comparativo de títulos de Renda Fixa
+/carteira/ferramentas/rendimentos   Simulador de RF (juros compostos e aportes futuros)
+/carteira/ferramentas/renda-fixa    Comparador de RF (comparação entre títulos de Renda Fixa)
 /carteira/ferramentas/comparador    Comparador simultâneo de múltiplos ativos lado a lado
-/carteira/ferramentas/analise-ativos Análise fundamentalista profunda por ativo com gráficos
+/carteira/ferramentas/analise-ativos Análise fundamentalista profunda por ativo com gráficos, relatórios CVM/B3, notícias e IA
 /carteira/ferramentas/recomendacoes Carteiras recomendadas institucionais guiadas por IA
 /carteira/irpf                      Radar Fiscal, ganhos de capital, isenções e informe anual
 /carteira/ajuda                     Central de Ajuda e Assistente Documental com IA
@@ -213,10 +213,10 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
 - Notificação matinal automática por e-mail dos proventos agendados para pagamento no dia.
 
 #### Conjunto de Ferramentas e Simuladores (`/carteira/ferramentas/*`)
-1. **Simulador de Renda Fixa:** Compara rendimentos brutos e líquidos entre títulos pré-fixados, pós-fixados (CDI) e híbridos (IPCA+), aplicando automaticamente a tabela regressiva de IRPF ou isenção conforme o tipo do ativo.
-2. **Calculadora de Rendimentos:** Simula a curva de acumulação de juros compostos com aportes periódicos e reinvestimento de dividendos.
-3. **Comparador de Ativos:** Permite selecionar até 5 ativos de classes diferentes e compará-los lado a lado em termos de múltiplos de valuation (P/L, P/VP, Dividend Yield, ROE, Margem Líquida) e rentabilidade histórica recente.
-4. **Página de Análise de Ativos:** Página dedicada de mergulho profundo em qualquer ativo cadastrado, com gráficos temporais de cotação, histórico de distribuição de proventos e múltiplos fundamentalistas.
+1. **Comparador de RF (`/carteira/ferramentas/renda-fixa`):** Compara rendimentos brutos e líquidos entre títulos pré-fixados, pós-fixados (CDI) e híbridos (IPCA+), aplicando automaticamente a tabela regressiva de IRPF ou isenção conforme o tipo do ativo.
+2. **Simulador de RF (`/carteira/ferramentas/rendimentos`):** Simula a curva de acumulação de juros compostos com aportes periódicos e taxa efetiva anual.
+3. **Comparador de Ativos:** Permite selecionar de 2 a 6 ativos e compará-los lado a lado em termos de múltiplos de valuation (P/L, P/VP, Dividend Yield, ROE, Margem Líquida) e rentabilidade histórica recente.
+4. **Página de Análise de Ativos:** Página dedicada de mergulho profundo em qualquer ativo cadastrado, com diagnóstico por IA e confronto gerencial, gráficos de fechamento diário e histórico de proventos, relatórios gerenciais e estruturados (Fundos.NET CVM/B3 e ITR/DFP B3), notícias externas recentes e múltiplos fundamentalistas.
 5. **Carteiras Recomendadas por IA:** Alocações institucionais de referência formuladas para três teses estratégicas centrais:
    - *Patrimônio:* Foco em preservação de capital e valor real (Renda Fixa defensiva, Tesouro e Blue Chips).
    - *Proventos:* Foco em renda passiva mensal imediata e previsibilidade de caixa (FIIs e Ações de dividendos).
