@@ -16,7 +16,7 @@ from sqlalchemy import (
     desc,
     func,
 )
-from sqlalchemy.orm import foreign, relationship
+from sqlalchemy.orm import foreign, relationship  # noqa: F401
 
 from app.core.database import Base
 import enum

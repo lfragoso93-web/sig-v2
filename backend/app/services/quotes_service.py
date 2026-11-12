@@ -400,7 +400,20 @@ async def _noop() -> dict[str, float]:
     return {}
 
 
+async def _ensure_runtime_keys_synced(db: Optional[AsyncSession]) -> None:
+    if db is None:
+        return
+    from app.services.provider_config_service import ProviderConfigService
+
+    if not getattr(ProviderConfigService, "_runtime_keys_synced", False):
+        try:
+            await ProviderConfigService.sync_runtime_key_overrides(db)
+        except Exception:
+            pass
+
+
 async def get_prices(positions: list[dict], db: Optional[AsyncSession] = None) -> dict[str, float]:
+    await _ensure_runtime_keys_synced(db)
     br_tickers: list[str] = []
     crypto_tickers: list[str] = []
     intl_pairs: list[tuple[str, AssetType]] = []

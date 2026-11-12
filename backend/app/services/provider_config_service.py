@@ -17,6 +17,7 @@ from app.core.provider_registry import (
     decrypt_secret,
     encrypt_secret,
     mask_secret,
+    set_runtime_provider_key_override,
 )
 from app.core.provider_status import ProviderStatus
 from app.models.audit_log import AuditAction
@@ -44,7 +45,20 @@ class EffectiveProviderConfig:
 
 
 class ProviderConfigService:
+    _runtime_keys_synced: bool = False
     """Orquestrador de configurações administrativas e dinâmicas."""
+
+    @staticmethod
+    async def sync_runtime_key_overrides(db: AsyncSession) -> None:
+        """Carrega overrides de API keys salvos no banco para cache em mem?ria."""
+        stmt = select(ProviderConfiguration)
+        result = await db.execute(stmt)
+        db_configs = {cfg.provider_id: cfg for cfg in result.scalars().all()}
+        for p_id in PROVIDER_REGISTRY:
+            db_cfg = db_configs.get(p_id.value)
+            db_key = decrypt_secret(db_cfg.api_key_encrypted) if db_cfg else None
+            set_runtime_provider_key_override(p_id, db_key)
+        ProviderConfigService._runtime_keys_synced = True
 
     @staticmethod
     async def list_providers(db: AsyncSession) -> list[ProviderConfigResponse]:
@@ -163,6 +177,7 @@ class ProviderConfigService:
             if definition.env_key_var
             else None
         )
+        set_runtime_provider_key_override(pid_enum, db_key)
         api_key = db_key or env_key
 
         is_enabled = db_cfg.is_enabled if db_cfg else True
@@ -281,6 +296,10 @@ class ProviderConfigService:
 
         await db.commit()
         await db.refresh(db_cfg)
+        if data.new_api_key is not None:
+            set_runtime_provider_key_override(
+                pid_enum, decrypt_secret(db_cfg.api_key_encrypted)
+            )
 
         await AuditLogService.log_action(
             db=db,
@@ -322,6 +341,7 @@ class ProviderConfigService:
             }
             await db.delete(db_cfg)
             await db.commit()
+            set_runtime_provider_key_override(provider_id, None)
 
             await AuditLogService.log_action(
                 db=db,

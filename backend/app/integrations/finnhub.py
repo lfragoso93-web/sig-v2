@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 import httpx
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ _TIMEOUT = 15.0
 
 
 def _api_key() -> Optional[str]:
-    return getattr(settings, "FINNHUB_API_KEY", None) or None
+    return get_runtime_provider_key(ProviderId.FINNHUB)
 
 
 def _is_configured() -> bool:

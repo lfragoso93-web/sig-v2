@@ -93,10 +93,24 @@ async def _run_startup_bootstrap() -> None:
         logger.error("[Bootstrap] %s incompleto: %s", report.schema_version, report.to_dict())
 
 
+async def _sync_runtime_provider_keys_on_startup() -> None:
+    if not hasattr(engine, "connect"):
+        return
+    from app.core.database import AsyncSessionLocal
+    from app.services.provider_config_service import ProviderConfigService
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await ProviderConfigService.sync_runtime_key_overrides(db)
+    except Exception as exc:
+        logger.debug("[Providers] Cache inicial de chaves em BD ignorado: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.services.system_readiness_service import mark_bootstrap_disabled
 
+    await _sync_runtime_provider_keys_on_startup()
     start_scheduler()
     if settings.ENABLE_BOOT_MARKET_SYNC:
         asyncio.create_task(_run_startup_bootstrap())

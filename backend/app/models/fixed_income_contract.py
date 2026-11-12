@@ -16,7 +16,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship  # noqa: F401
 
 from app.core.database import Base
 from app.models.base import TimestampMixin

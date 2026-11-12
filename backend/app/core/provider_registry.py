@@ -269,3 +269,38 @@ def mask_secret(secret: str | None) -> str | None:
     if length <= 8:
         return f"{cleaned[:2]}****{cleaned[-2:]}"
     return f"{cleaned[:3]}****{cleaned[-3:]}"
+
+
+_RUNTIME_KEY_OVERRIDES: dict[ProviderId, str] = {}
+
+
+def set_runtime_provider_key_override(
+    provider_id: ProviderId | str,
+    api_key: str | None,
+) -> None:
+    """Atualiza ou remove o override em mem?ria da API Key configurada no painel."""
+    pid = ProviderId(provider_id)
+    cleaned = api_key.strip() if api_key else ""
+    if cleaned:
+        _RUNTIME_KEY_OVERRIDES[pid] = cleaned
+    else:
+        _RUNTIME_KEY_OVERRIDES.pop(pid, None)
+
+
+def clear_runtime_provider_key_overrides() -> None:
+    """Limpa todos os overrides em mem?ria (uso em testes/reload)."""
+    _RUNTIME_KEY_OVERRIDES.clear()
+
+
+def get_runtime_provider_key(provider_id: ProviderId | str) -> str | None:
+    """Resolve a API Key efetiva: override do painel (BD) -> fallback .env."""
+    pid = ProviderId(provider_id)
+    override = _RUNTIME_KEY_OVERRIDES.get(pid)
+    if override:
+        return override
+    definition = PROVIDER_REGISTRY.get(pid)
+    if not definition or not definition.env_key_var:
+        return None
+    env_val = getattr(settings, definition.env_key_var, None)
+    cleaned = str(env_val).strip() if env_val else ""
+    return cleaned or None

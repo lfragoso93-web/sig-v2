@@ -18,6 +18,7 @@ import httpx
 
 import re
 from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
@@ -218,7 +219,7 @@ class BrapiV2Client:
         if not raw_base.endswith("/api"):
             raw_base = f"{raw_base}/api"
         self._base_url = raw_base
-        self._token = token if token is not None else settings.BRAPI_TOKEN
+        self._token = token if token is not None else get_runtime_provider_key(ProviderId.BRAPI)
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
 
