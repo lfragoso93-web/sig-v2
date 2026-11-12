@@ -275,6 +275,32 @@ async def _fetch_range(
         effective_provider = "brapi"
     elif asset_type == AssetType.CRIPTO:
         rows, source, effective_provider = await _fetch_crypto_history(ticker)
+        latest_crypto_date = max((ts.date() for ts, _ in rows), default=None)
+        if (
+            missing_range.reason == "stale_end"
+            and source == "brapi_v2_crypto_max"
+            and (latest_crypto_date is None or latest_crypto_date < missing_range.date_to)
+        ):
+            try:
+                usd_rows = await _fetch_yf_max(_yahoo_crypto_usd_symbol(ticker), AssetType.CRIPTO)
+                scoped_usd_rows = [
+                    (ts, val)
+                    for ts, val in usd_rows
+                    if missing_range.date_from
+                    <= (ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)).date()
+                    <= missing_range.date_to
+                ]
+                fallback = await _convert_crypto_usd_rows_to_brl(scoped_usd_rows)
+                if fallback:
+                    rows = fallback
+                    source = "yfinance_crypto_ptax_brl_max"
+                    effective_provider = "yfinance"
+            except Exception as exc:
+                logger.warning(
+                    "[price_gap_sync] fallback yahoo crypto indisponivel ticker=%s: %s",
+                    ticker,
+                    exc,
+                )
     elif asset_type in INTL_TYPES:
         date_from_str = missing_range.date_from.isoformat()
         date_to_str = missing_range.date_to.isoformat()
@@ -319,6 +345,19 @@ async def _fetch_range(
                 date_to=missing_range.date_to.isoformat(),
             )
             source = "brapi_v2_fii"
+            if not rows:
+                rows = await fetch_stocks_historical_v2(
+                    ticker=ticker,
+                    date_from=missing_range.date_from.isoformat(),
+                    date_to=missing_range.date_to.isoformat(),
+                )
+                if rows:
+                    source = "brapi_v2_stocks"
+            if not rows:
+                rows = await _fetch_yf_max(ticker, asset_type)
+                if rows:
+                    source = "yfinance_period_max"
+                    effective_provider = "yfinance"
         elif initial_history:
             rows = await fetch_stocks_historical_v2(ticker=ticker, range_="max")
             source = "brapi_v2_stocks_max"

@@ -7,9 +7,9 @@ from typing import Iterable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
+from app.services.lifecycle_aware_price_service import resolve_asset_ids_by_ticker_and_type
 from app.services.portfolio_snapshot_twr_components import build_open_quote_requirements
 
 
@@ -24,13 +24,9 @@ async def has_partial_prices_silent(
 
     tickers = [ticker.upper() for ticker, _ in requirements]
     start = datetime.combine(target_date - timedelta(days=5), datetime.min.time(), tzinfo=timezone.utc)
-    end = datetime.combine(target_date + timedelta(days=1), datetime.max.time(), tzinfo=timezone.utc)
+    end = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
 
-    assets_result = await db.execute(
-        select(Asset.id, Asset.ticker).where(func.upper(Asset.ticker).in_(tickers))
-    )
-    asset_rows = assets_result.all()
-    ticker_to_asset_id = {str(row.ticker).upper(): int(row.id) for row in asset_rows}
+    _, ticker_to_asset_id = await resolve_asset_ids_by_ticker_and_type(db, requirements)
 
     covered_result = await db.execute(
         select(AssetPrice.asset_id, func.max(AssetPrice.timestamp))

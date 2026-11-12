@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
@@ -143,12 +143,14 @@ async def upsert_enriched_snapshot(
     snapshot_date: date,
     values: dict,
 ) -> None:
+    now_utc = datetime.now(timezone.utc)
+    upsert_values = {**values, "updated_at": now_utc}
     stmt = (
         pg_insert(PortfolioSnapshot)
-        .values(portfolio_id=portfolio_id, snapshot_date=snapshot_date, **values)
+        .values(portfolio_id=portfolio_id, snapshot_date=snapshot_date, **upsert_values)
         .on_conflict_do_update(
             constraint="uq_snapshot_portfolio_date",
-            set_=values,
+            set_=upsert_values,
         )
     )
     await db.execute(stmt)

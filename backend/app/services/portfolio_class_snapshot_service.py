@@ -266,6 +266,8 @@ async def rebuild_class_snapshots(
     db: AsyncSession,
     portfolio_id: int,
     days_back: int | None = None,
+    *,
+    end_date: date | None = None,
 ) -> int:
     """Reconstrói a cadeia completa de TWR por classe usando apenas o banco.
 
@@ -319,7 +321,7 @@ async def rebuild_class_snapshots(
             days_back,
         )
 
-    today = datetime.now(UTC).date()
+    today = end_date or datetime.now(UTC).date()
     has_crypto = any(_asset_type(t.asset_type) == AssetType.CRIPTO for t in supported_transactions)
     first_tx_date = supported_transactions[0].date
     start = first_tx_date if has_crypto else _next_business_date(first_tx_date)

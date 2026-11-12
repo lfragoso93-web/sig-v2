@@ -21,8 +21,12 @@ async def test_scheduler_registers_only_price_and_local_maintenance_jobs():
         job_ids = {job.id for job in scheduler.get_jobs()}
         expected = {
             "persist_daily_close_prices",
+            "persist_daily_close_prices_catchup_night",
+            "persist_daily_close_prices_catchup_morning",
+            "sync_fx_rates_daily",
             "persist_treasury_daily_close",
             "portfolio_snapshot_auto_maintenance",
+            "portfolio_snapshot_reconcile_late_data",
             "update_quotes_intraday_full_hour",
             "update_crypto_quotes_offhours_weekdays",
             "update_crypto_quotes_weekends",

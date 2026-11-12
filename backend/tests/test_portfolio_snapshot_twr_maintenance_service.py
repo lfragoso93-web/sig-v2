@@ -89,7 +89,9 @@ async def test_maintenance_rebuilds_class_snapshots_once_then_skips_when_current
         "snapshots": 0,
         "class_snapshots": 42,
     }
-    class_backfill.assert_awaited_once_with(db, 1)
+    from app.services.portfolio_snapshot_twr_maintenance_service import _today_brt
+
+    class_backfill.assert_awaited_once_with(db, 1, end_date=_today_brt())
 
 
 @pytest.mark.asyncio
