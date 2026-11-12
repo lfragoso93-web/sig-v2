@@ -530,3 +530,29 @@ def test_class_snapshot_projection_carries_corporate_action_cash_flow_total() ->
     assert on_credit["NIKE34"].quantity == Decimal("0")
     assert on_credit["NIKE34"].corporate_action_cash_flow_total == Decimal("25.40")
     assert on_credit["NIKE34"].realized_pnl == Decimal("-4.60")
+
+    breakeven_action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:nike34-bdr-breakeven",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=None,
+            settlement_gross_amount_brl=Decimal("30.00"),
+            settlement_date=date(2026, 10, 21),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+    )
+    breakeven_on_credit = project_class_positions_at(
+        [tx],
+        {"NIKE34": (breakeven_action,)},
+        target_date=date(2026, 10, 21),
+    )
+    assert breakeven_on_credit["NIKE34"].quantity == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].cost == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].realized_pnl == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].corporate_action_cash_flow_total == Decimal("30.00")

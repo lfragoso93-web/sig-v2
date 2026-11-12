@@ -60,6 +60,7 @@ def project_class_positions_at(
             and valued_cost <= _ZERO
             and position.realized_pnl == _ZERO
             and not position.pending_corporate_action_fractions
+            and not position.corporate_action_cash_flows
         ):
             continue
         cash_flow_total = sum(
