@@ -58,7 +58,11 @@ async def seed_international_catalog(
                 result.created += 1
             else:
                 changed = False
-                if not existing.name and item.name:
+                if (
+                    (not existing.name or existing.name.strip().upper() == item.ticker.strip().upper())
+                    and item.name
+                    and item.name.strip().upper() != item.ticker.strip().upper()
+                ):
                     existing.name = item.name
                     changed = True
                 if existing.currency != "USD":

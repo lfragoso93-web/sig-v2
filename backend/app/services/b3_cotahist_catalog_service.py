@@ -86,8 +86,13 @@ async def upsert_b3_cotahist_catalog(
             continue
 
         changed = False
-        if not existing.name and record.short_name.strip():
-            existing.name = record.short_name.strip()
+        incoming_name = record.short_name.strip()
+        if (
+            (not existing.name or existing.name.strip().upper() == ticker)
+            and incoming_name
+            and incoming_name.upper() != ticker
+        ):
+            existing.name = incoming_name
             changed = True
         if not existing.currency and record.currency.strip():
             existing.currency = _currency_from_cotahist(record.currency)
