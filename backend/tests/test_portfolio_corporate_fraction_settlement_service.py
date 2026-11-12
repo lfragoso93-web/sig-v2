@@ -753,3 +753,145 @@ async def test_upsert_rejects_component_bonus_without_fractional_entitlement() -
                 source_event_id="b3:klbn-whole-only",
                 gross_amount_brl=Decimal("5.00"),
             )
+
+
+@pytest.mark.asyncio
+async def test_deferred_full_position_settlement_preserves_twr_return_base_in_both_chains() -> None:
+    from app.models.asset_price import AssetPrice
+    from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
+    from app.models.portfolio_snapshot import PortfolioSnapshot
+    from app.services.portfolio_class_snapshot_service import rebuild_class_snapshots
+    from app.services.portfolio_snapshot_canonical_twr_service import (
+        backfill_canonical_snapshots_with_returns,
+    )
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with session_factory() as db:
+            user = User(name="TwrBase", email="twrbase@test.dev", hashed_password="x")
+            db.add(user)
+            await db.flush()
+            portfolio = Portfolio(user_id=user.id, name="TwrBase")
+            asset = Asset(ticker="NIKE34", name="Nike BDR", asset_type="BDR")
+            db.add_all([portfolio, asset])
+            await db.flush()
+
+            db.add(
+                AssetPrice(
+                    asset_id=asset.id,
+                    timestamp=datetime(2026, 10, 12, 18, 0, tzinfo=timezone.utc),
+                    open=Decimal("30.00"),
+                    high=Decimal("30.00"),
+                    low=Decimal("30.00"),
+                    close=Decimal("30.00"),
+                    volume=100,
+                    source="test",
+                )
+            )
+            db.add(
+                Transaction(
+                    portfolio_id=portfolio.id,
+                    ticker="NIKE34",
+                    asset_type="BDR",
+                    operation=OperationType.buy,
+                    quantity=Decimal("1"),
+                    price=Decimal("30.00"),
+                    fees=Decimal("0"),
+                    date=date(2026, 10, 12),
+                    currency="BRL",
+                )
+            )
+            ev = CorporateEvent(
+                asset_id=asset.id,
+                ticker="NIKE34",
+                event_type="GRUPAMENTO",
+                status="PENDENTE",
+                source_provider="b3",
+                source_event_id="b3:nike34-twr-deferred",
+                is_canonical=True,
+                reconciliation_status="MATCHED",
+                requires_review=False,
+                effective_date=date(2026, 10, 13),
+                quantity_factor=Decimal("0.2"),
+            )
+            db.add(ev)
+            await db.flush()
+            db.add(
+                CorporateEventReconciliationEvidence(
+                    corporate_event_id=ev.id,
+                    decision="MATCHED",
+                    evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                    evidence_reference="b3:nike34-twr-ev",
+                    fractional_policy="PENDING_SETTLEMENT",
+                )
+            )
+            await db.commit()
+
+            write_access = PortfolioAccessContext.for_user(
+                user_id=user.id,
+                portfolio_id=portfolio.id,
+                permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+            )
+            await upsert_portfolio_corporate_fraction_settlement(
+                db,
+                access=write_access,
+                source_event_id="b3:nike34-twr-deferred",
+                gross_amount_brl=Decimal("25.40"),
+                settlement_date=date(2026, 10, 21),
+                notes="Credito em conta",
+            )
+
+            await backfill_canonical_snapshots_with_returns(
+                db,
+                portfolio.id,
+                end_date=date(2026, 10, 22),
+            )
+            await rebuild_class_snapshots(
+                db,
+                portfolio.id,
+            )
+
+            port_snaps = {
+                s.date: s
+                for s in (
+                    await db.execute(
+                        select(PortfolioSnapshot).where(
+                            PortfolioSnapshot.portfolio_id == portfolio.id
+                        )
+                    )
+                ).scalars().all()
+            }
+            class_snaps = {
+                s.date: s
+                for s in (
+                    await db.execute(
+                        select(PortfolioClassSnapshot).where(
+                            PortfolioClassSnapshot.portfolio_id == portfolio.id
+                        )
+                    )
+                ).scalars().all()
+            }
+
+            assert Decimal(str(port_snaps[date(2026, 10, 13)].daily_return_pct)) == Decimal("0")
+            assert Decimal(str(port_snaps[date(2026, 10, 20)].accumulated_return_pct)) == Decimal("0")
+            assert Decimal(str(port_snaps[date(2026, 10, 21)].accumulated_return_pct)).quantize(
+                Decimal("0.01")
+            ) == Decimal("-15.33")
+            assert Decimal(str(port_snaps[date(2026, 10, 22)].accumulated_return_pct)).quantize(
+                Decimal("0.01")
+            ) == Decimal("-15.33")
+
+            assert Decimal(str(class_snaps[date(2026, 10, 13)].daily_return_pct)) == Decimal("0")
+            assert Decimal(str(class_snaps[date(2026, 10, 20)].accumulated_return_pct)) == Decimal("0")
+            assert Decimal(str(class_snaps[date(2026, 10, 21)].accumulated_return_pct)).quantize(
+                Decimal("0.01")
+            ) == Decimal("-15.33")
+            assert Decimal(str(class_snaps[date(2026, 10, 22)].accumulated_return_pct)).quantize(
+                Decimal("0.01")
+            ) == Decimal("-15.33")
+    finally:
+        await engine.dispose()

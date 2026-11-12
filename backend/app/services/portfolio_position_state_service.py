@@ -31,6 +31,7 @@ class TickerState:
         "cost",
         "realized_pnl",
         "corporate_action_cash_flows",
+        "pending_fraction_cost_basis",
         "is_usd",
     )
 
@@ -41,6 +42,7 @@ class TickerState:
         self.cost = Decimal("0")
         self.realized_pnl = Decimal("0")
         self.corporate_action_cash_flows = ()
+        self.pending_fraction_cost_basis = Decimal("0")
         self.is_usd = is_usd
 
 
@@ -74,6 +76,7 @@ async def build_positions_at(
         transactions=transactions,
         actions_by_ticker=actions_by_ticker,
         target_date=target_date,
+        include_pending_fractions=True,
         include_corporate_action_cash_flows=True,
     )
 
@@ -84,6 +87,13 @@ async def build_positions_at(
         state.cost = projection.total_cost
         state.realized_pnl = projection.realized_pnl
         state.corporate_action_cash_flows = projection.corporate_action_cash_flows
+        state.pending_fraction_cost_basis = sum(
+            (
+                Decimal(str(pf.cost_basis_brl))
+                for pf in projection.pending_corporate_action_fractions
+            ),
+            Decimal("0"),
+        )
         states[ticker] = state
 
     return states

@@ -515,12 +515,21 @@ async def rebuild_class_snapshots(
                 ),
                 _ZERO,
             )
+            pending_fraction_value = sum(
+                (
+                    position.pending_fraction_cost_basis
+                    for position in projected_positions.values()
+                    if position.asset_type == asset_type
+                ),
+                _ZERO,
+            )
             cash_flow_day = cash_flow_total - previous_cash_flow_by_class[asset_type]
             previous_cash_flow_by_class[asset_type] = cash_flow_total
             class_state.dividends_accumulated += dividends_day
+            twr_value = market_value + pending_fraction_value
             daily_return = calculate_daily_twr_pct(
                 class_state.previous_value,
-                market_value,
+                twr_value,
                 net_external_flow=external_flows[asset_type],
                 dividends_day=(dividends_day + cash_flow_day),
             )
@@ -558,7 +567,7 @@ async def rebuild_class_snapshots(
                     ),
                 },
             )
-            class_state.previous_value = market_value
+            class_state.previous_value = twr_value
             count += 1
 
         if AssetType.TESOURO_DIRETO in portfolio_types:

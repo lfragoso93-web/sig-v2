@@ -64,6 +64,14 @@ def _corporate_action_cash_flow_total(positions: dict) -> Decimal:
     return total.quantize(_MONEY)
 
 
+def _pending_fraction_value(positions: dict) -> Decimal:
+    """Soma custo pendente de fracoes em liquidacao futura para preservar base de TWR."""
+    total = _ZERO
+    for state in positions.values():
+        total += Decimal(str(getattr(state, "pending_fraction_cost_basis", 0) or 0))
+    return total.quantize(_MONEY)
+
+
 async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
     result = await db.execute(
         select(Asset.ticker).where(
@@ -145,6 +153,7 @@ async def _base_totals_without_dedicated_lookup(
             "total_pnl": _ZERO,
             "return_pct": _ZERO,
             "corporate_action_cash_flow_total": _ZERO,
+            "pending_fraction_value": _ZERO,
             "pre_listing_assets": 0,
             "real_price_gaps": 0,
             "market_value_by_class": {},
@@ -254,6 +263,7 @@ async def _base_totals_without_dedicated_lookup(
         "corporate_action_cash_flow_total": _corporate_action_cash_flow_total(
             positions,
         ),
+        "pending_fraction_value": _pending_fraction_value(positions),
         "pre_listing_assets": len(pre_listing),
         "real_price_gaps": len(real_gaps),
         "market_value_by_class": {
