@@ -17,4 +17,9 @@ describe('useTickerQuote error contract', () => {
     expect(source).not.toContain('BRAPI')
     expect(source).not.toContain('else {\n          setError(null)')
   })
+
+  it('forwards asset_type to /assets/quote so quotes stay scoped to the selected class', () => {
+    expect(source).toContain('assetType?: string')
+    expect(source).toContain("if (assetType) qs.set('asset_type', assetType)")
+  })
 })

@@ -1,6 +1,6 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, or_
+from sqlalchemy import and_, func, select, or_
 from app.models.asset import Asset, AssetType
 from app.models.asset_alias import AssetAlias
 from app.schemas.asset import AssetCreate
@@ -93,10 +93,24 @@ async def search_assets(
     asset_type: Optional[AssetType] = None,
     limit: int = 20,
 ) -> list[Asset]:
-    """Busca ativos por ticker, nome ou alias historico, com filtro opcional de asset_type."""
+    """Busca ativos por ticker, nome ou alias historico, com filtro estrito de asset_type."""
+    from app.services.asset_catalog_query_service import (
+        _B3_CLASS_TYPES,
+        _b3_ticker_eligibility_predicate,
+        _user_selectable_catalog_predicate,
+        is_eligible_b3_ticker,
+    )
+
+    asset_type_val = asset_type.value if asset_type is not None else None
+    alias_join = (
+        and_(AssetAlias.asset_id == Asset.id, AssetAlias.asset_type == asset_type_val)
+        if asset_type_val is not None
+        else (AssetAlias.asset_id == Asset.id)
+    )
     query = (
         select(Asset)
-        .outerjoin(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .outerjoin(AssetAlias, alias_join)
+        .where(_user_selectable_catalog_predicate())
     )
     if q.strip():
         like = f"%{q.strip().upper()}%"
@@ -107,8 +121,19 @@ async def search_assets(
                 AssetAlias.alias_ticker.ilike(like),
             )
         )
-    if asset_type is not None:
-        query = query.where(Asset.asset_type == asset_type)
-    query = query.distinct().order_by(Asset.ticker).limit(limit)
+    if asset_type_val is not None:
+        query = query.where(Asset.asset_type == asset_type_val)
+        if asset_type_val in _B3_CLASS_TYPES:
+            query = query.where(_b3_ticker_eligibility_predicate())
+    effective_limit = max(1, limit)
+    fetch_limit = (
+        min(max(effective_limit * 4, effective_limit + 20), 200)
+        if asset_type_val in _B3_CLASS_TYPES
+        else effective_limit
+    )
+    query = query.distinct().order_by(Asset.ticker).limit(fetch_limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    assets = list(result.scalars().all())
+    if asset_type_val in _B3_CLASS_TYPES:
+        assets = [a for a in assets if is_eligible_b3_ticker(a.ticker)]
+    return assets[:effective_limit]

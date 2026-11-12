@@ -70,6 +70,7 @@ export default function AssetComparisonPage() {
   const initializedParamRef = useRef<string | null>(null)
 
   const [search, setSearch] = useState('')
+  const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [selected, setSelected] = useState<CatalogAsset[]>([])
   const normalizedSearch = search.trim()
 
@@ -95,8 +96,8 @@ export default function AssetComparisonPage() {
   }, [initialTickersParam])
 
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
-    queryKey: ['asset-comparison-search', normalizedSearch],
-    queryFn: () => api.get('/assets/search', { params: { q: normalizedSearch, limit: 12 } }).then(response => response.data),
+    queryKey: ['asset-comparison-search', normalizedSearch, assetTypeFilter],
+    queryFn: () => api.get('/assets/search', { params: { q: normalizedSearch, limit: 12, ...(assetTypeFilter ? { asset_type: assetTypeFilter } : {}) } }).then(response => response.data),
     enabled: normalizedSearch.length >= 2,
     staleTime: 60_000,
   })
@@ -127,9 +128,27 @@ export default function AssetComparisonPage() {
 
       <section className="card p-4 sm:p-5" aria-label="Selecionar ativos">
         <label htmlFor="asset-comparison-search" className="mb-2 block text-sm font-medium">Adicionar ativo ({selected.length}/6)</label>
-        <div className="relative max-w-xl">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center max-w-2xl">
+          <select
+            aria-label="Filtrar por classe"
+            className="input sm:w-48"
+            value={assetTypeFilter}
+            onChange={event => setAssetTypeFilter(event.target.value)}
+          >
+            <option value="">Todas as classes</option>
+            <option value="ACAO">Ações B3</option>
+            <option value="FII">FIIs</option>
+            <option value="ETF_NACIONAL">ETFs Brasil</option>
+            <option value="BDR">BDRs</option>
+            <option value="STOCK">Stocks (EUA)</option>
+            <option value="ETF_INTERNACIONAL">ETFs Internacionais</option>
+            <option value="CRIPTO">Criptomoedas</option>
+            <option value="TESOURO_DIRETO">Tesouro Direto</option>
+          </select>
+          <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
           <input id="asset-comparison-search" className="input w-full pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Busque por ticker ou nome" autoComplete="off" />
+          </div>
         </div>
         {normalizedSearch.length >= 2 && (
           <div className="mt-2 max-w-xl overflow-hidden rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>

@@ -6,6 +6,7 @@ certificado e deve ser a única fonte para descoberta/sugestão no runtime.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,21 +26,43 @@ class AssetCatalogSuggestion:
     asset_type: str
 
 
+_B3_CLASS_TYPES = frozenset({
+    AssetType.ACAO.value,
+    AssetType.FII.value,
+    AssetType.ETF_NACIONAL.value,
+    AssetType.BDR.value,
+})
+_B3_TICKER_DIGITS_RE = re.compile(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$")
+
+
+def is_eligible_b3_ticker(ticker: str | None) -> bool:
+    """Return True when ticker matches canonical B3 alphanumeric-with-digits shape."""
+    return bool(_B3_TICKER_DIGITS_RE.fullmatch(str(ticker or "").strip().upper()))
+
+
+def _b3_ticker_eligibility_predicate():
+    """SQL pre-filter requiring a digit so malformed B3 rows are excluded before LIMIT."""
+    return or_(*(Asset.ticker.like(f"%{digit}%") for digit in "0123456789"))
+
+
 def _normalize_filter(asset_type: str | None) -> tuple[str, ...] | None:
     if not asset_type:
         return None
 
     value = asset_type.strip().upper()
     aliases: dict[str, tuple[str, ...]] = {
-        "STOCK": (AssetType.ACAO.value,),
         "ACAO": (AssetType.ACAO.value,),
         "ACOES": (AssetType.ACAO.value,),
+        "AÇÃO": (AssetType.ACAO.value,),
+        "AÇÕES": (AssetType.ACAO.value,),
         "FUND": (AssetType.FII.value,),
         "FII": (AssetType.FII.value,),
+        "FIIS": (AssetType.FII.value,),
         "ETF": (AssetType.ETF_NACIONAL.value,),
         "ETF_BR": (AssetType.ETF_NACIONAL.value,),
         "ETF_NACIONAL": (AssetType.ETF_NACIONAL.value,),
         "BDR": (AssetType.BDR.value,),
+        "STOCK": (AssetType.STOCK.value,),
         "STOCK_INT": (AssetType.STOCK.value,),
         "ETF_INT": (AssetType.ETF_INTERNACIONAL.value,),
         "ETF_INTERNACIONAL": (AssetType.ETF_INTERNACIONAL.value,),
@@ -48,6 +71,7 @@ def _normalize_filter(asset_type: str | None) -> tuple[str, ...] | None:
         "TESOURO": (AssetType.TESOURO_DIRETO.value,),
         "TESOURO_DIRETO": (AssetType.TESOURO_DIRETO.value,),
         "RENDA_FIXA": (AssetType.RENDA_FIXA.value,),
+        "OUTRO": (AssetType.OUTRO.value,),
     }
     return aliases.get(value, (value,))
 
@@ -78,16 +102,21 @@ async def suggest_assets_from_catalog(
     from app.core.asset_types import normalize_b3_equity_ticker
     from app.services.crypto_transaction_eligibility_service import _CRYPTO_NAME_TO_TICKER
 
+    allowed_types = _normalize_filter(asset_type)
+    allowed_set = set(allowed_types) if allowed_types else None
+
     search_terms = [normalized]
-    base_equity = normalize_b3_equity_ticker(normalized)
-    if base_equity != normalized and base_equity not in search_terms:
-        search_terms.append(base_equity)
-    mapped_crypto = _CRYPTO_NAME_TO_TICKER.get(normalized)
-    if mapped_crypto and mapped_crypto not in search_terms:
-        search_terms.append(mapped_crypto)
-    for c_name, c_ticker in _CRYPTO_NAME_TO_TICKER.items():
-        if normalized == c_ticker and c_name not in search_terms:
-            search_terms.append(c_name)
+    if allowed_set is None or bool(allowed_set & _B3_CLASS_TYPES):
+        base_equity = normalize_b3_equity_ticker(normalized)
+        if base_equity != normalized and base_equity not in search_terms:
+            search_terms.append(base_equity)
+    if allowed_set is None or AssetType.CRIPTO.value in allowed_set:
+        mapped_crypto = _CRYPTO_NAME_TO_TICKER.get(normalized)
+        if mapped_crypto and mapped_crypto not in search_terms:
+            search_terms.append(mapped_crypto)
+        for c_name, c_ticker in _CRYPTO_NAME_TO_TICKER.items():
+            if normalized == c_ticker and c_name not in search_terms:
+                search_terms.append(c_name)
 
     predicates = []
     for term in search_terms:
@@ -98,19 +127,34 @@ async def suggest_assets_from_catalog(
             func.upper(AssetAlias.alias_ticker).like(term_like),
         ])
 
+    alias_join = (
+        and_(
+            AssetAlias.asset_id == Asset.id,
+            AssetAlias.asset_type.in_(allowed_types),
+        )
+        if allowed_types
+        else (AssetAlias.asset_id == Asset.id)
+    )
     stmt = (
         select(Asset, AssetAlias.alias_ticker)
-        .outerjoin(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .outerjoin(AssetAlias, alias_join)
         .where(
             or_(*predicates),
             _user_selectable_catalog_predicate(),
         )
     )
-
-    allowed_types = _normalize_filter(asset_type)
     if allowed_types:
         stmt = stmt.where(Asset.asset_type.in_(allowed_types))
+        if allowed_set and bool(allowed_set & _B3_CLASS_TYPES):
+            stmt = stmt.where(
+                or_(
+                    Asset.asset_type.notin_(_B3_CLASS_TYPES),
+                    _b3_ticker_eligibility_predicate(),
+                )
+            )
 
+    effective_limit = max(1, min(limit, 50))
+    fetch_limit = min(max(effective_limit * 4, effective_limit + 20), 200)
     stmt = stmt.order_by(
         case(
             (func.upper(Asset.ticker) == normalized, 0),
@@ -120,14 +164,21 @@ async def suggest_assets_from_catalog(
             else_=4,
         ),
         Asset.ticker,
-    ).limit(max(1, min(limit, 50)))
+    ).limit(fetch_limit)
 
     result = await db.execute(stmt)
     rows = result.all()
     seen: set[tuple[str, str]] = set()
     suggestions: list[AssetCatalogSuggestion] = []
     for asset, alias_ticker in rows:
-        key = (asset.ticker, str(asset.asset_type))
+        asset_type_str = str(asset.asset_type)
+        if (
+            allowed_set is not None
+            and asset_type_str in _B3_CLASS_TYPES
+            and not is_eligible_b3_ticker(asset.ticker)
+        ):
+            continue
+        key = (asset.ticker, asset_type_str)
         if key in seen:
             continue
         seen |= {key}
@@ -140,9 +191,11 @@ async def suggest_assets_from_catalog(
             AssetCatalogSuggestion(
                 ticker=asset.ticker,
                 name=name,
-                asset_type=str(asset.asset_type),
+                asset_type=asset_type_str,
             )
         )
+        if len(suggestions) >= effective_limit:
+            break
     return suggestions
 
 

@@ -445,7 +445,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
     return raw
   }, [ticker, tab.assetType])
-  const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(effectiveQuoteTicker, !!tab.brapiEnabled && !isEditMode, date)
+  const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(effectiveQuoteTicker, !!tab.brapiEnabled && !isEditMode, date, tab.assetType)
   const { items: tdItems, loading: tdLoading, error: tdSearchError } = useTesouroSearch(ticker, isTesouro && !isEditMode)
   const { items: rvItems, loading: rvLoading, error: rvSearchError } = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
   const { price: tdPrice, rate: tdRate, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
@@ -536,9 +536,14 @@ export default function AddTransactionModal({ onClose }: Props) {
     setShowTDSugg(true)
   }, [tdItems, isTesouro, isEditMode, ticker])
 
+  const classFilteredRvItems = useMemo(
+    () => rvItems.filter(item => !item.type || item.type === tab.assetType),
+    [rvItems, tab.assetType],
+  )
+
   useEffect(() => {
-    if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true); else setShowRVSugg(false)
-  }, [rvItems, tab.brapiSuggestType])
+    if (tab.brapiSuggestType && classFilteredRvItems.length > 0) setShowRVSugg(true); else setShowRVSugg(false)
+  }, [classFilteredRvItems, tab.brapiSuggestType])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -747,7 +752,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
         onSelect: () => applyTDSuggestion(item),
       }))
-    : rvItems.map(item => ({
+    : classFilteredRvItems.map(item => ({
         label: item.ticker, sublabel: item.name,
         onSelect: () => applyRVSuggestion(item),
       }))
@@ -910,7 +915,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                       onFocus={() => {
                         if (!isEditMode) {
                           if (isTesouro && tdItems.length > 0) setShowTDSugg(true)
-                          if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true)
+                          if (tab.brapiSuggestType && classFilteredRvItems.length > 0) setShowRVSugg(true)
                         }
                       }}
                       placeholder={tab.tickerPlaceholder}

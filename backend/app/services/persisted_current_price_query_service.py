@@ -8,12 +8,13 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset
+from app.models.asset import Asset, AssetType
 
 
 async def get_persisted_current_prices(
     db: AsyncSession,
     tickers: list[str],
+    asset_type: str | AssetType | None = None,
 ) -> dict[str, float]:
     """Retorna ``last_price`` persistido por ticker, sem requisito de frescor."""
     requested = {
@@ -24,12 +25,19 @@ async def get_persisted_current_prices(
     if not requested:
         return {}
 
-    result = await db.execute(
-        select(Asset.ticker, Asset.last_price).where(
-            func.lower(Asset.ticker).in_(set(requested.values())),
-            Asset.last_price.is_not(None),
-        )
+    stmt = select(Asset.ticker, Asset.last_price).where(
+        func.lower(Asset.ticker).in_(set(requested.values())),
+        Asset.last_price.is_not(None),
     )
+    if asset_type is not None:
+        at_val = (
+            asset_type.value
+            if isinstance(asset_type, AssetType)
+            else str(asset_type).strip().upper()
+        )
+        if at_val:
+            stmt = stmt.where(Asset.asset_type == at_val)
+    result = await db.execute(stmt)
     prices_by_lower = {
         str(row.ticker).strip().lower(): float(row.last_price)
         for row in result.all()
