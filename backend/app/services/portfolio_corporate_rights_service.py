@@ -183,6 +183,7 @@ async def load_portfolio_corporate_rights(
         fractional_components = [
             item for item in entitlements if item.fractional_quantity > 0
         ]
+        has_fractional_entitlement = bool(fractional_components)
         gross_amount = sum(
             (item.gross_amount_brl for item in fractional_components),
             start=Decimal(0),
@@ -232,13 +233,13 @@ async def load_portfolio_corporate_rights(
                 "components": component_payloads,
                 "gross_amount_brl": (
                     Decimal(str(settlement_map[event_source_id].gross_amount_brl))
-                    if event_source_id in settlement_map
+                    if has_fractional_entitlement and event_source_id in settlement_map
                     else gross_amount
                 ),
                 "calculated_gross_amount_brl": gross_amount,
                 "confirmed_gross_amount_brl": (
                     Decimal(str(settlement_map[event_source_id].gross_amount_brl))
-                    if event_source_id in settlement_map
+                    if has_fractional_entitlement and event_source_id in settlement_map
                     else None
                 ),
                 "bonus_cost_per_share_brl": bonus_cost_per_share,
@@ -246,17 +247,18 @@ async def load_portfolio_corporate_rights(
                 "fractional_cost_basis_brl": fractional_cost_basis,
                 "estimated_fractional_result_brl": (
                     Decimal(str(settlement_map[event_source_id].gross_amount_brl))
-                    if event_source_id in settlement_map
+                    if has_fractional_entitlement and event_source_id in settlement_map
                     else gross_amount
                 )
                 - fractional_cost_basis,
                 "cash_status": (
                     "CONFIRMED"
-                    if event_source_id in settlement_map
+                    if has_fractional_entitlement and event_source_id in settlement_map
                     else "CALCULATED_NOT_CONFIRMED"
                 ),
                 "cash_treatment": str(settlement.get("cash_treatment", "")),
                 "evidence_reference": str(settlement["evidence_reference"]),
+                "has_fractional_entitlement": has_fractional_entitlement,
             }
         )
     return sorted(output, key=lambda item: (item["settlement_date"], item["ticker"]))

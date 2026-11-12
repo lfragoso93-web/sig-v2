@@ -257,6 +257,51 @@ describe('PendingCorporateFractionsPanel', () => {
     expect(screen.getByText('KLBN11')).toBeTruthy()
     expect(screen.getByText('0,1')).toBeTruthy()
     expect(screen.getByText(/Leilão liquidado/)).toBeTruthy()
+    expect(screen.getByText('KLBN11')).toBeTruthy()
+    expect(screen.getByText('0,1')).toBeTruthy()
+    expect(screen.getByText(/Leilão liquidado/)).toBeTruthy()
     expect(screen.getByText(/0,39/)).toBeTruthy()
+  })
+
+  it('oculta Confirmar valor para bonificação por componentes sem fração elegível', () => {
+    mocks.fractions = []
+    mocks.rights = [{
+      event_id: 88,
+      source_event_id: 'b3:klbn-whole-only',
+      ticker: 'KLBN11',
+      event_type: 'BONIFICACAO',
+      record_date: '2025-12-17',
+      settlement_date: '2026-02-24',
+      base_position: 100,
+      settlement_status: 'AVAILABLE',
+      has_fractional_entitlement: false,
+      components: [{
+        component: 'ON',
+        bonus_quantity: 1,
+        whole_quantity: 1,
+        fractional_quantity: 0,
+        whole_units_formed: 0,
+        component_shares_in_units: 0,
+        residual_whole_quantity: 1,
+        settlement_price_brl: 3.94,
+        gross_amount_brl: 0,
+        attributed_cost_brl: 12.95,
+        fractional_cost_basis_brl: 0,
+        estimated_fractional_result_brl: 0,
+      }],
+      gross_amount_brl: 0,
+      calculated_gross_amount_brl: 0,
+      bonus_cost_per_share_brl: 12.95,
+      attributed_bonus_cost_brl: 12.95,
+      fractional_cost_basis_brl: 0,
+      estimated_fractional_result_brl: 0,
+      cash_status: 'CALCULATED_NOT_CONFIRMED',
+      cash_treatment: 'PRO_RATA_AUCTION_RIGHT',
+    }]
+
+    render(<PendingCorporateFractionsPanel portfolioId={15} />)
+
+    expect(screen.getByText('Sem fração')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Confirmar valor/i })).toBeNull()
   })
 })

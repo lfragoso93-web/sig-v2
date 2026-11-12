@@ -555,4 +555,201 @@ def test_class_snapshot_projection_carries_corporate_action_cash_flow_total() ->
     assert breakeven_on_credit["NIKE34"].quantity == Decimal("0")
     assert breakeven_on_credit["NIKE34"].cost == Decimal("0")
     assert breakeven_on_credit["NIKE34"].realized_pnl == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].quantity == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].cost == Decimal("0")
+    assert breakeven_on_credit["NIKE34"].realized_pnl == Decimal("0")
     assert breakeven_on_credit["NIKE34"].corporate_action_cash_flow_total == Decimal("30.00")
+
+
+def test_user_confirmed_auction_with_disappeared_fraction_does_not_crash() -> None:
+    action = NormalizedCorporateAction(
+        source="b3",
+        source_event_id="b3:nike34-disappeared-frac",
+        ticker="NIKE34",
+        event_date=date(2026, 10, 13),
+        kind=CorporateActionKind.REVERSE_SPLIT,
+        quantity_factor=Decimal("0.2"),
+        raw_payload={},
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=None,
+            settlement_gross_amount_brl=Decimal("25.40"),
+            settlement_date=date(2026, 10, 21),
+            cash_treatment=PORTFOLIO_USER_CONFIRMED_AUCTION,
+        ),
+    )
+
+    result = project_position_timeline(
+        movements=[
+            PositionMovement(
+                movement_date=date(2026, 10, 1),
+                kind=PositionMovementKind.BUY,
+                quantity=Decimal("5"),
+                unit_price=Decimal("30"),
+            )
+        ],
+        actions=[action],
+        through_date=date(2026, 11, 11),
+    )
+
+    assert result.quantity == Decimal("1")
+    assert result.total_cost == Decimal("150")
+    assert result.realized_pnl == Decimal("0")
+    assert result.corporate_action_cash_flows == ()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_settlements_removes_stale_rows_after_tx_edit() -> None:
+    from app.services.portfolio_corporate_fraction_settlement_service import (
+        reconcile_portfolio_corporate_fraction_settlements,
+    )
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with session_factory() as db:
+            user = User(name="Reconcile", email="reconcile@test.dev", hashed_password="x")
+            db.add(user)
+            await db.flush()
+            portfolio = Portfolio(user_id=user.id, name="Reconcile")
+            asset = Asset(ticker="NIKE34", name="Nike BDR", asset_type="BDR")
+            db.add_all([portfolio, asset])
+            await db.flush()
+            tx = Transaction(
+                portfolio_id=portfolio.id,
+                ticker="NIKE34",
+                asset_type="BDR",
+                operation=OperationType.buy,
+                quantity=Decimal("6"),
+                price=Decimal("30.00"),
+                fees=Decimal("0"),
+                date=date(2026, 1, 10),
+                currency="BRL",
+            )
+            ev = CorporateEvent(
+                asset_id=asset.id,
+                ticker="NIKE34",
+                event_type="GRUPAMENTO",
+                status="PENDENTE",
+                source_provider="b3",
+                source_event_id="b3:nike34-reconcile",
+                is_canonical=True,
+                reconciliation_status="MATCHED",
+                requires_review=False,
+                effective_date=date(2026, 10, 13),
+                quantity_factor=Decimal("0.2"),
+            )
+            db.add_all([tx, ev])
+            await db.flush()
+            db.add(
+                CorporateEventReconciliationEvidence(
+                    corporate_event_id=ev.id,
+                    decision="MATCHED",
+                    evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                    evidence_reference="b3:nike34-reconcile-ev",
+                    fractional_policy="PENDING_SETTLEMENT",
+                )
+            )
+            await db.commit()
+
+            write_access = PortfolioAccessContext.for_user(
+                user_id=user.id,
+                portfolio_id=portfolio.id,
+                permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+            )
+            await upsert_portfolio_corporate_fraction_settlement(
+                db,
+                access=write_access,
+                source_event_id="b3:nike34-reconcile",
+                gross_amount_brl=Decimal("25.40"),
+                settlement_date=date(2026, 10, 21),
+                notes="Leilao antigo",
+            )
+
+            # Edit purchase quantity 6 -> 5 so 5 * 0.2 = 1.0 leaves no fraction.
+            tx.quantity = Decimal("5")
+            await db.commit()
+
+            stale_ids, earliest_date = await reconcile_portfolio_corporate_fraction_settlements(
+                db,
+                portfolio_id=portfolio.id,
+                tickers=["NIKE34"],
+                commit=True,
+                clock=FrozenClock(datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)),
+            )
+            assert stale_ids == ["b3:nike34-reconcile"]
+            assert earliest_date == date(2026, 10, 21)
+
+            remaining = (
+                await db.execute(select(PortfolioCorporateFractionSettlement))
+            ).scalars().all()
+            assert remaining == []
+
+            read_access = PortfolioAccessContext.for_user(
+                user_id=user.id,
+                portfolio_id=portfolio.id,
+                permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+            )
+            fractions = await load_portfolio_pending_corporate_fractions(
+                db,
+                access=read_access,
+                clock=FrozenClock(datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)),
+            )
+            assert len(fractions) == 1
+            assert fractions[0]["fractional_quantity"] is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_upsert_rejects_component_bonus_without_fractional_entitlement() -> None:
+    access = PortfolioAccessContext.for_user(
+        user_id=7,
+        portfolio_id=19,
+        permissions=frozenset({WRITE_PORTFOLIO_CORPORATE_FRACTIONS}),
+    )
+    ownership = MagicMock()
+    ownership.scalar_one_or_none.return_value = SimpleNamespace(id=19, user_id=7)
+    db = AsyncMock()
+    db.execute.return_value = ownership
+
+    whole_only_right = {
+        "event_id": 88,
+        "source_event_id": "b3:klbn-whole-only",
+        "ticker": "KLBN11",
+        "event_type": "BONIFICACAO",
+        "record_date": date(2025, 12, 17),
+        "settlement_date": date(2026, 2, 24),
+        "base_position": Decimal("100"),
+        "settlement_status": "AVAILABLE",
+        "components": [
+            {"component": "ON", "fractional_quantity": Decimal("0")},
+            {"component": "PN", "fractional_quantity": Decimal("0")},
+        ],
+        "gross_amount_brl": Decimal("0"),
+        "calculated_gross_amount_brl": Decimal("0"),
+        "has_fractional_entitlement": False,
+    }
+
+    with (
+        patch(
+            "app.services.portfolio_asset_corporate_lifecycle_service."
+            "load_portfolio_pending_corporate_fractions",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.portfolio_corporate_rights_service."
+            "load_portfolio_corporate_rights",
+            new=AsyncMock(return_value=[whole_only_right]),
+        ),
+    ):
+        with pytest.raises(LookupError):
+            await upsert_portfolio_corporate_fraction_settlement(
+                db,
+                access=access,
+                source_event_id="b3:klbn-whole-only",
+                gross_amount_brl=Decimal("5.00"),
+            )

@@ -401,6 +401,9 @@ export default function PendingCorporateFractionsPanel({
                   )))}
                   {rights.map(right => {
                     const savedRightSettlement = settlementByEvent.get(right.source_event_id)
+                    const hasRightFraction =
+                      right.has_fractional_entitlement
+                      ?? right.components.some(component => Number(component.fractional_quantity) > 0)
                     return (
                       <tr key={`${right.event_id}:total`} className="border-t font-semibold" style={{ borderColor: 'var(--color-divider)' }}>
                         <td className="py-3 pr-4">Total {right.ticker}</td>
@@ -423,28 +426,34 @@ export default function PendingCorporateFractionsPanel({
                         <td className="py-3 pl-4 text-right tabular-nums">R$ {formatBrl(right.estimated_fractional_result_brl)}</td>
                         <td className="py-3 pl-4 text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-2 font-normal">
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() =>
-                                openEditor({
-                                  sourceEventId: right.source_event_id,
-                                  ticker: right.ticker,
-                                  eventLabel: `${right.ticker} · ${right.event_type}`,
-                                  defaultDate: savedRightSettlement?.settlement_date ?? right.settlement_date,
-                                  initialAmount: formatBrl(
-                                    savedRightSettlement?.gross_amount_brl ?? right.gross_amount_brl
-                                  ),
-                                  initialNotes: savedRightSettlement?.notes ?? '',
-                                })
-                              }
-                              className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border"
-                              style={{ borderColor: 'var(--color-divider)' }}
-                            >
-                              <PencilLine size={12} />
-                              {right.cash_status === 'CONFIRMED' ? 'Editar' : 'Confirmar valor'}
-                            </button>
-                            {right.cash_status === 'CONFIRMED' && (
+                            {hasRightFraction ? (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() =>
+                                  openEditor({
+                                    sourceEventId: right.source_event_id,
+                                    ticker: right.ticker,
+                                    eventLabel: `${right.ticker} · ${right.event_type}`,
+                                    defaultDate: savedRightSettlement?.settlement_date ?? right.settlement_date,
+                                    initialAmount: formatBrl(
+                                      savedRightSettlement?.gross_amount_brl ?? right.gross_amount_brl
+                                    ),
+                                    initialNotes: savedRightSettlement?.notes ?? '',
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium border"
+                                style={{ borderColor: 'var(--color-divider)' }}
+                              >
+                                <PencilLine size={12} />
+                                {right.cash_status === 'CONFIRMED' ? 'Editar' : 'Confirmar valor'}
+                              </button>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>
+                                Sem fração
+                              </span>
+                            )}
+                            {(right.cash_status === 'CONFIRMED' || savedRightSettlement != null) && (
                               <button
                                 type="button"
                                 disabled={isBusy}

@@ -43,6 +43,7 @@ from app.services.portfolio_corporate_fraction_settlement_service import (
     WRITE_PORTFOLIO_CORPORATE_FRACTIONS,
     delete_portfolio_corporate_fraction_settlement,
     list_portfolio_corporate_fraction_settlements,
+    reconcile_portfolio_corporate_fraction_settlements,
     upsert_portfolio_corporate_fraction_settlement,
 )
 from app.services.portfolio_corporate_rights_service import (
@@ -465,12 +466,20 @@ async def create_transaction(
         status_code = 400 if detail.startswith("Quantidade insuficiente") else 422
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
+    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        tickers=[tx.ticker],
+        commit=True,
+    )
+    backfill_from = min(payload.date, reconciled_from) if reconciled_from else payload.date
+
     # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
     # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=payload.date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -605,11 +614,18 @@ async def update_transaction(
 
     await db.commit()
     await db.refresh(tx)
+    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        tickers=[old_ticker, ticker],
+        commit=True,
+    )
+    backfill_from = min(invalidate_from, reconciled_from) if reconciled_from else invalidate_from
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=invalidate_from,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -642,14 +658,22 @@ async def delete_transaction(
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.") from exc
 
     tx_date = tx.date
+    tx_ticker = tx.ticker
 
     await db.delete(tx)
     await db.commit()
+    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        tickers=[tx_ticker],
+        commit=True,
+    )
+    backfill_from = min(tx_date, reconciled_from) if reconciled_from else tx_date
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=tx_date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,
@@ -695,7 +719,7 @@ async def bulk_delete_transactions(
             detail="Informe transaction_ids ou ao menos um filtro para exclusao em lote.",
         )
 
-    stmt = select(Transaction.id, Transaction.date).where(Transaction.portfolio_id == portfolio_id)
+    stmt = select(Transaction.id, Transaction.date, Transaction.ticker).where(Transaction.portfolio_id == portfolio_id)
     if payload.transaction_ids:
         stmt = stmt.where(Transaction.id.in_(payload.transaction_ids))
     if payload.asset_type:
@@ -720,6 +744,7 @@ async def bulk_delete_transactions(
 
     tx_ids = [row[0] for row in rows]
     earliest_date = min(row[1] for row in rows)
+    affected_tickers = {row[2] for row in rows if len(row) > 2 and row[2]}
 
     await db.execute(
         delete(Transaction).where(
@@ -728,11 +753,18 @@ async def bulk_delete_transactions(
         )
     )
     await db.commit()
+    _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+        db,
+        portfolio_id=portfolio_id,
+        tickers=affected_tickers or None,
+        commit=True,
+    )
+    backfill_from = min(earliest_date, reconciled_from) if reconciled_from else earliest_date
 
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
-        tx_date=earliest_date,
+        tx_date=backfill_from,
     )
     background_tasks.add_task(
         invalidate_portfolio_cache,

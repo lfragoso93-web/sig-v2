@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from datetime import date as DateType
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext
@@ -19,13 +19,13 @@ from app.models.portfolio_corporate_fraction_settlement import (
 from app.repositories.portfolio_access_repository import get_accessible_portfolio
 from app.services.corporate_action_engine import NormalizedCorporateAction
 from app.services.corporate_event_fractional_resolution import (
+    PORTFOLIO_USER_CONFIRMED_AUCTION,
     FractionalResolution,
     FractionalResolutionPolicy,
 )
 
 READ_PORTFOLIO_CORPORATE_FRACTIONS = "portfolio:corporate-lifecycle:read"
 WRITE_PORTFOLIO_CORPORATE_FRACTIONS = "portfolio:corporate-fractions:write"
-PORTFOLIO_USER_CONFIRMED_AUCTION = "PORTFOLIO_USER_CONFIRMED_AUCTION"
 
 
 def _clean_text(value: object) -> str | None:
@@ -33,6 +33,19 @@ def _clean_text(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _has_positive_component_fraction(right: Mapping[str, Any]) -> bool:
+    if right.get("has_fractional_entitlement") is False:
+        return False
+    components = right.get("components")
+    if isinstance(components, Sequence) and not isinstance(components, (str, bytes)):
+        return any(
+            Decimal(str(comp.get("fractional_quantity") or 0)) > 0
+            for comp in components
+            if isinstance(comp, Mapping)
+        )
+    return bool(right.get("has_fractional_entitlement", False))
 
 
 async def load_portfolio_fraction_settlement_map(
@@ -207,6 +220,7 @@ async def upsert_portfolio_corporate_fraction_settlement(
                 for item in rights
                 if item.get("source_event_id") == normalized_event_id
                 and Decimal(str(item.get("calculated_gross_amount_brl") or 0)) >= 0
+                and _has_positive_component_fraction(item)
             ),
             None,
         )
@@ -300,3 +314,130 @@ async def delete_portfolio_corporate_fraction_settlement(
     await db.delete(record)
     await db.commit()
     return rebuild_from
+
+
+async def reconcile_portfolio_corporate_fraction_settlements(
+    db: AsyncSession,
+    *,
+    portfolio_id: int,
+    tickers: Iterable[str] | None = None,
+    commit: bool = False,
+    clock: Clock = SYSTEM_CLOCK,
+) -> tuple[list[str], DateType | None]:
+    """Remove liquidacoes manuais cuja fracao elegivel deixou de existir na carteira."""
+    stmt = select(PortfolioCorporateFractionSettlement).where(
+        PortfolioCorporateFractionSettlement.portfolio_id == portfolio_id,
+    )
+    if tickers is not None:
+        normalized_tickers = sorted(
+            {str(t).strip().upper() for t in tickers if str(t).strip()}
+        )
+        if not normalized_tickers:
+            return [], None
+        stmt = stmt.where(
+            PortfolioCorporateFractionSettlement.ticker.in_(normalized_tickers)
+        )
+
+    try:
+        rows_result = await db.execute(stmt)
+    except StopAsyncIteration:
+        return [], None
+
+    settlements = [
+        row
+        for row in rows_result.scalars().all()
+        if isinstance(row, PortfolioCorporateFractionSettlement)
+    ]
+    if not settlements:
+        return [], None
+
+    from app.models.transaction import Transaction
+    from app.services.corporate_action_position_reader import (
+        load_global_corporate_actions_by_ticker,
+    )
+    from app.services.portfolio_asset_corporate_lifecycle_service import (
+        READ_PORTFOLIO_CORPORATE_LIFECYCLE,
+    )
+    from app.services.portfolio_corporate_rights_service import (
+        load_portfolio_corporate_rights,
+    )
+    from app.services.snapshot_position_projection import (
+        project_transaction_timelines,
+    )
+
+    affected_tickers = sorted(
+        {str(row.ticker).strip().upper() for row in settlements if row.ticker}
+    )
+    eligible_event_ids: set[str] = set()
+
+    if affected_tickers:
+        try:
+            tx_result = await db.execute(
+                select(Transaction)
+                .where(
+                    Transaction.portfolio_id == portfolio_id,
+                    func.upper(func.trim(Transaction.ticker)).in_(affected_tickers),
+                )
+                .order_by(Transaction.date.asc(), Transaction.id.asc())
+            )
+            transactions = [
+                tx
+                for tx in tx_result.scalars().all()
+                if hasattr(tx, "ticker") and hasattr(tx, "date")
+            ]
+        except StopAsyncIteration:
+            return [], None
+
+        if transactions:
+            actions_by_ticker = await load_global_corporate_actions_by_ticker(
+                db,
+                affected_tickers,
+            )
+            timelines = project_transaction_timelines(
+                transactions=transactions,
+                actions_by_ticker=actions_by_ticker,
+                target_date=clock.today(),
+            )
+            for projection, _asset_type, _is_usd in timelines.values():
+                for pending in projection.pending_corporate_action_fractions:
+                    if Decimal(str(pending.fractional_quantity)) > 0:
+                        eligible_event_ids.add(pending.source_event_id)
+                for flow in projection.corporate_action_cash_flows:
+                    if Decimal(str(flow.fractional_quantity)) > 0:
+                        eligible_event_ids.add(flow.source_event_id)
+
+            rights_access = PortfolioAccessContext.for_system(
+                portfolio_id=portfolio_id,
+                permissions=frozenset({READ_PORTFOLIO_CORPORATE_LIFECYCLE}),
+                purpose="corporate_fraction_settlement_reconcile",
+            )
+            rights = await load_portfolio_corporate_rights(
+                db,
+                access=rights_access,
+                clock=clock,
+            )
+            for right in rights:
+                if _has_positive_component_fraction(right):
+                    eligible_event_ids.add(str(right["source_event_id"]))
+
+    stale = [
+        row for row in settlements if row.source_event_id not in eligible_event_ids
+    ]
+    if not stale:
+        return [], None
+
+    stale_ids = [row.source_event_id for row in stale]
+    dates = [
+        row.settlement_date or row.created_at.date()
+        for row in stale
+        if (row.settlement_date is not None or row.created_at is not None)
+    ]
+    earliest_date = min(dates) if dates else None
+
+    for row in stale:
+        await db.delete(row)
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
+    return stale_ids, earliest_date

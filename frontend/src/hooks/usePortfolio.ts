@@ -97,6 +97,7 @@ export interface PortfolioCorporateRight {
   estimated_fractional_result_brl: number
   cash_status: 'CALCULATED_NOT_CONFIRMED' | 'CONFIRMED'
   cash_treatment: string
+  has_fractional_entitlement?: boolean
 }
 
 export interface CorporateFractionSettlementRecord {

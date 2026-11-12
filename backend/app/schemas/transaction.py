@@ -187,6 +187,7 @@ class PortfolioCorporateRightOut(BaseModel):
     cash_status: Literal["CALCULATED_NOT_CONFIRMED", "CONFIRMED"]
     cash_treatment: str
     evidence_reference: str
+    has_fractional_entitlement: bool = True
 
 
 class CorporateFractionSettlementUpsert(BaseModel):

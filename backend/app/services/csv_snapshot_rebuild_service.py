@@ -7,6 +7,9 @@ from sqlalchemy import func, select
 from app.core.database import AsyncSessionLocal
 from app.models.transaction import Transaction
 from app.services.portfolio_class_snapshot_service import rebuild_class_snapshots
+from app.services.portfolio_corporate_fraction_settlement_service import (
+    reconcile_portfolio_corporate_fraction_settlements,
+)
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.portfolio_snapshot_canonical_twr_service import (
     backfill_canonical_snapshots_with_returns,
@@ -45,10 +48,16 @@ async def _execute_csv_snapshot_rebuild(portfolio_id: int) -> None:
             )
             return
 
+        _, reconciled_from = await reconcile_portfolio_corporate_fraction_settlements(
+            db,
+            portfolio_id=portfolio_id,
+            commit=True,
+        )
+        invalidate_from = min(first_date, reconciled_from) if reconciled_from else first_date
         removed = await invalidate_snapshots_from(
             db,
             portfolio_id,
-            first_date,
+            invalidate_from,
             commit=True,
         )
         created = await backfill_canonical_snapshots_with_returns(db, portfolio_id)

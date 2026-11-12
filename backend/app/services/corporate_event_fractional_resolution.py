@@ -1,4 +1,4 @@
-"""Contrato compartilhado para resolu??o fracion?ria de eventos corporativos."""
+"""Contrato compartilhado para resolucao fracionaria de eventos corporativos."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+
+PORTFOLIO_USER_CONFIRMED_AUCTION = "PORTFOLIO_USER_CONFIRMED_AUCTION"
 
 
 class FractionalResolutionPolicy(StrEnum):
