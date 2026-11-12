@@ -1,6 +1,7 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, or_
+import re
+from sqlalchemy import and_, func, select, or_
 from app.models.asset import Asset, AssetType
 from app.models.asset_alias import AssetAlias
 from app.schemas.asset import AssetCreate
@@ -87,16 +88,34 @@ async def get_asset_by_ticker(db: AsyncSession, ticker: str) -> Asset | None:
     return alias_result.scalar_one_or_none()
 
 
+_B3_CLASS_TYPES = frozenset({
+    AssetType.ACAO.value,
+    AssetType.FII.value,
+    AssetType.ETF_NACIONAL.value,
+    AssetType.BDR.value,
+})
+_B3_TICKER_DIGITS_RE = re.compile(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$")
+
+
 async def search_assets(
     db: AsyncSession,
     q: str,
     asset_type: Optional[AssetType] = None,
     limit: int = 20,
 ) -> list[Asset]:
-    """Busca ativos por ticker, nome ou alias historico, com filtro opcional de asset_type."""
+    """Busca ativos por ticker, nome ou alias historico, com filtro estrito de asset_type."""
+    from app.services.asset_catalog_query_service import _user_selectable_catalog_predicate
+
+    asset_type_val = asset_type.value if asset_type is not None else None
+    alias_join = (
+        and_(AssetAlias.asset_id == Asset.id, AssetAlias.asset_type == asset_type_val)
+        if asset_type_val is not None
+        else (AssetAlias.asset_id == Asset.id)
+    )
     query = (
         select(Asset)
-        .outerjoin(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .outerjoin(AssetAlias, alias_join)
+        .where(_user_selectable_catalog_predicate())
     )
     if q.strip():
         like = f"%{q.strip().upper()}%"
@@ -107,8 +126,15 @@ async def search_assets(
                 AssetAlias.alias_ticker.ilike(like),
             )
         )
-    if asset_type is not None:
-        query = query.where(Asset.asset_type == asset_type)
+    if asset_type_val is not None:
+        query = query.where(Asset.asset_type == asset_type_val)
     query = query.distinct().order_by(Asset.ticker).limit(limit)
     result = await db.execute(query)
-    return list(result.scalars().all())
+    assets = list(result.scalars().all())
+    if asset_type_val in _B3_CLASS_TYPES:
+        assets = [
+            a
+            for a in assets
+            if _B3_TICKER_DIGITS_RE.fullmatch(str(a.ticker or "").strip().upper())
+        ]
+    return assets

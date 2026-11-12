@@ -19,7 +19,12 @@ interface HttpErrorLike {
  * Hook com debounce de 600 ms.
  * Consulta /assets/quote/{ticker}?date=YYYY-MM-DD quando a data nao for hoje.
  */
-export function useTickerQuote(ticker: string, enabled = true, date?: string) {
+export function useTickerQuote(
+  ticker: string,
+  enabled = true,
+  date?: string,
+  assetType?: string,
+) {
   const [quote,   setQuote]   = useState<TickerQuote | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -39,8 +44,11 @@ export function useTickerQuote(ticker: string, enabled = true, date?: string) {
       try {
         const today   = new Date().toISOString().split('T')[0]
         const useDate = date && date !== today ? date : undefined
-        const params  = useDate ? `?date=${useDate}` : ''
-        const res     = await api.get<TickerQuote>(`/assets/quote/${t}${params}`)
+        const qs      = new URLSearchParams()
+        if (useDate) qs.set('date', useDate)
+        if (assetType) qs.set('asset_type', assetType)
+        const query   = qs.toString()
+        const res     = await api.get<TickerQuote>(`/assets/quote/${t}${query ? `?${query}` : ''}`)
         setQuote(res.data)
       } catch (error: unknown) {
         setQuote(null)
@@ -56,7 +64,7 @@ export function useTickerQuote(ticker: string, enabled = true, date?: string) {
     }, 600)
 
     return () => clearTimeout(timer)
-  }, [ticker, enabled, date])
+  }, [ticker, enabled, date, assetType])
 
   return { quote, loading, error }
 }

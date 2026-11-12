@@ -197,6 +197,7 @@ export default function AssetAnalysisPage() {
   const urlParam = initialTicker || initialId
 
   const [search, setSearch] = useState('')
+  const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [selected, setSelected] = useState<CatalogAsset | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -223,8 +224,8 @@ export default function AssetAnalysisPage() {
   }, [urlParam, selected, isDropdownOpen])
 
   const { data: matches = [], isFetching } = useQuery<CatalogAsset[]>({
-    queryKey: ['asset-analysis-search', normalized],
-    queryFn: () => api.get('/assets/search', { params: { q: normalized, limit: 15 } }).then(response => response.data),
+    queryKey: ['asset-analysis-search', normalized, assetTypeFilter],
+    queryFn: () => api.get('/assets/search', { params: { q: normalized, limit: 15, ...(assetTypeFilter ? { asset_type: assetTypeFilter } : {}) } }).then(response => response.data),
     enabled: normalized.length >= 2 && isDropdownOpen,
     staleTime: 60_000,
   })
@@ -282,7 +283,24 @@ export default function AssetAnalysisPage() {
 
       <section className="card p-4 sm:p-5" ref={containerRef}>
         <label htmlFor="asset-analysis-search" className="mb-2 block text-sm font-medium">Encontre um ativo no catálogo</label>
-        <div className="relative max-w-2xl">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center max-w-3xl">
+          <select
+            aria-label="Filtrar por classe"
+            className="input sm:w-48"
+            value={assetTypeFilter}
+            onChange={event => setAssetTypeFilter(event.target.value)}
+          >
+            <option value="">Todas as classes</option>
+            <option value="ACAO">Ações B3</option>
+            <option value="FII">FIIs</option>
+            <option value="ETF_NACIONAL">ETFs Brasil</option>
+            <option value="BDR">BDRs</option>
+            <option value="STOCK">Stocks (EUA)</option>
+            <option value="ETF_INTERNACIONAL">ETFs Internacionais</option>
+            <option value="CRIPTO">Criptomoedas</option>
+            <option value="TESOURO_DIRETO">Tesouro Direto</option>
+          </select>
+          <div className="relative flex-1">
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
           <input
             id="asset-analysis-search"
@@ -309,6 +327,7 @@ export default function AssetAnalysisPage() {
               <X size={15} />
             </button>
           )}
+          </div>
         </div>
 
         {isDropdownOpen && normalized.length >= 2 && (

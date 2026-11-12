@@ -247,10 +247,20 @@ async def _find_catalog_asset(
 ) -> Optional[Asset]:
     from app.core.asset_types import normalize_b3_equity_ticker
     normalized = ticker.strip().upper()
-    candidates = {normalized, _crypto_candidate(normalized), normalize_b3_equity_ticker(normalized)}
+    normalized_type = asset_type.strip().upper() if asset_type and asset_type.strip() else None
+    candidates = {normalized}
+    if normalized_type is None or normalized_type == AssetType.CRIPTO.value:
+        candidates.add(_crypto_candidate(normalized))
+    if normalized_type is None or normalized_type in {
+        "ACAO",
+        "FII",
+        "ETF_NACIONAL",
+        "BDR",
+    }:
+        candidates.add(normalize_b3_equity_ticker(normalized))
     stmt = select(Asset).where(func.upper(Asset.ticker).in_(candidates))
-    if asset_type:
-        stmt = stmt.where(Asset.asset_type == asset_type.strip().upper())
+    if normalized_type:
+        stmt = stmt.where(Asset.asset_type == normalized_type)
     stmt = stmt.order_by(
         case((func.upper(Asset.ticker) == normalized, 0), else_=1),
         Asset.id,
@@ -310,27 +320,28 @@ async def list_assets(
 async def get_asset_detail(
     ticker: str,
     days: int = Query(90, ge=7, le=1825),
+    asset_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    asset = await _find_catalog_asset(db, ticker)
+    asset = await _find_catalog_asset(db, ticker, asset_type)
     if asset is None:
         raise HTTPException(status_code=404, detail=f"Ativo '{ticker.upper()}' nao encontrado no banco.")
 
-    asset_type = AssetType(str(asset.asset_type))
-    current_prices = await get_persisted_current_prices(db, [asset.ticker])
+    resolved_asset_type = AssetType(str(asset.asset_type))
+    current_prices = await get_persisted_current_prices(db, [asset.ticker], asset_type=resolved_asset_type)
     current_price = current_prices.get(str(asset.ticker).strip().upper())
     history = await get_persisted_price_history(
         db,
         asset.ticker,
         days=days,
-        asset_type=asset_type,
+        asset_type=resolved_asset_type,
     )
     return AssetDetailResponse(
         id=asset.id,
         ticker=asset.ticker,
         name=asset.name,
-        asset_type=asset_type.value,
+        asset_type=resolved_asset_type.value,
         last_price=float(asset.last_price) if asset.last_price else None,
         last_price_updated_at=(
             asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None
@@ -626,9 +637,11 @@ async def get_ticker_quote(
         ).get(normalized_ticker)
         source = "asset_prices"
     else:
-        price = (await get_persisted_current_prices(db, [normalized_ticker])).get(
-            normalized_ticker
-        )
+        price = (
+            await get_persisted_current_prices(
+                db, [normalized_ticker], asset_type=normalized_type
+            )
+        ).get(normalized_ticker)
         source = "assets.last_price"
 
     if price is None:

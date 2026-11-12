@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Optional
 
 from app.core.log_safety import sanitize_log_value
@@ -73,6 +74,8 @@ async def verify_market_asset_exists(
         from app.core.asset_types import normalize_b3_equity_ticker
         from app.integrations.brapi import fetch_asset_info, fetch_ticker_suggestions
         normalized_ticker = normalize_b3_equity_ticker(normalized_ticker, normalized_type)
+        if not re.fullmatch(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$", normalized_ticker):
+            return False, None
 
         try:
             info = await fetch_asset_info(normalized_ticker)
