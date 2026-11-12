@@ -306,6 +306,19 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
             db=db,
         )
         assert finnhub._api_key() == "fh-env"
+        # Simula outro worker observando invalidacao via bump de versao ou TTL
+        ProviderConfigService._runtime_keys_version = "old-ver"
+        monkeypatch.setattr(
+            ProviderConfigService,
+            "_read_runtime_keys_version",
+            staticmethod(lambda: _async_val("new-ver")),
+        )
+        from app.core.provider_registry import set_runtime_provider_key_override
+
+        set_runtime_provider_key_override(ProviderId.BRAPI, "stale-worker-val")
+        await ProviderConfigService.ensure_runtime_key_overrides_fresh(db)
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
+
         await ProviderConfigService.reset_provider_to_default(
             provider_id=ProviderId.BRAPI.value,
             user_id=user.id,
@@ -314,3 +327,7 @@ async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
         assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
     finally:
         clear_runtime_provider_key_overrides()
+
+
+async def _async_val(value: str) -> str:
+    return value

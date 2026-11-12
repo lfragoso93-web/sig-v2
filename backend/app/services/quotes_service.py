@@ -405,11 +405,10 @@ async def _ensure_runtime_keys_synced(db: Optional[AsyncSession]) -> None:
         return
     from app.services.provider_config_service import ProviderConfigService
 
-    if not getattr(ProviderConfigService, "_runtime_keys_synced", False):
-        try:
-            await ProviderConfigService.sync_runtime_key_overrides(db)
-        except Exception:
-            pass
+    try:
+        await ProviderConfigService.ensure_runtime_key_overrides_fresh(db)
+    except Exception:
+        pass
 
 
 async def get_prices(positions: list[dict], db: Optional[AsyncSession] = None) -> dict[str, float]:
