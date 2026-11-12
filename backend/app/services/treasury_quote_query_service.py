@@ -1,9 +1,9 @@
 """Leitura enriquecida de PU/taxa do Tesouro para superficies de input."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.tesouro_transparente import fetch_official_treasury_quote
@@ -18,11 +18,12 @@ async def load_treasury_rate_at_or_before(
     target_date: date,
 ) -> tuple[float | None, str | None]:
     """Retorna taxa persistida; usa fonte oficial como fallback ate o proximo seed."""
+    upper_ts = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
     rate_result = await db.execute(
         select(AssetPrice.open, AssetPrice.timestamp)
         .where(
             AssetPrice.asset_id == asset_id,
-            func.date(AssetPrice.timestamp) <= target_date,
+            AssetPrice.timestamp <= upper_ts,
             AssetPrice.open.is_not(None),
         )
         .order_by(AssetPrice.timestamp.desc())

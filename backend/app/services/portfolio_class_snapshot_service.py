@@ -221,13 +221,24 @@ async def _load_exact_treasury_prices(
     if not normalized:
         return {}
 
+    start_ts = datetime.combine(
+        target_date,
+        datetime.min.time(),
+        tzinfo=UTC,
+    )
+    end_ts = datetime.combine(
+        target_date,
+        datetime.max.time(),
+        tzinfo=UTC,
+    )
     result = await db.execute(
         select(Asset.ticker, AssetPrice.close)
         .join(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(
             Asset.asset_type == AssetType.TESOURO_DIRETO.value,
             func.upper(Asset.ticker).in_(normalized),
-            func.date(AssetPrice.timestamp) == target_date,
+            AssetPrice.timestamp >= start_ts,
+            AssetPrice.timestamp <= end_ts,
         )
         .order_by(AssetPrice.timestamp.desc())
     )
@@ -237,6 +248,31 @@ async def _load_exact_treasury_prices(
         if key not in prices:
             prices[key] = _decimal(close)
     return prices
+
+
+async def _load_treasury_prices_with_holiday_carry(
+    db: AsyncSession,
+    tickers: Iterable[str],
+    target_date: date,
+    *,
+    max_lookback_days: int = 5,
+) -> dict[str, Decimal]:
+    """Carrega PU exato na data ou no fechamento útil imediatamente anterior (feriados/pré-fechamento)."""
+    requested = sorted({str(ticker).upper() for ticker in tickers if ticker})
+    if not requested:
+        return {}
+
+    found = await _load_exact_treasury_prices(db, requested, target_date)
+    missing = [ticker for ticker in requested if ticker not in found]
+    step = 1
+    while missing and step <= max_lookback_days:
+        prior_date = target_date - timedelta(days=step)
+        prior_prices = await _load_exact_treasury_prices(db, missing, prior_date)
+        for ticker, price in prior_prices.items():
+            found.setdefault(ticker, price)
+        missing = [ticker for ticker in requested if ticker not in found]
+        step += 1
+    return found
 
 
 async def _upsert_class_snapshot(
@@ -586,7 +622,7 @@ async def rebuild_class_snapshots(
                 if cursor.weekday() >= 5
                 else cursor
             )
-            treasury_prices = await _load_exact_treasury_prices(
+            treasury_prices = await _load_treasury_prices_with_holiday_carry(
                 db,
                 (position.ticker for position in open_positions),
                 price_date,
