@@ -389,6 +389,10 @@ class ProviderConfigService:
             headers["Authorization"] = f"Bearer {effective.api_key}"
         elif pid_enum == ProviderId.ALPHA_VANTAGE and effective.api_key:
             params["apikey"] = effective.api_key
+        elif pid_enum == ProviderId.FINNHUB and effective.api_key:
+            headers["X-Finnhub-Token"] = effective.api_key
+        elif pid_enum == ProviderId.TIINGO and effective.api_key:
+            headers["Authorization"] = f"Token {effective.api_key}"
 
         try:
             async with httpx.AsyncClient(

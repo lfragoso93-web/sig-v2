@@ -19,6 +19,26 @@ def _cron_trigger(**kwargs) -> CronTrigger:
     return CronTrigger(timezone=SCHEDULER_TIMEZONE, **kwargs)
 
 
+INTL_INTRADAY_HOURS: frozenset[int] = frozenset({11, 14, 17})
+
+
+def _intraday_asset_types(hour: int) -> list:
+    """Retorna classes para o ciclo intradi?rio, reduzindo chamadas externas."""
+    from app.models.asset import AssetType
+
+    asset_types = [
+        AssetType.ACAO,
+        AssetType.FII,
+        AssetType.ETF_NACIONAL,
+        AssetType.BDR,
+        AssetType.CRIPTO,
+        AssetType.TESOURO_DIRETO,
+    ]
+    if hour in INTL_INTRADAY_HOURS:
+        asset_types.extend([AssetType.STOCK, AssetType.ETF_INTERNACIONAL])
+    return asset_types
+
+
 def _intraday_quote_triggers() -> tuple[CronTrigger]:
     """Atualiza ativos de pregão de hora em hora, das 09:00 às 18:00."""
     return (_cron_trigger(day_of_week="mon-fri", hour="9-18", minute=0),)
@@ -53,21 +73,12 @@ def start_scheduler() -> None:
     )
     async def update_quotes_intraday():
         from app.core.database import AsyncSessionLocal
-        from app.models.asset import AssetType
         from app.services.quote_cache_invalidation_service import (
             refresh_quotes_and_invalidate,
         )
 
-        asset_types = [
-            AssetType.ACAO,
-            AssetType.FII,
-            AssetType.ETF_NACIONAL,
-            AssetType.BDR,
-            AssetType.STOCK,
-            AssetType.ETF_INTERNACIONAL,
-            AssetType.CRIPTO,
-            AssetType.TESOURO_DIRETO,
-        ]
+        current_hour = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).hour
+        asset_types = _intraday_asset_types(current_hour)
         async with distributed_job_lock(
             job_name="update_quotes_intraday",
             period="intraday",
@@ -398,6 +409,7 @@ def start_scheduler() -> None:
                 result = await run_system_bootstrap_corporate_events_stage(
                     context,
                     authorized=True,
+                    continue_on_asset_error=True,
                 )
                 logger.info(
                     "[scheduler] Sincronização de eventos corporativos: %s",

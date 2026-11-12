@@ -185,3 +185,52 @@ async def test_b3_cotahist_connectivity_probe(db: AsyncSession) -> None:
     assert test_result.status == ProviderStatus.OK.value
     assert test_result.latency_ms >= 0
     assert "COTAHIST" in test_result.message
+
+
+@pytest.mark.asyncio
+async def test_intl_provider_connectivity_probes_inject_auth_headers(
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Valida injecao de headers de autenticacao nos probes de Finnhub e Tiingo."""
+    from unittest.mock import AsyncMock
+    import httpx
+
+    monkeypatch.setattr("app.core.config.settings.FINNHUB_API_KEY", "fh-0000")
+    monkeypatch.setattr("app.core.config.settings.TIINGO_API_KEY", "tg-0000")
+
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        async def get(self, url: str, headers: dict[str, str] | None = None, params=None):
+            captured.append((url, dict(headers or {})))
+            resp = AsyncMock(spec=httpx.Response)
+            resp.status_code = 200
+            resp.text = "ok"
+            resp.json = lambda: {"c": 100.0}
+            return resp
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+    finnhub_res = await ProviderConfigService.test_provider_connectivity(
+        ProviderId.FINNHUB.value, db
+    )
+    tiingo_res = await ProviderConfigService.test_provider_connectivity(
+        ProviderId.TIINGO.value, db
+    )
+
+    assert finnhub_res.success is True
+    assert finnhub_res.status == ProviderStatus.OK.value
+    assert tiingo_res.success is True
+    assert tiingo_res.status == ProviderStatus.OK.value
+    assert captured[0][1].get("X-Finnhub-Token") == "fh-0000"
+    assert captured[1][1].get("Authorization") == "Token tg-0000"

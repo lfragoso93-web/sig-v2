@@ -33,7 +33,7 @@ impedir execução concorrente entre réplicas.
 | `notify_daily_dividend_payments` | segunda a sexta, 08:30 | E-mail dos pagamentos do dia; não coleta dados de provedores. |
 | `sync_benchmark_rates_daily` | segunda a sexta, 08:40 e 20:40 | CDI, Selic, IPCA e IGP-M; depende de `ENABLE_DAILY_BENCHMARK_SYNC`. |
 | `sync_ibov_benchmark_daily` | segunda a sexta, 08:42 e 20:42 | Fechamento do Ibovespa; depende da mesma configuração. |
-| `sync_corporate_events_daily` | segunda a sexta, 22:00 | Coleta eventos corporativos globais; não aplica eventos ao ledger. |
+| `sync_corporate_events_daily` | segunda a sexta, 22:00 | Coleta eventos corporativos globais com savepoints por ativo (`continue_on_asset_error=True`) para não abortar o lote em falhas transitórias unitárias; não aplica eventos ao ledger. |
 | `portfolio_snapshot_auto_maintenance` | diariamente, 21:00 | Reconstrói snapshots patrimoniais/TWR com dados persistidos; lock Redis global. |
 
 Proventos e eventos reutilizam os estágios canônicos, com persistência
