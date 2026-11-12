@@ -57,6 +57,32 @@ class TestCalcProjection:
         assert months == pytest.approx(3.0, rel=0.1)
         assert date is not None
 
+    def test_calc_projection_proventos_uses_dividend_yield_not_linear_contribution(self):
+        # Meta de R$ 500/mês com R$ 100/mês atual e aporte de R$ 500/mês de capital:
+        # Não deve retornar 0.8 (1 mês), mas sim o horizonte real de acumulação (~67 meses a 0.7% a.m.)
+        months, proj_date = _calc_projection(
+            current=100.0,
+            target=500.0,
+            monthly=500.0,
+            goal_type="PROVENTOS",
+            portfolio_patrimonio=14285.0,  # ~0.7% a.m.
+        )
+        assert months is not None
+        assert months > 24.0
+        assert proj_date is not None
+
+    def test_calc_projection_proventos_with_reinvestment_only(self):
+        months, proj_date = _calc_projection(
+            current=400.0,
+            target=450.0,
+            monthly=0.0,
+            goal_type="PROVENTOS",
+            portfolio_patrimonio=40000.0,  # 1.0% a.m.
+        )
+        assert months is not None
+        assert months >= 10.0
+        assert proj_date is not None
+
 
 class TestEnrich:
 

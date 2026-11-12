@@ -1,27 +1,88 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
+  AlertTriangle,
   ArrowDownToLine,
   CalendarDays,
   ChartNoAxesCombined,
+  CheckCircle2,
   CircleDollarSign,
+  ExternalLink,
   FileText,
+  Newspaper,
   Search,
+  Sparkles,
   X,
 } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import api from '@/services/api'
 
 type CatalogAsset = { id: number; ticker: string; name: string | null; asset_type: string; currency?: string }
 type DataRow = Record<string, unknown>
+type ReportItem = {
+  id?: string
+  title?: string
+  category?: string
+  reference_date?: string
+  delivery_date?: string
+  status?: string
+  version?: string | number
+  fund_name?: string
+  source?: string
+  url?: string
+  download_url?: string
+  is_management_report?: boolean
+}
+type NewsItem = {
+  title?: string
+  source?: string
+  url?: string
+  published_at?: string | null
+  summary?: string | null
+}
+type AiAnalysis = {
+  ticker?: string
+  asset_type?: string
+  score?: number
+  verdict_label?: string
+  executive_summary?: string
+  strengths?: string[]
+  attention_points?: string[]
+  report_confrontation?: string[]
+  price_trend?: DataRow
+  dividend_outlook?: DataRow
+  latest_report_referenced?: {
+    title?: string | null
+    reference_date?: string | null
+    delivery_date?: string | null
+    url?: string | null
+    excerpt_preview?: string | null
+  } | null
+  provider_mode?: string
+  generated_at?: string
+  disclaimer?: string
+}
 type AssetAnalysis = {
   asset: DataRow
   enrichment: DataRow
   price_history: DataRow[]
   dividends: DataRow[]
   corporate_events: DataRow[]
-  reports: DataRow[]
+  reports: ReportItem[]
+  news?: NewsItem[]
+  ai_analysis?: AiAnalysis
 }
 
 const labels: Record<string, string> = {
@@ -41,7 +102,7 @@ const labels: Record<string, string> = {
   net_worth: 'Patrimônio líquido', nav_per_share: 'Valor patrimonial por cota', share_holders: 'Cotistas', shares_outstanding: 'Cotas emitidas',
   physical_vacancy: 'Vacância física', financial_vacancy: 'Vacância financeira', properties_count: 'Imóveis', total_area_m2: 'Área total (m²)',
   segment: 'Segmento', segment_type: 'Tipo de segmento', management_type: 'Gestão', administrator_name: 'Administradora',
-  administrator_cnpj: 'CNPJ da administradora', symbol: 'Código', benchmark: 'Índice de referência', expense_ratio: 'Taxa de administração',
+  administrator_cnpj: 'CNPJ da administradora', cnpj: 'CNPJ do fundo', symbol: 'Código', benchmark: 'Índice de referência', expense_ratio: 'Taxa de administração',
   manager: 'Gestor', administrator: 'Administrador', dividend_policy: 'Política de proventos', net_assets: 'Patrimônio', category: 'Categoria',
   underlying_ticker: 'Ativo subjacente', underlying_company: 'Empresa subjacente', origin_market: 'Mercado de origem',
   origin_currency: 'Moeda de origem', depositary_bank: 'Banco depositário', ratio: 'Proporção do BDR', coin: 'Criptoativo',
@@ -53,7 +114,7 @@ const labels: Record<string, string> = {
   country: 'País', currency: 'Moeda', exchange: 'Bolsa', weburl: 'Site', consensus: 'Consenso', strong_buy: 'Compra forte',
   buy: 'Compra', hold: 'Manter', sell: 'Venda', strong_sell: 'Venda forte', total_paid_12m: 'Total pago em 12 meses',
   payments_count_12m: 'Pagamentos em 12 meses', last_payment_date: 'Data do último pagamento', frequency: 'Frequência',
-  timestamp: 'Data', open: 'Abertura', high: 'Máxima', low: 'Mínima', close: 'Fechamento', volume: 'Volume', source: 'Fonte',
+  timestamp: 'Data de fechamento', open: 'Abertura', high: 'Máxima', low: 'Mínima', close: 'Fechamento', volume: 'Volume', source: 'Fonte',
   record_date: 'Data-base', ex_date: 'Data ex', payment_date: 'Pagamento', type: 'Tipo', value_per_unit: 'Valor por unidade', remarks: 'Observações',
   event_type: 'Tipo de evento', status: 'Situação', reconciliation_status: 'Conciliação', requires_review: 'Requer revisão',
   effective_date: 'Data de vigência', announcement_date: 'Anúncio', source_provider: 'Fonte',
@@ -74,14 +135,30 @@ const percentFields = new Set([
 const dateFields = new Set(['timestamp', 'record_date', 'ex_date', 'payment_date', 'effective_date', 'announcement_date', 'maturity_date', 'last_payment_date'])
 const enumFields = new Set(['asset_type', 'asset_class', 'type', 'event_type', 'status', 'reconciliation_status', 'provider_status', 'coverage_status'])
 
-function safeDate(value: unknown): string {
+function safeDate(value: unknown, includeTime = false): string {
   if (typeof value !== 'string' || !value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const options: Intl.DateTimeFormatOptions = value.includes('T')
+  const raw = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  }
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return raw
+  const options: Intl.DateTimeFormatOptions = raw.includes('T') && includeTime
     ? { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }
     : { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }
   return date.toLocaleString('pt-BR', options)
+}
+
+function shortChartDate(value: unknown): string {
+  if (typeof value !== 'string' || !value) return ''
+  const raw = value.slice(0, 10)
+  const parts = raw.split('-')
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`
+  }
+  return raw
 }
 
 function money(value: number, currency: string): string {
@@ -94,7 +171,8 @@ function money(value: number, currency: string): string {
 
 function formatField(key: string, value: unknown, currency = 'BRL'): string {
   if (value === null || value === undefined || value === '') return '—'
-  if (dateFields.has(key) || key.endsWith('_at')) return safeDate(value)
+  if (key === 'timestamp') return safeDate(value, false)
+  if (dateFields.has(key) || key.endsWith('_at')) return safeDate(value, key.endsWith('_at'))
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (typeof value === 'number') {
     const explicitCurrency = key === 'total_paid_12m' || key.endsWith('_brl') ? 'BRL' : key.endsWith('_usd') ? 'USD' : currency
@@ -116,7 +194,7 @@ function displayEnum(value: string): string {
   const known: Record<string, string> = {
     ACAO: 'Ação', ETF_NACIONAL: 'ETF nacional', ETF_INTERNACIONAL: 'ETF internacional', STOCK: 'Ação internacional',
     CRIPTO: 'Criptoativo', TESOURO_DIRETO: 'Tesouro Direto', RENDA_FIXA: 'Renda fixa', FII: 'Fundo imobiliário', BDR: 'BDR',
-    DIVIDENDO: 'Dividendo', JCP: 'Juros sobre capital próprio', RENDIMENTO: 'Rendimento', AMORTIZACAO: 'Amortização',
+    DIVIDENDO: 'Dividendo', DIVIDEND: 'Dividendo', JCP: 'Juros sobre capital próprio', RENDIMENTO: 'Rendimento', AMORTIZACAO: 'Amortização',
     BONIFICACAO: 'Bonificação', SUBSCRICAO: 'Subscrição', OUTROS: 'Outros', REVERSE_SPLIT: 'Grupamento',
     SPLIT: 'Desdobramento', BONUS: 'Bonificação', RIGHTS: 'Direito de subscrição', PENDENTE: 'Pendente',
     MATCHED: 'Conciliado', UNRECONCILED: 'A conciliar', CONFLICT: 'Divergente',
@@ -138,15 +216,15 @@ function DataTable({ title, rows, currency, empty }: { title: string; rows: Data
   return (
     <section className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
-        <h3 className="font-semibold">{title}</h3>
+        <h3 className="font-semibold text-sm">{title}</h3>
         <span className="rounded-full px-2.5 py-1 text-xs" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>{rows.length} registros</span>
       </div>
       {!rows.length ? (
         <p className="p-5 text-sm" style={{ color: 'var(--color-text-muted)' }}>{empty}</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-96">
           <table className="w-full min-w-max text-left text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr style={{ color: 'var(--color-text-muted)', background: 'var(--color-surface-2)' }}>
                 {keys.map(key => <th key={key} className="px-4 py-3 font-medium">{humanize(key)}</th>)}
               </tr>
@@ -182,6 +260,212 @@ function SectionLink({ href, icon: Icon, children, count }: { href: string; icon
   )
 }
 
+function DailyPriceHistorySection({ rows, currency }: { rows: DataRow[]; currency: string }) {
+  const [range, setRange] = useState<'30D' | '90D' | '1A' | 'ALL'>('1A')
+  const [showTable, setShowTable] = useState(false)
+
+  const chartPoints = useMemo(() => {
+    const normalized = rows
+      .map(row => {
+        const day = String(row.timestamp ?? '').slice(0, 10)
+        const closeVal = Number(row.close)
+        return {
+          ...row,
+          day,
+          label: shortChartDate(day),
+          close: Number.isFinite(closeVal) ? closeVal : 0,
+        }
+      })
+      .filter(point => point.day && point.close > 0)
+
+    if (range === '30D') return normalized.slice(-30)
+    if (range === '90D') return normalized.slice(-90)
+    if (range === '1A') return normalized.slice(-252)
+    return normalized
+  }, [rows, range])
+
+  return (
+    <section id="historico" className="scroll-mt-6 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Histórico de preços (fechamento diário)</h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Cotação única de fechamento por dia em ordem cronológica ({currency}).
+          </p>
+        </div>
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(['30D', '90D', '1A', 'ALL'] as const).map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setRange(opt)}
+                className="rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors"
+                style={{
+                  background: range === opt ? 'var(--color-primary)' : 'var(--color-surface-2)',
+                  color: range === opt ? '#fff' : 'var(--color-text-muted)',
+                }}
+              >
+                {opt === 'ALL' ? 'Tudo' : opt}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowTable(v => !v)}
+              className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+            >
+              {showTable ? 'Ocultar tabela' : 'Ver tabela'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {chartPoints.length > 0 ? (
+        <div className="card p-4 sm:p-5 space-y-4">
+          <div className="h-64 w-full" aria-label="Gráfico de fechamento diário">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartPoints} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="assetCloseGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.32} />
+                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} minTickGap={24} />
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickFormatter={val => money(Number(val), currency)}
+                  width={88}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 10,
+                    fontSize: 12,
+                  }}
+                  formatter={(value: unknown) => [money(Number(value), currency), 'Fechamento']}
+                  labelFormatter={label => `Data: ${label}`}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="close"
+                  stroke="var(--color-primary)"
+                  strokeWidth={2}
+                  fill="url(#assetCloseGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+            <span>Último fechamento da série: <strong className="tabular-nums" style={{ color: 'var(--color-text)' }}>{money(chartPoints[chartPoints.length - 1].close, currency)}</strong> ({safeDate(chartPoints[chartPoints.length - 1].day)})</span>
+            <span>{chartPoints.length} fechamento(s) diário(s) exibido(s)</span>
+          </div>
+        </div>
+      ) : null}
+
+      {(showTable || chartPoints.length === 0) && (
+        <DataTable
+          title="Cotações de fechamento diário"
+          rows={[...rows].reverse()}
+          currency={currency}
+          empty="Não há cotações históricas armazenadas para este ativo."
+        />
+      )}
+    </section>
+  )
+}
+
+function DividendsHistorySection({ rows, currency }: { rows: DataRow[]; currency: string }) {
+  const [showTable, setShowTable] = useState(false)
+
+  const chartPoints = useMemo(() => {
+    return [...rows]
+      .map(row => {
+        const rawDate = String(row.payment_date || row.ex_date || row.record_date || '').slice(0, 10)
+        const val = Number(row.value_per_unit ?? row.value ?? 0)
+        return {
+          rawDate,
+          label: shortChartDate(rawDate),
+          value_per_unit: Number.isFinite(val) ? val : 0,
+          type: displayEnum(String(row.type || 'PROVENTO')),
+        }
+      })
+      .filter(item => item.rawDate && item.value_per_unit > 0)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+      .slice(-24)
+  }, [rows])
+
+  return (
+    <section id="proventos" className="scroll-mt-6 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Proventos</h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Evolução gráfica e eventos monetários registrados por unidade ({currency}).
+          </p>
+        </div>
+        {rows.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowTable(v => !v)}
+            className="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+          >
+            {showTable ? 'Ocultar tabela' : 'Ver tabela detalhada'}
+          </button>
+        )}
+      </div>
+
+      {chartPoints.length > 0 ? (
+        <div className="card p-4 sm:p-5 space-y-4">
+          <div className="h-60 w-full" aria-label="Gráfico de histórico de proventos">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartPoints} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} minTickGap={18} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickFormatter={val => money(Number(val), currency)}
+                  width={84}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 10,
+                    fontSize: 12,
+                  }}
+                  formatter={(value: unknown) => [money(Number(value), currency), 'Provento / unid.']}
+                  labelFormatter={label => `Data: ${label}`}
+                />
+                <Bar dataKey="value_per_unit" fill="var(--color-success)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+            <span>Último provento: <strong className="tabular-nums" style={{ color: 'var(--color-text)' }}>{money(chartPoints[chartPoints.length - 1].value_per_unit, currency)}</strong> ({chartPoints[chartPoints.length - 1].type})</span>
+            <span>{rows.length} evento(s) registrado(s)</span>
+          </div>
+        </div>
+      ) : null}
+
+      {(showTable || chartPoints.length === 0) && (
+        <DataTable
+          title="Proventos registrados"
+          rows={rows}
+          currency={currency}
+          empty="Não há proventos armazenados para este ativo."
+        />
+      )}
+    </section>
+  )
+}
+
 function useSafeSearchParams() {
   try {
     return useSearchParams()
@@ -204,7 +488,6 @@ export default function AssetAnalysisPage() {
 
   const normalized = search.trim()
 
-  // Fechar dropdown ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -215,7 +498,6 @@ export default function AssetAnalysisPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Se o parâmetro de URL mudar ou for limpo (ex.: botão Voltar do navegador), sincronizar
   useEffect(() => {
     if (!urlParam && selected && !isDropdownOpen) {
       setSelected(null)
@@ -230,7 +512,6 @@ export default function AssetAnalysisPage() {
     staleTime: 60_000,
   })
 
-  // Priorizar parâmetro da URL ativo sobre a seleção interna para respeitar histórico do navegador
   const targetIdentifier = urlParam || (selected?.id ? String(selected.id) : null)
 
   const { data, isLoading, isError } = useQuery<AssetAnalysis>({
@@ -240,7 +521,6 @@ export default function AssetAnalysisPage() {
     staleTime: 60_000,
   })
 
-  // Sincronizar ativo selecionado quando data for carregado via URL ou histórico de navegação
   useEffect(() => {
     if (data?.asset) {
       if (!selected || selected.id !== data.asset.id || selected.ticker !== data.asset.ticker) {
@@ -273,12 +553,18 @@ export default function AssetAnalysisPage() {
     ['Provedor', 'provider', data.asset.provider], ['Situação do provedor', 'provider_status', data.asset.provider_status],
   ] as Array<[string, string, unknown]>).filter(([, , value]) => value !== null && value !== undefined && value !== '') : []
 
+  const reports = data?.reports ?? []
+  const news = data?.news ?? []
+  const aiAnalysis = data?.ai_analysis
+
   return (
     <div className="page-container space-y-5 pb-10">
       <header>
         <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-primary)' }}>Ferramentas · Pesquisa</p>
         <h1 className="page-title">Análise de ativos</h1>
-        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>Consulte em um só lugar os fundamentos, cotações históricas, proventos e eventos registrados no sistema.</p>
+        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Consulte em um só lugar a análise por IA, fundamentos, gráficos de fechamento diário, proventos, relatórios gerenciais (CVM/B3) e notícias do ativo.
+        </p>
       </header>
 
       <section className="card p-4 sm:p-5" ref={containerRef}>
@@ -301,32 +587,32 @@ export default function AssetAnalysisPage() {
             <option value="TESOURO_DIRETO">Tesouro Direto</option>
           </select>
           <div className="relative flex-1">
-          <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
-          <input
-            id="asset-analysis-search"
-            className="input w-full pl-10 pr-10"
-            value={search}
-            onChange={event => {
-              setSearch(event.target.value)
-              setIsDropdownOpen(true)
-            }}
-            onFocus={() => {
-              if (normalized.length >= 2) setIsDropdownOpen(true)
-            }}
-            placeholder="Busque por ticker ou nome, por exemplo PETR4 ou Bitcoin"
-            autoComplete="off"
-          />
-          {(search || selected) && (
-            <button
-              type="button"
-              onClick={handleClear}
-              aria-label="Limpar pesquisa"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 transition-colors hover:bg-[var(--color-surface-2)]"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <X size={15} />
-            </button>
-          )}
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
+            <input
+              id="asset-analysis-search"
+              className="input w-full pl-10 pr-10"
+              value={search}
+              onChange={event => {
+                setSearch(event.target.value)
+                setIsDropdownOpen(true)
+              }}
+              onFocus={() => {
+                if (normalized.length >= 2) setIsDropdownOpen(true)
+              }}
+              placeholder="Busque por ticker ou nome, por exemplo PETR4, MXRF11 ou Bitcoin"
+              autoComplete="off"
+            />
+            {(search || selected) && (
+              <button
+                type="button"
+                onClick={handleClear}
+                aria-label="Limpar pesquisa"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 transition-colors hover:bg-[var(--color-surface-2)]"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -360,7 +646,7 @@ export default function AssetAnalysisPage() {
         <section className="card flex flex-col items-center px-5 py-12 text-center">
           <div className="mb-3 rounded-full p-3" style={{ background: 'var(--color-surface-2)', color: 'var(--color-primary)' }}><ChartNoAxesCombined size={24} /></div>
           <h2 className="font-semibold">Escolha um ativo para começar</h2>
-          <p className="mt-1 max-w-md text-sm" style={{ color: 'var(--color-text-muted)' }}>A análise reúne os dados existentes no catálogo. A abertura desta página não inicia consultas a provedores.</p>
+          <p className="mt-1 max-w-md text-sm" style={{ color: 'var(--color-text-muted)' }}>A análise reúne os dados existentes no catálogo, relatórios CVM/B3 e síntese analítica por IA.</p>
         </section>
       )}
 
@@ -397,7 +683,7 @@ export default function AssetAnalysisPage() {
               <div className="shrink-0 rounded-xl p-4 sm:min-w-52 sm:text-right" style={{ background: 'var(--color-surface-2)' }}>
                 <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Último preço registrado</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">{data.asset.last_price == null ? '—' : money(Number(data.asset.last_price), currency)}</p>
-                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{data.asset.last_price_updated_at ? `Referência: ${safeDate(data.asset.last_price_updated_at)}` : 'Data de referência indisponível'}</p>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{data.asset.last_price_updated_at ? `Referência: ${safeDate(data.asset.last_price_updated_at, true)}` : 'Data de referência indisponível'}</p>
               </div>
             </div>
             <div className="flex items-start gap-2 border-t px-5 py-3 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
@@ -407,12 +693,129 @@ export default function AssetAnalysisPage() {
           </section>
 
           <nav aria-label="Seções da análise" className="flex gap-2 overflow-x-auto pb-1">
+            {aiAnalysis && <SectionLink href="#ia-analise" icon={Sparkles}>Análise IA</SectionLink>}
             <SectionLink href="#fundamentos" icon={CircleDollarSign}>Fundamentos</SectionLink>
             <SectionLink href="#historico" icon={ChartNoAxesCombined} count={data.price_history.length}>Histórico</SectionLink>
             <SectionLink href="#proventos" icon={ArrowDownToLine} count={data.dividends.length}>Proventos</SectionLink>
+            <SectionLink href="#relatorios" icon={FileText} count={reports.length}>Relatórios</SectionLink>
+            <SectionLink href="#noticias" icon={Newspaper} count={news.length}>Notícias</SectionLink>
             <SectionLink href="#eventos" icon={CalendarDays} count={data.corporate_events.length}>Eventos</SectionLink>
-            <SectionLink href="#relatorios" icon={FileText} count={data.reports.length}>Relatórios</SectionLink>
           </nav>
+
+          {aiAnalysis && (
+            <section id="ia-analise" className="scroll-mt-6 card p-5 sm:p-6 space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{
+                      background: 'oklch(from var(--color-primary) l c h / 0.14)',
+                      color: 'var(--color-primary)',
+                    }}
+                  >
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-bold">Diagnóstico por IA e Confronto Gerencial</h2>
+                      {aiAnalysis.verdict_label && (
+                        <span
+                          className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                          style={{
+                            background: (aiAnalysis.score ?? 70) >= 75
+                              ? 'oklch(from var(--color-success) l c h / 0.16)'
+                              : 'var(--color-surface-2)',
+                            color: (aiAnalysis.score ?? 70) >= 75 ? 'var(--color-success)' : 'var(--color-text)',
+                          }}
+                        >
+                          {aiAnalysis.verdict_label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                      Cruzamento automatizado de múltiplos, histórico de cotações, proventos e últimos relatórios CVM/B3.
+                    </p>
+                  </div>
+                </div>
+                {aiAnalysis.score != null && (
+                  <div className="rounded-xl px-4 py-2 text-right" style={{ background: 'var(--color-surface-2)' }}>
+                    <span className="block text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Score Analítico</span>
+                    <span className="text-xl font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
+                      {aiAnalysis.score}/100
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {aiAnalysis.executive_summary && (
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                  {aiAnalysis.executive_summary}
+                </p>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-xl border p-4 space-y-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-offset)' }}>
+                  <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--color-success)' }}>
+                    <CheckCircle2 size={15} />
+                    <span>Pontos Fortes</span>
+                  </div>
+                  <ul className="space-y-2 text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                    {(aiAnalysis.strengths ?? []).map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border p-4 space-y-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-offset)' }}>
+                  <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--color-gold)' }}>
+                    <AlertTriangle size={15} />
+                    <span>Pontos de Atenção</span>
+                  </div>
+                  <ul className="space-y-2 text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                    {(aiAnalysis.attention_points ?? []).map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border p-4 space-y-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-offset)' }}>
+                  <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
+                    <FileText size={15} />
+                    <span>Confronto Dados × Relatórios</span>
+                  </div>
+                  <ul className="space-y-2 text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                    {(aiAnalysis.report_confrontation ?? []).map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {aiAnalysis.latest_report_referenced?.excerpt_preview && (
+                <div className="rounded-xl border p-4 text-xs space-y-1.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-2)' }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
+                      Trecho extraído do último Relatório Gerencial ({aiAnalysis.latest_report_referenced.reference_date || 'CVM/B3'})
+                    </span>
+                    {aiAnalysis.latest_report_referenced.url && (
+                      <a
+                        href={aiAnalysis.latest_report_referenced.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-semibold hover:underline"
+                        style={{ color: 'var(--color-primary)' }}
+                      >
+                        Abrir PDF oficial <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
+                  <p className="leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    {aiAnalysis.latest_report_referenced.excerpt_preview}
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
 
           <section id="fundamentos" className="scroll-mt-6 space-y-4">
             <div>
@@ -461,38 +864,72 @@ export default function AssetAnalysisPage() {
             )}
           </section>
 
-          <section id="historico" className="scroll-mt-6 space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold">Histórico de preços</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Até 90 registros persistidos, em ordem cronológica. Valores na moeda de negociação ({currency}).</p>
-            </div>
-            <DataTable title="Cotações" rows={data.price_history} currency={currency} empty="Não há cotações históricas armazenadas para este ativo." />
-          </section>
+          <DailyPriceHistorySection rows={data.price_history} currency={currency} />
 
-          <section id="proventos" className="scroll-mt-6 space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold">Proventos</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos monetários cadastrados e respectivos valores por unidade.</p>
-            </div>
-            <DataTable title="Proventos registrados" rows={data.dividends} currency={currency} empty="Não há proventos armazenados para este ativo." />
-          </section>
-
-          <section id="eventos" className="scroll-mt-6 space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold">Eventos corporativos</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos gerais do ativo que não estão vinculados a uma carteira específica.</p>
-            </div>
-            <DataTable title="Eventos registrados" rows={data.corporate_events} currency={currency} empty="Não há eventos corporativos gerais armazenados para este ativo." />
-          </section>
+          <DividendsHistorySection rows={data.dividends} currency={currency} />
 
           <section id="relatorios" className="scroll-mt-6 space-y-3">
             <div>
-              <h2 className="text-lg font-semibold">Relatórios gerenciais</h2>
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Documentos vinculados diretamente a este ativo.</p>
+              <h2 className="text-lg font-semibold">Relatórios gerenciais e documentos CVM/B3</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Relatórios gerenciais, informes mensais (Fundos.NET) e demonstrações financeiras estruturadas (ITR, DFP e FRE na B3/CVM).
+              </p>
             </div>
             <div className="card p-5">
-              {data.reports.length ? (
-                <p className="text-sm">Há {data.reports.length} relatório(s) disponível(is).</p>
+              {reports.length ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                    Há {reports.length} relatório(s) oficial(is) disponível(is) para consulta direta:
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {reports.map((rep, idx) => (
+                      <div
+                        key={rep.id || idx}
+                        className="rounded-xl border p-3.5 flex items-start justify-between gap-3"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-offset)' }}
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                              {rep.title || rep.category || 'Documento Oficial'}
+                            </span>
+                            {rep.is_management_report && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                style={{
+                                  background: 'oklch(from var(--color-primary) l c h / 0.14)',
+                                  color: 'var(--color-primary)',
+                                }}
+                              >
+                                Destaque Analítico
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {rep.category && rep.category !== rep.title ? `${rep.category} · ` : ''}
+                            Ref.: {safeDate(rep.reference_date)} · Entrega: {safeDate(rep.delivery_date)}
+                          </p>
+                          {rep.source && (
+                            <p className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+                              Fonte: {rep.source}
+                            </p>
+                          )}
+                        </div>
+                        {rep.url && (
+                          <a
+                            href={rep.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                          >
+                            <span>Abrir</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg p-2" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
@@ -505,6 +942,60 @@ export default function AssetAnalysisPage() {
                 </div>
               )}
             </div>
+          </section>
+
+          <section id="noticias" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Notícias de mercado sobre o ativo</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Acompanhamento de notícias externas recentes envolvendo o ticker e a companhia ou fundo.
+              </p>
+            </div>
+            <div className="card p-5">
+              {news.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {news.map((item, idx) => (
+                    <a
+                      key={idx}
+                      href={item.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl border p-3.5 flex flex-col justify-between gap-2 transition-colors hover:bg-[var(--color-surface-2)]"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-offset)' }}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
+                          {item.title}
+                        </p>
+                        {item.summary && (
+                          <p className="text-xs line-clamp-2" style={{ color: 'var(--color-text-muted)' }}>
+                            {item.summary}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 pt-1 text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+                        <span>{item.source || 'Noticiário'} · {safeDate(item.published_at)}</span>
+                        <span className="inline-flex items-center gap-1 font-medium" style={{ color: 'var(--color-primary)' }}>
+                          Ler matéria <ExternalLink size={11} />
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  Nenhuma notícia externa recente localizada para este ativo no momento.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section id="eventos" className="scroll-mt-6 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Eventos corporativos</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>Eventos gerais do ativo que não estão vinculados a uma carteira específica.</p>
+            </div>
+            <DataTable title="Eventos registrados" rows={data.corporate_events} currency={currency} empty="Não há eventos corporativos gerais armazenados para este ativo." />
           </section>
         </>
       )}

@@ -311,13 +311,25 @@ function GoalModal({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
-              label={form.goal_type === 'RENTABILIDADE' ? 'Rentabilidade Alvo (%)' : 'Valor Alvo (R$)'}
+              label={
+                form.goal_type === 'RENTABILIDADE'
+                  ? 'Rentabilidade Alvo (%)'
+                  : form.goal_type === 'PROVENTOS'
+                    ? 'Provento Mensal Alvo (R$/mês)'
+                    : 'Valor Alvo (R$)'
+              }
               hint="Objetivo principal a ser alcançado"
             >
               <input
                 type="text"
                 className="input text-sm"
-                placeholder={form.goal_type === 'RENTABILIDADE' ? 'Ex: 15' : 'Ex: 500000'}
+                placeholder={
+                  form.goal_type === 'RENTABILIDADE'
+                    ? 'Ex: 15'
+                    : form.goal_type === 'PROVENTOS'
+                      ? 'Ex: 1000'
+                      : 'Ex: 500000'
+                }
                 value={form.target_value}
                 onChange={event => set('target_value', event.target.value)}
                 required
@@ -350,7 +362,11 @@ function GoalModal({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
               label="Aporte Mensal Estimado (R$)"
-              hint="Usado para projetar a data de conclusão"
+              hint={
+                form.goal_type === 'PROVENTOS'
+                  ? 'Projeta prazo considerando yield mensal da carteira e reinvestimento de proventos'
+                  : 'Usado para projetar a data de conclusão'
+              }
             >
               <input
                 type="text"

@@ -3,11 +3,11 @@
 Atualizado em 18/10/2026.
 
 As duas experiencias ficam agrupadas no menu lateral em **Ferramentas**:
-**Calculadora** (`/carteira/ferramentas/rendimentos`) e **Simulador RF**
+**Simulador de RF** (`/carteira/ferramentas/rendimentos`) e **Comparador de RF**
 (`/carteira/ferramentas/renda-fixa`). O grupo expande automaticamente ao abrir
 uma dessas rotas; os enderecos e o acesso protegido permanecem iguais.
 
-## Calculadora de rendimentos — primeira entrega da #359
+## Simulador de RF (Juros Compostos e Rendimentos) — primeira entrega da #359
 
 A rota protegida `/carteira/ferramentas/rendimentos` oferece projeção isolada
 com aporte inicial, aporte mensal, taxa efetiva anual e prazo de 1 a 600 meses.
@@ -32,7 +32,7 @@ Os campos aceitam aporte de R$ 0 a R$ 1 bilhão, taxa efetiva anual acima de
 valores inválidos e crescimento numérico sem limite na interface; não são
 recomendação de investimento.
 
-## Comparador de Renda Fixa - frente B da #359
+## Comparador de RF (Comparador de Renda Fixa) - frente B da #359
 
 A rota protegida `/carteira/ferramentas/renda-fixa` compara dois tipos de titulo e suas taxas efetivas anuais. O tratamento de IR e derivado automaticamente do tipo de produto; nao existe uma escolha manual de isencao. Para cada cenario, a interface mostra valor/rendimento bruto, aliquota e IR estimados, valor liquido e retorno liquido efetivo anual, alem da taxa equivalente do primeiro titulo para igualar o valor liquido do segundo. O simulador nao le carteira, contratos, precos ou benchmarks e nao grava dados.
 

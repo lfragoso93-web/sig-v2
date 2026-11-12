@@ -255,8 +255,8 @@ export default function Sidebar() {
           </button>
           {(toolsOpen || isToolsRoute) && (
             <div className="ml-3 flex flex-col gap-0.5 border-l pl-2 mt-0.5" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.09)' }}>
-              <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" />
-              <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" />
+              <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Simulador de RF" />
+              <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Comparador de RF" />
               <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" />
               <NavItem to="/carteira/ferramentas/analise-ativos" icon={Search} label="Análise de ativos" />
               <NavItem to="/carteira/ferramentas/recomendacoes" icon={Sparkles} label="Recomendações IA" />
@@ -362,8 +362,8 @@ export default function Sidebar() {
                   zIndex: 60,
                 }}
               >
-                <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Calculadora" compact />
-                <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Simulador RF" compact />
+                <NavItem to="/carteira/ferramentas/rendimentos" icon={Calculator} label="Simulador de RF" compact />
+                <NavItem to="/carteira/ferramentas/renda-fixa" icon={Calculator} label="Comparador de RF" compact />
                 <NavItem to="/carteira/ferramentas/comparador" icon={PieChart} label="Comparar ativos" compact />
                 <NavItem to="/carteira/ferramentas/analise-ativos" icon={Search} label="Análise de ativos" compact />
                 <NavItem to="/carteira/ferramentas/recomendacoes" icon={Sparkles} label="Recomendações IA" compact />

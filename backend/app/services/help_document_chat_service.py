@@ -135,14 +135,14 @@ _ROUTE_DEFINITIONS = (
         "Apuração de resultados e apoio para declaração",
     ),
     (
-        ("calculadora", "juros", "rendimentos", "simulacao"),
-        "Calculadora de Rendimentos",
+        ("calculadora", "juros", "rendimentos", "simulacao", "simulador de rf"),
+        "Simulador de RF",
         "/carteira/ferramentas/rendimentos",
         "Simulação de juros compostos e aportes regulares",
     ),
     (
-        ("renda fixa", "cdb", "lci", "lca", "simulador rf"),
-        "Simulador de Renda Fixa",
+        ("renda fixa", "cdb", "lci", "lca", "simulador rf", "comparador de rf"),
+        "Comparador de RF",
         "/carteira/ferramentas/renda-fixa",
         "Comparador de taxas e prazos de títulos de renda fixa",
     ),

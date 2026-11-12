@@ -211,21 +211,21 @@ const articles: HelpArticle[] = [
   },
   {
     category: 'Recursos',
-    question: 'A Calculadora de rendimentos altera minha carteira?',
+    question: 'O Simulador de RF altera minha carteira?',
     answer:
-      'Não. Ela faz uma projeção isolada no navegador com aporte inicial, aporte mensal, taxa anual e prazo. Não consulta nem altera a carteira e não considera impostos, inflação, tarifas ou variação da taxa ao longo do tempo.',
+      'Não. Ele faz uma projeção isolada no navegador com aporte inicial, aporte mensal, taxa anual e prazo. Não consulta nem altera a carteira e não considera impostos, inflação, tarifas ou variação da taxa ao longo do tempo.',
     href: '/carteira/ferramentas/rendimentos',
-    action: 'Abrir Calculadora',
-    keywords: 'simulação juros aporte rendimento composto calculadora',
+    action: 'Abrir Simulador de RF',
+    keywords: 'simulação juros aporte rendimento composto calculadora simulador de rf',
   },
   {
     category: 'Recursos',
-    question: 'Como funciona o Simulador de Renda Fixa?',
+    question: 'Como funciona o Comparador de RF?',
     answer:
       'Ele compara dois cenários de renda fixa a partir do produto, taxa e prazo informados e estima valores bruto e líquido, imposto e taxa equivalente. É uma simulação: não consulta ofertas de mercado, não lê a carteira e não substitui informes da instituição ou orientação fiscal.',
     href: '/carteira/ferramentas/renda-fixa',
-    action: 'Abrir Simulador RF',
-    keywords: 'cdb lci lca imposto taxa equivalente prazo renda fixa',
+    action: 'Abrir Comparador de RF',
+    keywords: 'cdb lci lca imposto taxa equivalente prazo renda fixa comparador de rf',
   },
   {
     category: 'Recursos',
@@ -333,7 +333,7 @@ const shortcuts = [
     icon: Landmark,
   },
   {
-    label: 'Calculadoras',
+    label: 'Simulador de RF',
     href: '/carteira/ferramentas/rendimentos',
     icon: Calculator,
   },

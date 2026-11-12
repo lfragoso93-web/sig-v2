@@ -2,7 +2,7 @@ import math
 import re
 from datetime import date as date_type
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -430,7 +430,7 @@ async def get_asset_analysis(
             select(AssetPrice)
             .where(AssetPrice.asset_id == asset.id)
             .order_by(AssetPrice.timestamp.desc())
-            .limit(90)
+            .limit(400)
         )
     ).scalars().all()
     dividends = (
@@ -453,51 +453,105 @@ async def get_asset_analysis(
         )
     ).scalars().all()
     from app.services.asset_enrichment_service import asset_enrichment_service
+    from app.services.asset_reports_and_news_service import asset_reports_and_news_service
+    from app.services.asset_ai_analysis_service import asset_ai_analysis_service
 
     enrichment = await asset_enrichment_service.get_cached_asset_enrichment(
         asset.ticker, asset.asset_type
     )
+
+    # Deduplica histórico de preços para manter apenas 1 fechamento diário (YYYY-MM-DD)
+    daily_prices_by_date: dict[str, Any] = {}
+    for row in prices:
+        day_key = (
+            row.timestamp.date().isoformat()
+            if hasattr(row.timestamp, "date")
+            else str(row.timestamp)[:10]
+        )
+        # Como `prices` está ordenado por `timestamp DESC`, o primeiro registro de cada dia é o fechamento do dia
+        if day_key not in daily_prices_by_date:
+            daily_prices_by_date[day_key] = row
+
+    sorted_days = sorted(daily_prices_by_date.keys())[-365:]
+    price_history_payload = [
+        {
+            "timestamp": day_key,
+            "open": float(daily_prices_by_date[day_key].open) if daily_prices_by_date[day_key].open is not None else None,
+            "high": float(daily_prices_by_date[day_key].high) if daily_prices_by_date[day_key].high is not None else None,
+            "low": float(daily_prices_by_date[day_key].low) if daily_prices_by_date[day_key].low is not None else None,
+            "close": float(daily_prices_by_date[day_key].close),
+            "volume": float(daily_prices_by_date[day_key].volume) if daily_prices_by_date[day_key].volume is not None else None,
+            "source": daily_prices_by_date[day_key].source,
+        }
+        for day_key in sorted_days
+    ]
+
+    dividends_payload = [
+        {
+            "record_date": row.record_date.isoformat() if row.record_date else None,
+            "ex_date": row.ex_date.isoformat(),
+            "payment_date": row.payment_date.isoformat() if row.payment_date else None,
+            "type": row.dividend_type.value if hasattr(row.dividend_type, "value") else str(row.dividend_type),
+            "value_per_unit": float(row.value_per_unit),
+            "source": row.source,
+            "remarks": row.remarks,
+        }
+        for row in dividends
+    ]
+    if not dividends_payload and isinstance(enrichment.get("dividend_history"), list):
+        for item in enrichment["dividend_history"][:100]:
+            if isinstance(item, dict) and item.get("value") is not None:
+                dividends_payload.append({
+                    "record_date": item.get("record_date"),
+                    "ex_date": item.get("ex_date") or item.get("record_date") or item.get("payment_date") or "",
+                    "payment_date": item.get("payment_date"),
+                    "type": str(item.get("type") or "PROVENTO"),
+                    "value_per_unit": float(item.get("value") or 0.0),
+                    "source": "brapi",
+                    "remarks": None,
+                })
+
+    reports_and_news = await asset_reports_and_news_service.get_reports_and_news(
+        asset.ticker,
+        asset_type=asset.asset_type,
+        asset_name=asset.name,
+        enrichment=enrichment,
+    )
+    reports_list = reports_and_news.get("reports") or []
+    news_list = reports_and_news.get("news") or []
+    latest_report_excerpt = reports_and_news.get("latest_report_excerpt")
+
+    asset_dict = {
+        "id": asset.id,
+        "ticker": asset.ticker,
+        "name": asset.name,
+        "asset_type": asset.asset_type,
+        "currency": asset.currency,
+        "sector": asset.sector,
+        "sub_sector": asset.sub_sector,
+        "isin_code": asset.isin_code,
+        "provider": asset.provider,
+        "provider_status": asset.provider_status,
+        "provider_last_sync_at": asset.provider_last_sync_at.isoformat() if asset.provider_last_sync_at else None,
+        "last_price": float(asset.last_price) if asset.last_price is not None else None,
+        "last_price_updated_at": asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None,
+    }
+
+    ai_analysis = await asset_ai_analysis_service.analyze_asset(
+        asset=asset_dict,
+        enrichment=enrichment,
+        price_history=price_history_payload,
+        dividends=dividends_payload,
+        reports=reports_list,
+        latest_report_excerpt=latest_report_excerpt,
+        news=news_list,
+    )
+
     return {
-        "asset": {
-            "id": asset.id,
-            "ticker": asset.ticker,
-            "name": asset.name,
-            "asset_type": asset.asset_type,
-            "currency": asset.currency,
-            "sector": asset.sector,
-            "sub_sector": asset.sub_sector,
-            "isin_code": asset.isin_code,
-            "provider": asset.provider,
-            "provider_status": asset.provider_status,
-            "provider_last_sync_at": asset.provider_last_sync_at.isoformat() if asset.provider_last_sync_at else None,
-            "last_price": float(asset.last_price) if asset.last_price is not None else None,
-            "last_price_updated_at": asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None,
-        },
+        "asset": asset_dict,
         "enrichment": enrichment,
-        "price_history": [
-            {
-                "timestamp": row.timestamp.isoformat(),
-                "open": float(row.open) if row.open is not None else None,
-                "high": float(row.high) if row.high is not None else None,
-                "low": float(row.low) if row.low is not None else None,
-                "close": float(row.close),
-                "volume": float(row.volume) if row.volume is not None else None,
-                "source": row.source,
-            }
-            for row in reversed(prices)
-        ],
-        "dividends": [
-            {
-                "record_date": row.record_date.isoformat() if row.record_date else None,
-                "ex_date": row.ex_date.isoformat(),
-                "payment_date": row.payment_date.isoformat() if row.payment_date else None,
-                "type": row.dividend_type.value if hasattr(row.dividend_type, "value") else str(row.dividend_type),
-                "value_per_unit": float(row.value_per_unit),
-                "source": row.source,
-                "remarks": row.remarks,
-            }
-            for row in dividends
-        ],
+        "price_history": price_history_payload,
+        "dividends": dividends_payload,
         "corporate_events": [
             {
                 "event_type": row.event_type,
@@ -511,7 +565,9 @@ async def get_asset_analysis(
             }
             for row in events
         ],
-        "reports": [],
+        "reports": reports_list,
+        "news": news_list,
+        "ai_analysis": ai_analysis,
     }
 
 
