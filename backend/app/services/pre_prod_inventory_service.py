@@ -61,6 +61,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "preserved",
         "Metas de alocação configuradas pelo usuário.",
     ),
+    "portfolio_corporate_fraction_settlements": (
+        "preserved",
+        "Liquidacoes manuais de fracoes corporativas informadas por carteira; nao sao reconstruiveis sem entrada do usuario.",
+    ),
     "portfolios": (
         "preserved",
         "Entidade principal da carteira e seus metadados.",
