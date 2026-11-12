@@ -258,6 +258,7 @@ def start_scheduler() -> None:
                 full_history=False,
                 end_grace_days=0,
                 include_start_gaps=False,
+                ignore_end_unavailable=True,
                 asset_types={AssetType.CRIPTO.value} if is_weekend else None,
                 tickers=tx_tickers if tx_tickers else None,
             )

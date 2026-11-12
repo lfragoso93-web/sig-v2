@@ -47,6 +47,7 @@ async def run_global_asset_price_backfill(
     full_history: bool = True,
     end_grace_days: int | None = None,
     include_start_gaps: bool = True,
+    ignore_end_unavailable: bool = False,
     clock: Clock | None = None,
     concurrency: int = _GLOBAL_SYNC_CONCURRENCY,
     asset_types: set[str] | None = None,
@@ -85,6 +86,7 @@ async def run_global_asset_price_backfill(
                 history_start=history_start,
                 end_grace_days=end_grace_days,
                 include_start_gaps=include_start_gaps,
+                ignore_end_unavailable=ignore_end_unavailable,
                 clock=clock,
             )
 
