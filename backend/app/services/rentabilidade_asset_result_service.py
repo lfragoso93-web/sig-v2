@@ -6,6 +6,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.asset_display_names import format_asset_display_name
 from app.models.transaction import OperationType, Transaction
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
 from app.services.realized_pnl_service import get_realized_pnl_by_ticker
@@ -65,7 +66,12 @@ async def get_canonical_asset_results(
             total = round(unrealized + realized, 2)
             rows.append({
                 "ticker": ticker,
-                "name": position.get("asset_label") or ticker,
+                "name": format_asset_display_name(
+                    position.get("asset_label"),
+                    ticker,
+                    position.get("asset_type"),
+                    fallback_label=ticker,
+                ),
                 "asset_type": position.get("asset_type"),
                 "quantity": float(position.get("quantity") or 0),
                 "avg_price": float(position.get("average_price") or 0),
@@ -88,7 +94,12 @@ async def get_canonical_asset_results(
         invested = round(float(info.get("invested") or 0), 2)
         rows.append({
             "ticker": ticker,
-            "name": ticker,
+            "name": format_asset_display_name(
+                None,
+                ticker,
+                info.get("asset_type"),
+                fallback_label=ticker,
+            ),
             "asset_type": info.get("asset_type"),
             "quantity": 0.0,
             "avg_price": 0.0,

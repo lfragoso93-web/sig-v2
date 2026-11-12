@@ -1,3 +1,4 @@
+import inspect
 import logging
 from datetime import date as DateType
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.asset_display_names import format_asset_display_name
 from app.core.asset_types import normalize_b3_equity_ticker
 from app.core.cache import cache_delete, cache_get, cache_set
 from app.core.log_safety import sanitize_log_value
@@ -298,9 +300,14 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         positions.append({
             "ticker": ticker,
             "asset_type": asset_type,
-            "asset_label": _TYPE_LABEL.get(
+            "asset_label": format_asset_display_name(
+                None,
+                ticker,
                 asset_type,
-                asset_type.replace("_", " ").title(),
+                fallback_label=_TYPE_LABEL.get(
+                    asset_type,
+                    asset_type.replace("_", " ").title(),
+                ),
             ),
             "quantity": float(projection.quantity),
             "avg_price": round(float(projection.average_price), 8),
@@ -367,6 +374,31 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
         select(Asset.ticker, Asset.logo_url).where(Asset.ticker.in_(tickers))
     )
     return {row.ticker: row.logo_url for row in result.all()}
+
+
+async def _fetch_asset_names_batch(
+    db: AsyncSession, tickers: list[str]
+) -> dict[tuple[str, str], str | None]:
+    if not tickers:
+        return {}
+    stmt = select(Asset.ticker, Asset.asset_type, Asset.name).where(
+        Asset.ticker.in_(tickers)
+    )
+    result = await db.execute(stmt)
+    all_fn = getattr(result, "all", None)
+    if all_fn is None or inspect.iscoroutinefunction(all_fn):
+        return {}
+    rows = all_fn()
+    if not isinstance(rows, (list, tuple)):
+        return {}
+    return {
+        (
+            str(row.ticker).strip().upper(),
+            normalize_type(getattr(row, "asset_type", None)),
+        ): str(row.name) if row.name is not None else None
+        for row in rows
+        if getattr(row, "ticker", None)
+    }
 
 
 def build_group_performance_metrics(
@@ -634,6 +666,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
+    asset_names = await _fetch_asset_names_batch(db, tickers)
     dividends_by_ticker = await sum_dividends_by_ticker(db, portfolio_id, tickers)
 
     try:
@@ -671,6 +704,16 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
                 "positions": [],
             }
 
+        ticker_key = str(e["ticker"]).strip().upper()
+        persisted_name = asset_names.get((ticker_key, normalize_type(at)))
+        if persisted_name is None:
+            persisted_name = asset_names.get(e["ticker"])  # type: ignore[arg-type]
+        asset_display_name = format_asset_display_name(
+            persisted_name or e.get("asset_label"),
+            e["ticker"],
+            at,
+            fallback_label=label,
+        )
         groups[at]["count"] += 1
         groups[at]["total_value"] += val_for_alloc
         groups[at]["total_invested"] += e["total_invested"]
@@ -678,7 +721,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "id": idx + 1,
             "ticker": e["ticker"],
             "asset_type": at,
-            "asset_label": label,
+            "asset_label": asset_display_name,
             "quantity": round(e["quantity"], 8),
             "average_price": round(e["avg_price_usd"], 4) if (is_usd and e.get("avg_price_usd") is not None) else round(e["avg_price"], 4),
             "average_price_brl": round(e["avg_price"], 4),

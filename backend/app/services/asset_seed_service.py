@@ -82,7 +82,11 @@ async def _upsert_asset(
         return "created"
 
     changed = False
-    if not existing.name and name:
+    if (
+        (not existing.name or existing.name.strip().upper() == ticker.strip().upper())
+        and name
+        and name.strip().upper() != ticker.strip().upper()
+    ):
         existing.name = name
         changed = True
     if not existing.sector and sector:

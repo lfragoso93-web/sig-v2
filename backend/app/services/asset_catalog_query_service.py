@@ -182,11 +182,14 @@ async def suggest_assets_from_catalog(
         if key in seen:
             continue
         seen |= {key}
+        from app.core.asset_display_names import format_asset_display_name
         name = asset.name or asset.ticker
         if str(asset.asset_type) == AssetType.TESOURO_DIRETO.value:
             name = format_friendly_treasury_title(name, asset.ticker)
-        elif alias_ticker and normalized in alias_ticker.upper() and alias_ticker.upper() != asset.ticker.upper():
-            name = f"{name} (antigo {alias_ticker})"
+        else:
+            name = format_asset_display_name(name, asset.ticker, asset_type_str)
+            if alias_ticker and normalized in alias_ticker.upper() and alias_ticker.upper() != asset.ticker.upper():
+                name = f"{name} (antigo {alias_ticker})"
         suggestions.append(
             AssetCatalogSuggestion(
                 ticker=asset.ticker,

@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.asset_display_names import format_asset_display_name
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.asset import Asset, AssetType
@@ -298,7 +299,7 @@ async def list_assets(
             AssetListItem(
                 id=asset.id,
                 ticker=asset.ticker,
-                name=asset.name,
+                name=format_asset_display_name(asset.name, asset.ticker, str(asset.asset_type)),
                 asset_type=str(asset.asset_type),
                 last_price=float(asset.last_price) if asset.last_price else None,
                 last_price_updated_at=(
@@ -340,7 +341,7 @@ async def get_asset_detail(
     return AssetDetailResponse(
         id=asset.id,
         ticker=asset.ticker,
-        name=asset.name,
+        name=format_asset_display_name(asset.name, asset.ticker, resolved_asset_type.value),
         asset_type=resolved_asset_type.value,
         last_price=float(asset.last_price) if asset.last_price else None,
         last_price_updated_at=(
@@ -390,7 +391,7 @@ async def compare_assets(
         comparisons.append(AssetComparisonItem(
             id=asset.id,
             ticker=asset.ticker,
-            name=asset.name,
+            name=format_asset_display_name(asset.name, asset.ticker, str(asset.asset_type)),
             asset_type=asset.asset_type,
             currency=asset.currency,
             last_price=float(asset.last_price) if asset.last_price is not None else None,
@@ -524,7 +525,7 @@ async def get_asset_analysis(
     asset_dict = {
         "id": asset.id,
         "ticker": asset.ticker,
-        "name": asset.name,
+        "name": format_asset_display_name(asset.name, asset.ticker, str(asset.asset_type)),
         "asset_type": asset.asset_type,
         "currency": asset.currency,
         "sector": asset.sector,
