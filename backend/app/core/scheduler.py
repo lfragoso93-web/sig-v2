@@ -219,7 +219,7 @@ def start_scheduler() -> None:
                 )
                 raise
 
-    async def _run_daily_close_catchup(job_name: str) -> None:
+    async def _run_daily_close_catchup(job_name: str, *, target_offset_days: int = 0) -> None:
         from datetime import timedelta
         from sqlalchemy import func, select
         from app.core.database import AsyncSessionLocal
@@ -237,7 +237,8 @@ def start_scheduler() -> None:
             if not acquired:
                 return
             today = datetime.now(ZoneInfo(SCHEDULER_TIMEZONE)).date()
-            is_weekend = today.weekday() >= 5
+            target_date = today - timedelta(days=target_offset_days)
+            is_weekend = target_date.weekday() >= 5
             async with AsyncSessionLocal() as db:
                 ticker_query = select(func.upper(func.trim(Transaction.ticker))).distinct()
                 if is_weekend:
@@ -252,10 +253,10 @@ def start_scheduler() -> None:
             if is_weekend and not tx_tickers:
                 return
             result = await run_global_asset_price_backfill(
-                required_to=today,
-                history_start=today - timedelta(days=2),
+                required_to=target_date,
+                history_start=target_date - timedelta(days=2),
                 full_history=False,
-                end_grace_days=2,
+                end_grace_days=0,
                 include_start_gaps=False,
                 asset_types={AssetType.CRIPTO.value} if is_weekend else None,
                 tickers=tx_tickers if tx_tickers else None,
@@ -270,7 +271,7 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     async def persist_daily_close_prices_catchup_night():
-        await _run_daily_close_catchup("persist_daily_close_prices_catchup_night")
+        await _run_daily_close_catchup("persist_daily_close_prices_catchup_night", target_offset_days=0)
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=7, minute=30),
@@ -280,7 +281,7 @@ def start_scheduler() -> None:
         coalesce=True,
     )
     async def persist_daily_close_prices_catchup_morning():
-        await _run_daily_close_catchup("persist_daily_close_prices_catchup_morning")
+        await _run_daily_close_catchup("persist_daily_close_prices_catchup_morning", target_offset_days=1)
 
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour="14,19,21", minute=15),

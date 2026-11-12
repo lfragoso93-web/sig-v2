@@ -309,7 +309,11 @@ async def maintain_twr_snapshots_for_active_portfolios(
                 purpose="background_nightly_twr_maintenance",
             )
             rebuild_consolidated = await _portfolio_needs_twr_rebuild(db, access.portfolio_id)
-            rebuild_classes = await _portfolio_needs_class_twr_rebuild(db, access.portfolio_id)
+            rebuild_classes = (
+                True
+                if rebuild_consolidated
+                else await _portfolio_needs_class_twr_rebuild(db, access.portfolio_id)
+            )
             if not rebuild_consolidated and not rebuild_classes:
                 skipped += 1
                 continue

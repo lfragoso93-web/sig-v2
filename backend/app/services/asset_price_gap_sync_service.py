@@ -283,7 +283,14 @@ async def _fetch_range(
         ):
             try:
                 usd_rows = await _fetch_yf_max(_yahoo_crypto_usd_symbol(ticker), AssetType.CRIPTO)
-                fallback = await _convert_crypto_usd_rows_to_brl(usd_rows)
+                scoped_usd_rows = [
+                    (ts, val)
+                    for ts, val in usd_rows
+                    if missing_range.date_from
+                    <= (ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)).date()
+                    <= missing_range.date_to
+                ]
+                fallback = await _convert_crypto_usd_rows_to_brl(scoped_usd_rows)
                 if fallback:
                     rows = fallback
                     source = "yfinance_crypto_ptax_brl_max"

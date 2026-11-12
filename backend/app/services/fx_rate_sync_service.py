@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -32,28 +32,32 @@ async def _upsert_fx_rates(
     inserted = 0
     updated = 0
 
+    now_utc = datetime.now(timezone.utc)
     if dialect_name == "postgresql":
         for item in rows:
             existing = (
                 await db.execute(
-                    select(FxRate.id).where(
+                    select(FxRate.rate).where(
                         FxRate.pair == item.pair,
                         FxRate.rate_date == item.rate_date,
                     )
                 )
             ).scalar_one_or_none()
+            update_fields: dict[str, object] = {"rate": item.rate}
+            if existing is not None and existing != item.rate:
+                update_fields["created_at"] = now_utc
             stmt = (
                 pg_insert(FxRate)
-                .values(pair=item.pair, rate_date=item.rate_date, rate=item.rate)
+                .values(pair=item.pair, rate_date=item.rate_date, rate=item.rate, created_at=now_utc)
                 .on_conflict_do_update(
                     constraint="uq_fx_rates_pair_date",
-                    set_={"rate": item.rate},
+                    set_=update_fields,
                 )
             )
             await db.execute(stmt)
             if existing is None:
                 inserted += 1
-            else:
+            elif existing != item.rate:
                 updated += 1
         return inserted, updated
 
@@ -67,10 +71,11 @@ async def _upsert_fx_rates(
             )
         ).scalar_one_or_none()
         if existing_row is None:
-            db.add(FxRate(pair=item.pair, rate_date=item.rate_date, rate=item.rate))
+            db.add(FxRate(pair=item.pair, rate_date=item.rate_date, rate=item.rate, created_at=now_utc))
             inserted += 1
-        else:
+        elif existing_row.rate != item.rate:
             existing_row.rate = item.rate
+            existing_row.created_at = now_utc
             updated += 1
     return inserted, updated
 
