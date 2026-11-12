@@ -28,6 +28,18 @@ def test_format_asset_display_name_resolves_all_classes() -> None:
     assert format_asset_display_name("NIKE34", "NIKE34", "BDR") == "Nike"
     assert format_asset_display_name("NVDA", "NVDA", "STOCK") == "NVIDIA"
     assert format_asset_display_name("BTC", "BTC", "CRIPTO") == "Bitcoin"
+    assert (
+        format_asset_display_name("TESOURO-RENDA-MAIS-2065", "TESOURO-RENDA-MAIS-2065", "TESOURO_DIRETO")
+        == "Tesouro Renda+ 2065"
+    )
+    assert (
+        format_asset_display_name(None, "tesouro-renda-mais-15122079", "TESOURO_DIRETO")
+        == "Tesouro Renda+ 2060"
+    )
+    assert (
+        format_asset_display_name(None, "tesouro-educa-15122030", "TESOURO_DIRETO")
+        == "Tesouro Educa+ 2026"
+    )
 
 
 def test_format_asset_display_name_preserves_mixed_case_and_cleans_all_caps() -> None:

@@ -381,8 +381,9 @@ async def _fetch_asset_names_batch(
 ) -> dict[tuple[str, str], str | None]:
     if not tickers:
         return {}
+    candidate_tickers = sorted({t for item in tickers for t in (item, item.lower(), item.upper()) if t})
     stmt = select(Asset.ticker, Asset.asset_type, Asset.name).where(
-        Asset.ticker.in_(tickers)
+        Asset.ticker.in_(candidate_tickers)
     )
     result = await db.execute(stmt)
     all_fn = getattr(result, "all", None)

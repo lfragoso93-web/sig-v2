@@ -491,6 +491,39 @@ def _clean_corporate_registration_name(raw_name: str) -> str:
     return " ".join(formatted_words)
 
 
+def _format_treasury_slug(slug: str) -> str:
+    lower = slug.strip().lower()
+    full_date_match = re.search(r"\d{4}(20\d{2})$", lower)
+    year_match = re.search(r"(20\d{2})$", lower)
+    year = int(year_match.group(1)) if year_match else None
+    if "renda-mais" in lower or "renda+" in lower or "renda-" in lower:
+        if year is not None and (
+            (full_date_match is not None and year >= 2049)
+            or (year >= 2049 and year % 5 == 4)
+        ):
+            year -= 19
+        return f"Tesouro Renda+ {year}" if year else "Tesouro Renda+"
+    if "educa-mais" in lower or "educa+" in lower or "educa-" in lower:
+        if year is not None and (
+            (full_date_match is not None and year >= 2030)
+            or year > 2043
+        ):
+            year -= 4
+        return f"Tesouro Educa+ {year}" if year else "Tesouro Educa+"
+    year_suffix = f" {year}" if year else ""
+    if "selic" in lower:
+        return f"Tesouro Selic{year_suffix}"
+    if "prefixado" in lower:
+        if "juros" in lower:
+            return f"Tesouro Prefixado com Juros Semestrais{year_suffix}"
+        return f"Tesouro Prefixado{year_suffix}"
+    if "ipca" in lower:
+        if "juros" in lower:
+            return f"Tesouro IPCA+ com Juros Semestrais{year_suffix}"
+        return f"Tesouro IPCA+{year_suffix}"
+    return slug.strip()
+
+
 def format_asset_display_name(
     raw_name: object,
     ticker: object,
@@ -512,6 +545,9 @@ def format_asset_display_name(
         and not clean_raw.isupper()
     ):
         return clean_raw
+
+    if norm_type in {"TESOURO_DIRETO", "TESOURO"} or upper_ticker.startswith("TESOURO-"):
+        return _format_treasury_slug(clean_ticker)
 
     # 2. Mapa canônico por (asset_type, ticker) para evitar colisão entre classes
     if norm_type in _KNOWN_NAMES_BY_TYPE:
