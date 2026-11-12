@@ -4,6 +4,7 @@ services:
     environment:
       ENVIRONMENT: production
       APP_DEBUG: "false"
+      RUNTIME_MIGRATION_TARGET: "20261111_fraction_settlements"
     healthcheck:
       start_period: 90s
       retries: 5
