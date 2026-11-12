@@ -197,11 +197,7 @@ async def _convert_crypto_usd_rows_to_brl(
     return converted
 
 
-async def _fetch_crypto_history(
-    ticker: str,
-    *,
-    required_to: date | None = None,
-) -> tuple[list[tuple[datetime, float]], str, str]:
+async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float]], str, str]:
     from app.integrations.brapi_crypto_history import fetch_brapi_crypto_history
 
     try:
@@ -219,18 +215,13 @@ async def _fetch_crypto_history(
         )
         rows = []
 
-    latest_brapi_date = max((ts.date() for ts, _ in rows), default=None)
-    if rows and (required_to is None or (latest_brapi_date is not None and latest_brapi_date >= required_to)):
+    if rows:
         return rows, "brapi_v2_crypto_max", "brapi"
 
     yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
     usd_rows = await _fetch_yf_max(yahoo_symbol, AssetType.CRIPTO)
     fallback = await _convert_crypto_usd_rows_to_brl(usd_rows)
-    if fallback:
-        return fallback, "yfinance_crypto_ptax_brl_max", "yfinance"
-    if rows:
-        return rows, "brapi_v2_crypto_max", "brapi"
-    return [], "yfinance_crypto_ptax_brl_max", "yfinance"
+    return fallback, "yfinance_crypto_ptax_brl_max", "yfinance"
 
 
 def _empty_status(missing_range: MissingPriceRange) -> str:
@@ -283,10 +274,26 @@ async def _fetch_range(
         source = "yfinance_crypto_ptax_brl_max"
         effective_provider = "brapi"
     elif asset_type == AssetType.CRIPTO:
-        rows, source, effective_provider = await _fetch_crypto_history(
-            ticker,
-            required_to=missing_range.date_to,
-        )
+        rows, source, effective_provider = await _fetch_crypto_history(ticker)
+        latest_crypto_date = max((ts.date() for ts, _ in rows), default=None)
+        if (
+            missing_range.reason == "stale_end"
+            and source == "brapi_v2_crypto_max"
+            and (latest_crypto_date is None or latest_crypto_date < missing_range.date_to)
+        ):
+            try:
+                usd_rows = await _fetch_yf_max(_yahoo_crypto_usd_symbol(ticker), AssetType.CRIPTO)
+                fallback = await _convert_crypto_usd_rows_to_brl(usd_rows)
+                if fallback:
+                    rows = fallback
+                    source = "yfinance_crypto_ptax_brl_max"
+                    effective_provider = "yfinance"
+            except Exception as exc:
+                logger.warning(
+                    "[price_gap_sync] fallback yahoo crypto indisponivel ticker=%s: %s",
+                    ticker,
+                    exc,
+                )
     elif asset_type in INTL_TYPES:
         date_from_str = missing_range.date_from.isoformat()
         date_to_str = missing_range.date_to.isoformat()
