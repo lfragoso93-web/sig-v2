@@ -491,6 +491,27 @@ def _clean_corporate_registration_name(raw_name: str) -> str:
     return " ".join(formatted_words)
 
 
+def _format_treasury_slug(slug: str) -> str:
+    lower = slug.strip().lower()
+    year_match = re.search(r"(\d{4})$", lower)
+    year_suffix = f" {year_match.group(1)}" if year_match else ""
+    if "renda-mais" in lower or "renda+" in lower:
+        return f"Tesouro Renda+{year_suffix}"
+    if "educa-mais" in lower or "educa+" in lower:
+        return f"Tesouro Educa+{year_suffix}"
+    if "selic" in lower:
+        return f"Tesouro Selic{year_suffix}"
+    if "prefixado" in lower:
+        if "juros" in lower:
+            return f"Tesouro Prefixado com Juros Semestrais{year_suffix}"
+        return f"Tesouro Prefixado{year_suffix}"
+    if "ipca" in lower:
+        if "juros" in lower:
+            return f"Tesouro IPCA+ com Juros Semestrais{year_suffix}"
+        return f"Tesouro IPCA+{year_suffix}"
+    return slug.strip()
+
+
 def format_asset_display_name(
     raw_name: object,
     ticker: object,
@@ -512,6 +533,9 @@ def format_asset_display_name(
         and not clean_raw.isupper()
     ):
         return clean_raw
+
+    if norm_type in {"TESOURO_DIRETO", "TESOURO"} or upper_ticker.startswith("TESOURO-"):
+        return _format_treasury_slug(clean_ticker)
 
     # 2. Mapa canônico por (asset_type, ticker) para evitar colisão entre classes
     if norm_type in _KNOWN_NAMES_BY_TYPE:
