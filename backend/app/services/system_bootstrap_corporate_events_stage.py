@@ -8,6 +8,7 @@ eventos corporativos.
 from __future__ import annotations
 
 import os
+import re
 import logging
 from dataclasses import dataclass
 
@@ -22,6 +23,8 @@ from app.services.system_bootstrap_execution_context import (
     SystemBootstrapExecutionContext,
 )
 
+_B3_ISSUER_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9]*\d+$")
+
 logger = logging.getLogger(__name__)
 
 CORPORATE_EVENTS_BOOTSTRAP_AUTH_ENV = "SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS"
@@ -34,6 +37,7 @@ SUPPORTED_CORPORATE_EVENT_ASSET_TYPES = (
     "STOCK",
     "ETF_INTERNACIONAL",
 )
+_NATIONAL_CORPORATE_EVENT_ASSET_TYPES = frozenset({"ACAO", "BDR", "ETF_NACIONAL", "FII"})
 
 
 class SystemBootstrapCorporateEventsGateError(RuntimeError):
@@ -105,9 +109,20 @@ async def run_system_bootstrap_corporate_events_stage(
 
             events_created = 0
             assets_processed = 0
+            assets_skipped = 0
             assets_failed = 0
             first_failure: Exception | None = None
             for asset in assets:
+                ticker_norm = str(getattr(asset, "ticker", "") or "").strip().upper()
+                asset_type_raw = getattr(asset, "asset_type", "")
+                asset_type_val = getattr(asset_type_raw, "value", asset_type_raw)
+                asset_type_norm = str(asset_type_val or "").strip().upper()
+                if (
+                    asset_type_norm in _NATIONAL_CORPORATE_EVENT_ASSET_TYPES
+                    and not _B3_ISSUER_TICKER_RE.fullmatch(ticker_norm)
+                ):
+                    assets_skipped += 1
+                    continue
                 if not continue_on_asset_error:
                     created = await sync_corporate_events_for_asset(db, asset)
                     events_created += len(created)
@@ -140,7 +155,7 @@ async def run_system_bootstrap_corporate_events_stage(
     report = CorporateEventsStageReport(
         assets_processed=assets_processed,
         events_created=events_created,
-        assets_skipped=0,
+        assets_skipped=assets_skipped,
         assets_failed=assets_failed,
     )
     return report.to_detail()

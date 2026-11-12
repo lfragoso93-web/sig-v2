@@ -14,7 +14,7 @@ import httpx
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 from app.models.asset_price import AssetPrice
 from app.services.b3_historical_market_rebuild_service import _ensure_ibov_benchmark_asset
 
@@ -30,7 +30,7 @@ _DEFAULT_HEADERS = {
 
 async def _fetch_ibov_brapi(range_str: str = "1mo") -> list[dict]:
     """Busca cotações do IBOV via BRAPI (^BVSP)."""
-    token = settings.BRAPI_TOKEN or ""
+    token = get_runtime_provider_key(ProviderId.BRAPI) or ""
     url = f"https://brapi.dev/api/quote/{_BRAPI_IBOV_SYMBOL}?range={range_str}&interval=1d"
     if token:
         url += f"&token={token}"

@@ -234,3 +234,100 @@ async def test_intl_provider_connectivity_probes_inject_auth_headers(
     assert tiingo_res.status == ProviderStatus.OK.value
     assert captured[0][1].get("X-Finnhub-Token") == "fh-0000"
     assert captured[1][1].get("Authorization") == "Token tg-0000"
+
+
+@pytest.mark.asyncio
+async def test_runtime_provider_keys_prefer_panel_override_over_env_fallback(
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Garante carga inicial do .env e sobrescrita/reset pelo painel para todos os provedores."""
+    from app.core.provider_registry import (
+        clear_runtime_provider_key_overrides,
+        get_runtime_provider_key,
+    )
+    from app.integrations import alpha_vantage, brapi, finnhub, tiingo
+    from app.integrations.brapi_v2_client import BrapiV2Client
+
+    clear_runtime_provider_key_overrides()
+    try:
+        monkeypatch.setattr("app.core.config.settings.FINNHUB_API_KEY", "fh-env")
+        monkeypatch.setattr("app.core.config.settings.TIINGO_API_KEY", "tg-env")
+        monkeypatch.setattr("app.core.config.settings.BRAPI_TOKEN", "br-env")
+        monkeypatch.setattr("app.core.config.settings.ALPHA_VANTAGE_API_KEY", "av-env")
+
+        assert finnhub._api_key() == "fh-env"
+        assert tiingo._api_key() == "tg-env"
+        assert alpha_vantage._api_key() == "av-env"
+        assert brapi._auth_headers() == {"Authorization": "Bearer br-env"}
+        singleton_v2 = BrapiV2Client()
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
+
+        user = User(
+            name="Admin Runtime",
+            email="superadmin_runtime_keys@sgi.local",
+            hashed_password="hash",
+            role=UserRole.superadmin,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        await ProviderConfigService.update_provider_config(
+            provider_id=ProviderId.FINNHUB.value,
+            data=ProviderConfigUpdate(new_api_key="fh-panel"),
+            user_id=user.id,
+            db=db,
+        )
+        await ProviderConfigService.update_provider_config(
+            provider_id=ProviderId.BRAPI.value,
+            data=ProviderConfigUpdate(new_api_key="br-panel"),
+            user_id=user.id,
+            db=db,
+        )
+
+        assert get_runtime_provider_key(ProviderId.FINNHUB) == "fh-panel"
+        assert finnhub._api_key() == "fh-panel"
+        assert brapi._auth_headers() == {"Authorization": "Bearer br-panel"}
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
+
+        clear_runtime_provider_key_overrides()
+        assert finnhub._api_key() == "fh-env"
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
+
+        await ProviderConfigService.sync_runtime_key_overrides(db)
+        assert finnhub._api_key() == "fh-panel"
+        assert brapi._auth_headers() == {"Authorization": "Bearer br-panel"}
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
+
+        await ProviderConfigService.reset_provider_to_default(
+            provider_id=ProviderId.FINNHUB.value,
+            user_id=user.id,
+            db=db,
+        )
+        assert finnhub._api_key() == "fh-env"
+        # Simula outro worker observando invalidacao via bump de versao ou TTL
+        ProviderConfigService._runtime_keys_version = "old-ver"
+        monkeypatch.setattr(
+            ProviderConfigService,
+            "_read_runtime_keys_version",
+            staticmethod(lambda: _async_val("new-ver")),
+        )
+        from app.core.provider_registry import set_runtime_provider_key_override
+
+        set_runtime_provider_key_override(ProviderId.BRAPI, "stale-worker-val")
+        await ProviderConfigService.ensure_runtime_key_overrides_fresh(db)
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-panel"}
+
+        await ProviderConfigService.reset_provider_to_default(
+            provider_id=ProviderId.BRAPI.value,
+            user_id=user.id,
+            db=db,
+        )
+        assert singleton_v2._headers() == {"Authorization": "Bearer br-env"}
+    finally:
+        clear_runtime_provider_key_overrides()
+
+
+async def _async_val(value: str) -> str:
+    return value

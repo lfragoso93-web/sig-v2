@@ -195,3 +195,28 @@ async def test_corporate_events_stage_raises_if_all_assets_fail_when_isolated(mo
 
     db.commit.assert_not_awaited()
     db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_corporate_events_stage_skips_non_b3_national_tickers_without_error(monkeypatch):
+    asset_bad = SimpleNamespace(id=1, ticker="BTC", asset_type="ACAO")
+    asset_ok = SimpleNamespace(id=2, ticker="PETR4", asset_type="ACAO")
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[MagicMock(), _assets_result(asset_bad, asset_ok)])
+    db.begin_nested = MagicMock(return_value=_NestedSavepoint())
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    monkeypatch.setattr(stage, "AsyncSessionLocal", lambda: _SessionContext(db))
+
+    sync = AsyncMock(return_value=[object()])
+    monkeypatch.setattr(stage, "sync_corporate_events_for_asset", sync)
+
+    detail = await stage.run_system_bootstrap_corporate_events_stage(
+        _CONTEXT,
+        authorized=True,
+        continue_on_asset_error=True,
+    )
+
+    sync.assert_awaited_once_with(db, asset_ok)
+    db.commit.assert_awaited_once()
+    assert detail == "processed=1 created=1 skipped=1"

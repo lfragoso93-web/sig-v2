@@ -22,7 +22,7 @@ from typing import Optional
 
 import httpx
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ _TIMEOUT = 15.0
 
 
 def _api_key() -> Optional[str]:
-    return getattr(settings, "ALPHA_VANTAGE_API_KEY", None) or None
+    return get_runtime_provider_key(ProviderId.ALPHA_VANTAGE)
 
 
 def _is_configured() -> bool:

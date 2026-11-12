@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 from app.core.database import AsyncSessionLocal
 from app.integrations.brapi_treasury import (
     canonical_treasury_symbol_from_text,
@@ -74,7 +74,7 @@ _HISTORY_CONTAINER_FIELDS = (
 
 
 def _headers() -> dict[str, str]:
-    token = getattr(settings, "BRAPI_TOKEN", None)
+    token = get_runtime_provider_key(ProviderId.BRAPI)
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 

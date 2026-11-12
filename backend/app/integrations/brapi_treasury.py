@@ -26,7 +26,7 @@ from typing import Any, Iterable, Optional
 
 import httpx
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
@@ -74,8 +74,9 @@ _TREASURY_SYMBOL_RE = re.compile(r"^tesouro-[a-z0-9-]+-\d{4,8}$")
 
 
 def _auth_headers() -> dict:
-    if settings.BRAPI_TOKEN:
-        return {"Authorization": f"Bearer {settings.BRAPI_TOKEN}"}
+    token = get_runtime_provider_key(ProviderId.BRAPI)
+    if token:
+        return {"Authorization": f"Bearer {token}"}
     return {}
 
 

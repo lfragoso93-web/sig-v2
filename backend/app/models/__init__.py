@@ -54,6 +54,7 @@ __all__ = [
     "FxRate",
     "FixedIncomeContract",
     "Goal",
+    "MarketCalendarDay",
     "Portfolio",
     "PortfolioClassSnapshot",
     "PortfolioClassTarget",

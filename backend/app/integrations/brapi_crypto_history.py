@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.core.config import settings
+from app.core.provider_registry import ProviderId, get_runtime_provider_key
 
 _BRAPI_CRYPTO_URL = "https://brapi.dev/api/v2/crypto"
 
@@ -41,7 +41,7 @@ def normalize_crypto_code(value: str) -> str:
 
 
 def _auth_headers() -> dict[str, str]:
-    token = str(getattr(settings, "BRAPI_TOKEN", "") or "").strip()
+    token = get_runtime_provider_key(ProviderId.BRAPI) or ""
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 

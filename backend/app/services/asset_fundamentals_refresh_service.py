@@ -93,6 +93,13 @@ async def run_asset_fundamentals_refresh(
     limit_catalog: int = 50,
 ) -> dict[str, int]:
     """Coleta e atualiza indicadores e fundamentos para ativos relevantes."""
+    from app.services.provider_config_service import ProviderConfigService
+
+    try:
+        await ProviderConfigService.ensure_runtime_key_overrides_fresh(db)
+    except Exception:
+        pass
+
     assets = await get_distinct_portfolio_and_catalog_assets(
         db, limit_catalog_fallback=limit_catalog
     )

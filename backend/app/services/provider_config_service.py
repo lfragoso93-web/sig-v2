@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
+
+from app.core.cache import get_redis
 from typing import Any
 
 import httpx
@@ -17,6 +19,7 @@ from app.core.provider_registry import (
     decrypt_secret,
     encrypt_secret,
     mask_secret,
+    set_runtime_provider_key_override,
 )
 from app.core.provider_status import ProviderStatus
 from app.models.audit_log import AuditAction
@@ -44,7 +47,65 @@ class EffectiveProviderConfig:
 
 
 class ProviderConfigService:
+    _RUNTIME_KEYS_VERSION_KEY = "sgi:provider:runtime_keys:version"
+    _RUNTIME_KEYS_TTL_SECONDS = 60.0
+    _runtime_keys_synced: bool = False
+    _runtime_keys_version: str | None = None
+    _runtime_keys_synced_at: float = 0.0
+
+    @staticmethod
+    async def _read_runtime_keys_version() -> str | None:
+        try:
+            client = await get_redis()
+            if client is None:
+                return None
+            val = await client.get(ProviderConfigService._RUNTIME_KEYS_VERSION_KEY)
+            return str(val) if val is not None else "0"
+        except Exception:
+            return None
+
+    @staticmethod
+    async def _bump_runtime_keys_version() -> str | None:
+        try:
+            client = await get_redis()
+            if client is None:
+                return None
+            val = await client.incr(ProviderConfigService._RUNTIME_KEYS_VERSION_KEY)
+            return str(val)
+        except Exception:
+            return None
     """Orquestrador de configurações administrativas e dinâmicas."""
+
+    @staticmethod
+    async def sync_runtime_key_overrides(db: AsyncSession) -> None:
+        """Carrega overrides de API keys salvos no banco para cache em mem?ria."""
+        stmt = select(ProviderConfiguration)
+        result = await db.execute(stmt)
+        db_configs = {cfg.provider_id: cfg for cfg in result.scalars().all()}
+        for p_id in PROVIDER_REGISTRY:
+            db_cfg = db_configs.get(p_id.value)
+            db_key = decrypt_secret(db_cfg.api_key_encrypted) if db_cfg else None
+            set_runtime_provider_key_override(p_id, db_key)
+        ProviderConfigService._runtime_keys_synced = True
+        ProviderConfigService._runtime_keys_synced_at = time.monotonic()
+        ProviderConfigService._runtime_keys_version = (
+            await ProviderConfigService._read_runtime_keys_version()
+        )
+
+    @staticmethod
+    async def ensure_runtime_key_overrides_fresh(db: AsyncSession) -> None:
+        """Recarrega overrides de chaves entre workers quando vers?o Redis ou TTL expirar."""
+        redis_version = await ProviderConfigService._read_runtime_keys_version()
+        version_changed = (
+            redis_version is not None
+            and redis_version != ProviderConfigService._runtime_keys_version
+        )
+        ttl_expired = (
+            time.monotonic() - ProviderConfigService._runtime_keys_synced_at
+            >= ProviderConfigService._RUNTIME_KEYS_TTL_SECONDS
+        )
+        if not ProviderConfigService._runtime_keys_synced or version_changed or ttl_expired:
+            await ProviderConfigService.sync_runtime_key_overrides(db)
 
     @staticmethod
     async def list_providers(db: AsyncSession) -> list[ProviderConfigResponse]:
@@ -163,6 +224,7 @@ class ProviderConfigService:
             if definition.env_key_var
             else None
         )
+        set_runtime_provider_key_override(pid_enum, db_key)
         api_key = db_key or env_key
 
         is_enabled = db_cfg.is_enabled if db_cfg else True
@@ -281,6 +343,14 @@ class ProviderConfigService:
 
         await db.commit()
         await db.refresh(db_cfg)
+        if data.new_api_key is not None:
+            set_runtime_provider_key_override(
+                pid_enum, decrypt_secret(db_cfg.api_key_encrypted)
+            )
+            version = await ProviderConfigService._bump_runtime_keys_version()
+            if version is not None:
+                ProviderConfigService._runtime_keys_version = version
+            ProviderConfigService._runtime_keys_synced_at = time.monotonic()
 
         await AuditLogService.log_action(
             db=db,
@@ -322,6 +392,11 @@ class ProviderConfigService:
             }
             await db.delete(db_cfg)
             await db.commit()
+            set_runtime_provider_key_override(provider_id, None)
+            version = await ProviderConfigService._bump_runtime_keys_version()
+            if version is not None:
+                ProviderConfigService._runtime_keys_version = version
+            ProviderConfigService._runtime_keys_synced_at = time.monotonic()
 
             await AuditLogService.log_action(
                 db=db,
