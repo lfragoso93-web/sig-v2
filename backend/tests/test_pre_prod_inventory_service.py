@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import pytest
 from sqlalchemy import event, text
@@ -143,6 +143,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
         ("corporate_events", "export_before_cleanup"),
         ("fixed_income_investments", "export_before_cleanup"),
         ("fixed_income_contracts", "preserved"),
+        ("portfolio_corporate_fraction_settlements", "preserved"),
         ("asset_prices", "rebuildable"),
         ("asset_universe_memberships", "rebuildable"),
         ("treasury_instruments", "rebuildable"),
@@ -167,3 +168,16 @@ def test_unknown_table_has_blocking_review_rationale() -> None:
 
     assert classification == "unclassified"
     assert "revisão arquitetural" in rationale
+
+
+def test_all_orm_tables_have_inventory_policy() -> None:
+    import app.models  # noqa: F401
+    from app.core.database import Base
+    from app.services.pre_prod_inventory_service import _classify_table
+
+    unclassified = [
+        table_name
+        for table_name in sorted(Base.metadata.tables)
+        if _classify_table(table_name) == "unclassified"
+    ]
+    assert unclassified == []

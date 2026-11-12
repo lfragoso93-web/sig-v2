@@ -19,6 +19,7 @@ _PORTFOLIO_DEPENDENT_TABLES = (
     "goals",
     "irpf_reports",
     "portfolio_class_targets",
+    "portfolio_corporate_fraction_settlements",
     "portfolio_positions",
     "portfolio_class_snapshots",
     "portfolio_snapshots",
