@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import httpx
@@ -209,14 +209,24 @@ class AssetAiAnalysisService:
         price_history: list[dict[str, Any]],
         last_price: Optional[float],
     ) -> dict[str, Any]:
-        closes = [
-            float(p["close"])
-            for p in price_history
-            if isinstance(p.get("close"), (int, float)) and float(p["close"]) > 0
-        ]
-        if not closes and last_price:
-            closes = [last_price]
+        points: list[tuple[Optional[date], float]] = []
+        for p in price_history:
+            c = p.get("close")
+            if not isinstance(c, (int, float)) or float(c) <= 0:
+                continue
+            raw_ts = str(p.get("timestamp") or p.get("date") or "")[:10]
+            obs_date: Optional[date] = None
+            if len(raw_ts) == 10:
+                try:
+                    obs_date = date.fromisoformat(raw_ts)
+                except ValueError:
+                    obs_date = None
+            points.append((obs_date, float(c)))
 
+        if not points and last_price:
+            points = [(None, float(last_price))]
+
+        closes = [val for _, val in points]
         if not closes:
             return {
                 "days_analyzed": 0,
@@ -231,10 +241,31 @@ class AssetAiAnalysisService:
 
         latest = closes[-1]
         first = closes[0]
-        idx_30 = max(0, len(closes) - 22)
-        idx_90 = max(0, len(closes) - 63)
-        ret_30 = ((latest / closes[idx_30]) - 1.0) * 100.0 if closes[idx_30] > 0 and len(closes) >= 5 else None
-        ret_90 = ((latest / closes[idx_90]) - 1.0) * 100.0 if closes[idx_90] > 0 and len(closes) >= 20 else None
+        dated_points = sorted(
+            [(d, val) for d, val in points if d is not None],
+            key=lambda item: item[0],
+        )
+
+        def _window_return(window_days: int) -> Optional[float]:
+            if len(dated_points) < 2:
+                return None
+            latest_dt, latest_val = dated_points[-1]
+            earliest_dt, _ = dated_points[0]
+            target_dt = latest_dt - timedelta(days=window_days)
+            if earliest_dt > target_dt:
+                return None
+            baseline_val: Optional[float] = None
+            for obs_dt, obs_val in dated_points:
+                if obs_dt <= target_dt:
+                    baseline_val = obs_val
+                else:
+                    break
+            if baseline_val is None or baseline_val <= 0:
+                return None
+            return ((latest_val / baseline_val) - 1.0) * 100.0
+
+        ret_30 = _window_return(30)
+        ret_90 = _window_return(90)
         ret_period = ((latest / first) - 1.0) * 100.0 if first > 0 and len(closes) >= 2 else None
 
         if ret_90 is not None:
@@ -455,11 +486,7 @@ class AssetAiAnalysisService:
         pe = _flt(fundamentals.get("pe"))
         pb = _flt(fundamentals.get("pb"))
         roe = _flt(fundamentals.get("roe"))
-        if roe is not None and abs(roe) <= 1.5:
-            roe = roe * 100.0
         net_margin = _flt(fundamentals.get("net_margin"))
-        if net_margin is not None and abs(net_margin) <= 1.5:
-            net_margin = net_margin * 100.0
         dy = _flt(fundamentals.get("dividend_yield")) or _flt(div_stats.get("dividend_yield_pct"))
         ev_ebitda = _flt(fundamentals.get("enterprise_to_ebitda"))
         target_price = _flt(fundamentals.get("target_price"))

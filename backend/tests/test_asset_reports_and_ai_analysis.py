@@ -138,3 +138,36 @@ async def test_asset_ai_analysis_handles_reports_without_excerpt_and_filters_tra
     assert result["latest_report_referenced"]["title"] == "ITR — Informações Trimestrais"
     assert result["dividend_outlook"]["payments_count_12m"] == 1
     assert result["dividend_outlook"]["total_paid_12m"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_asset_ai_analysis_preserves_normalized_percentages_and_timestamp_windows() -> None:
+    result = await asset_ai_analysis_service.analyze_asset(
+        asset={
+            "ticker": "ABCD3",
+            "name": "Empresa ABCD S.A.",
+            "asset_type": "ACAO",
+            "currency": "BRL",
+            "last_price": 110.0,
+        },
+        enrichment={
+            "stock_fundamentals": {
+                "roe": 1.0,
+                "net_margin": 1.0,
+                "pe": 18.0,
+            }
+        },
+        price_history=[
+            {"timestamp": "2026-09-25T00:00:00+00:00", "close": 100.0},
+            {"timestamp": "2026-10-13T00:00:00+00:00", "close": 100.0},
+            {"timestamp": "2026-11-12T00:00:00+00:00", "close": 110.0},
+        ],
+        dividends=[],
+        reports=[],
+        latest_report_excerpt=None,
+        news=[],
+    )
+    assert any("1,00%" in item for item in result["attention_points"])
+    assert not any("100,00%" in item for item in result["strengths"])
+    assert result["price_trend"]["return_30d_pct"] == 10.0
+    assert result["price_trend"]["return_90d_pct"] is None
