@@ -3,7 +3,7 @@
 
 > **Status do Documento:** Oficial / Baseline de Produção  
 > **Versão da Plataforma:** 2.0.0 (Release Contínuo — Branch `main`)  
-> **Revisão Canônica do Banco:** Alembic Head `20261105_purge_cert_entities`  
+> **Revisão Canônica do Banco:** Alembic Head `20261111_fraction_settlements`  
 > **Público-alvo:** Diretoria Executiva, Investidores, Gestores, Engenharia de Software, Segurança e Operações
 
 ---
