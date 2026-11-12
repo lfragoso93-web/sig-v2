@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
+from app.models.market_calendar_day import MarketCalendarDay
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.services.benchmark_rate_service import BenchmarkCoverageStatus
@@ -250,6 +251,50 @@ async def _load_exact_treasury_prices(
     return prices
 
 
+async def _is_confirmed_non_trading_treasury_date(
+    db: AsyncSession,
+    target_date: date,
+) -> bool:
+    """Confirma se a data é dia sem negociação do Tesouro (fim de semana, calendário certificado ou ausência global de PU)."""
+    if target_date.weekday() >= 5:
+        return True
+
+    calendar_row = (
+        await db.execute(
+            select(MarketCalendarDay.is_business_day).where(
+                MarketCalendarDay.market == "TESOURO_DIRETO_STANDARD",
+                MarketCalendarDay.calendar_date == target_date,
+            )
+        )
+    ).scalar_one_or_none()
+    if calendar_row is not None:
+        return not bool(calendar_row)
+
+    start_ts = datetime.combine(
+        target_date,
+        datetime.min.time(),
+        tzinfo=UTC,
+    )
+    end_ts = datetime.combine(
+        target_date,
+        datetime.max.time(),
+        tzinfo=UTC,
+    )
+    any_treasury_price = (
+        await db.execute(
+            select(AssetPrice.id)
+            .join(Asset, Asset.id == AssetPrice.asset_id)
+            .where(
+                Asset.asset_type == AssetType.TESOURO_DIRETO.value,
+                AssetPrice.timestamp >= start_ts,
+                AssetPrice.timestamp <= end_ts,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return any_treasury_price is None
+
+
 async def _load_treasury_prices_with_holiday_carry(
     db: AsyncSession,
     tickers: Iterable[str],
@@ -257,13 +302,19 @@ async def _load_treasury_prices_with_holiday_carry(
     *,
     max_lookback_days: int = 5,
 ) -> dict[str, Decimal]:
-    """Carrega PU exato na data ou no fechamento útil imediatamente anterior (feriados/pré-fechamento)."""
+    """Carrega PU exato na data; só propaga fechamento anterior quando a data é comprovadamente sem negociação."""
     requested = sorted({str(ticker).upper() for ticker in tickers if ticker})
     if not requested:
         return {}
 
     found = await _load_exact_treasury_prices(db, requested, target_date)
     missing = [ticker for ticker in requested if ticker not in found]
+    if not missing:
+        return found
+
+    if not await _is_confirmed_non_trading_treasury_date(db, target_date):
+        return found
+
     step = 1
     while missing and step <= max_lookback_days:
         prior_date = target_date - timedelta(days=step)
@@ -271,6 +322,8 @@ async def _load_treasury_prices_with_holiday_carry(
         for ticker, price in prior_prices.items():
             found.setdefault(ticker, price)
         missing = [ticker for ticker in requested if ticker not in found]
+        if missing and not await _is_confirmed_non_trading_treasury_date(db, prior_date):
+            break
         step += 1
     return found
 

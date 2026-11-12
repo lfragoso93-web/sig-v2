@@ -176,4 +176,30 @@ async def test_load_exact_treasury_prices_resolves_utc_midnight_and_prior_close(
         assert prices_exact == {"TESOURO-RENDA-MAIS-2065": Decimal("166.85")}
         assert prices_carry == {"TESOURO-RENDA-MAIS-2065": Decimal("166.85")}
 
+        # When another Treasury instrument has a price on a trading day, a missing ticker must NOT carry prior day's price
+        td_other = Asset(
+            ticker="tesouro-selic-2029",
+            name="Tesouro Selic 2029",
+            asset_type="TESOURO_DIRETO",
+            currency="BRL",
+        )
+        db.add(td_other)
+        await db.flush()
+        db.add(
+            AssetPrice(
+                asset_id=td_other.id,
+                timestamp=datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc),
+                close=Decimal("15000.00"),
+                source="tesouro_transparente",
+            )
+        )
+        await db.commit()
+
+        trading_day_missing = await _load_treasury_prices_with_holiday_carry(
+            db,
+            ["TESOURO-RENDA-MAIS-2065"],
+            date(2026, 11, 12),
+        )
+        assert trading_day_missing == {}
+
     await engine.dispose()
