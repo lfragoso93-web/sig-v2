@@ -35,6 +35,16 @@ _B3_CLASS_TYPES = frozenset({
 _B3_TICKER_DIGITS_RE = re.compile(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$")
 
 
+def is_eligible_b3_ticker(ticker: str | None) -> bool:
+    """Return True when ticker matches canonical B3 alphanumeric-with-digits shape."""
+    return bool(_B3_TICKER_DIGITS_RE.fullmatch(str(ticker or "").strip().upper()))
+
+
+def _b3_ticker_eligibility_predicate():
+    """SQL pre-filter requiring a digit so malformed B3 rows are excluded before LIMIT."""
+    return or_(*(Asset.ticker.like(f"%{digit}%") for digit in "0123456789"))
+
+
 def _normalize_filter(asset_type: str | None) -> tuple[str, ...] | None:
     if not asset_type:
         return None
@@ -135,7 +145,16 @@ async def suggest_assets_from_catalog(
     )
     if allowed_types:
         stmt = stmt.where(Asset.asset_type.in_(allowed_types))
+        if allowed_set and bool(allowed_set & _B3_CLASS_TYPES):
+            stmt = stmt.where(
+                or_(
+                    Asset.asset_type.notin_(_B3_CLASS_TYPES),
+                    _b3_ticker_eligibility_predicate(),
+                )
+            )
 
+    effective_limit = max(1, min(limit, 50))
+    fetch_limit = min(max(effective_limit * 4, effective_limit + 20), 200)
     stmt = stmt.order_by(
         case(
             (func.upper(Asset.ticker) == normalized, 0),
@@ -145,19 +164,18 @@ async def suggest_assets_from_catalog(
             else_=4,
         ),
         Asset.ticker,
-    ).limit(max(1, min(limit, 50)))
+    ).limit(fetch_limit)
 
     result = await db.execute(stmt)
     rows = result.all()
     seen: set[tuple[str, str]] = set()
     suggestions: list[AssetCatalogSuggestion] = []
     for asset, alias_ticker in rows:
-        ticker_upper = str(asset.ticker or "").strip().upper()
         asset_type_str = str(asset.asset_type)
         if (
             allowed_set is not None
             and asset_type_str in _B3_CLASS_TYPES
-            and not _B3_TICKER_DIGITS_RE.fullmatch(ticker_upper)
+            and not is_eligible_b3_ticker(asset.ticker)
         ):
             continue
         key = (asset.ticker, asset_type_str)
@@ -173,9 +191,11 @@ async def suggest_assets_from_catalog(
             AssetCatalogSuggestion(
                 ticker=asset.ticker,
                 name=name,
-                asset_type=str(asset.asset_type),
+                asset_type=asset_type_str,
             )
         )
+        if len(suggestions) >= effective_limit:
+            break
     return suggestions
 
 

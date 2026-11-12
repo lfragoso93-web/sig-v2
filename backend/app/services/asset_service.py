@@ -1,6 +1,5 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-import re
 from sqlalchemy import and_, func, select, or_
 from app.models.asset import Asset, AssetType
 from app.models.asset_alias import AssetAlias
@@ -88,15 +87,6 @@ async def get_asset_by_ticker(db: AsyncSession, ticker: str) -> Asset | None:
     return alias_result.scalar_one_or_none()
 
 
-_B3_CLASS_TYPES = frozenset({
-    AssetType.ACAO.value,
-    AssetType.FII.value,
-    AssetType.ETF_NACIONAL.value,
-    AssetType.BDR.value,
-})
-_B3_TICKER_DIGITS_RE = re.compile(r"^[A-Z][A-Z0-9]*\d+[A-Z]?$")
-
-
 async def search_assets(
     db: AsyncSession,
     q: str,
@@ -104,7 +94,12 @@ async def search_assets(
     limit: int = 20,
 ) -> list[Asset]:
     """Busca ativos por ticker, nome ou alias historico, com filtro estrito de asset_type."""
-    from app.services.asset_catalog_query_service import _user_selectable_catalog_predicate
+    from app.services.asset_catalog_query_service import (
+        _B3_CLASS_TYPES,
+        _b3_ticker_eligibility_predicate,
+        _user_selectable_catalog_predicate,
+        is_eligible_b3_ticker,
+    )
 
     asset_type_val = asset_type.value if asset_type is not None else None
     alias_join = (
@@ -128,13 +123,17 @@ async def search_assets(
         )
     if asset_type_val is not None:
         query = query.where(Asset.asset_type == asset_type_val)
-    query = query.distinct().order_by(Asset.ticker).limit(limit)
+        if asset_type_val in _B3_CLASS_TYPES:
+            query = query.where(_b3_ticker_eligibility_predicate())
+    effective_limit = max(1, limit)
+    fetch_limit = (
+        min(max(effective_limit * 4, effective_limit + 20), 200)
+        if asset_type_val in _B3_CLASS_TYPES
+        else effective_limit
+    )
+    query = query.distinct().order_by(Asset.ticker).limit(fetch_limit)
     result = await db.execute(query)
     assets = list(result.scalars().all())
     if asset_type_val in _B3_CLASS_TYPES:
-        assets = [
-            a
-            for a in assets
-            if _B3_TICKER_DIGITS_RE.fullmatch(str(a.ticker or "").strip().upper())
-        ]
-    return assets
+        assets = [a for a in assets if is_eligible_b3_ticker(a.ticker)]
+    return assets[:effective_limit]

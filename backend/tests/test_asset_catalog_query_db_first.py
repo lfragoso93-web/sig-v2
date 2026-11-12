@@ -103,3 +103,9 @@ async def test_assets_only_respond_to_search_and_quotes_within_their_own_class(
     # Market asset verification blocks non-B3 ticker shapes like BTC in ACAO
     exists, name = await verify_market_asset_exists("BTC", "ACAO")
     assert exists is False and name is None
+
+    # Anomalous BTC/ACAO sorting before valid BTOW3/ACAO must not consume SQL limit=1
+    db.add(Asset(ticker="BTOW3", name="B2W Digital", asset_type="ACAO", currency="BRL"))
+    await db.flush()
+    assert [(s.ticker, s.asset_type) for s in await suggest_assets_from_catalog(db, "BT", asset_type="ACAO", limit=1)] == [("BTOW3", "ACAO")]
+    assert [(a.ticker, a.asset_type) for a in await search_assets(db, "BT", asset_type=AssetType.ACAO, limit=1)] == [("BTOW3", "ACAO")]
