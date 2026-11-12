@@ -352,30 +352,34 @@ async def rebuild_class_snapshots(
         )
     )
 
+    def _clone_tx_for_date(transaction: Transaction, effective_date: date) -> Transaction:
+        if effective_date == transaction.date:
+            return transaction
+        return Transaction(
+            id=transaction.id,
+            portfolio_id=transaction.portfolio_id,
+            asset_type=transaction.asset_type,
+            ticker=transaction.ticker,
+            operation=transaction.operation,
+            date=effective_date,
+            quantity=transaction.quantity,
+            price=transaction.price,
+            currency=transaction.currency,
+            fx_rate=transaction.fx_rate,
+            price_brl=transaction.price_brl,
+            fees=transaction.fees,
+            notes=transaction.notes,
+            created_at=transaction.created_at,
+            updated_at=transaction.updated_at,
+            fixed_income_contract_id=transaction.fixed_income_contract_id,
+        )
+
     effective_market_transactions: list[Transaction] = []
     transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in market_transactions:
         is_crypto = _asset_type(transaction.asset_type) == AssetType.CRIPTO
         effective_date = transaction.date if is_crypto else _next_business_date(transaction.date)
-        if effective_date == transaction.date:
-            effective_tx = transaction
-        else:
-            effective_tx = Transaction(
-                id=transaction.id,
-                portfolio_id=transaction.portfolio_id,
-                asset_type=transaction.asset_type,
-                ticker=transaction.ticker,
-                operation=transaction.operation,
-                date=effective_date,
-                quantity=transaction.quantity,
-                price=transaction.price,
-                currency=transaction.currency,
-                exchange_rate=transaction.exchange_rate,
-                fees=transaction.fees,
-                notes=transaction.notes,
-                created_at=transaction.created_at,
-                updated_at=transaction.updated_at,
-            )
+        effective_tx = _clone_tx_for_date(transaction, effective_date)
         effective_market_transactions.append(effective_tx)
         transactions_by_day[effective_date].append(effective_tx)
 
@@ -383,25 +387,7 @@ async def rebuild_class_snapshots(
     treasury_transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in treasury_transactions:
         effective_date = _next_business_date(transaction.date)
-        if effective_date == transaction.date:
-            effective_tx = transaction
-        else:
-            effective_tx = Transaction(
-                id=transaction.id,
-                portfolio_id=transaction.portfolio_id,
-                asset_type=transaction.asset_type,
-                ticker=transaction.ticker,
-                operation=transaction.operation,
-                date=effective_date,
-                quantity=transaction.quantity,
-                price=transaction.price,
-                currency=transaction.currency,
-                exchange_rate=transaction.exchange_rate,
-                fees=transaction.fees,
-                notes=transaction.notes,
-                created_at=transaction.created_at,
-                updated_at=transaction.updated_at,
-            )
+        effective_tx = _clone_tx_for_date(transaction, effective_date)
         effective_treasury_transactions.append(effective_tx)
         treasury_transactions_by_day[effective_date].append(effective_tx)
 
