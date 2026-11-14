@@ -171,6 +171,25 @@ async def test_catalog_services_overwrite_placeholder_ticker_names(db: AsyncSess
 
 
 @pytest.mark.asyncio
+async def test_fetch_logos_batch_drops_brapi_placeholder(db: AsyncSession) -> None:
+    db.add_all([
+        Asset(
+            ticker="MXRF11", name="Maxi Renda FII", asset_type=AssetType.FII.value, currency="BRL",
+            logo_url="https://icons.brapi.dev/icons/BRAPI.svg",
+        ),
+        Asset(
+            ticker="PETR4", name="Petrobras", asset_type=AssetType.ACAO.value, currency="BRL",
+            logo_url="https://icons.brapi.dev/icons/PETR4.svg",
+        ),
+    ])
+    await db.commit()
+
+    logos = await portfolio_service._fetch_logos_batch(db, ["MXRF11", "PETR4"])
+    assert logos["MXRF11"] is None
+    assert logos["PETR4"] == "https://icons.brapi.dev/icons/PETR4.svg"
+
+
+@pytest.mark.asyncio
 async def test_fetch_asset_names_batch_keys_by_ticker_and_asset_type(db: AsyncSession) -> None:
     db.add_all([
         Asset(ticker="DIA", name="DIA Crypto", asset_type=AssetType.CRIPTO.value, currency="BRL"),
@@ -186,4 +205,3 @@ async def test_fetch_asset_names_batch_keys_by_ticker_and_asset_type(db: AsyncSe
     names = await portfolio_service._fetch_asset_names_batch(db, ["DIA"])
     assert names[("DIA", "CRIPTO")] == "DIA Crypto"
     assert names[("DIA", "ETF_INTERNACIONAL")] == "SPDR Dow Jones Industrial Average ETF"
-

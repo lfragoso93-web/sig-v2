@@ -373,7 +373,14 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
     result = await db.execute(
         select(Asset.ticker, Asset.logo_url).where(Asset.ticker.in_(tickers))
     )
-    return {row.ticker: row.logo_url for row in result.all()}
+    return {
+        row.ticker: (
+            None
+            if not row.logo_url or row.logo_url.rstrip("/").upper().endswith(("/BRAPI.SVG", "/BRAPI.PNG"))
+            else row.logo_url
+        )
+        for row in result.all()
+    }
 
 
 async def _fetch_asset_names_batch(
@@ -724,10 +731,18 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "asset_type": at,
             "asset_label": asset_display_name,
             "quantity": round(e["quantity"], 8),
-            "average_price": round(e["avg_price_usd"], 4) if (is_usd and e.get("avg_price_usd") is not None) else round(e["avg_price"], 4),
+            "average_price": (
+                round(e["avg_price_usd"], 4)
+                if (is_usd and e.get("avg_price_usd") is not None)
+                else round(e["avg_price"], 4)
+            ),
             "average_price_brl": round(e["avg_price"], 4),
             "average_price_usd": e.get("avg_price_usd"),
-            "current_price": e["current_price_usd"] if (is_usd and e.get("current_price_usd") is not None) else e["current_price"],
+            "current_price": (
+                e["current_price_usd"]
+                if (is_usd and e.get("current_price_usd") is not None)
+                else e["current_price"]
+            ),
             "current_price_brl": e["current_price"],
             "current_price_usd": e.get("current_price_usd"),
             "current_value": e["current_value"],

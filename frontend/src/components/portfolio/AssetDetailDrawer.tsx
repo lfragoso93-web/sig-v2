@@ -27,9 +27,10 @@ import {
   useAssetPortfolioInsights,
 } from '@/hooks/useAssetDetail'
 import { useTransactions } from '@/hooks/useTransactions'
+import AssetLogo from '@/components/ui/AssetLogo'
 import { useDividends } from '@/hooks/useDividends'
 import { formatReferenceDate } from '@/utils/portfolioSummary'
-import { formatBRL } from '@/utils/format'
+import { formatBRL, formatDate } from '@/utils/format'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
 export interface AssetDetailDrawerProps {
@@ -112,10 +113,14 @@ export default function AssetDetailDrawer({
   const transactions = txData?.items ?? []
   const assetDividends = (dividends ?? []).filter(d => d.ticker === activeTicker)
   const priceHistory = assetDetail?.price_history ?? []
-  const chartData = priceHistory.map(p => ({
-    date: new Date(p.date).toLocaleDateString('pt-BR', { month: '2-digit', day: '2-digit' }),
-    price: p.price,
-  }))
+  const chartData = priceHistory.map(p => {
+    const parts = p.date ? p.date.split('T')[0].split('-') : []
+    const label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : p.date
+    return {
+      date: label,
+      price: p.price,
+    }
+  })
 
   const avgPrice = asset?.average_price ?? portfolioInsight?.position.average_price ?? 0
   const totalDividends =
@@ -208,31 +213,12 @@ export default function AssetDetailDrawer({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-              {asset?.logo_url ? (
-                <img
-                  src={asset.logo_url}
-                  alt={activeTicker}
-                  style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'contain', flexShrink: 0 }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    background: 'var(--color-primary-light, rgba(37, 99, 235, 0.1))',
-                    color: 'var(--color-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: '0.95rem',
-                    flexShrink: 0,
-                  }}
-                >
-                  {activeTicker.slice(0, 2)}
-                </div>
-              )}
+              <AssetLogo
+                ticker={activeTicker ?? ''}
+                assetType={asset?.asset_type ?? assetDetail?.asset_type}
+                size={40}
+                logoUrl={asset?.logo_url}
+              />
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <h2
@@ -852,7 +838,7 @@ export default function AssetDetailDrawer({
                             {tx.operation.toUpperCase()} {tx.quantity} @ {formatBRL(tx.price)}
                           </div>
                           <div style={{ color: 'var(--color-text-muted)' }}>
-                            {new Date(tx.date).toLocaleDateString('pt-BR')}
+                            {formatDate(tx.date)}
                           </div>
                         </div>
                         <div style={{ fontWeight: 600, color: 'var(--color-text)', textAlign: 'right' }}>
@@ -1052,7 +1038,7 @@ export default function AssetDetailDrawer({
                                 {tx.operation.toUpperCase()} {tx.quantity} @ {formatBRL(tx.price)}
                               </div>
                               <div style={{ color: 'var(--color-text-muted)' }}>
-                                {new Date(tx.date).toLocaleDateString('pt-BR')}
+                                {formatDate(tx.date)}
                               </div>
                             </div>
                             <div style={{ fontWeight: 600, color: 'var(--color-text)', textAlign: 'right' }}>
