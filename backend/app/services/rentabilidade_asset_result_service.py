@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.asset_display_names import format_asset_display_name
 from app.models.transaction import OperationType, Transaction
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
+from app.services.portfolio_service import _fetch_logos_batch
 from app.services.realized_pnl_service import get_realized_pnl_by_ticker
 
 
@@ -73,6 +74,7 @@ async def get_canonical_asset_results(
                     fallback_label=ticker,
                 ),
                 "asset_type": position.get("asset_type"),
+                "logo_url": position.get("logo_url"),
                 "quantity": float(position.get("quantity") or 0),
                 "avg_price": float(position.get("average_price") or 0),
                 "current_price": position.get("current_price"),
@@ -86,6 +88,13 @@ async def get_canonical_asset_results(
                 "is_open": True,
                 "result_source": "canonical_positions_and_realized_pnl",
             })
+
+    closed_tickers = [
+        ticker
+        for ticker, realized in realized_by_ticker.items()
+        if ticker not in open_tickers and realized != 0
+    ]
+    closed_logos = await _fetch_logos_batch(db, closed_tickers) if closed_tickers else {}
 
     for ticker, realized in realized_by_ticker.items():
         if ticker in open_tickers or realized == 0:
@@ -101,6 +110,7 @@ async def get_canonical_asset_results(
                 fallback_label=ticker,
             ),
             "asset_type": info.get("asset_type"),
+            "logo_url": closed_logos.get(ticker),
             "quantity": 0.0,
             "avg_price": 0.0,
             "current_price": None,

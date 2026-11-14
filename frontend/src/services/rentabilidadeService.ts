@@ -26,6 +26,7 @@ export interface RentabilidadeAtivo {
   ticker: string
   name: string
   asset_type: string | null
+  logo_url?: string | null
   quantity: number
   avg_price: number
   current_price: number | null

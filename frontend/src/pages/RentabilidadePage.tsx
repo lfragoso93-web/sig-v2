@@ -199,7 +199,12 @@ function AtivoRow({ ativo, onTickerClick }: { ativo: RentabilidadeAtivo; onTicke
     <tr className="border-b" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.06)' }}>
       <td className="py-3 pr-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <AssetLogo ticker={ativo.ticker} assetType={ativo.asset_type} size={28} />
+          <AssetLogo
+            ticker={ativo.ticker}
+            assetType={ativo.asset_type}
+            logoUrl={ativo.logo_url}
+            size={28}
+          />
           <div className="flex flex-col min-w-0">
             <button
               type="button"
