@@ -26,11 +26,14 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
   const acc: Record<string, MonthlyPoint> = {}
 
   for (const t of transactions) {
-    const date = new Date(t.date)
-    if (Number.isNaN(date.getTime())) continue
+    if (!t.date) continue
+    const parts = t.date.split('T')[0].split('-')
+    if (parts.length < 2) continue
+    const [year, month] = parts
+    if (!year || !month || year.length !== 4) continue
 
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    const label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`
+    const key = `${year}-${month}`
+    const label = `${month}/${year.slice(-2)}`
 
     if (!acc[key]) {
       acc[key] = { month: key, label, buy: 0, sell: 0 }

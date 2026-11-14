@@ -86,14 +86,29 @@ export function formatQuantity(value: number | null | undefined): string {
 // -- Data --------------------------------------------------------------------
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
+  const parts = dateStr.split('T')[0].split('-')
+  if (parts.length === 3) {
+    const [y, m, d] = parts
+    if (y && m && d && y.length === 4) {
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+    }
+  }
   const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR')
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('pt-BR')
 }
 
 export function formatDateShort(dateStr: string): string {
   if (!dateStr) return '-'
+  const parts = dateStr.split('T')[0].split('-')
+  if (parts.length === 3) {
+    const [y, m] = parts
+    if (y && m && y.length === 4) {
+      const d = new Date(Number(y), Number(m) - 1, 1)
+      return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+    }
+  }
   const d = new Date(dateStr)
-  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
 }
 
 // -- Classe de cor por sinal -------------------------------------------------

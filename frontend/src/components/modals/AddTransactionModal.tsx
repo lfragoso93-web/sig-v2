@@ -72,7 +72,14 @@ const RF_PRODUCT_TYPES = [
   ['DEBENTURE', 'Debênture'], ['DEBENTURE_INCENTIVADA', 'Debênture incentivada'],
   ['LETRA_FINANCEIRA', 'Letra Financeira'], ['OUTRO', 'Outro'],
 ] as const
-const TODAY       = new Date().toISOString().split('T')[0]
+function getLocalTodayISO(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const TODAY = getLocalTodayISO()
 
 function canonicalContractIndexer(value: string): string | null {
   const map: Record<string, string> = {

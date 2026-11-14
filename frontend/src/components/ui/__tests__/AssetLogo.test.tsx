@@ -47,6 +47,27 @@ describe('AssetLogo canonical iconography (#351)', () => {
     expect(screen.getByTestId(`asset-logo-class-${assetType}`)).toBeTruthy()
     expect(container.querySelector('svg')).toBeTruthy()
   })
+
+  it('ignores the generic BRAPI placeholder logo and shows the class icon instead', () => {
+    render(
+      <AssetLogo ticker="MXRF11" assetType="FII" logoUrl="https://icons.brapi.dev/icons/BRAPI.svg" />,
+    )
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByTestId('asset-logo-class-FII')).toBeTruthy()
+  })
+
+  it.each(['DOGE', 'DOT', 'AVAX', 'POL', 'LTC', 'ADA'])(
+    'renders dedicated icon for crypto %s',
+    (ticker) => {
+      render(<AssetLogo ticker={ticker} assetType="CRIPTO" />)
+      expect(screen.getByTestId(`asset-logo-crypto-${ticker}`)).toBeTruthy()
+    },
+  )
+
+  it('does not treat a non-crypto asset with a crypto-like ticker as crypto', () => {
+    render(<AssetLogo ticker="BTC" assetType="ACAO" />)
+    expect(screen.getByTestId('asset-logo-class-ACAO')).toBeTruthy()
+  })
 })
 
 describe('formatTreasuryName commercial nomenclature (#351)', () => {
