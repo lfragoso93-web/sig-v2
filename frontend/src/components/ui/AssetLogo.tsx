@@ -23,6 +23,88 @@ export interface AssetLogoProps {
   logoUrl?: string | null
 }
 
+const US_STOCK_LOGO_ALIAS: Record<string, string> = {
+  NVDA: 'NVDC34',
+  AMZN: 'AMZO34',
+  GOOGL: 'GOGL34',
+  GOOG: 'GOGL34',
+  DIS: 'DISB34',
+  KO: 'COCA34',
+  MELI: 'MELI34',
+  JNJ: 'JNJB34',
+  PG: 'PGCO34',
+  V: 'VISA34',
+  MA: 'MSCD34',
+  JPM: 'JPMC34',
+  WMT: 'WALM34',
+  HD: 'HOME34',
+  MCD: 'MCDC34',
+  INTC: 'ITLC34',
+  AMD: 'A1MD34',
+  BABA: 'BABA34',
+  NIKE: 'NIKE34',
+  NKE: 'NIKE34',
+  SBUX: 'SBUB34',
+  PYPL: 'PYPL34',
+  ADBE: 'ADBE34',
+  QCOM: 'QCOM34',
+  AVGO: 'AVGO34',
+  PFIZ: 'PFIZ34',
+  PFE: 'PFIZ34',
+  ABBV: 'ABBV34',
+  UNH: 'UNHH34',
+  CVX: 'CHVX34',
+  XOM: 'EXXO34',
+  BAC: 'BOAC34',
+  WFC: 'WFCO34',
+  GS: 'GSGI34',
+  ORCL: 'ORCL34',
+  CSCO: 'CSCO34',
+  IBM: 'IBMB34',
+  AIRB: 'AIRB34',
+  ABNB: 'AIRB34',
+  UBER: 'U1BE34',
+}
+
+const KNOWN_US_STOCK_DIRECT = new Set(['AAPL', 'MSFT', 'TSLA', 'META', 'NFLX'])
+
+const B3_TICKER_REGEX = /^[A-Z]{4}(3|4|5|6|11|34|35)$/i
+
+export function deriveCompanyLogoUrl(ticker?: string | null, assetType?: string | null): string | null {
+  if (!ticker || !ticker.trim()) return null
+  const clean = ticker.trim().toUpperCase()
+  const normType = (assetType ?? '').trim().toUpperCase()
+
+  // Tesouro, Renda Fixa e Cripto sempre usam seus icones dedicados
+  if (
+    normType === 'TESOURO_DIRETO' ||
+    normType === 'TESOURO' ||
+    normType === 'RENDA_FIXA' ||
+    normType === 'CRIPTO' ||
+    normType === 'CRIPTOMOEDA'
+  ) {
+    return null
+  }
+
+  // Stock americano
+  if (normType === 'STOCK' || normType === 'STOCKS') {
+    if (clean in US_STOCK_LOGO_ALIAS) {
+      return `https://icons.brapi.dev/icons/${US_STOCK_LOGO_ALIAS[clean]}.svg`
+    }
+    if (KNOWN_US_STOCK_DIRECT.has(clean)) {
+      return `https://icons.brapi.dev/icons/${clean}.svg`
+    }
+    return null
+  }
+
+  // Ativos B3 (Acao, BDR, FII, ETF)
+  if (B3_TICKER_REGEX.test(clean)) {
+    return `https://icons.brapi.dev/icons/${clean}.svg`
+  }
+
+  return null
+}
+
 function normalizeCryptoSymbol(rawTicker: string): string {
   const clean = rawTicker.trim().toUpperCase()
   return clean
@@ -153,7 +235,15 @@ export default function AssetLogo({ ticker, assetType, size = 24, logoUrl }: Ass
     justifyContent: 'center',
   }
 
-  if (logoUrl && !isPlaceholderLogo(logoUrl) && !imgFailed) {
+  const isPlaceholder = isPlaceholderLogo(logoUrl)
+  const candidateUrl =
+    logoUrl && !isPlaceholder
+      ? logoUrl
+      : logoUrl == null
+        ? deriveCompanyLogoUrl(ticker, normType)
+        : null
+
+  if (candidateUrl && !imgFailed) {
     return (
       <div
         style={{
@@ -163,7 +253,7 @@ export default function AssetLogo({ ticker, assetType, size = 24, logoUrl }: Ass
         }}
       >
         <img
-          src={logoUrl}
+          src={candidateUrl}
           alt={ticker}
           width={size}
           height={size}

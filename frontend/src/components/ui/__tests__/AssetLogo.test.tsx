@@ -68,6 +68,24 @@ describe('AssetLogo canonical iconography (#351)', () => {
     render(<AssetLogo ticker="BTC" assetType="ACAO" />)
     expect(screen.getByTestId('asset-logo-class-ACAO')).toBeTruthy()
   })
+
+  it.each([
+    ['POMO4', 'ACAO', 'https://icons.brapi.dev/icons/POMO4.svg'],
+    ['PETR4', 'ACAO', 'https://icons.brapi.dev/icons/PETR4.svg'],
+    ['VALE3', 'ACAO', 'https://icons.brapi.dev/icons/VALE3.svg'],
+    ['AAPL34', 'BDR', 'https://icons.brapi.dev/icons/AAPL34.svg'],
+    ['NVDC34', 'BDR', 'https://icons.brapi.dev/icons/NVDC34.svg'],
+    ['NVDA', 'STOCK', 'https://icons.brapi.dev/icons/NVDC34.svg'],
+    ['AAPL', 'STOCK', 'https://icons.brapi.dev/icons/AAPL.svg'],
+  ])('derives company logo for %s (%s) when logoUrl is not passed and falls back to icon on error', (ticker, assetType, expectedUrl) => {
+    render(<AssetLogo ticker={ticker} assetType={assetType} />)
+    const img = screen.getByRole('img', { name: ticker }) as HTMLImageElement
+    expect(img.getAttribute('src')).toBe(expectedUrl)
+
+    fireEvent.error(img)
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByTestId(`asset-logo-class-${assetType}`)).toBeTruthy()
+  })
 })
 
 describe('formatTreasuryName commercial nomenclature (#351)', () => {

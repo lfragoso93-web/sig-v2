@@ -367,20 +367,120 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
     return await get_persisted_current_prices(db, tickers)
 
 
+_US_STOCK_LOGO_ALIAS: dict[str, str] = {
+    "NVDA": "NVDC34",
+    "AMZN": "AMZO34",
+    "GOOGL": "GOGL34",
+    "GOOG": "GOGL34",
+    "DIS": "DISB34",
+    "KO": "COCA34",
+    "MELI": "MELI34",
+    "JNJ": "JNJB34",
+    "PG": "PGCO34",
+    "V": "VISA34",
+    "MA": "MSCD34",
+    "JPM": "JPMC34",
+    "WMT": "WALM34",
+    "HD": "HOME34",
+    "MCD": "MCDC34",
+    "INTC": "ITLC34",
+    "AMD": "A1MD34",
+    "BABA": "BABA34",
+    "NIKE": "NIKE34",
+    "NKE": "NIKE34",
+    "SBUX": "SBUB34",
+    "PYPL": "PYPL34",
+    "ADBE": "ADBE34",
+    "QCOM": "QCOM34",
+    "AVGO": "AVGO34",
+    "PFIZ": "PFIZ34",
+    "PFE": "PFIZ34",
+    "ABBV": "ABBV34",
+    "UNH": "UNHH34",
+    "CVX": "CHVX34",
+    "XOM": "EXXO34",
+    "BAC": "BOAC34",
+    "WFC": "WFCO34",
+    "GS": "GSGI34",
+    "ORCL": "ORCL34",
+    "CSCO": "CSCO34",
+    "IBM": "IBMB34",
+    "AIRB": "AIRB34",
+    "ABNB": "AIRB34",
+    "UBER": "U1BE34",
+}
+
+_COMPANY_ASSET_TYPES = {
+    "ACAO",
+    "ACAO_NACIONAL",
+    "ACOES",
+    "BDR",
+    "FII",
+    "ETF",
+    "ETF_NACIONAL",
+    "ETF_INTERNACIONAL",
+    "STOCK",
+    "STOCKS",
+}
+
+
+def _derive_company_logo_url(ticker: str, asset_type: str | None = None) -> str | None:
+    raw_ticker = str(ticker or "").strip().upper()
+    if not raw_ticker:
+        return None
+    raw_type = str(getattr(asset_type, "value", asset_type) or "").strip().upper()
+
+    # Tesouro Direto, Renda Fixa e Cripto usam exclusivamente seus icones vetoriais
+    if raw_type in {"TESOURO_DIRETO", "TESOURO", "RENDA_FIXA", "CRIPTO", "CRIPTOMOEDA"}:
+        return None
+
+    if raw_type in {"STOCK", "STOCKS"} or raw_ticker in _US_STOCK_LOGO_ALIAS:
+        alias = _US_STOCK_LOGO_ALIAS.get(raw_ticker, raw_ticker)
+        return f"https://icons.brapi.dev/icons/{alias}.svg"
+
+    if raw_type in _COMPANY_ASSET_TYPES or any(
+        raw_ticker.endswith(s) for s in ("3", "4", "5", "6", "11", "34", "35")
+    ):
+        return f"https://icons.brapi.dev/icons/{raw_ticker}.svg"
+
+    return None
+
+
 async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
     if not tickers:
         return {}
+    candidate_tickers = sorted({t for item in tickers for t in (item, item.lower(), item.upper()) if t})
     result = await db.execute(
-        select(Asset.ticker, Asset.logo_url).where(Asset.ticker.in_(tickers))
-    )
-    return {
-        row.ticker: (
-            None
-            if not row.logo_url or row.logo_url.rstrip("/").upper().endswith(("/BRAPI.SVG", "/BRAPI.PNG"))
-            else row.logo_url
+        select(Asset.ticker, Asset.logo_url, Asset.asset_type).where(
+            Asset.ticker.in_(candidate_tickers)
         )
-        for row in result.all()
-    }
+    )
+    db_assets: dict[str, tuple[str | None, str | None, bool]] = {}
+    for row in result.all():
+        ticker_key = str(row.ticker).upper()
+        raw_logo = row.logo_url
+        is_placeholder = bool(
+            raw_logo and raw_logo.rstrip("/").upper().endswith(("/BRAPI.SVG", "/BRAPI.PNG"))
+        )
+        if is_placeholder:
+            raw_logo = None
+        db_assets[ticker_key] = (
+            raw_logo,
+            str(getattr(row.asset_type, "value", row.asset_type) or ""),
+            is_placeholder,
+        )
+
+    logos: dict[str, str | None] = {}
+    for t in tickers:
+        clean_t = str(t).upper().strip()
+        persisted_logo, asset_type, is_placeholder = db_assets.get(clean_t, (None, None, False))
+        if persisted_logo:
+            logos[t] = persisted_logo
+        elif is_placeholder:
+            logos[t] = None
+        else:
+            logos[t] = _derive_company_logo_url(clean_t, asset_type)
+    return logos
 
 
 async def _fetch_asset_names_batch(

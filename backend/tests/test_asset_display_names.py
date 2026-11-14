@@ -190,6 +190,42 @@ async def test_fetch_logos_batch_drops_brapi_placeholder(db: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
+async def test_fetch_logos_batch_derives_company_logo_when_db_logo_is_none(db: AsyncSession) -> None:
+    db.add_all([
+        Asset(
+            ticker="POMO4", name="Marcopolo", asset_type=AssetType.ACAO.value, currency="BRL",
+            logo_url=None,
+        ),
+        Asset(
+            ticker="AAPL34", name="Apple BDR", asset_type=AssetType.BDR.value, currency="BRL",
+            logo_url=None,
+        ),
+        Asset(
+            ticker="NVDA", name="NVIDIA Corp", asset_type=AssetType.STOCK.value, currency="USD",
+            logo_url=None,
+        ),
+        Asset(
+            ticker="TESOURO-SELIC-2029", name="Tesouro Selic 2029",
+            asset_type=AssetType.TESOURO_DIRETO.value, currency="BRL", logo_url=None,
+        ),
+        Asset(
+            ticker="BTC", name="Bitcoin",
+            asset_type=AssetType.CRIPTO.value, currency="BRL", logo_url=None,
+        ),
+    ])
+    await db.commit()
+
+    logos = await portfolio_service._fetch_logos_batch(
+        db, ["POMO4", "AAPL34", "NVDA", "TESOURO-SELIC-2029", "BTC"]
+    )
+    assert logos["POMO4"] == "https://icons.brapi.dev/icons/POMO4.svg"
+    assert logos["AAPL34"] == "https://icons.brapi.dev/icons/AAPL34.svg"
+    assert logos["NVDA"] == "https://icons.brapi.dev/icons/NVDC34.svg"
+    assert logos["TESOURO-SELIC-2029"] is None
+    assert logos["BTC"] is None
+
+
+@pytest.mark.asyncio
 async def test_fetch_asset_names_batch_keys_by_ticker_and_asset_type(db: AsyncSession) -> None:
     db.add_all([
         Asset(ticker="DIA", name="DIA Crypto", asset_type=AssetType.CRIPTO.value, currency="BRL"),

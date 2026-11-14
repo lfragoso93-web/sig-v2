@@ -49,6 +49,7 @@ async def test_asset_results_use_canonical_positions_and_realized_pnl():
         "ticker": "TEST3",
         "name": "Teste",
         "asset_type": "ACAO",
+        "logo_url": None,
         "quantity": 10.0,
         "avg_price": 10.0,
         "current_price": 12,
@@ -83,10 +84,14 @@ async def test_closed_position_keeps_realized_result_without_fake_twr():
     ), patch(
         "app.services.rentabilidade_asset_result_service.get_realized_pnl_by_ticker",
         AsyncMock(return_value={"OLD3": 20.0}),
+    ), patch(
+        "app.services.rentabilidade_asset_result_service._fetch_logos_batch",
+        AsyncMock(return_value={"OLD3": "https://icons.brapi.dev/icons/OLD3.svg"}),
     ):
         rows = await get_canonical_asset_results(db, 1, 2)
 
     assert rows[0]["is_open"] is False
     assert rows[0]["realized_pnl"] == 20.0
     assert rows[0]["total_pnl_pct"] == 25.0
+    assert rows[0]["logo_url"] == "https://icons.brapi.dev/icons/OLD3.svg"
     assert "twr" not in rows[0]
