@@ -1,12 +1,12 @@
-fastapi>=0.162.2
+fastapi>=0.165.0
 starlette>=1.10.0
 uvicorn[standard]==0.54.0
 sqlalchemy[asyncio]==2.1.8
 psycopg2-binary==2.9.13
 asyncpg==0.32.0
-pydantic==2.14.3
-pydantic[email]==2.14.3
-pydantic-settings==2.16.2
+pydantic==2.14.4
+pydantic[email]==2.14.4
+pydantic-settings==2.16.3
 alembic==1.20.1
 httpx==0.28.1
 yfinance==0.2.66
