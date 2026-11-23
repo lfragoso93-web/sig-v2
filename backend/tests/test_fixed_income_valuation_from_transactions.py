@@ -54,7 +54,7 @@ async def test_fixed_income_totals_from_transactions_reuses_preloaded_rows():
 async def test_fixed_income_totals_uses_latest_covered_benchmark_date(monkeypatch):
     calls = []
 
-    async def fake_valuations(_db, _portfolio_id, target_date=None):
+    async def fake_valuations(_db, _portfolio_id, target_date=None, **_kwargs):
         calls.append(target_date)
         if len(calls) == 1:
             raise IncompleteBenchmarkCoverageError(

@@ -113,6 +113,34 @@ async def get_canonical_portfolio_positions(
     user_id: int,
 ) -> list[dict]:
     legacy_groups = await get_portfolio_positions(db, portfolio_id, user_id)
+    today = datetime.now(timezone.utc).date()
+
+    # Otimização: get_portfolio_positions já calcula proventos canônicos em cada posição.
+    # Evita re-executar a query de entitlements quando todas as posições já têm proventos calculados.
+    all_positions = [
+        pos for group in legacy_groups for pos in group.get("positions", [])
+    ]
+    has_all_proventos = bool(all_positions) and all(
+        "proventos" in pos and pos.get("proventos") is not None
+        for pos in all_positions
+    )
+
+    if has_all_proventos:
+        canonical_groups: list[dict] = []
+        for group in legacy_groups:
+            positions = group.get("positions", [])
+            received_dividends = sum(
+                float(position.get("proventos") or 0.0)
+                for position in positions
+            )
+            canonical_groups.append(
+                _project_group(
+                    group,
+                    received_dividends=received_dividends,
+                    proventos_as_of=today.isoformat(),
+                )
+            )
+        return canonical_groups
 
     tickers = [
         str(position.get("ticker", "")).upper()
@@ -120,7 +148,6 @@ async def get_canonical_portfolio_positions(
         for position in group.get("positions", [])
         if position.get("ticker")
     ]
-    today = datetime.now(timezone.utc).date()
     dividends_by_ticker = await load_received_entitlements_by_ticker(
         db,
         portfolio_id,
@@ -128,7 +155,7 @@ async def get_canonical_portfolio_positions(
         as_of=today,
     )
 
-    canonical_groups: list[dict] = []
+    canonical_groups = []
     for group in legacy_groups:
         positions = group.get("positions", [])
         received_dividends = sum(

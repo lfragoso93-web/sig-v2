@@ -177,13 +177,18 @@ def _is_fixed_income_type(asset_type) -> bool:
     return normalize_type(asset_type) == RENDA_FIXA_TYPE
 
 
-async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date, Transaction.id)
-    )
-    transactions = list(result.scalars().all())
+async def calc_raw_positions(
+    db: AsyncSession,
+    portfolio_id: int,
+    transactions: list[Transaction] | None = None,
+) -> list[dict]:
+    if transactions is None:
+        result = await db.execute(
+            select(Transaction)
+            .where(Transaction.portfolio_id == portfolio_id)
+            .order_by(Transaction.date, Transaction.id)
+        )
+        transactions = list(result.scalars().all())
     if not transactions:
         return []
 
@@ -446,17 +451,27 @@ def _derive_company_logo_url(ticker: str, asset_type: str | None = None) -> str 
     return None
 
 
-async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
+async def _fetch_asset_metadata_batch(
+    db: AsyncSession, tickers: list[str]
+) -> tuple[dict[str, str | None], dict[tuple[str, str], str | None]]:
     if not tickers:
-        return {}
+        return {}, {}
     candidate_tickers = sorted({t for item in tickers for t in (item, item.lower(), item.upper()) if t})
     result = await db.execute(
-        select(Asset.ticker, Asset.logo_url, Asset.asset_type).where(
+        select(Asset.ticker, Asset.logo_url, Asset.asset_type, Asset.name).where(
             Asset.ticker.in_(candidate_tickers)
         )
     )
+    all_fn = getattr(result, "all", None)
+    if all_fn is None or inspect.iscoroutinefunction(all_fn):
+        return {}, {}
+    rows = all_fn()
+    if not isinstance(rows, (list, tuple)):
+        return {}, {}
+
     db_assets: dict[str, tuple[str | None, str | None, bool]] = {}
-    for row in result.all():
+    names: dict[tuple[str, str], str | None] = {}
+    for row in rows:
         ticker_key = str(row.ticker).upper()
         raw_logo = row.logo_url
         is_placeholder = bool(
@@ -469,6 +484,11 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
             str(getattr(row.asset_type, "value", row.asset_type) or ""),
             is_placeholder,
         )
+        if getattr(row, "ticker", None):
+            names[(
+                str(row.ticker).strip().upper(),
+                normalize_type(getattr(row, "asset_type", None)),
+            )] = str(row.name) if row.name is not None else None
 
     logos: dict[str, str | None] = {}
     for t in tickers:
@@ -480,33 +500,20 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
             logos[t] = None
         else:
             logos[t] = _derive_company_logo_url(clean_t, asset_type)
+
+    return logos, names
+
+
+async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
+    logos, _ = await _fetch_asset_metadata_batch(db, tickers)
     return logos
 
 
 async def _fetch_asset_names_batch(
     db: AsyncSession, tickers: list[str]
 ) -> dict[tuple[str, str], str | None]:
-    if not tickers:
-        return {}
-    candidate_tickers = sorted({t for item in tickers for t in (item, item.lower(), item.upper()) if t})
-    stmt = select(Asset.ticker, Asset.asset_type, Asset.name).where(
-        Asset.ticker.in_(candidate_tickers)
-    )
-    result = await db.execute(stmt)
-    all_fn = getattr(result, "all", None)
-    if all_fn is None or inspect.iscoroutinefunction(all_fn):
-        return {}
-    rows = all_fn()
-    if not isinstance(rows, (list, tuple)):
-        return {}
-    return {
-        (
-            str(row.ticker).strip().upper(),
-            normalize_type(getattr(row, "asset_type", None)),
-        ): str(row.name) if row.name is not None else None
-        for row in rows
-        if getattr(row, "ticker", None)
-    }
+    _, names = await _fetch_asset_metadata_batch(db, tickers)
+    return names
 
 
 def build_group_performance_metrics(
@@ -681,8 +688,12 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
     return portfolio
 
 
-async def _non_fixed_income_enriched(db: AsyncSession, portfolio_id: int) -> list[dict]:
-    positions_raw = await calc_raw_positions(db, portfolio_id)
+async def _non_fixed_income_enriched(
+    db: AsyncSession,
+    portfolio_id: int,
+    transactions: list[Transaction] | None = None,
+) -> list[dict]:
+    positions_raw = await calc_raw_positions(db, portfolio_id, transactions=transactions)
     positions_raw = [p for p in positions_raw if not _is_fixed_income_type(p.get("asset_type"))]
     fx_today = await get_usd_brl_today(db)
     prices = await _fetch_prices_batch(db, positions_raw)
@@ -773,8 +784,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     previous_prices, previous_reference_date = await _fetch_previous_prices_batch(db, enriched)
 
     tickers = [e["ticker"] for e in enriched]
-    logos = await _fetch_logos_batch(db, tickers)
-    asset_names = await _fetch_asset_names_batch(db, tickers)
+    logos, asset_names = await _fetch_asset_metadata_batch(db, tickers)
     dividends_by_ticker = await sum_dividends_by_ticker(db, portfolio_id, tickers)
 
     try:

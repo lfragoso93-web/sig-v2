@@ -328,27 +328,50 @@ async def _load_treasury_prices_with_holiday_carry(
     return found
 
 
-async def _upsert_class_snapshot(
+async def _upsert_class_snapshots_batch(
+    db: AsyncSession,
+    snapshots: list[dict],
+) -> None:
+    if not snapshots:
+        return
+    stmt = pg_insert(PortfolioClassSnapshot).values(snapshots)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_class_snapshot_portfolio_type_date",
+        set_={
+            "market_value": stmt.excluded.market_value,
+            "cost_basis": stmt.excluded.cost_basis,
+            "realized_pnl": stmt.excluded.realized_pnl,
+            "unrealized_pnl": stmt.excluded.unrealized_pnl,
+            "net_external_flow": stmt.excluded.net_external_flow,
+            "dividends_day": stmt.excluded.dividends_day,
+            "dividends_accumulated": stmt.excluded.dividends_accumulated,
+            "daily_return_pct": stmt.excluded.daily_return_pct,
+            "accumulated_return_pct": stmt.excluded.accumulated_return_pct,
+            "has_partial_prices": stmt.excluded.has_partial_prices,
+            "return_is_estimated": stmt.excluded.return_is_estimated,
+            "valuation_status": stmt.excluded.valuation_status,
+        },
+    )
+    await db.execute(stmt)
+
+
+async def _default_upsert_class_snapshot(
     db: AsyncSession,
     portfolio_id: int,
     asset_type: AssetType,
     snapshot_date: date,
     values: dict,
 ) -> None:
-    statement = (
-        pg_insert(PortfolioClassSnapshot)
-        .values(
-            portfolio_id=portfolio_id,
-            asset_type=asset_type.value,
-            snapshot_date=snapshot_date,
-            **values,
-        )
-        .on_conflict_do_update(
-            constraint="uq_class_snapshot_portfolio_type_date",
-            set_=values,
-        )
-    )
-    await db.execute(statement)
+    record = {
+        "portfolio_id": portfolio_id,
+        "asset_type": asset_type.value,
+        "snapshot_date": snapshot_date,
+        **values,
+    }
+    await _upsert_class_snapshots_batch(db, [record])
+
+
+_upsert_class_snapshot = _default_upsert_class_snapshot
 
 
 async def rebuild_class_snapshots(
@@ -494,8 +517,36 @@ async def rebuild_class_snapshots(
     previous_cash_flow_by_class: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
     treasury_inputs: list[DailyTwrInput] = []
     treasury_realized_pnl = _ZERO
+    snapshots_buffer: list[dict] = []
     count = 0
     cursor = start
+
+    async def _record_snapshot(
+        asset_type: AssetType,
+        snapshot_date: date,
+        values: dict,
+    ) -> None:
+        if _upsert_class_snapshot is not _default_upsert_class_snapshot:
+            await _upsert_class_snapshot(
+                db,
+                portfolio_id,
+                asset_type,
+                snapshot_date,
+                values,
+            )
+            return
+
+        snapshots_buffer.append(
+            {
+                "portfolio_id": portfolio_id,
+                "asset_type": asset_type.value,
+                "snapshot_date": snapshot_date,
+                **values,
+            }
+        )
+        if len(snapshots_buffer) >= 100:
+            await _upsert_class_snapshots_batch(db, snapshots_buffer)
+            snapshots_buffer.clear()
     while cursor <= today:
         external_flows: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
         for transaction in transactions_by_day.get(cursor, []):
@@ -616,9 +667,7 @@ async def rebuild_class_snapshots(
             )
             unrealized_pnl = market_value - cost_basis
 
-            await _upsert_class_snapshot(
-                db,
-                portfolio_id,
+            await _record_snapshot(
                 asset_type,
                 cursor,
                 {
@@ -710,9 +759,7 @@ async def rebuild_class_snapshots(
             treasury_point = build_daily_twr_chain(treasury_inputs)[-1]
             if treasury_point.available:
                 unrealized_pnl = market_value - cost_basis
-                await _upsert_class_snapshot(
-                    db,
-                    portfolio_id,
+                await _record_snapshot(
                     AssetType.TESOURO_DIRETO,
                     cursor,
                     {
@@ -771,9 +818,7 @@ async def rebuild_class_snapshots(
                 )
             unrealized_pnl = market_value - cost_basis
 
-            await _upsert_class_snapshot(
-                db,
-                portfolio_id,
+            await _record_snapshot(
                 AssetType.RENDA_FIXA,
                 cursor,
                 {
@@ -795,9 +840,15 @@ async def rebuild_class_snapshots(
             count += 1
 
         if count and count % 100 == 0:
+            if snapshots_buffer:
+                await _upsert_class_snapshots_batch(db, snapshots_buffer)
+                snapshots_buffer.clear()
             await db.commit()
         cursor += timedelta(days=1)
 
+    if snapshots_buffer:
+        await _upsert_class_snapshots_batch(db, snapshots_buffer)
+        snapshots_buffer.clear()
     await db.commit()
     logger.info(
         "[class_twr] portfolio=%s snapshots=%s start=%s supported=%s unavailable=%s",

@@ -284,7 +284,7 @@ export default function Sidebar() {
         <div
           style={{
             width: '100%',
-            maxWidth: 'min(1360px, 100%)',
+            maxWidth: 'min(1600px, 100%)',
             marginInline: 'auto',
             padding: '0 clamp(1rem, 2.5vw, 2rem)',
             height: 42,

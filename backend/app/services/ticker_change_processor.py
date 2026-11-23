@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable
 
 from sqlalchemy import select
@@ -99,7 +99,7 @@ async def apply_ticker_change_event(
     )
     if existing_result.first() is not None:
         event.status = CorporateEventStatus.APLICADO
-        event.applied_at = datetime.utcnow()
+        event.applied_at = datetime.now(timezone.utc)
         return False
 
     effective_date = event.effective_date or getattr(event, "event_date", None)
@@ -116,7 +116,7 @@ async def apply_ticker_change_event(
 
     if position.quantity <= 0:
         event.status = CorporateEventStatus.APLICADO
-        event.applied_at = datetime.utcnow()
+        event.applied_at = datetime.now(timezone.utc)
         await db.flush()
         return False
 
@@ -134,7 +134,7 @@ async def apply_ticker_change_event(
     db.add(Transaction(ticker=new_ticker, operation=OperationType.buy, **common))
 
     event.status = CorporateEventStatus.APLICADO
-    event.applied_at = datetime.utcnow()
+    event.applied_at = datetime.now(timezone.utc)
     await db.flush()
     return True
 

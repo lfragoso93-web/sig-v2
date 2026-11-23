@@ -382,7 +382,7 @@ async def main() -> None:
 
             year = now_utc.year
             irpf = await client.get(
-                f"/api/v1/irpf/{portfolio_id}/irpf/{year}/canonical",
+                f"/api/v1/portfolios/{portfolio_id}/irpf/{year}/canonical",
                 headers=headers,
             )
             _require_status(irpf, 200, "IRPF canonical")

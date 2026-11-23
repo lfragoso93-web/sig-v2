@@ -316,7 +316,7 @@ export default function Topbar() {
         className="flex items-center justify-between h-full"
         style={{
           width: '100%',
-          maxWidth: 'min(1360px, 100%)',
+          maxWidth: 'min(1600px, 100%)',
           marginInline: 'auto',
           padding: '0 clamp(1rem, 2.5vw, 2rem)',
           gap: 14,

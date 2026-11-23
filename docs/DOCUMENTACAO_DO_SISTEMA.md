@@ -3,7 +3,7 @@
 
 > **Status do Documento:** Oficial / Baseline de Produção  
 > **Versão da Plataforma:** 2.0.0 (Release Contínuo — Branch `main`)  
-> **Revisão Canônica do Banco:** Alembic Head `20261111_fraction_settlements`  
+> **Revisão Canônica do Banco:** Alembic Head `20261114_perf_query_indexes`
 > **Público-alvo:** Diretoria Executiva, Investidores, Gestores, Engenharia de Software, Segurança e Operações
 
 ---
@@ -222,6 +222,18 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
    - *Proventos:* Foco em renda passiva mensal imediata e previsibilidade de caixa (FIIs e Ações de dividendos).
    - *Performance:* Foco em valorização exponencial de longo prazo (Small Caps, Tech e Criptoativos).
    - Possui simulador integrado que calcula a quantidade exata de compra de cada ativo a partir do capital informado pelo usuário.
+
+### 5.2 Performance, Otimizações de Query e Governança de Índices
+
+O SGI v2 conta com arquitetura de alta performance para cargas analíticas e de consolidação de séries temporais:
+- **Eliminação de N+1 e Cache Invariante:** Consultas de metadados em lote (`_fetch_asset_metadata_batch`), resolução unificada de nomes e logos, e cache de ciclo de vida (`first_dates_cache`, `ticker_to_asset_id`) durante o encadeamento diário do motor TWR.
+- **Bulk Upserts Nativos no PostgreSQL:** Reconstrução de snapshots patrimoniais consolidados (`upsert_enriched_snapshots_batch`) e por classe (`_upsert_class_snapshots_batch`) operando com buffers em lote de até 100 registros por instrução nativa `INSERT ... ON CONFLICT DO UPDATE`, reduzindo o volume de chamadas SQL em ~98% durante rebuilds históricos.
+- **Coalescência de Consultas Transacionais:** Na rota `/summary`, as transações da carteira são carregadas uma única vez e compartilhadas em memória entre valoração intradiária, PnL realizado e valoração de títulos de renda fixa.
+- **Governança de Índices Alembic (`20261114_perf_query_indexes`):**
+  - `idx_txn_portfolio_ticker` em `transactions (portfolio_id, ticker)`: acelera filtros combinados por carteira e ativo.
+  - `idx_assets_lower_ticker` em `assets (lower(ticker))`: acelera lookups e cotações DB-first case-insensitive sem degradar índices B-Tree.
+  - `ix_portfolio_positions_asset_id` em `portfolio_positions (asset_id)`: indexação da chave estrangeira para joins de catálogo e restrições de deleção.
+  - `ix_corporate_events_portfolio_id` em `corporate_events (portfolio_id)` e `ix_corp_event_destination_leg_event` em `corporate_event_destination_legs (corporate_event_id)`: aceleração de buscas de eventos e operações em cascata.
 
 ---
 

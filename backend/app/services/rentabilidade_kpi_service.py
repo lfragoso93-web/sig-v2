@@ -46,7 +46,11 @@ async def get_rentabilidade_kpis(
     summary = await get_canonical_portfolio_summary(db, portfolio_id, user_id)
 
     today = clock.today() if clock is not SYSTEM_CLOCK else date.today()
-    points = await get_enriched_daily_evolution(db, portfolio_id, days=0)
+    # Otimização: carrega apenas a janela de 366 dias para calcular mês e 12M.
+    # points[-1] fornece o snapshot mais recente com accumulated_return_pct desde o início.
+    points = await get_enriched_daily_evolution(db, portfolio_id, days=366)
+    if not points:
+        points = await get_enriched_daily_evolution(db, portfolio_id, days=0)
     latest = points[-1] if points else None
 
     month_start = today.replace(day=1)

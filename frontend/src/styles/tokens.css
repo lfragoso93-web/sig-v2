@@ -160,6 +160,7 @@
   --content-narrow:  640px;
   --content-default: 960px;
   --content-wide:    1280px;
+  --content-max:     1600px;
   --content-full:    100%;
 
   /* ── Sidebar ────────────────────────────────────────── */
