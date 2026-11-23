@@ -53,6 +53,23 @@
     padding-right: 0.75rem !important;
   }
 
+  /* Tabela de matriz anual (15 colunas: Ano, 12 meses, No Ano, Acumulado) */
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] th,
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] td {
+    padding-left: clamp(0.25rem, 0.45vw, 0.5rem) !important;
+    padding-right: clamp(0.25rem, 0.45vw, 0.5rem) !important;
+  }
+
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] th:first-child,
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] td:first-child {
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] th:last-child,
+  .table-responsive table[data-testid="rentabilidade-matriz-anual-table"] td:last-child {
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+
   .positions-table td:last-child > div {
     gap: 0.5rem !important;
     flex-wrap: nowrap;

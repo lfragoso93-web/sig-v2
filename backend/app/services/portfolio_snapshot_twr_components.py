@@ -137,7 +137,30 @@ def accumulated_dividends_at(
     return total
 
 
-async def upsert_enriched_snapshot(
+async def upsert_enriched_snapshots_batch(
+    db: AsyncSession,
+    snapshots: list[dict],
+) -> None:
+    if not snapshots:
+        return
+    now_utc = datetime.now(timezone.utc)
+    for s in snapshots:
+        s["updated_at"] = now_utc
+
+    stmt = pg_insert(PortfolioSnapshot).values(snapshots)
+    set_cols = {
+        c.name: stmt.excluded[c.name]
+        for c in PortfolioSnapshot.__table__.columns
+        if c.name not in ("id", "portfolio_id", "snapshot_date", "created_at")
+    }
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_snapshot_portfolio_date",
+        set_=set_cols,
+    )
+    await db.execute(stmt)
+
+
+async def default_upsert_enriched_snapshot(
     db: AsyncSession,
     portfolio_id: int,
     snapshot_date: date,
@@ -154,3 +177,6 @@ async def upsert_enriched_snapshot(
         )
     )
     await db.execute(stmt)
+
+
+upsert_enriched_snapshot = default_upsert_enriched_snapshot

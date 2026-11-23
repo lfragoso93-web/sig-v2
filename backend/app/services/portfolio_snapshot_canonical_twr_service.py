@@ -25,7 +25,9 @@ from app.services.portfolio_snapshot_twr_components import (
     accumulated_dividends_at,
     calculate_transaction_components,
     decimal_value,
+    default_upsert_enriched_snapshot,
     upsert_enriched_snapshot,
+    upsert_enriched_snapshots_batch,
 )
 from app.services.silent_price_coverage_service import has_partial_prices_silent
 from app.services.twr_service import (
@@ -90,6 +92,30 @@ async def backfill_canonical_snapshots_with_returns(
     cursor = start
     treasury_symbol_cache: dict[str, str | None] = {}
     treasury_ticker_cache: dict[str, str] = {}
+    coverage_asset_id_cache: dict[str, int] = {}
+    coverage_first_dates_cache: dict[int, date | None] = {}
+    snapshots_buffer: list[dict] = []
+
+    async def _record_enriched_snapshot(
+        target_date: date,
+        values_dict: dict,
+    ) -> None:
+        if upsert_enriched_snapshot is not default_upsert_enriched_snapshot:
+            await upsert_enriched_snapshot(db, portfolio_id, target_date, values_dict)
+            return
+
+        snapshots_buffer.append(
+            {
+                "portfolio_id": portfolio_id,
+                "snapshot_date": target_date,
+                **values_dict,
+            }
+        )
+        if len(snapshots_buffer) >= 100:
+            await upsert_enriched_snapshots_batch(db, snapshots_buffer)
+            snapshots_buffer.clear()
+            if commit:
+                await db.commit()
 
     while cursor <= upper_bound:
         try:
@@ -162,6 +188,8 @@ async def backfill_canonical_snapshots_with_returns(
             db,
             transactions,
             cursor,
+            ticker_to_asset_id_cache=coverage_asset_id_cache,
+            first_dates_cache=coverage_first_dates_cache,
         )
         treasury_unresolved = decimal_value(
             totals.get("treasury_unresolved", 0)
@@ -183,16 +211,22 @@ async def backfill_canonical_snapshots_with_returns(
             "has_partial_prices": has_partial_prices,
             "return_is_estimated": has_partial_prices,
         }
-        await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
+        await _record_enriched_snapshot(cursor, values)
         previous_twr_value = current_twr_value
         previous_corporate_action_cash_flow_total = (
             corporate_action_cash_flow_total
         )
         count += 1
         if commit and count % 30 == 0:
+            if snapshots_buffer:
+                await upsert_enriched_snapshots_batch(db, snapshots_buffer)
+                snapshots_buffer.clear()
             await db.commit()
         cursor += timedelta(days=1)
 
+    if snapshots_buffer:
+        await upsert_enriched_snapshots_batch(db, snapshots_buffer)
+        snapshots_buffer.clear()
     if commit:
         await db.commit()
     logger.info(

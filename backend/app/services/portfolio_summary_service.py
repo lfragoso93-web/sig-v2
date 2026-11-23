@@ -18,6 +18,7 @@ from app.core.cache import cache_get, cache_set
 from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.transaction import Transaction
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services.canonical_dividend_aggregation_service import (
     load_received_entitlement_totals,
@@ -113,11 +114,19 @@ async def _get_latest_snapshot(db: AsyncSession, portfolio_id: int) -> Portfolio
     return result.scalars().first()
 
 
-async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
-    enriched = await _non_fixed_income_enriched(db, portfolio_id)
+async def _get_intraday_valuation(
+    db: AsyncSession,
+    portfolio_id: int,
+    transactions: list[Transaction] | None = None,
+) -> dict:
+    enriched = await _non_fixed_income_enriched(db, portfolio_id, transactions=transactions)
     try:
         fixed_income, _fixed_income_effective_date = (
-            await get_fixed_income_totals_with_coverage_fallback(db, portfolio_id)
+            await get_fixed_income_totals_with_coverage_fallback(
+                db,
+                portfolio_id,
+                transactions=transactions,
+            )
         )
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
@@ -125,7 +134,11 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
             sanitize_log_value(portfolio_id),
             sanitize_log_value(str(exc)),
         )
-        fixed_income = await get_fixed_income_principal_totals(db, portfolio_id)
+        fixed_income = await get_fixed_income_principal_totals(
+            db,
+            portfolio_id,
+            transactions=transactions,
+        )
     total_invested = sum(position["total_invested"] for position in enriched) + float(
         fixed_income["invested_amount"]
     )
@@ -199,14 +212,33 @@ def _quality_metadata(valuation: dict) -> dict:
     }
 
 
+async def _load_portfolio_transactions(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[Transaction]:
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    return list(result.scalars().all())
+
+
 async def _build_summary_from_latest_snapshot(
     db: AsyncSession,
     portfolio_id: int,
     snapshot: PortfolioSnapshot,
 ) -> dict:
-    valuation = await _get_intraday_valuation(db, portfolio_id)
+    transactions: list[Transaction] | None = None
+    if isinstance(db, AsyncSession):
+        try:
+            transactions = await _load_portfolio_transactions(db, portfolio_id)
+        except Exception:
+            transactions = None
+
+    valuation = await _get_intraday_valuation(db, portfolio_id, transactions=transactions)
     dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
-    realized_pnl = await get_realized_pnl(db, portfolio_id)
+    realized_pnl = await get_realized_pnl(db, portfolio_id, transactions=transactions)
     today = datetime.now(timezone.utc).date()
 
     summary = build_portfolio_summary(
@@ -257,9 +289,16 @@ async def _build_summary_from_latest_snapshot(
 
 
 async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id: int) -> dict:
-    valuation = await _get_intraday_valuation(db, portfolio_id)
+    transactions: list[Transaction] | None = None
+    if isinstance(db, AsyncSession):
+        try:
+            transactions = await _load_portfolio_transactions(db, portfolio_id)
+        except Exception:
+            transactions = None
+
+    valuation = await _get_intraday_valuation(db, portfolio_id, transactions=transactions)
     dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
-    realized_pnl = await get_realized_pnl(db, portfolio_id)
+    realized_pnl = await get_realized_pnl(db, portfolio_id, transactions=transactions)
     today = datetime.now(timezone.utc).date()
     summary = build_portfolio_summary(
         PortfolioSummaryInput(

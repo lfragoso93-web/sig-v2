@@ -41,6 +41,16 @@ async def get_portfolio_performance(
     ]
     current_prices = await get_persisted_current_prices(db, priced_tickers)
 
+    asset_names: dict[str, str] = {}
+    if priced_tickers:
+        asset_stmt = select(Asset.ticker, Asset.name).where(Asset.ticker.in_(priced_tickers))
+        asset_rows = (await db.execute(asset_stmt)).all()
+        asset_names = {
+            str(row.ticker).strip().upper(): str(row.name)
+            for row in asset_rows
+            if row.name is not None
+        }
+
     items = []
     for position in positions:
         ticker = str(position["ticker"]).upper()
@@ -68,13 +78,10 @@ async def get_portfolio_performance(
         gain = current_value - invested
         gain_pct = gain / invested * 100 if invested else 0.0
 
-        asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
-        asset = asset_result.scalar_one_or_none()
-
         items.append(
             {
                 "ticker": ticker,
-                "name": asset.name if asset else ticker,
+                "name": asset_names.get(ticker, ticker),
                 "asset_type": asset_type_str,
                 "quantity": round(quantity, 8),
                 "invested": round(invested, 2),

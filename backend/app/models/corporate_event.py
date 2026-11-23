@@ -86,7 +86,7 @@ class CorporateEvent(Base):
     # Contratos legados preservados temporariamente durante a migração incremental.
     description = Column(String)
     applied_at = Column(DateTime, nullable=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=True, index=True)
 
     # Catálogo canônico independente de provedor.
     destination_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
@@ -233,6 +233,7 @@ class CorporateEventDestinationLeg(Base):
         Integer,
         ForeignKey("corporate_events.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     destination_asset_id = Column(
         Integer,

@@ -35,6 +35,7 @@ class Transaction(Base):
         Index("idx_txn_ticker_date", "ticker", desc("date")),
         Index("idx_txn_asset_type", "asset_type"),
         Index("idx_txn_portfolio_date_asc", "portfolio_id", "date", "id"),
+        Index("idx_txn_portfolio_ticker", "portfolio_id", "ticker"),
         ForeignKeyConstraint(
             ["portfolio_id", "fixed_income_contract_id"],
             ["fixed_income_contracts.portfolio_id", "fixed_income_contracts.id"],

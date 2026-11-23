@@ -18,7 +18,7 @@ O backend do SGI v2 é construído sobre Python 3.12+ utilizando **FastAPI**, **
 ```text
 backend/
 ├── alembic/                # Scripts de migração de banco de dados (Alembic)
-│   └── versions/           # 70 revisões lineares (head: 20261105_purge_cert_entities)
+│   └── versions/           # 72 revisões lineares (head: 20261114_perf_query_indexes)
 ├── app/                    # Código-fonte principal da aplicação
 │   ├── cli/                # 64 módulos de linha de comando operacionais e administrativos
 │   ├── core/               # Configurações, segurança, database, redis, clock e scheduler
@@ -76,6 +76,11 @@ O desenvolvimento no backend do SGI v2 é rigidamente condicionado pelos seguint
 ### 2.6 Budgets de Queries (`assert_max_queries`)
 - Leituras financeiras de alta frequência são protegidas contra regressões N+1 por tetos estritos de queries SQL (`assert_max_queries`), garantindo que novas relações não degradem o pool de conexões.
 
+### 2.7 Superfície Canônica de Rotas e Higiene de Warnings
+- Endpoints de carteira mantêm prefixo único `/api/v1/portfolios/{portfolio_id}/...`, eliminando rotas duplicadas no catálogo OpenAPI/Swagger.
+- Modernização Python 3.12+ com eliminação de `datetime.utcnow()` obsoleto e injeção do relógio canônico `Clock` em serviços de projeção de metas.
+- Configuração estrita de `asyncio_default_fixture_loop_scope = function` no `pytest.ini`, eliminando avisos de depreciação do `pytest-asyncio`.
+
 ---
 
 ## 3. Banco de Dados e Governança de Migrations (Alembic)
@@ -83,7 +88,13 @@ O desenvolvimento no backend do SGI v2 é rigidamente condicionado pelos seguint
 - **Engine Assíncrono:** Conexões gerenciadas via SQLAlchemy 2.0 com driver `asyncpg` sobre PostgreSQL 16.
 - **Sessões:** Injetadas via dependência `get_db` no FastAPI utilizando context manager assíncrono `AsyncSessionLocal()`.
 - **Governança Alembic:** Todas as alterações no schema DDL são estritamente unidirecionais e encadeadas de forma linear em `backend/alembic/versions/`.
-- **Cabeça Vigente:** `20261105_purge_cert_entities` (70 revisões encadeadas sem ramificações abertas, cobrindo unificação de fracionários e purga de entidades sintéticas).
+- **Cabeça Vigente:** `20261114_perf_query_indexes` (72 revisões encadeadas sem ramificações abertas, cobrindo índices de performance de queries e unificação de fracionários).
+- **Índices de Performance Estruturais:**
+  - `idx_txn_portfolio_ticker` em `transactions (portfolio_id, ticker)`: filtros compostos por carteira e ativo.
+  - `idx_assets_lower_ticker` em `assets (lower(ticker))`: lookups e cotações DB-first case-insensitive sem degradação de B-Tree.
+  - `ix_portfolio_positions_asset_id` em `portfolio_positions (asset_id)`: aceleração de joins de catálogo e restrições de chave estrangeira.
+  - `ix_corporate_events_portfolio_id` em `corporate_events (portfolio_id)` e `ix_corp_event_destination_leg_event` em `corporate_event_destination_legs (corporate_event_id)`: aceleração de consultas e integridade referencial.
+- **Bulk Upserts Nativos:** Reconstrução de snapshots patrimoniais (`upsert_enriched_snapshots_batch`) e por classe (`_upsert_class_snapshots_batch`) com buffer em lotes de até 100 registros em `INSERT ... ON CONFLICT DO UPDATE`, eliminando round-trips e acelerando rebuilds históricos em ~98%.
 - **Gate de Drift:** O teste `tests/test_alembic_drift_gate.py` valida periodicamente a paridade perfeita entre os modelos SQLAlchemy `MetaData` e as revisões do Alembic.
 
 ---

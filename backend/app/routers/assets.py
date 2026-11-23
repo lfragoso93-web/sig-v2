@@ -259,11 +259,12 @@ async def _find_catalog_asset(
         "BDR",
     }:
         candidates.add(normalize_b3_equity_ticker(normalized))
-    stmt = select(Asset).where(func.upper(Asset.ticker).in_(candidates))
+    candidates_lower = [c.lower() for c in candidates]
+    stmt = select(Asset).where(func.lower(Asset.ticker).in_(candidates_lower))
     if normalized_type:
         stmt = stmt.where(Asset.asset_type == normalized_type)
     stmt = stmt.order_by(
-        case((func.upper(Asset.ticker) == normalized, 0), else_=1),
+        case((func.lower(Asset.ticker) == normalized.lower(), 0), else_=1),
         Asset.id,
     ).limit(1)
     result = await db.execute(stmt)
@@ -417,7 +418,7 @@ async def get_asset_analysis(
     else:
         stmt = (
             select(Asset)
-            .where(func.upper(Asset.ticker) == clean_identifier.upper())
+            .where(func.lower(Asset.ticker) == clean_identifier.lower())
             .order_by(Asset.id.asc())
         )
         result = await db.execute(stmt)

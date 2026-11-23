@@ -7,7 +7,7 @@
 > ⚠️ **Regra Obrigatória de Documentação Contínua e Viva:** A cada nova instrução, implementação, correção de bug, refatoração, migração ou criação de recurso/rota no código, **toda a documentação afetada DEVE ser atualizada obrigatoriamente no mesmo bloco de trabalho** (incluindo `README.md`, `docs/ROADMAP.md`, `docs/DOCUMENTACAO_DO_SISTEMA.md`, `backend/README.md`, `frontend/README.md` e arquivos de domínio). Nenhuma entrega de software é considerada completa com documentação divergente ou defasada.
 
 Plataforma corporativa e determinística para acompanhamento, consolidação patrimonial, rentabilidade ponderada pelo tempo (TWR), Proventos, apuração fiscal de IRPF e simulação financeira de carteiras multiclasse.
-- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261111_fraction_settlements`, 71 revisões), PostgreSQL 16, Redis 7 e APScheduler (12 jobs canônicos).
+- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261114_perf_query_indexes`, 72 revisões), PostgreSQL 16, Redis 7 e APScheduler (12 jobs canônicos).
 - **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`, major 7 bloqueado até compatibilidade do `typescript-eslint`), Vite 8 (`^8.3.6`), Tailwind CSS v4 (`^4.3.4`), TanStack Query v5 (`^5.106.1`), Zustand e Vitest.
 
 ## Ambientes de desenvolvimento e producao
@@ -41,9 +41,12 @@ Detalhes em `docs/deployment/oci-execution-index.md` e `docs/REAL_DATA_CERTIFICA
 
 ## Funcionalidades e baseline de produção
 
-A baseline confirmada em produção nesta revisão é a **PR #567** (Fase 2) no SHA `666b5d8e`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261111_fraction_settlements` (71 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
+A baseline confirmada em produção nesta revisão é a **PR #567** (Fase 2) no SHA `666b5d8e`. A branch local `stable-15jun` é a base de desenvolvimento e validação. A revisão canônica de banco está na migration `20261114_perf_query_indexes` (72 migrações lineares aplicadas). Consulte [`docs/ROADMAP.md`](docs/ROADMAP.md) para o histórico das entregas.
 
 ### Funcionalidades Implementadas e Ativas
+
+- **Otimização Global de Performance de Consultas, I/O e Índices:** Eliminação de N+1 em performance e no loop diário de TWR (`silent_price_coverage_service.py`), unificação de metadados em batch em `portfolio_service.py`, reuso de proventos canônicos em posições, carga de snapshots limitada a 366 dias em KPIs, query condicional e escopada para ativos encerrados, bulk upsert nativo com `pg_insert` em metas de alocação e snapshots de classe (buffer de 100 itens), bulk upsert em lotes de snapshots TWR consolidados em `portfolio_snapshot_twr_components.py`, coalescência transacional única em `/summary` para valoração de posições, PnL realizado e títulos de renda fixa, alinhamento funcional de índices com `func.lower(Asset.ticker)` e eliminação de funções em colunas indexadas, além da criação e governança de índices relacionais e compostos na revisão Alembic `20261114_perf_query_indexes` (`idx_txn_portfolio_ticker`, `idx_assets_lower_ticker`, `ix_portfolio_positions_asset_id`, `ix_corporate_events_portfolio_id`, `ix_corp_event_destination_leg_event`).
+- **Higiene de Rotas REST, Modernização e Resiliência de Frontend:** Eliminação da rota duplicada de IRPF em `main.py`, unificando a superfície pública em `/api/v1/portfolios/{portfolio_id}/irpf`, alinhamento do smoke test `test_ready_http_smoke.py`, eliminação de `datetime.utcnow()` depreciado em `ticker_change_processor.py`, injeção canônica de `Clock` em `goals_service.py`, configuração de loop scope no `pytest.ini`, eliminação de avisos assíncronos no Vitest (`AddTransactionModal.test.tsx`) e calibração de `gcTime` e `refetchOnWindowFocus: false` no QueryClient do TanStack Query v5.
 
 - **Motor de Análise (#360) e Camada de IA (#361):** Análise determinística de diversificação patrimonial e concentração de ativos combinada com geração de resumos executivos e diagnósticos explicativos em linguagem natural (`frontend/src/pages/AnalisePage.tsx`).
 - **Autenticação Google OAuth 2.0 & MFA TOTP (#97):** Login federado com Google e proteção com segundo fator (TOTP) integrados no fluxo de autenticação e no schema de banco.

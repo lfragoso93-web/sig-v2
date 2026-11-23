@@ -548,7 +548,7 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
               </tbody>
             </table>
           ) : (
-            <table className="w-full min-w-[980px]" data-testid="rentabilidade-matriz-anual-table">
+            <table className="w-full min-w-[880px]" data-testid="rentabilidade-matriz-anual-table">
               <thead>
                 <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.08)' }}>
                   <th className="pb-2.5 pr-3 text-left text-xs font-medium" style={{ color: 'var(--color-text-faint)' }}>

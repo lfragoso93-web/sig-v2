@@ -14,7 +14,7 @@ Projeção de data:
 from __future__ import annotations
 
 from typing import Optional
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,9 +217,13 @@ async def _get_patrimonio_atual(
     return float(summary["total_patrimonio"])
 
 
-async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
+async def _get_proventos_mensais(
+    db: AsyncSession,
+    portfolio_id: int,
+    clock: Clock = SYSTEM_CLOCK,
+) -> float:
     """Return average monthly net BRL entitlements paid in last 12 months."""
-    today = date.today()
+    today = clock.today()
     cutoff_12m = today + relativedelta(months=-12)
     entitlements = await load_portfolio_dividend_entitlements(
         db,
@@ -262,6 +266,7 @@ async def _resolve_current_value(
     goal_type: str,
     provided_current: float,
     user_id: int | None = None,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> float:
     """Para tipos auto, busca valor real; LIVRE usa valor informado."""
     if goal_type == "PATRIMONIO":
@@ -269,7 +274,7 @@ async def _resolve_current_value(
             raise ValueError("user_id is required to resolve portfolio value")
         return await _get_patrimonio_atual(db, portfolio_id, user_id)
     if goal_type == "PROVENTOS":
-        return await _get_proventos_mensais(db, portfolio_id)
+        return await _get_proventos_mensais(db, portfolio_id, clock=clock)
     if goal_type == "RENTABILIDADE":
         return await _get_rentabilidade_atual(db, portfolio_id)
     return provided_current  # LIVRE

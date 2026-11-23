@@ -24,25 +24,31 @@ _RENDA_FIXA_TYPE = "RENDA_FIXA"
 async def load_realized_pnl_by_ticker(
     db: AsyncSession,
     portfolio_id: int,
+    transactions: list[Transaction] | None = None,
 ) -> dict[str, float]:
     """Projeta PnL realizado sem reconstruir posição com regra paralela."""
 
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
-    transactions = [
+    if transactions is None:
+        result = await db.execute(
+            select(Transaction)
+            .where(Transaction.portfolio_id == portfolio_id)
+            .order_by(Transaction.date.asc(), Transaction.id.asc())
+        )
+        loaded = list(result.scalars().all())
+    else:
+        loaded = list(transactions)
+
+    filtered_transactions = [
         tx
-        for tx in result.scalars().all()
+        for tx in loaded
         if normalize_type(tx.asset_type) != _RENDA_FIXA_TYPE
     ]
-    if not transactions:
+    if not filtered_transactions:
         return {}
 
     actions_by_ticker = await load_global_corporate_actions_by_ticker(
         db,
-        [str(tx.ticker) for tx in transactions],
+        [str(tx.ticker) for tx in filtered_transactions],
     )
     actions_by_ticker = await apply_portfolio_corporate_fraction_settlements(
         db,
@@ -50,7 +56,7 @@ async def load_realized_pnl_by_ticker(
         actions_by_ticker=actions_by_ticker,
     )
     timelines = project_transaction_timelines(
-        transactions=transactions,
+        transactions=filtered_transactions,
         actions_by_ticker=actions_by_ticker,
         target_date=datetime.now(UTC).date(),
     )

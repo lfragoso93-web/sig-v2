@@ -19,12 +19,21 @@ def _pct(value: float, base: float) -> float | None:
     return round(value / base * 100, 4)
 
 
-async def _transaction_metadata(db: AsyncSession, portfolio_id: int) -> dict[str, dict]:
-    result = await db.execute(
+async def _transaction_metadata(
+    db: AsyncSession,
+    portfolio_id: int,
+    tickers: list[str] | set[str] | None = None,
+) -> dict[str, dict]:
+    if tickers is not None and not tickers:
+        return {}
+    query = (
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
+    if tickers is not None:
+        query = query.where(Transaction.ticker.in_(list(tickers)))
+    query = query.order_by(Transaction.date.asc(), Transaction.id.asc())
+    result = await db.execute(query)
     metadata: dict[str, dict] = defaultdict(lambda: {"invested": 0.0, "asset_type": None})
     for tx in result.scalars().all():
         ticker = str(tx.ticker or "").upper().strip()
@@ -49,7 +58,6 @@ async def get_canonical_asset_results(
     """Combina valuation canônico atual e PnL realizado canônico por ticker."""
     groups = await get_canonical_portfolio_positions(db, portfolio_id, user_id)
     realized_by_ticker = await get_realized_pnl_by_ticker(db, portfolio_id)
-    metadata = await _transaction_metadata(db, portfolio_id)
 
     open_tickers: set[str] = set()
     rows: list[dict] = []
@@ -94,6 +102,7 @@ async def get_canonical_asset_results(
         for ticker, realized in realized_by_ticker.items()
         if ticker not in open_tickers and realized != 0
     ]
+    metadata = await _transaction_metadata(db, portfolio_id, tickers=closed_tickers) if closed_tickers else {}
     closed_logos = await _fetch_logos_batch(db, closed_tickers) if closed_tickers else {}
 
     for ticker, realized in realized_by_ticker.items():

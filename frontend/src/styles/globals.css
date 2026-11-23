@@ -77,7 +77,7 @@
 
   .page-container {
     width: 100%;
-    max-width: min(1360px, 100%);
+    max-width: min(1600px, 100%);
     margin-left: auto !important;
     margin-right: auto !important;
     padding: clamp(1.125rem, 1.8vw, 1.5rem) clamp(1rem, 2.5vw, 2rem) clamp(1.75rem, 2.2vw, 2.5rem);

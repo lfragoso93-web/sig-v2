@@ -1,6 +1,6 @@
 @layer components {
   .settings-page {
-    max-width: min(1360px, 100%);
+    max-width: min(1600px, 100%);
     margin-inline: auto;
   }
 
@@ -270,7 +270,7 @@
 
   @media (min-width: 1440px) {
     .settings-page {
-      max-width: min(1360px, 100%);
+      max-width: min(1600px, 100%);
     }
 
     .auth-panel {

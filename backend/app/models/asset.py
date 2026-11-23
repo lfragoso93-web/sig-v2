@@ -4,10 +4,12 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -40,6 +42,7 @@ class Asset(Base):
 
     __table_args__ = (
         UniqueConstraint("ticker", "asset_type", name="uq_asset_ticker_type"),
+        Index("idx_assets_lower_ticker", text("lower(ticker)")),
     )
 
     id = Column(Integer, primary_key=True, index=True)
