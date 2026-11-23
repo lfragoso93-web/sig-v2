@@ -26,6 +26,16 @@ export interface PatrimonioEvolutionPoint {
 interface Props {
   data: PatrimonioEvolutionPoint[]
   loading?: boolean
+  granularity?: 'daily' | 'monthly'
+}
+
+function dayLabel(value: string) {
+  const parts = value.slice(0, 10).split('-')
+  if (parts.length === 3) {
+    const [, month, day] = parts
+    return `${day}/${month}`
+  }
+  return value
 }
 
 function monthLabel(value: string) {
@@ -43,6 +53,7 @@ function fullDate(value: string) {
 interface TooltipProps {
   active?: boolean
   payload?: Array<{ payload: ChartPoint }>
+  granularity?: 'daily' | 'monthly'
 }
 
 export interface ChartPoint {
@@ -60,15 +71,23 @@ export interface ChartPoint {
   is_realtime?: boolean
 }
 
-export function buildPatrimonioChartData(data: PatrimonioEvolutionPoint[]): ChartPoint[] {
+export function buildPatrimonioChartData(
+  data: PatrimonioEvolutionPoint[],
+  granularity?: 'daily' | 'monthly',
+): ChartPoint[] {
+  const isDaily = granularity === 'daily'
   return data.map(point => {
     const patrimonio = Number(point.market_value)
     const aplicado = Number(point.cost_basis)
     const resultado = Number(point.unrealized_pnl)
     const isRealTime = Boolean(point.is_realtime || point.history_source === 'realtime')
 
+    const label = isDaily
+      ? dayLabel(point.date)
+      : monthLabel(point.period ?? point.date.slice(0, 7))
+
     const basePoint: ChartPoint = {
-      name: monthLabel(point.period ?? point.date.slice(0, 7)),
+      name: label,
       date: point.date,
       patrimonio,
       aplicado,
@@ -105,16 +124,18 @@ export function getSymmetricAxisLimit(data: ChartPoint[]): number {
   return Math.ceil(maxAbsolute * 1.08)
 }
 
-function EvolutionTooltip({ active, payload }: TooltipProps) {
+function EvolutionTooltip({ active, payload, granularity }: TooltipProps) {
   const point = payload?.[0]?.payload
   if (!active || !point) return null
 
   const isRealTime = point.source === 'realtime' || Boolean(point.is_realtime)
+  const isDaily = granularity === 'daily'
   const referenceLabel = isRealTime
     ? 'Posição Atual (Tempo Real)'
     : point.source === 'portfolio_class_snapshot'
-      ? 'Snapshot mensal da classe'
-      : 'Snapshot consolidado'
+      ? (isDaily ? 'Snapshot diário da classe' : 'Snapshot mensal da classe')
+      : (isDaily ? 'Snapshot diário consolidado' : 'Snapshot consolidado')
+  const title = isDaily ? fullDate(point.date) : point.name
 
   return (
     <div
@@ -126,7 +147,7 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontWeight: 700, marginBottom: 10 }}>
-        <span style={{ fontSize: '0.825rem', letterSpacing: '-0.01em' }}>{point.name}</span>
+        <span style={{ fontSize: '0.825rem', letterSpacing: '-0.01em' }}>{title}</span>
         {isRealTime && (
           <span
             style={{
@@ -228,7 +249,7 @@ function ChartLegend() {
   )
 }
 
-export default function PatrimonioBarChart({ data, loading }: Props) {
+export default function PatrimonioBarChart({ data, loading, granularity }: Props) {
   if (loading) return <div className="skeleton h-64 w-full rounded-xl" />
 
   if (!data.length) {
@@ -241,7 +262,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
     )
   }
 
-  const chartData = buildPatrimonioChartData(data)
+  const chartData = buildPatrimonioChartData(data, granularity)
   const axisLimit = getSymmetricAxisLimit(chartData)
 
   return (
@@ -293,7 +314,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
             width={62}
           />
           <Tooltip
-            content={<EvolutionTooltip />}
+            content={<EvolutionTooltip granularity={granularity} />}
             cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.05)', radius: 4 }}
           />
           <Bar

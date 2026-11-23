@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   usePositions: vi.fn(),
   useMonthlyEvolution: vi.fn(),
   useClassMonthlyEvolution: vi.fn(),
+  useDailyEvolution: vi.fn(),
+  useClassDailyEvolution: vi.fn(),
   useClassTwrAvailability: vi.fn(),
   setSelectedPortfolioId: vi.fn(),
   kpiProps: [] as Array<{ label: string; value: string; subValue?: string }>,
@@ -21,11 +23,17 @@ vi.mock('@/hooks/usePortfolio', () => ({
   usePositions: mocks.usePositions,
 }))
 
-vi.mock('@/hooks/useEvolution', () => ({
-  useMonthlyEvolution: mocks.useMonthlyEvolution,
-  useClassMonthlyEvolution: mocks.useClassMonthlyEvolution,
-  useClassTwrAvailability: mocks.useClassTwrAvailability,
-}))
+vi.mock('@/hooks/useEvolution', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useEvolution')>()
+  return {
+    ...actual,
+    useMonthlyEvolution: mocks.useMonthlyEvolution,
+    useClassMonthlyEvolution: mocks.useClassMonthlyEvolution,
+    useDailyEvolution: mocks.useDailyEvolution,
+    useClassDailyEvolution: mocks.useClassDailyEvolution,
+    useClassTwrAvailability: mocks.useClassTwrAvailability,
+  }
+})
 
 vi.mock('@/store/appStore', () => ({
   useAppStore: (selector: (state: {
@@ -61,8 +69,8 @@ vi.mock('@/components/ui/SkeletonCard', () => ({
 }))
 
 vi.mock('@/components/charts/PatrimonioBarChart', () => ({
-  default: ({ data }: { data: Array<{ history_source?: string }> }) => (
-    <div data-testid="patrimonio-chart">{data[0]?.history_source}</div>
+  default: ({ data, granularity }: { data: Array<{ history_source?: string }>; granularity?: string }) => (
+    <div data-testid="patrimonio-chart" data-granularity={granularity}>{data[0]?.history_source}</div>
   ),
 }))
 
@@ -94,6 +102,14 @@ describe('ResumePage position states', () => {
       data: [],
       isLoading: false,
     })
+    mocks.useDailyEvolution.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
+    mocks.useClassDailyEvolution.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
     mocks.useClassTwrAvailability.mockReturnValue({
       data: [],
       isLoading: false,
@@ -114,6 +130,57 @@ describe('ResumePage position states', () => {
 
     expect(mocks.useMonthlyEvolution).toHaveBeenCalledWith(46, 'all')
     expect(screen.getByTestId('patrimonio-chart').textContent).toBe('portfolio_snapshot')
+  })
+
+  it('usa snapshots diários quando o período diário é selecionado', () => {
+    mocks.useDailyEvolution.mockReturnValue({
+      data: [{ history_source: 'portfolio_snapshot', date: '2026-11-20' }],
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+    const periodSelect = screen.getAllByRole('combobox')[1]
+    fireEvent.change(periodSelect, {
+      target: { value: '30d' },
+    })
+
+    expect(mocks.useDailyEvolution).toHaveBeenCalledWith(46, '30d')
+    const chart = screen.getByTestId('patrimonio-chart')
+    expect(chart.textContent).toBe('portfolio_snapshot')
+    expect(chart.getAttribute('data-granularity')).toBe('daily')
+  })
+
+  it('usa snapshots diários de classe quando classe e período diário estão selecionados', () => {
+    mocks.useClassTwrAvailability.mockReturnValue({
+      data: [{
+        asset_type: 'FII',
+        available: true,
+        engine_supported: true,
+        data_available: true,
+        latest_snapshot_date: '2026-11-20',
+        status: 'available',
+        reason: null,
+      }],
+      isLoading: false,
+    })
+    mocks.useClassDailyEvolution.mockReturnValue({
+      data: [{ history_source: 'portfolio_class_snapshot', date: '2026-11-20' }],
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+    const [classSelect, periodSelect] = screen.getAllByRole('combobox')
+    fireEvent.change(classSelect, {
+      target: { value: 'FII' },
+    })
+    fireEvent.change(periodSelect, {
+      target: { value: '15d' },
+    })
+
+    expect(mocks.useClassDailyEvolution).toHaveBeenCalledWith(46, 'FII', '15d')
+    const chart = screen.getByTestId('patrimonio-chart')
+    expect(chart.textContent).toBe('portfolio_class_snapshot')
+    expect(chart.getAttribute('data-granularity')).toBe('daily')
   })
 
   it('usa snapshots de classe somente quando a classe está disponível', () => {

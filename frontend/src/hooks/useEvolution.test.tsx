@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import api from '@/services/api'
 import {
+  PERIOD_DAYS,
   PERIOD_MONTHS,
+  isDailyPeriod,
   useClassDailyEvolution,
   useClassMonthlyEvolution,
   useDailyEvolution,
@@ -41,11 +43,21 @@ function createWrapper() {
 describe('canonical monthly evolution hooks', () => {
   it('mapeia todos os períodos sem aproximação no componente', () => {
     expect(PERIOD_MONTHS).toEqual({
+      '7d': 1,
+      '15d': 1,
+      '30d': 1,
       '6m': 6,
       '12m': 12,
       '24m': 24,
       'all': 0,
     })
+    expect(PERIOD_DAYS['7d']).toBe(7)
+    expect(PERIOD_DAYS['15d']).toBe(15)
+    expect(PERIOD_DAYS['30d']).toBe(30)
+    expect(isDailyPeriod('7d')).toBe(true)
+    expect(isDailyPeriod('15d')).toBe(true)
+    expect(isDailyPeriod('30d')).toBe(true)
+    expect(isDailyPeriod('6m')).toBe(false)
   })
 
   it('mantém loading até a primeira resposta consolidada', () => {

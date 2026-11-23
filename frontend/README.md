@@ -53,7 +53,7 @@ frontend/
 │   │   ├── PatrimonioPage.tsx            # Alocação patrimonial por classes e produtos
 │   │   ├── ProventosPage.tsx             # Linha do tempo e tabela oficial de dividendos/JCP
 │   │   ├── RentabilidadePage.tsx         # Análise de retorno TWR, MWR e benchmarks
-│   │   ├── ResumePage.tsx                # Dashboard com KPIs e evolução patrimonial contínua
+│   │   ├── ResumePage.tsx                # Dashboard com KPIs e evolução patrimonial contínua (períodos diários 7d/15d/30d e mensais)
 │   │   └── Transacoes.tsx                # Extrato com filtros temporais e máscara monetária R$
 │   ├── router/             # Definição canônica de rotas e redirecionamentos (/carteira/*)
 │   ├── store/              # Stores globais Zustand (sessão, carteira ativa, preferências)

@@ -62,9 +62,12 @@ export interface ClassTwrAvailability {
   reason: string | null
 }
 
-export type PeriodOption = '6m' | '12m' | '24m' | 'all'
+export type PeriodOption = '7d' | '15d' | '30d' | '6m' | '12m' | '24m' | 'all'
 
 export const PERIOD_DAYS: Record<PeriodOption, number> = {
+  '7d': 7,
+  '15d': 15,
+  '30d': 30,
   '6m': 180,
   '12m': 365,
   '24m': 730,
@@ -72,10 +75,17 @@ export const PERIOD_DAYS: Record<PeriodOption, number> = {
 }
 
 export const PERIOD_MONTHS: Record<PeriodOption, number> = {
+  '7d': 1,
+  '15d': 1,
+  '30d': 1,
   '6m': 6,
   '12m': 12,
   '24m': 24,
   'all': 0,
+}
+
+export function isDailyPeriod(period: PeriodOption): boolean {
+  return period === '7d' || period === '15d' || period === '30d'
 }
 
 export function useDailyEvolution(

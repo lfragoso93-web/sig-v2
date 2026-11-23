@@ -6,8 +6,11 @@ import {
   usePortfolioSummaryData,
 } from '@/hooks/usePortfolio'
 import {
+  isDailyPeriod,
+  useClassDailyEvolution,
   useClassMonthlyEvolution,
   useClassTwrAvailability,
+  useDailyEvolution,
   useMonthlyEvolution,
 } from '@/hooks/useEvolution'
 import type { PeriodOption } from '@/hooks/useEvolution'
@@ -26,7 +29,10 @@ import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 import { ASSET_CLASS_ALL, assetTypeLabel } from '@/utils/assetTypes'
 
-const PERIOD_OPTIONS = [
+const PERIOD_OPTIONS: { label: string; value: PeriodOption }[] = [
+  { label: 'Últimos 7 dias', value: '7d' },
+  { label: 'Últimos 15 dias', value: '15d' },
+  { label: 'Últimos 30 dias', value: '30d' },
   { label: 'Últimos 6 meses', value: '6m' },
   { label: 'Últimos 12 meses', value: '12m' },
   { label: 'Últimos 24 meses', value: '24m' },
@@ -125,17 +131,31 @@ export default function ResumePage() {
     ? activeAssetType
     : null
 
+  const isDaily = isDailyPeriod(period)
+
   const { data: monthlyHistory, isLoading: loadingMonthlyHistory } = useMonthlyEvolution(
-    activeAssetType ? null : portfolioId,
+    (!isDaily && !activeAssetType) ? portfolioId : null,
     period,
   )
   const { data: classMonthlyHistory, isLoading: loadingClassMonthlyHistory } = useClassMonthlyEvolution(
-    portfolioId,
-    availableClassAssetType,
+    !isDaily ? portfolioId : null,
+    !isDaily ? availableClassAssetType : null,
     period,
   )
 
-  const rawPatrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
+  const { data: dailyHistory, isLoading: loadingDailyHistory } = useDailyEvolution(
+    (isDaily && !activeAssetType) ? portfolioId : null,
+    period,
+  )
+  const { data: classDailyHistory, isLoading: loadingClassDailyHistory } = useClassDailyEvolution(
+    isDaily ? portfolioId : null,
+    isDaily ? availableClassAssetType : null,
+    period,
+  )
+
+  const rawPatrimonioHistory = isDaily
+    ? (activeAssetType ? classDailyHistory : dailyHistory)
+    : (activeAssetType ? classMonthlyHistory : monthlyHistory)
   const classHistoryUnavailable = Boolean(
     activeAssetType
     && !loadingClassAvailability
@@ -143,8 +163,8 @@ export default function ResumePage() {
   )
   const loadingHistory = activeAssetType
     ? loadingClassAvailability
-      || (selectedClassAvailability?.available === true && loadingClassMonthlyHistory)
-    : loadingMonthlyHistory
+      || (selectedClassAvailability?.available === true && (isDaily ? loadingClassDailyHistory : loadingClassMonthlyHistory))
+    : (isDaily ? loadingDailyHistory : loadingMonthlyHistory)
   const historyEmptyMessage = classHistoryUnavailable
     ? selectedClassAvailability?.reason ?? 'Histórico canônico ainda não disponível para esta classe.'
     : 'Sem dados históricos para esta seleção'
@@ -195,6 +215,38 @@ export default function ResumePage() {
     const historyCopy: PatrimonioEvolutionPoint[] = [...rawPatrimonioHistory]
     const lastIndex = historyCopy.length - 1
 
+    if (isDaily) {
+      if (lastIndex >= 0 && historyCopy[lastIndex].date === todayStr) {
+        historyCopy[lastIndex] = {
+          ...historyCopy[lastIndex],
+          date: todayStr,
+          market_value: currentMarketValue,
+          cost_basis: currentCostBasis,
+          unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+          accumulated_return_pct: currentReturnPct !== null ? currentReturnPct : (historyCopy[lastIndex].accumulated_return_pct ?? 0),
+          has_partial_prices: currentHasPartialPrices,
+          return_is_estimated: currentReturnIsEstimated,
+          history_source: 'realtime',
+          is_realtime: true,
+        }
+        return historyCopy
+      }
+
+      historyCopy.push({
+        date: todayStr,
+        market_value: currentMarketValue,
+        cost_basis: currentCostBasis,
+        unrealized_pnl: currentUnrealizedPnl ?? (currentMarketValue - currentCostBasis),
+        accumulated_return_pct: currentReturnPct ?? (lastIndex >= 0 ? (historyCopy[lastIndex].accumulated_return_pct ?? 0) : 0),
+        has_partial_prices: currentHasPartialPrices,
+        return_is_estimated: currentReturnIsEstimated,
+        history_source: 'realtime',
+        is_realtime: true,
+      })
+
+      return historyCopy
+    }
+
     if (lastIndex >= 0) {
       const lastPoint = historyCopy[lastIndex]
       const lastPeriod = lastPoint.period ?? lastPoint.date.slice(0, 7)
@@ -230,7 +282,7 @@ export default function ResumePage() {
     })
 
     return historyCopy
-  }, [rawPatrimonioHistory, activeAssetType, metrics, positions])
+  }, [rawPatrimonioHistory, isDaily, activeAssetType, metrics, positions])
 
   if (loadingPortfolios) {
     return (
@@ -381,7 +433,7 @@ export default function ResumePage() {
         {loadingHistory ? (
           <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
         ) : patrimonioHistory?.length ? (
-          <PatrimonioBarChart data={patrimonioHistory} />
+          <PatrimonioBarChart data={patrimonioHistory} granularity={isDaily ? 'daily' : 'monthly'} />
         ) : (
           <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem' }}>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>{historyEmptyMessage}</span>

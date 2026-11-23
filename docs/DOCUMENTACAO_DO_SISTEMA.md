@@ -190,7 +190,7 @@ O sistema é navegado através do prefixo `/carteira/*`, garantindo contexto de 
 
 #### Dashboard e Resumo (`ResumePage.tsx`)
 - Indicadores em tempo real de Patrimônio Total, Lucro/Prejuízo Total, Variação do Dia e Proventos acumulados.
-- Gráfico de Evolução Patrimonial histórico contínuo com suporte a finais de semana e ponto intradiário em tempo real (alinhamento imediato com as cotações do pregão corrente).
+- Gráfico de Evolução Patrimonial histórico contínuo com suporte a múltiplos períodos: granularidade diária (`Últimos 7 dias`, `Últimos 15 dias` e `Últimos 30 dias`) com rótulos `DD/MM` e granularidade mensal (`Últimos 6 meses`, `Últimos 12 meses`, `Últimos 24 meses` e `Todo período`), suporte a finais de semana e ponto intradiário em tempo real (alinhamento imediato com as cotações do pregão corrente).
 
 #### Extrato de Transações (`Transacoes.tsx`)
 - Histórico completo com paginação e ordenação por data, ativo, tipo de operação e corretora.
