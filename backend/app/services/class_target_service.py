@@ -159,19 +159,19 @@ async def bulk_upsert_targets(
     if not items:
         return await get_targets(db, portfolio_id)
 
-    values_list = []
+    values_by_type: dict[str, dict[str, object]] = {}
     for raw_type, raw_pct in items:
         normalized_type = str(raw_type).strip().upper()
         if not math.isfinite(float(raw_pct)) or float(raw_pct) < 0 or float(raw_pct) > 100:
             raise ValueError(f"target_pct inválido para {normalized_type}: deve estar entre 0 e 100.")
         safe_pct = Decimal(str(round(float(raw_pct), 2)))
-        values_list.append({
+        values_by_type[normalized_type] = {
             "portfolio_id": portfolio_id,
             "asset_type": normalized_type,
             "target_pct": safe_pct,
-        })
+        }
 
-    insert_stmt = pg_insert(PortfolioClassTarget).values(values_list)
+    insert_stmt = pg_insert(PortfolioClassTarget).values(list(values_by_type.values()))
     stmt = insert_stmt.on_conflict_do_update(
         constraint="uq_portfolio_class_target",
         set_={"target_pct": insert_stmt.excluded.target_pct},

@@ -534,7 +534,7 @@ Auditoria abrangente e implementação de otimizações de I/O e consultas SQL:
 
 ## Rebaseline de Segurança e Dependências - 24/11/2026
 
-Consolidação direta em `stable-15jun` dos PRs Dependabot #584, #585, #588 e #590-#596, correção do gate Flake8, atualização do runtime frontend para `nginx:1.30.7-alpine` e renovação do layer Debian backend sem o cliente PostgreSQL 17 redundante. O bloco só pode seguir para `main` após suíte completa, build das imagens, auditorias de dependências e nova análise CodeQL/Trivy do SHA exato. Alertas históricos permanecem abertos até o scanner confirmar a correção.
+Consolidação direta em `stable-15jun` dos PRs Dependabot #584, #585, #588 e #590-#596, correção do gate Flake8, atualização do runtime frontend para `nginx:1.30.7-alpine` e renovação do layer Debian backend sem o cliente PostgreSQL 17 redundante. A revisão acumulada também preserva `applied_at` como UTC naive conforme o contrato PostgreSQL e deduplica metas de classe normalizadas com semântica last-value-wins antes do upsert em lote. O bloco só pode seguir para `main` após suíte completa, build das imagens, auditorias de dependências e nova análise CodeQL/Trivy do SHA exato. Alertas históricos permanecem abertos até o scanner confirmar a correção.
 
 ## Evolução Patrimonial com Períodos Diários no Dashboard Resumo - 23/11/2026
 
