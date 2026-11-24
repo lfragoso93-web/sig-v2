@@ -12,7 +12,7 @@ Plataforma corporativa e determinística para acompanhamento, consolidação pat
 
 ### Baseline de segurança e dependências - 24/11/2026
 
-`stable-15jun` consolida os PRs Dependabot #584, #585, #588 e #590-#596 em um único candidato validável. O backend usa FastAPI `>=0.165.0`, SQLAlchemy `2.1.9`, Pydantic `2.14.4`, pydantic-settings `2.16.3`, python-multipart `0.0.34`, pypdf `>=7.1.1` e pytest-asyncio `1.5.0`; o frontend atualiza Lucide, Zustand, Tailwind/Vite, Vitest/Coverage `5.1.0`, ESLint e typescript-eslint. A imagem web usa Nginx `1.30.7-alpine`, versão corrigida para os achados HIGH/CRITICAL observados no gate Trivy. O backend invalida explicitamente o layer de atualização Debian e mantém apenas `libpq5` com os binários canônicos PostgreSQL 16 copiados do estágio dedicado. Alertas CodeQL antigos só são considerados encerrados após nova análise do SHA publicado.
+`stable-15jun` consolida os PRs Dependabot #584, #585, #588 e #590-#596 em um único candidato validável. O backend usa FastAPI `>=0.165.0`, SQLAlchemy `2.1.9`, Pydantic `2.14.4`, pydantic-settings `2.16.3`, python-multipart `0.0.34`, pypdf `>=7.1.1` e pytest-asyncio `1.5.0`; o frontend atualiza Lucide `^1.77.0`, Zustand, Tailwind/Vite, Vitest/Coverage `5.1.1`, ESLint e typescript-eslint. A imagem web usa Nginx `1.30.7-alpine`, versão corrigida para os achados HIGH/CRITICAL observados no gate Trivy. O backend invalida explicitamente o layer de atualização Debian e mantém apenas `libpq5` com os binários canônicos PostgreSQL 16 copiados do estágio dedicado. Alertas CodeQL antigos só são considerados encerrados após nova análise do SHA publicado.
 
 ## Ambientes de desenvolvimento e producao
 

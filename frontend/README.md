@@ -171,7 +171,7 @@ Compila os assets estáticos minificados em `frontend/dist/` e executa o script 
 
 ### 4.6 Auditoria de Dependências de Segurança
 
-Baseline de 24/11/2026: `lucide-react ^1.72.0`, `zustand ^5.1.0`, `@tailwindcss/vite ^4.3.5`, `vitest`/`@vitest/coverage-v8 ^5.1.0`, `eslint ^10.15.0` e `typescript-eslint ^8.73.0`, consolidando os PRs Dependabot #584, #585, #588, #590 e #593. O alinhamento Vitest/Coverage evita peer dependency divergente. O runtime usa `nginx:1.30.7-alpine`; o gate Trivy da imagem permanece obrigatório antes de release.
+Baseline de 24/11/2026: `lucide-react ^1.77.0`, `zustand ^5.1.0`, `@tailwindcss/vite ^4.3.5`, `vitest`/`@vitest/coverage-v8 ^5.1.1`, `eslint ^10.15.0` e `typescript-eslint ^8.73.0`, consolidando os PRs Dependabot #584, #585, #588, #590 e #593. O alinhamento Vitest/Coverage evita peer dependency divergente. O runtime usa `nginx:1.30.7-alpine`; o gate Trivy da imagem permanece obrigatório antes de release.
 
 ```powershell
 cd frontend
