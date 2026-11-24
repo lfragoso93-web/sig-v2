@@ -226,6 +226,10 @@ class CorporateEventDestinationLeg(Base):
             "ix_corp_event_destination_leg_asset",
             "destination_asset_id",
         ),
+        Index(
+            "ix_corp_event_destination_leg_event",
+            "corporate_event_id",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
@@ -233,7 +237,6 @@ class CorporateEventDestinationLeg(Base):
         Integer,
         ForeignKey("corporate_events.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     destination_asset_id = Column(
         Integer,

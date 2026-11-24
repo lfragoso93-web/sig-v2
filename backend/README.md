@@ -200,7 +200,7 @@ cd backend
 
 ### Baseline de dependências - 24/11/2026
 
-O candidato de homologação consolida FastAPI `>=0.165.0`, SQLAlchemy `2.1.9`, Pydantic `2.14.4`, pydantic-settings `2.16.3`, python-multipart `0.0.34`, pypdf `>=7.1.1` e pytest-asyncio `1.5.0`. `requirements-test.txt` mantém SQLAlchemy e pytest-asyncio exatamente alinhados ao runtime. A imagem invalida explicitamente o layer Debian de segurança e não instala `postgresql-client-17`; usa `libpq5` atualizado e os binários PostgreSQL 16 do estágio dedicado. O bloco corresponde aos PRs Dependabot #591, #592 e #594-#596 e deve passar pela suíte completa, Architecture Doctor, Flake8, Mypy, migrations e scans antes da promoção para `main`.
+O candidato de homologação consolida FastAPI `>=0.165.0`, SQLAlchemy `2.1.9`, Pydantic `2.14.4`, pydantic-settings `2.16.3`, python-multipart `0.0.34`, pypdf `>=7.1.1` e pytest-asyncio `1.5.0`. `requirements-test.txt` mantém SQLAlchemy e pytest-asyncio exatamente alinhados ao runtime. Os índices de `portfolio_positions.asset_id` e `corporate_event_destination_legs.corporate_event_id` têm nomes explícitos no metadata ORM, idênticos à migração `20261114_perf_query_indexes`, preservando drift zero. A imagem invalida explicitamente o layer Debian de segurança e não instala `postgresql-client-17`; usa `libpq5` atualizado e os binários PostgreSQL 16 do estágio dedicado. O bloco corresponde aos PRs Dependabot #591, #592 e #594-#596 e deve passar pela suíte completa, Architecture Doctor, Flake8, Mypy, migrations e scans antes da promoção para `main`.
 
 - Desenvolvimento local: Windows/PowerShell/Docker na branch `stable-15jun`.
 - Producao: OCI executa a branch `main`.
