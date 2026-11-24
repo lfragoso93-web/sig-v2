@@ -10,6 +10,10 @@ Plataforma corporativa e determinística para acompanhamento, consolidação pat
 - **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.0 Async (`asyncpg`), Alembic (head `20261114_perf_query_indexes`, 72 revisões), PostgreSQL 16, Redis 7 e APScheduler (12 jobs canônicos).
 - **Frontend:** React 19 (`^19.3.1`), TypeScript 6 (`^6.0.3`, major 7 bloqueado até compatibilidade do `typescript-eslint`), Vite 8 (`^8.3.6`), Tailwind CSS v4 (`^4.3.4`), TanStack Query v5 (`^5.106.1`), Zustand e Vitest.
 
+### Baseline de segurança e dependências - 24/11/2026
+
+`stable-15jun` consolida os PRs Dependabot #584, #585, #588 e #590-#596 em um único candidato validável. O backend usa FastAPI `>=0.165.0`, SQLAlchemy `2.1.9`, Pydantic `2.14.4`, pydantic-settings `2.16.3`, python-multipart `0.0.34`, pypdf `>=7.1.1` e pytest-asyncio `1.5.0`; o frontend atualiza Lucide, Zustand, Tailwind/Vite, Vitest/Coverage `5.1.0`, ESLint e typescript-eslint. A imagem web usa Nginx `1.30.7-alpine`, versão corrigida para os achados HIGH/CRITICAL observados no gate Trivy. O backend invalida explicitamente o layer de atualização Debian e mantém apenas `libpq5` com os binários canônicos PostgreSQL 16 copiados do estágio dedicado. Alertas CodeQL antigos só são considerados encerrados após nova análise do SHA publicado.
+
 ## Ambientes de desenvolvimento e producao
 
 Windows com Docker e o ambiente local de desenvolvimento e validacao na branch `stable-15jun`. OCI e producao na branch `main`.

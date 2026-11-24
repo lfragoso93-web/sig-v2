@@ -532,6 +532,10 @@ Auditoria abrangente e implementação de otimizações de I/O e consultas SQL:
 15. **Higiene de Rotas, Determinismo Temporal e Resiliência (Onda 4):** Eliminação da rota duplicada `/api/v1/irpf/{portfolio_id}/irpf` no FastAPI (`main.py`) unificando a superfície canônica em `/api/v1/portfolios/{portfolio_id}/irpf`, atualização do smoke test operacional (`test_ready_http_smoke.py`), saneamento de `datetime.utcnow()` obsoleto no Python 3.12 em `ticker_change_processor.py`, injeção canônica de `Clock` em `goals_service.py`, configuração de loop scope explícito no `pytest.ini`, eliminação de avisos assíncronos no Vitest (`AddTransactionModal.test.tsx`) e calibração de `gcTime` e `refetchOnWindowFocus` no TanStack Query v5.
 
 
+## Rebaseline de Segurança e Dependências - 24/11/2026
+
+Consolidação direta em `stable-15jun` dos PRs Dependabot #584, #585, #588 e #590-#596, correção do gate Flake8, atualização do runtime frontend para `nginx:1.30.7-alpine` e renovação do layer Debian backend sem o cliente PostgreSQL 17 redundante. O bloco só pode seguir para `main` após suíte completa, build das imagens, auditorias de dependências e nova análise CodeQL/Trivy do SHA exato. Alertas históricos permanecem abertos até o scanner confirmar a correção.
+
 ## Evolução Patrimonial com Períodos Diários no Dashboard Resumo - 23/11/2026
 
 Extensão do gráfico de Evolução Patrimonial no dashboard Resumo (`ResumePage`) para suportar séries temporais diárias:

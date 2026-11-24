@@ -296,6 +296,8 @@ As tarefas em lote e rotinas de manutenção periódica são gerenciadas pelo **
 
 O SGI atende aos mais rígidos padrões de segurança da informação e governança corporativa:
 
+- **Rebaseline de 24/11/2026:** os PRs Dependabot #584, #585, #588 e #590-#596 foram consolidados em `stable-15jun`; o runtime web passou a `nginx:1.30.7-alpine` e o backend passou a invalidar o layer Debian de segurança, removendo o cliente PostgreSQL 17 redundante e preservando os binários PG16 canônicos. CodeQL, Trivy, Gitleaks, pip-audit e npm audit permanecem gates obrigatórios e devem avaliar o SHA exato antes da promoção para `main`.
+
 ### 8.1 Autenticação e Credenciais
 - **Senhas Criptografadas:** Hashing moderno via `bcrypt` com salting individualizado.
 - **Google OAuth 2.0:** Suporte nativo a Single Sign-On (SSO) corporativo.
