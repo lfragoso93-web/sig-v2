@@ -5,7 +5,7 @@ from datetime import date, date as DateType
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_context import PortfolioAccessContext, PortfolioAccessDenied
@@ -731,7 +731,7 @@ async def bulk_delete_transactions(
     if payload.transaction_ids:
         stmt = stmt.where(Transaction.id.in_(payload.transaction_ids))
     if payload.asset_type:
-        stmt = stmt.where(func.upper(Transaction.asset_type) == payload.asset_type.strip().upper())
+        stmt = stmt.where(Transaction.asset_type == payload.asset_type.strip().upper())
     if payload.ticker and payload.ticker.strip():
         t = payload.ticker.strip().upper()
         base_t = normalize_b3_equity_ticker(t)

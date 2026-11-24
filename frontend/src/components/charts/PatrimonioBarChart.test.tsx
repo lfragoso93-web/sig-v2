@@ -87,6 +87,20 @@ describe('buildPatrimonioChartData', () => {
     expect(point.patrimonio).toBe(52340.50)
     expect(point.source).toBe('realtime')
   })
+
+  it('formats daily points as DD/MM when granularity is daily', () => {
+    const [point] = buildPatrimonioChartData([
+      {
+        date: '2026-11-23',
+        market_value: 50000,
+        cost_basis: 45000,
+        unrealized_pnl: 5000,
+      },
+    ], 'daily')
+
+    expect(point.name).toBe('23/11')
+    expect(point.date).toBe('2026-11-23')
+  })
 })
 
 describe('getSymmetricAxisLimit', () => {

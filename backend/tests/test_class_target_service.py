@@ -9,6 +9,7 @@ from app.services.class_target_service import (
     get_targets,
     get_targets_map,
     get_targets_with_current,
+    bulk_upsert_targets,
     upsert_target,
     delete_target,
 )
@@ -214,6 +215,21 @@ class TestGetTargetsWithCurrent:
 
 @pytest.mark.asyncio
 class TestUpsertTarget:
+
+    async def test_bulk_upsert_deduplicates_normalized_types_last_value_wins(self):
+        db = AsyncMock(spec=AsyncSession)
+        execute_result = MagicMock()
+        execute_result.scalars.return_value.all.return_value = []
+        db.execute.return_value = execute_result
+
+        await bulk_upsert_targets(db, 1, [("acao", 25.0), (" ACAO ", 35.0)])
+
+        statement = db.execute.await_args_list[0].args[0]
+        parameters = statement.compile().params
+        asset_types = [value for key, value in parameters.items() if "asset_type" in key]
+        target_values = [value for key, value in parameters.items() if "target_pct" in key]
+        assert asset_types == ["ACAO"]
+        assert target_values == [Decimal("35.0")]
 
     async def test_upsert_target_create_new(self):
         db = AsyncMock(spec=AsyncSession)

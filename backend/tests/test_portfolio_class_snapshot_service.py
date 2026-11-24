@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import select
+from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.asset import AssetType
 from app.models.asset import Asset
 from app.models.asset_price import AssetPrice
@@ -467,3 +469,54 @@ async def test_treasury_class_snapshot_carries_friday_price_across_weekend(monke
     assert persisted[date(2026, 9, 5)]["market_value"] == Decimal("1000.00")
     assert persisted[date(2026, 9, 6)]["market_value"] == Decimal("1000.00")
     assert persisted[date(2026, 9, 7)]["market_value"] == Decimal("1020.00")
+
+
+@pytest.mark.asyncio
+async def test_upsert_class_snapshots_batch_persists_multi_row(db) -> None:
+    records = [
+        {
+            "portfolio_id": 99,
+            "asset_type": AssetType.ACAO.value,
+            "snapshot_date": date(2026, 1, 1),
+            "market_value": Decimal("100.00"),
+            "cost_basis": Decimal("90.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": Decimal("10.00"),
+            "net_external_flow": Decimal("0.00"),
+            "dividends_day": Decimal("0.00"),
+            "dividends_accumulated": Decimal("0.00"),
+            "daily_return_pct": Decimal("0.00"),
+            "accumulated_return_pct": Decimal("0.00"),
+            "has_partial_prices": False,
+            "return_is_estimated": False,
+            "valuation_status": "complete",
+        },
+        {
+            "portfolio_id": 99,
+            "asset_type": AssetType.FII.value,
+            "snapshot_date": date(2026, 1, 1),
+            "market_value": Decimal("200.00"),
+            "cost_basis": Decimal("180.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": Decimal("20.00"),
+            "net_external_flow": Decimal("0.00"),
+            "dividends_day": Decimal("0.00"),
+            "dividends_accumulated": Decimal("0.00"),
+            "daily_return_pct": Decimal("0.00"),
+            "accumulated_return_pct": Decimal("0.00"),
+            "has_partial_prices": False,
+            "return_is_estimated": False,
+            "valuation_status": "complete",
+        },
+    ]
+
+    await class_snapshot_service._upsert_class_snapshots_batch(db, records)
+
+    result = await db.execute(
+        select(PortfolioClassSnapshot).where(PortfolioClassSnapshot.portfolio_id == 99)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    by_type = {row.asset_type: row for row in rows}
+    assert by_type[AssetType.ACAO.value].market_value == Decimal("100.00")
+    assert by_type[AssetType.FII.value].market_value == Decimal("200.00")

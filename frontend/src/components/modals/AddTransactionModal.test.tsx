@@ -153,12 +153,14 @@ describe('AddTransactionModal', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /Salvar Lançamento/i }))
 
-    expect(createTransaction).toHaveBeenCalledWith({
-      portfolioId: 42,
-      data: expect.objectContaining({
-        ticker: 'BTC',
-        asset_type: 'CRIPTO',
-      }),
+    await waitFor(() => {
+      expect(createTransaction).toHaveBeenCalledWith({
+        portfolioId: 42,
+        data: expect.objectContaining({
+          ticker: 'BTC',
+          asset_type: 'CRIPTO',
+        }),
+      })
     })
   })
 

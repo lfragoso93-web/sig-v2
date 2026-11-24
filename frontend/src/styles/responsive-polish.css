@@ -28,7 +28,7 @@
 
   @media (min-width: 1600px) {
     .page-container {
-      max-width: min(1360px, 100%);
+      max-width: min(1600px, 100%);
     }
 
     .table-responsive table,

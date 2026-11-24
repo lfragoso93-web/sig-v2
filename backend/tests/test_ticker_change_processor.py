@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import cast
 
 from app.models.transaction import OperationType, Transaction
+from app.services import ticker_change_processor
 from app.services.ticker_change_processor import calculate_position_at_event
 
 
@@ -47,3 +48,7 @@ def test_multiplas_compras_mantem_custo_total() -> None:
     assert position.quantity == 20
     assert position.total_cost == 200
     assert position.average_price == 10
+
+
+def test_processor_uses_naive_utc_for_applied_at() -> None:
+    assert ticker_change_processor.utc_now_naive().tzinfo is None

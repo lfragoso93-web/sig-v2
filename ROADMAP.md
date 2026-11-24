@@ -4,7 +4,7 @@
 
 > **Última Atualização:** 29/10/2026.
 > **Roadmap vivo:** [`docs/ROADMAP.md`](docs/ROADMAP.md). O diagnóstico de 29/10 é histórico, não backlog técnico vigente.
-> **Alembic Head Vigente:** `20261022_auth_oauth_mfa` (67 revisões lineares encadeadas).
+> **Alembic Head Vigente:** `20261114_perf_query_indexes` (72 revisões lineares encadeadas).
 > **Branch Mandatória:** `stable-15jun`.
 
 ## Snapshot historico de baseline e entregas (29/10/2026)
@@ -510,3 +510,36 @@ Runtime read-only confirmou BTC no catalogo, busca e preflight CSV sem erros;
 anonimizada para falhas CSV de outros tipos de ativo.
 
 Atualizacao do proximo bloco #370 (19/10/2026): integrar a projecao multiativo coordenadamente em posicoes, custo/realizado, snapshots/TWR, resumo e IRPF. Eventos incompletos seguem fora da projecao e KLBN11 aguarda evidencia externa. O contrato de integracao e a divergencia de runtime estao registrados em docs/CORPORATE_EVENT_COMPLEX_ACTIONS_DESIGN.md.
+
+
+## Otimização de Performance de Queries e Governança de Índices - 14/11/2026
+
+Auditoria abrangente e implementação de otimizações de I/O e consultas SQL:
+1. **Eliminação de N+1:** Resolução em lote (`IN (...)`) de nomes de ativos em `performance_service.py` eliminando queries individuais por posição em loop.
+2. **Unificação de Metadados de Ativos:** Fusão das leituras de logotipos e nomes em um único round-trip (`_fetch_asset_metadata_batch`) em `portfolio_service.py`.
+3. **Desduplicação de Proventos Canônicos:** Reutilização dos proventos já calculados nas posições em `canonical_positions_service.py`, evitando execução redundante do pipeline de direitos na rota `/positions`.
+4. **Governança de Índices Alembic (`20261114_perf_query_indexes`):** Adição dos índices compostos e funcionais `idx_txn_portfolio_ticker` em `transactions (portfolio_id, ticker)` e `idx_assets_lower_ticker` em `assets (lower(ticker))`.
+5. **Carga Temporal de Snapshots:** Limitação da janela de snapshots diários a 366 dias em `rentabilidade_kpi_service.py` com fallback resiliente para carteiras inativas, eliminando a carga desnecessária de séries inteiras de múltiplos anos em memória.
+6. **Leitura Condicional de Metadados de Posições Encerradas:** Em `rentabilidade_asset_result_service.py`, a consulta de transações para custo inicial passa a ser executada apenas quando existem ativos encerrados (`closed_tickers`), e restrita estritamente a esses tickers via `IN (...)`.
+7. **Bulk Upsert de Metas de Alocação:** Em `class_target_service.py`, o método `bulk_upsert_targets` foi unificado em uma única instrução atômica `INSERT ... ON CONFLICT DO UPDATE` via PostgreSQL `pg_insert`, substituindo upserts individuais em laço.
+8. **Bulk Upsert de Snapshots por Classe:** Em `portfolio_class_snapshot_service.py`, substituição de instruções `INSERT ... ON CONFLICT DO UPDATE` individuais executadas dia a dia por classe por buffer em lote (`_upsert_class_snapshots_batch`) processando até 100 registros por instrução nativa, reduzindo round-trips SQL em ~98% durante rebuilds históricos.
+9. **Eliminação de N+1 no Loop Diário de TWR (`has_partial_prices_silent`):** Em `silent_price_coverage_service.py` e `portfolio_snapshot_canonical_twr_service.py`, adição de cache de resolução `ticker_to_asset_id` e primeira data de cotação histórica (`first_dates_cache`), evitando centenas de consultas repetidas na tabela `assets` e `asset_prices` ao longo dos dias do rebuild.
+10. **Coalescência de Transações e PnL Realizado em `/summary`:** Em `portfolio_summary_service.py`, `portfolio_service.py` (`calc_raw_positions`) e `realized_pnl_projection_reader.py` (`load_realized_pnl_by_ticker`), as transações da carteira passam a ser carregadas uma única vez e compartilhadas entre a valoração intradiária de posições e o cálculo de resultado realizado, eliminando consultas redundantes em `Transaction` a cada chamada de resumo de carteira.
+11. **Bulk Upsert de Snapshots TWR Consolidados:** Em `portfolio_snapshot_twr_components.py` e `portfolio_snapshot_canonical_twr_service.py`, substituição de instruções `INSERT ... ON CONFLICT DO UPDATE` individuais executadas dia a dia da carteira por buffer em lote (`upsert_enriched_snapshots_batch`) processando em blocos de até 100 snapshots por instrução nativa no rebuild histórico (~18 execuções em vez de 1.800 em 5 anos), com fallback transparente e compatibilidade retroativa para mocks de teste.
+12. **Coalescência de Transações na Valoração de Renda Fixa em `/summary`:** Em `fixed_income_valuation_service.py` e `portfolio_summary_service.py`, suporte a recebimento de `transactions` pré-carregadas nos métodos de valoração de títulos de renda fixa (`get_fixed_income_valuations`, etc.), eliminando consulta separada de transações ao carregar a posição patrimonial consolidada.
+13. **Alinhamento Funcional com `idx_assets_lower_ticker` e Remoção de Funções Inibidoras de Índice:** Em `lifecycle_aware_price_service.py` e `routers/assets.py`, alinhamento do filtro de ticker para `func.lower(Asset.ticker).in_(tickers_lower)`, e em `transaction_service.py` e `routers/transactions.py`, remoção de `func.upper(Transaction.asset_type)` em benefício de comparação direta indexável `Transaction.asset_type == at`.
+14. **Governança de Foreign Keys Não Indexadas:** Expansão da migration `20261114_perf_query_indexes` e modelos declarativos para indexar FKs ausentes: `ix_portfolio_positions_asset_id` em `portfolio_positions (asset_id)`, `ix_corporate_events_portfolio_id` em `corporate_events (portfolio_id)` e `ix_corp_event_destination_leg_event` em `corporate_event_destination_legs (corporate_event_id)`, acelerando joins e cascading checks.
+15. **Higiene de Rotas, Determinismo Temporal e Resiliência (Onda 4):** Eliminação da rota duplicada `/api/v1/irpf/{portfolio_id}/irpf` no FastAPI (`main.py`) unificando a superfície canônica em `/api/v1/portfolios/{portfolio_id}/irpf`, atualização do smoke test operacional (`test_ready_http_smoke.py`), saneamento de `datetime.utcnow()` obsoleto no Python 3.12 em `ticker_change_processor.py`, injeção canônica de `Clock` em `goals_service.py`, configuração de loop scope explícito no `pytest.ini`, eliminação de avisos assíncronos no Vitest (`AddTransactionModal.test.tsx`) e calibração de `gcTime` e `refetchOnWindowFocus` no TanStack Query v5.
+
+
+## Rebaseline de Segurança e Dependências - 24/11/2026
+
+Consolidação direta em `stable-15jun` dos PRs Dependabot #584, #585, #588 e #590-#596, correção do gate Flake8, atualização do runtime frontend para `nginx:1.30.7-alpine` e renovação do layer Debian backend sem o cliente PostgreSQL 17 redundante. A revisão acumulada também preserva `applied_at` como UTC naive conforme o contrato PostgreSQL e deduplica metas de classe normalizadas com semântica last-value-wins antes do upsert em lote. O bloco só pode seguir para `main` após suíte completa, build das imagens, auditorias de dependências e nova análise CodeQL/Trivy do SHA exato. Alertas históricos permanecem abertos até o scanner confirmar a correção.
+
+## Evolução Patrimonial com Períodos Diários no Dashboard Resumo - 23/11/2026
+
+Extensão do gráfico de Evolução Patrimonial no dashboard Resumo (`ResumePage`) para suportar séries temporais diárias:
+1. **Períodos Diários Dedicados:** Adição das opções `Últimos 7 dias`, `Últimos 15 dias` e `Últimos 30 dias` no seletor de período, mantendo as opções mensais preexistentes (`6m`, `12m`, `24m`, `all`).
+2. **Desacoplamento e Roteamento de Hooks:** Roteamento dinâmico em `ResumePage` para consumir `useDailyEvolution` e `useClassDailyEvolution` nos períodos diários, e `useMonthlyEvolution` e `useClassMonthlyEvolution` nos períodos mensais, com tipagem canônica e helper `isDailyPeriod`.
+3. **Formatação de Eixo e Tooltip no `PatrimonioBarChart`:** Adaptação da propriedade `granularity?: 'daily' | 'monthly'`, permitindo rotulação no formato `DD/MM` nos pontos diários (evitando duplicidades de rótulo no mesmo mês) e apresentação da data completa no tooltip com identificação explícita de snapshot diário ou intradiário em tempo real.
+4. **Cobertura de Testes e Tipagem:** Testes unitários atualizados em `useEvolution.test.tsx`, `useEvolution.test.ts`, `PatrimonioBarChart.test.tsx` e `ResumePage.test.tsx` (100% aprovados).

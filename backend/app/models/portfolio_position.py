@@ -19,6 +19,7 @@ class PortfolioPosition(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("portfolio_id", "asset_id", name="uq_position_portfolio_asset"),
         Index("idx_pp_portfolio", "portfolio_id"),
+        Index("ix_portfolio_positions_asset_id", "asset_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

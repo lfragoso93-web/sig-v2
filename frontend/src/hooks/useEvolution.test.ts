@@ -10,6 +10,9 @@ describe('patrimonio evolution periods', () => {
   })
 
   it('keeps bounded periods deterministic', () => {
+    expect(PERIOD_DAYS['7d']).toBe(7)
+    expect(PERIOD_DAYS['15d']).toBe(15)
+    expect(PERIOD_DAYS['30d']).toBe(30)
     expect(PERIOD_DAYS['12m']).toBe(365)
     expect(PERIOD_MONTHS['12m']).toBe(12)
     expect(PERIOD_DAYS['24m']).toBe(730)

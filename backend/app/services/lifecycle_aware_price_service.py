@@ -48,9 +48,10 @@ async def resolve_asset_ids_by_ticker_and_type(
     if not tickers:
         return {}, {}
 
+    tickers_lower = [t.lower() for t in tickers]
     assets_result = await db.execute(
         select(Asset.id, Asset.ticker, Asset.asset_type).where(
-            func.upper(Asset.ticker).in_(tickers)
+            func.lower(Asset.ticker).in_(tickers_lower)
         )
     )
     asset_id_to_ticker: dict[int, str] = {}

@@ -26,11 +26,12 @@ WORKDIR /app
 
 # Atualiza todos os pacotes do SO para garantir patches de seguranca
 # (inclui libssh2-1t64 >= 1.11.1-1+deb13u1 que corrige CVE-2026-55200 e CVE-2026-7598)
-RUN apt-get update \
+ARG SECURITY_REFRESH=2026-11-24
+RUN echo "security-refresh=${SECURITY_REFRESH}" \
+    && apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         libpq5 \
-        postgresql-client \
         curl \
     && groupadd --gid 1000 app \
     && useradd --uid 1000 --gid app --create-home --shell /usr/sbin/nologin app \

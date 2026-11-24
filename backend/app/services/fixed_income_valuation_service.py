@@ -462,9 +462,13 @@ async def get_fixed_income_valuations(
     target_date: Optional[date] = None,
     *,
     clock: Clock = SYSTEM_CLOCK,
+    transactions: list[Transaction] | None = None,
 ) -> list[FixedIncomeValuation]:
     target = target_date or clock.today()
-    txs = await _load_fixed_income_transactions(db, portfolio_id)
+    if transactions is None:
+        txs = await _load_fixed_income_transactions(db, portfolio_id)
+    else:
+        txs = [tx for tx in transactions if tx.asset_type == RENDA_FIXA_TYPE]
     return await get_fixed_income_valuations_from_transactions(db, txs, target)
 
 
@@ -561,10 +565,16 @@ async def get_fixed_income_valuations_with_coverage_fallback(
     target_date: Optional[date] = None,
     *,
     clock: Clock = SYSTEM_CLOCK,
+    transactions: list[Transaction] | None = None,
 ) -> tuple[list[FixedIncomeValuation], date | None]:
     target = target_date or clock.today()
     try:
-        return await get_fixed_income_valuations(db, portfolio_id, target), target
+        return (
+            await get_fixed_income_valuations(
+                db, portfolio_id, target, clock=clock, transactions=transactions
+            ),
+            target,
+        )
     except IncompleteBenchmarkCoverageError as exc:
         covered = await _covered_target_or_none(db, exc)
         if covered is None:
@@ -574,7 +584,12 @@ async def get_fixed_income_valuations_with_coverage_fallback(
             target,
             covered,
         )
-        return await get_fixed_income_valuations(db, portfolio_id, covered), covered
+        return (
+            await get_fixed_income_valuations(
+                db, portfolio_id, covered, clock=clock, transactions=transactions
+            ),
+            covered,
+        )
 
 
 async def get_fixed_income_totals_with_coverage_fallback(
@@ -583,12 +598,14 @@ async def get_fixed_income_totals_with_coverage_fallback(
     target_date: Optional[date] = None,
     *,
     clock: Clock = SYSTEM_CLOCK,
+    transactions: list[Transaction] | None = None,
 ) -> tuple[dict[str, Decimal], date | None]:
     valuations, effective_date = await get_fixed_income_valuations_with_coverage_fallback(
         db,
         portfolio_id,
         target_date,
         clock=clock,
+        transactions=transactions,
     )
     invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
     current = _money(sum((v.current_value for v in valuations), Decimal("0")))
@@ -605,8 +622,12 @@ async def get_fixed_income_totals_with_coverage_fallback(
 async def get_fixed_income_principal_valuations(
     db: AsyncSession,
     portfolio_id: int,
+    transactions: list[Transaction] | None = None,
 ) -> list[FixedIncomeValuation]:
-    txs = await _load_fixed_income_transactions(db, portfolio_id)
+    if transactions is None:
+        txs = await _load_fixed_income_transactions(db, portfolio_id)
+    else:
+        txs = [tx for tx in transactions if tx.asset_type == RENDA_FIXA_TYPE]
 
     applications: list[FixedIncomeApplication] = []
     for tx in txs:
@@ -651,8 +672,11 @@ async def get_fixed_income_principal_valuations(
 async def get_fixed_income_principal_totals(
     db: AsyncSession,
     portfolio_id: int,
+    transactions: list[Transaction] | None = None,
 ) -> dict[str, Decimal]:
-    valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
+    valuations = await get_fixed_income_principal_valuations(
+        db, portfolio_id, transactions=transactions
+    )
     invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
     return {
         "invested_amount": invested,
